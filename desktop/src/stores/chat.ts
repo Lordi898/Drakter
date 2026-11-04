@@ -305,7 +305,7 @@ async function rehydrate(): Promise<void> {
       .map((m) => ({
         id: m.id,
         role: m.role === 'user' ? 'user' : 'agent',
-        content: m.content,
+        content: m.text,
         status: STORED_STATUS[m.status],
         turnId: m.turn_id ?? null,
         tools: []

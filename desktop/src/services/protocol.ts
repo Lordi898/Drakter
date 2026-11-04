@@ -18,14 +18,21 @@ import type {
   ConfirmationRequested,
   ConfirmationResolved,
   ConfirmationTicket,
-  ConversationOut,
+  AgentStatusOut,
+  ChatSession,
   EventType as ContractEventType,
+  MessageAccepted,
+  MessageCreate,
   MessageOut,
   Page,
   TypedEvent
 } from '../../../contracts/ts'
 
 export type { AgentState, ConfirmationOut, ConfirmationTicket, MessageOut, Page }
+export type ChatSessionInfo = Pick<ChatSession, 'id'>
+export type SendMessageRequest = MessageCreate
+export type SendMessageResponse = MessageAccepted
+export type AgentStatusInfo = AgentStatusOut
 
 export const EVENT_VERSION = 1
 
@@ -42,31 +49,6 @@ export const AGENT_STATES = [
 ] as const satisfies readonly AgentState[]
 
 // ---- REST ------------------------------------------------------------------
-
-/**
- * `ChatSession` no está en los tipos generados: routes.md lo cita y su modelo es
- * `ConversationOut`. De él solo se usa `id`.
- */
-export type ChatSessionInfo = Pick<ConversationOut, 'id'>
-
-/** Hermes CONTRACT §4 y routes.md dicen `text`; `MessageCreate` generado dice `content`. Pedido aclararlo. */
-export interface SendMessageRequest {
-  readonly text: string
-  readonly client_message_id: string
-}
-
-/** 202: la respuesta llega por WebSocket. */
-export interface SendMessageResponse {
-  readonly turn_id: string
-  readonly message_id: string
-}
-
-export interface AgentStatusInfo {
-  readonly state: AgentState
-  readonly provider: string
-  readonly model: string
-  readonly detail: string | null
-}
 
 export interface ApiErrorDetail {
   readonly field: string | null
@@ -191,7 +173,7 @@ export function isMessageOut(value: unknown): value is MessageOut {
     isRecord(value) &&
     has(value, {
       id: isString,
-      content: isString,
+      text: isString,
       turn_id: (v) => v === undefined || isStringOrNull(v),
       role: (v) => v === 'user' || v === 'assistant' || v === 'system',
       status: (v) => v === 'streaming' || v === 'complete' || v === 'cancelled' || v === 'failed'
