@@ -11,6 +11,12 @@ dependencies = [
     "pydantic-settings",
     "platformdirs",
     "drakter-contracts",
+    "pypdf",
+]
+
+[dependency-groups]
+dev = [
+    "httpx2",
 ]
 
 [tool.uv]

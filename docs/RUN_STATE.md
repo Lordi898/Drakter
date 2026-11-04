@@ -12,6 +12,7 @@ Foto operativa de la construcción. El detalle por tareas está en `IMPLEMENTATI
 - **Anidación:** `drakter-lider` lanza subagentes (dos niveles comprobados en sesión nueva).
 - **Identidad Git:** esta máquina no tiene `user.name` ni `user.email`. Los commits usan `git -c user.name=... -c user.email=...` con la identidad de los commits existentes.
 - **Secretos:** `~/.config/drakter/.env` pertenece al usuario y queda fuera del repositorio.
+- **Seguridad sin revisar:** `drakter/seguridad` (`05861f9`) está integrada, pero su revisión adversarial sigue pendiente.
 
 ## Copias de seguridad
 
