@@ -5,7 +5,7 @@
  * `contracts/python/drakter_contracts/events.py` y
  * `backend/app/integrations/hermes/CONTRACT.md`. SUPUESTO marca lo no contratado.
  *
- * El renderer no tiene token ni red (D-14): todo va por `window.api`.
+ * El renderer no tiene credenciales ni red (D-14): todo va por `window.api`.
  * Aprobar o rechazar no existe aquí: lo hace main con un diálogo nativo.
  *
  * Todo lo que llega por red es dato no confiable: se valida aquí y se muestra

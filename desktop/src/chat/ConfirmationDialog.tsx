@@ -3,7 +3,8 @@ import { Button } from '@/components/ui/button'
 import type { PendingConfirmation } from '@/services/protocol'
 import { reviewConfirmation, useConfirmations } from '@/stores/confirmations'
 
-const UNAVAILABLE_NOTICE = 'No se puede decidir desde aquí, así que la acción no se ejecutará.'
+const CONFLICT_NOTICE = 'Los elementos han cambiado; la acción no se ha ejecutado.'
+const FAILED_NOTICE = 'No se ha podido completar la decisión. Comprueba el estado antes de repetir.'
 const REVIEW_FAILED_NOTICE = 'No se ha podido abrir la revisión. Inténtalo de nuevo.'
 
 function formatRemaining(ms: number): string {
@@ -34,7 +35,8 @@ function ConfirmationNotice({ confirmation }: { confirmation: PendingConfirmatio
     setProblem(null)
     try {
       const outcome = await reviewConfirmation(confirmation.action_id, event)
-      if (outcome === 'unavailable') setProblem(UNAVAILABLE_NOTICE)
+      if (outcome === 'conflict') setProblem(CONFLICT_NOTICE)
+      else if (outcome === 'failed') setProblem(FAILED_NOTICE)
     } catch {
       setProblem(REVIEW_FAILED_NOTICE)
     } finally {
@@ -50,6 +52,11 @@ function ConfirmationNotice({ confirmation }: { confirmation: PendingConfirmatio
           <p id={summaryId} className="max-h-24 overflow-y-auto break-words whitespace-pre-wrap">
             {confirmation.summary}
           </p>
+          {typeof confirmation.affected_count === 'number' ? (
+            <p className="text-xs text-muted-foreground">
+              Afecta a {confirmation.affected_count} {confirmation.affected_count === 1 ? 'elemento' : 'elementos'}
+            </p>
+          ) : null}
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <span role="timer" aria-live="off" aria-label="Tiempo restante" className="text-xs text-muted-foreground tabular-nums">

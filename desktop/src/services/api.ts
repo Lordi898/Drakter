@@ -15,7 +15,7 @@ import {
 
 /**
  * Cliente único del backend para el renderer. Todo pasa por `window.api` (D-14):
- * aquí no hay red, token ni puerto. La respuesta es dato no confiable.
+ * aquí no hay red, credenciales ni puerto. La respuesta es dato no confiable.
  */
 const SAFE_CODE = /^[A-Za-z0-9_.-]{1,64}$/
 
