@@ -18,9 +18,10 @@ def clean(ctx):
 
 @check("parada.token_fuera_de_logs", "El token no aparece en ningún log", phase="post")
 def token_not_logged(ctx):
-    token = ctx.api.token
+    tokens = ctx.stack.tokens
     paths = [p for p in ctx.stack.logs_dir.rglob("*") if p.is_file()]
     paths += [p for p in (ctx.stack.data_dir / "logs").rglob("*") if p.is_file()]
-    leaked = [str(p) for p in paths if token in p.read_text(errors="replace")]
+    texts = {p: p.read_text(errors="replace") for p in paths}
+    leaked = [str(p) for p, text in texts.items() if any(token in text for token in tokens)]
     assert not leaked, f"token en {leaked}"
-    return f"{len(paths)} logs revisados"
+    return f"{len(paths)} logs revisados con {len(tokens)} tokens"

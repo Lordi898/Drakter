@@ -45,14 +45,15 @@ class Api:
         except urllib.error.HTTPError as exc:
             return _response(exc.code, exc.read(), exc.headers)
 
-    def ws(self, *, origin: str | None = None, auth: bool = True, open_timeout: float = 5):
-        """Abre `/ws` con el contrato real: subprotocolo, nunca token en la URL."""
+    def ws(self, path: str = "/ws", *, origin: str | None = None, auth: bool = True,
+           open_timeout: float = 5):
+        """Abre un WebSocket con el contrato real: subprotocolo, nunca token en la URL."""
         from websockets.sync.client import connect
 
         protocols = ["drakter.v1"]
         if auth:
             protocols.append(f"drakter.auth.{self.token}")
-        return connect(f"ws://127.0.0.1:{self.port}/ws", subprotocols=protocols, origin=origin,
+        return connect(f"ws://127.0.0.1:{self.port}{path}", subprotocols=protocols, origin=origin,
                        proxy=None, open_timeout=open_timeout)
 
 

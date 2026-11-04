@@ -19,7 +19,8 @@ from harness.stack import Layout, Stack
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
-SCENARIOS = ("backend", "data", "conversation", "desktop", "shutdown")
+FOUNDATION = ("backend", "data")
+SCENARIOS = ("conversation", "desktop", "shutdown")
 EXIT_OK, EXIT_FAILED, EXIT_NOT_RUN = 0, 1, 2
 
 
@@ -29,12 +30,17 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--desktop-dir", type=Path, default=ROOT / "desktop")
     parser.add_argument("--stub-dir", type=Path, default=ROOT / "tools" / "dev-llm-stub")
     parser.add_argument("--backend-python", type=Path)
+    parser.add_argument("--hermes-venv", type=Path, default=os.environ.get("DRAKTER_E2E_HERMES_VENV"),
+                        help="venv propio de Hermes (Python >= 3.14 con aiohttp)")
     parser.add_argument("--status-file", type=Path, default=ROOT / "docs" / "IMPLEMENTATION_STATUS.md")
+    parser.add_argument("--coverage", type=Path, default=HERE / "coverage.toml",
+                        help="mapa de casillas a comprobaciones")
     parser.add_argument("--out", type=Path, help="carpeta del informe")
     parser.add_argument("--only", action="append", default=[], metavar="PREFIJO",
                         help="ejecuta solo las comprobaciones con este prefijo (pasada parcial)")
     parser.add_argument("--no-build", action="store_true", help="no recompila desktop/out")
     parser.add_argument("--no-desktop", action="store_true", help="no abre Electron")
+    parser.add_argument("--headless", action="store_true", help="Electron sin ventana en el escritorio")
     parser.add_argument("--keep-work", action="store_true", help="conserva logs y datos de la pasada")
     parser.add_argument("--min-mem-mb", type=int, default=1500)
     parser.add_argument("--validate", action="store_true",
@@ -85,11 +91,15 @@ class Context:
         return self.stack.api
 
     def scrub(self, text: str) -> str:
-        token = self.stack.api.token if self.stack.api else None
-        return text.replace(token, "[REDACTED]") if token else text
+        for token in self.stack.tokens:
+            text = text.replace(token, "[REDACTED]")
+        return text
 
 
 def load_all(catalog_path: Path) -> dict:
+    # El orden de registro es el de ejecución: primero la base, después los flujos de dominio.
+    for name in FOUNDATION:
+        importlib.import_module(f"scenarios.{name}")
     catalog = flows.load_catalog(catalog_path) if catalog_path.is_file() else {}
     for name in SCENARIOS:
         importlib.import_module(f"scenarios.{name}")
@@ -100,7 +110,7 @@ def main() -> int:
     args = parse_args()
     catalog = load_all(HERE / "catalog.toml")
     checklists = report.parse_checklists(args.status_file)
-    coverage = report.load_coverage(HERE / "coverage.toml")
+    coverage = report.load_coverage(args.coverage)
     problems = report.validate_coverage(coverage, checklists, set(REGISTRY))
     if args.validate:
         print("\n".join(problems) or f"mapa válido: {len(checklists)} casillas, {len(REGISTRY)} comprobaciones")
@@ -122,8 +132,9 @@ def main() -> int:
     with (HERE / "config.toml").open("rb") as handle:
         config = tomllib.load(handle)
     layout = Layout(ROOT, work, args.backend_dir.resolve(), args.desktop_dir.resolve(),
-                    args.stub_dir.resolve(), python, config)
-    stack = Stack(layout)
+                    args.stub_dir.resolve(), python, config,
+                    args.hermes_venv.resolve() if args.hermes_venv else None)
+    stack = Stack(layout, headless=args.headless)
     ctx = Context(stack, report_dir, catalog)
     warnings: list[str] = []
 
@@ -144,6 +155,7 @@ def main() -> int:
                 results[item.id] = result
                 print(f"[{result.status.value:^13}] {item.id}: {result.evidence[:110]}", flush=True)
 
+    stack.check_hermes()
     stack.start_stub()  # antes que el backend: este debe conocer su URL
     stack.start_backend()
     run_phase(PHASES[0])
@@ -174,7 +186,8 @@ def main() -> int:
     if args.only:
         warnings.append(f"Pasada parcial (--only {' '.join(args.only)}): lo demás queda NO COMPROBADO.")
     items = report.judge(checklists, coverage, results)
-    sources = {"backend": layout.backend_dir, "desktop": layout.desktop_dir, "stub": layout.stub_dir}
+    sources = {"backend": layout.backend_dir, "desktop": layout.desktop_dir, "stub": layout.stub_dir,
+               "hermes": layout.hermes_venv or Path("(sin venv)")}
     meta = {
         "date": dt.datetime.now().astimezone().isoformat(timespec="seconds"),
         "scope": git_source(ROOT),

@@ -26,6 +26,16 @@ def stub_starts(ctx):
     return f"stub en 127.0.0.1:{ctx.stack.stub_port} con dev_stub=true"
 
 
+@check("hermes.preflight", "Hermes es el commit fijado, con venv propio Python >= 3.14 y aiohttp", needs=())
+def hermes_preflight(ctx):
+    if "hermes" in ctx.stack.failed:
+        raise AssertionError(ctx.stack.why_unavailable("hermes"))
+    if not ctx.stack.available("hermes"):
+        raise NotChecked(ctx.stack.why_unavailable("hermes"))
+    commit = ctx.stack.layout.config["hermes"]["commit"]
+    return f"commit {commit[:12]} verificado en el venv; Python y aiohttp correctos"
+
+
 @check("backend.loopback", "El backend escucha solo en 127.0.0.1")
 def loopback(ctx):
     target = f"{ctx.api.port:04X}"
@@ -70,19 +80,31 @@ def errors(ctx):
     return f"404 con código {body['code']}"
 
 
-@check("backend.websocket", "/ws autentica por subprotocolo y responde ping")
+@check("backend.websocket", "El WebSocket autentica por subprotocolo y rechaza lo ajeno")
 def websocket(ctx):
-    with ctx.api.ws() as socket:
-        assert socket.subprotocol == "drakter.v1", f"subprotocolo {socket.subprotocol}"
-        socket.send("ping")
-        assert socket.recv(timeout=5) == "pong"
+    # El contrato mueve /ws a /api/v1/events, que solo emite: el ping es exclusivo de /ws.
+    configured = ctx.catalog.get("conversation", {}).get("ws_path", "/ws")
+    accepted = None
+    for path in dict.fromkeys((configured, "/ws")):
+        try:
+            socket = ctx.api.ws(path)
+        except Exception:  # noqa: BLE001 - ruta sin WebSocket: se prueba la siguiente.
+            continue
+        accepted = path
+        with socket:
+            assert socket.subprotocol == "drakter.v1", f"subprotocolo {socket.subprotocol}"
+            if path == "/ws":
+                socket.send("ping")
+                assert socket.recv(timeout=5) == "pong"
+        break
+    assert accepted, f"ningún WebSocket acepta el token: {configured}, /ws"
     for label, kwargs in (("sin token", {"auth": False}), ("Origin ajeno", {"origin": "https://evil.example"})):
         try:
-            ctx.api.ws(**kwargs).close()
+            ctx.api.ws(accepted, **kwargs).close()
         except Exception:  # noqa: BLE001 - el rechazo del handshake llega como excepción.
             continue
-        raise AssertionError(f"WebSocket aceptado {label}")
-    return "ping/pong con token; handshake rechazado sin token y con Origin ajeno"
+        raise AssertionError(f"WebSocket {accepted} aceptado {label}")
+    return f"{accepted} acepta con token; handshake rechazado sin token y con Origin ajeno"
 
 
 @check("backend.permisos", "Sesión y base de datos son privadas")
@@ -100,4 +122,6 @@ def migrations(ctx):
     status = ctx.stack.backend_cli("status")
     assert status.returncode == 0, status.stderr
     assert "pendientes: 0" in status.stdout, status.stdout
+    if "última versión: 0" in status.stdout:
+        raise NotChecked("el árbol no tiene ninguna migración: no hay esquema que comprobar")
     return " · ".join(status.stdout.split("\n")[:2])

@@ -1,7 +1,14 @@
-# Variables extra del backend cuando el stub está arriba. {stub_url} y {work} se expanden.
-# La integración real de Hermes (drakter/agente-hermes) fija aquí sus nombres definitivos.
+# Hermes exigido: se verifica por commit, nunca por texto de versión.
+[hermes]
+commit = "b200f5bc60e31588ba2cb60e288029c4a54ba5fa"
+
+# Variables del backend con stub y Hermes válidos. Nombres de AgentSettings
+# (drakter/agente-hermes). No se pasa ninguna clave: el stub no la necesita.
 [backend_env_with_stub]
-ANTHROPIC_BASE_URL = "{stub_url}"
-ANTHROPIC_API_KEY = "stub-sin-valor-real"
+DRAKTER_AGENT_PROVIDER = "hermes"
+DRAKTER_MODEL_PROVIDER = "dev_stub"
 DRAKTER_MODEL_NAME = "drakter-dev-stub"
-HERMES_HOME = "{work}/hermes-home"
+DRAKTER_DEV_STUB_URL = "{stub_url}"
+DRAKTER_HERMES_COMMAND = "{hermes_command}"
+DRAKTER_HERMES_PORT = "{hermes_port}"
+DRAKTER_AGENT_TOOLS_PORT = "{tools_port}"

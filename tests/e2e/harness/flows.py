@@ -1,7 +1,8 @@
 """Motor de flujos declarativos de `tests/e2e/catalog.toml`.
 
-Un flujo es una lista de pasos HTTP. Si el PRIMER paso da 404/405 de enrutado, el
-módulo aún no está integrado: NO COMPROBADO. Cualquier otro desvío es FALLA.
+Un flujo es una lista de pasos HTTP. Si el PRIMER paso, o uno con `unrouted_ok = true`,
+da 404/405 de enrutado, esa pieza aún no está integrada: NO COMPROBADO. Cualquier otro
+desvío es FALLA.
 """
 from __future__ import annotations
 
@@ -49,7 +50,7 @@ def run_flow(flow: dict[str, Any], ctx: Any) -> str:
         name = step.get("name", f"paso {index + 1}")
         method, path = step["method"], expand(step["path"], variables)
         reply = ctx.api.request(method, path, json_body=expand(step.get("json"), variables))
-        if index == 0 and reply.error_code in UNROUTED:
+        if (index == 0 or step.get("unrouted_ok")) and reply.error_code in UNROUTED:
             raise NotChecked(f"ruta no integrada: {method} {path} → {reply.status}")
         expected = step.get("expect", [200])
         if reply.status not in expected:

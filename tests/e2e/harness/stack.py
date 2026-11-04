@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from . import hermes
 from .http import Api, _OPENER
 
 # Lista blanca: ni claves del entorno ni ELECTRON_RENDERER_URL llegan a los procesos.
@@ -37,6 +38,7 @@ class Layout:
     stub_dir: Path
     python: Path
     config: dict[str, Any]
+    hermes_venv: Path | None = None
 
 
 @dataclass
@@ -47,9 +49,13 @@ class Stack:
     state: dict[str, str] = field(default_factory=dict)  # componente -> "ok" o motivo
     failed: set[str] = field(default_factory=set)  # arrancó mal: FALLA, no NO COMPROBADO
     api: Api | None = None
+    tokens: list[str] = field(default_factory=list)  # uno por arranque del backend
     backend_port: int = 0
     stub_port: int = 0
     cdp_port: int = 0
+    hermes_port: int = 0
+    tools_port: int = 0
+    headless: bool = False
 
     def __post_init__(self) -> None:
         work = self.layout.work
@@ -104,9 +110,11 @@ class Stack:
         env.update(DRAKTER_ENV="development", DRAKTER_PORT=str(self.backend_port),
                    DRAKTER_DATA_DIR=str(self.data_dir), DRAKTER_RUNTIME_DIR=str(self.runtime_dir),
                    DRAKTER_LOG_LEVEL="INFO")
-        if self.available("stub"):
-            values = {"stub_url": f"http://127.0.0.1:{self.stub_port}", "work": str(self.layout.work)}
-            for key, value in self.layout.config.get("backend_env_with_stub", {}).items():
+        if self.available("stub") and self.available("hermes"):
+            values = {"stub_url": f"http://127.0.0.1:{self.stub_port}",
+                      "hermes_command": str(self.layout.hermes_venv / "bin" / "hermes"),
+                      "hermes_port": self.hermes_port, "tools_port": self.tools_port}
+            for key, value in self.layout.config["backend_env_with_stub"].items():
                 env[key] = value.format(**values)
         return env
 
@@ -120,6 +128,20 @@ class Stack:
                                     stderr=subprocess.STDOUT, start_new_session=True)
         self.procs[name] = proc
         return proc
+
+    def check_hermes(self) -> bool:
+        """Preflight previo al backend: un Hermes incorrecto no llega a arrancarse."""
+        venv = self.layout.hermes_venv
+        if venv is None:
+            return self._absent("hermes", "sin venv: usa --hermes-venv o DRAKTER_E2E_HERMES_VENV")
+        if not venv.is_dir():
+            return self._absent("hermes", f"no existe {venv}")
+        found = hermes.problems(venv, self.layout.config["hermes"]["commit"], self.base_env())
+        if found:
+            return self._failed("hermes", "; ".join(found))
+        self.hermes_port, self.tools_port = free_port(), free_port()
+        self.state["hermes"] = "ok"
+        return True
 
     def start_stub(self) -> bool:
         server = self.layout.stub_dir / "server.py"
@@ -158,6 +180,7 @@ class Stack:
             if self.session_file.is_file():
                 session = json.loads(self.session_file.read_text())
                 self.api = Api(session["port"], session["token"])
+                self.tokens.append(session["token"])
                 if self.api.request("GET", "/health", auth=False).status == 200:
                     self.state["backend"] = "ok"
                     return True
@@ -173,15 +196,17 @@ class Stack:
             return self._absent("desktop", "falta node_modules: cd desktop && npm ci")
         if not (desktop / "out" / "main" / "index.js").is_file():
             return self._absent("desktop", "falta desktop/out: npm run build o quita --no-build")
-        if not (os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY")):
+        if not (self.headless or os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY")):
             return self._absent("desktop", "no hay sesión gráfica")
         self.cdp_port = free_port()
         # --no-sandbox SOLO en este arnés: chrome-sandbox no es SUID aquí y no hay sudo.
         # Nunca va en artefactos: el sandbox real queda sin probar y el informe lo avisa.
         argv = [str(binary), "--no-sandbox", f"--remote-debugging-port={self.cdp_port}",
                 "--remote-debugging-address=127.0.0.1",
-                f"--user-data-dir={self.layout.work / 'electron-profile'}", "--disable-gpu",
-                str(desktop)]
+                f"--user-data-dir={self.layout.work / 'electron-profile'}", "--disable-gpu"]
+        if self.headless:
+            argv += ["--ozone-platform=headless", "--ozone-override-screen-size=1280,820"]
+        argv.append(str(desktop))
         proc = self._spawn("desktop", argv, desktop, self.base_env())
         time.sleep(1)
         if proc.poll() is not None:
