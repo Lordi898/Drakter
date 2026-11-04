@@ -7,7 +7,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Header, Query, Request, Response
 
-from app.api.tasks_http import confirmation_response, parse_if_match, service_context
+from app.api.tasks_http import confirmation_response, expected_revision, service_context
 from app.schemas.projects import (
     ProjectCreate,
     ProjectListQuery,
@@ -22,6 +22,7 @@ from app.services.tasks_ports import ConfirmationRequired
 router = APIRouter(prefix="/api/v1/projects", tags=["projects"])
 
 IfMatch = Annotated[str | None, Header()]
+RevisionQuery = Annotated[int | None, Query(ge=1)]
 
 
 @router.get("", response_model=Page[ProjectOut])
@@ -44,36 +45,36 @@ def get_project(request: Request, project_id: UUID) -> ProjectOut:
 
 @router.patch("/{project_id}", response_model=ProjectOut)
 def update_project(
-    request: Request, project_id: UUID, body: ProjectUpdate, if_match: IfMatch = None
+    request: Request, project_id: UUID, body: ProjectUpdate, if_match: IfMatch = None, revision: RevisionQuery = None
 ) -> ProjectOut:
-    revision = parse_if_match(if_match)
+    expected = expected_revision(if_match, revision)
     with service_context(request) as ctx:
-        return service.update_project(ctx, str(project_id), body, expected_revision=revision)
+        return service.update_project(ctx, str(project_id), body, expected_revision=expected)
 
 
 @router.delete("/{project_id}", status_code=204, response_class=Response)
-def delete_project(request: Request, project_id: UUID, if_match: IfMatch = None) -> Response:
-    revision = parse_if_match(if_match)
+def delete_project(request: Request, project_id: UUID, if_match: IfMatch = None, revision: RevisionQuery = None) -> Response:
+    expected = expected_revision(if_match, revision)
     with service_context(request) as ctx:
         try:
-            service.delete_project(ctx, str(project_id), expected_revision=revision)
+            service.delete_project(ctx, str(project_id), expected_revision=expected)
         except ConfirmationRequired as exc:
             return confirmation_response(request, exc)
     return Response(status_code=204)
 
 
 @router.post("/{project_id}/archive", response_model=ProjectOut)
-def archive_project(request: Request, project_id: UUID, if_match: IfMatch = None) -> ProjectOut:
-    revision = parse_if_match(if_match)
+def archive_project(request: Request, project_id: UUID, if_match: IfMatch = None, revision: RevisionQuery = None) -> ProjectOut:
+    expected = expected_revision(if_match, revision)
     with service_context(request) as ctx:
-        return service.archive_project(ctx, str(project_id), expected_revision=revision)
+        return service.archive_project(ctx, str(project_id), expected_revision=expected)
 
 
 @router.post("/{project_id}/unarchive", response_model=ProjectOut)
-def unarchive_project(request: Request, project_id: UUID, if_match: IfMatch = None) -> ProjectOut:
-    revision = parse_if_match(if_match)
+def unarchive_project(request: Request, project_id: UUID, if_match: IfMatch = None, revision: RevisionQuery = None) -> ProjectOut:
+    expected = expected_revision(if_match, revision)
     with service_context(request) as ctx:
-        return service.unarchive_project(ctx, str(project_id), expected_revision=revision)
+        return service.unarchive_project(ctx, str(project_id), expected_revision=expected)
 
 
 @router.get("/{project_id}/progress", response_model=ProjectProgress)
