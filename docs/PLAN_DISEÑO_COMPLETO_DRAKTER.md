@@ -620,6 +620,8 @@ Al detectar una interrupción:
 
 ### 8.1. Arquitectura seleccionada
 
+> ⚠️ **v1:** memoria SQLite + FTS5 tras el Memory Adapter. Lo que este documento dice de OpenViking pasa a futuro (decisión "Memoria v1 en SQLite + FTS5; OpenViking desactivado"), desviación pendiente de confirmar por el usuario (U-1).
+
 Memoria integrada de Hermes + OpenViking como proveedor externo principal.
 
 Solo hay un proveedor externo activo: OpenViking.
@@ -1279,7 +1281,7 @@ Indicadores:
 
 - Estado de Hermes.
 - Estado del backend.
-- Estado de OpenViking.
+- Estado de la memoria.
 - Estado de la base de datos.
 - Estado del micrófono.
 - Estado de STT.
@@ -1312,7 +1314,7 @@ Servicios:
 - Runner de Hermes.
 - Drakter MCP Server.
 - Voice Service.
-- OpenViking.
+- OpenViking (desactivado en v1).
 - SQLite.
 
 Los servicios se podrán iniciar y detener desde la aplicación.
@@ -1400,7 +1402,7 @@ Se conservarán versiones recientes y un procedimiento de restauración probado.
 ### Fase 6. Memoria
 
 - Archivos de Hermes.
-- OpenViking.
+- OpenViking (desactivado en v1).
 - Extracción y clasificación configuradas en OpenViking (sin pipeline propio).
 - Recuperación.
 - Evaluación.
@@ -1452,7 +1454,7 @@ Se conservarán versiones recientes y un procedimiento de restauración probado.
 5. Se inicia o verifica el backend FastAPI.
 6. El backend comprueba SQLite.
 7. Se inicia o verifica el runner de Hermes (proceso aparte sobre `AIAgent`, sin gateway, supervisado por FastAPI).
-8. Se inicia o verifica OpenViking.
+8. OpenViking no se inicia en v1 (desactivado).
 9. Se inicia o verifica el servidor MCP.
 10. Se comprueba el servicio de voz.
 11. Se recupera el estado del Workspace.

@@ -242,17 +242,18 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 - [ ] Definir cuatro capas de memoria.
 - [ ] Crear configuración e integración de `memory/` (sin recuerdos ni datos personales).
 - [ ] Crear Memory Adapter.
-- [ ] Configurar OpenViking como proveedor de Hermes.
-- [ ] Configurar capas L0/L1/L2.
-- [ ] Elegir embedding multilingüe.
-- [ ] Configurar y comprobar la extracción de recuerdos de OpenViking.
-- [ ] Configurar y comprobar la clasificación de OpenViking.
-- [ ] Configurar y comprobar la deduplicación de OpenViking.
-- [ ] Configurar y comprobar la detección de contradicciones de OpenViking.
+- [ ] Implementar la memoria SQLite + FTS5 tras el Memory Adapter.
+  ⚠️ OpenViking queda desactivado en v1 (entrada "Memoria v1 en SQLite + FTS5; OpenViking desactivado" de `DECISIONS.md`); desviación pendiente de confirmar por el usuario (U-1).
+- [ ] Configurar capas L0/L1/L2 (futuro, con OpenViking).
+- [ ] Elegir embedding multilingüe (futuro, con OpenViking).
+- [ ] Implementar y comprobar la extracción de recuerdos en el Memory Adapter.
+- [ ] Implementar y comprobar la clasificación en el Memory Adapter.
+- [ ] Implementar y comprobar la deduplicación en el Memory Adapter.
+- [ ] Implementar y comprobar la detección de contradicciones en el Memory Adapter.
 - [ ] Configurar y comprobar la memoria de trabajo en Hermes y OpenViking.
-- [ ] Configurar y comprobar la memoria episódica en Hermes y OpenViking.
-- [ ] Configurar y comprobar la memoria semántica en Hermes y OpenViking.
-- [ ] Configurar y comprobar la memoria procedimental en Hermes y OpenViking.
+- [ ] Implementar y comprobar la memoria episódica en el Memory Adapter.
+- [ ] Implementar y comprobar la memoria semántica en el Memory Adapter.
+- [ ] Implementar y comprobar la memoria procedimental en el Memory Adapter.
 - [ ] Configurar y comprobar la recuperación selectiva.
 - [ ] Configurar y comprobar los límites de contexto.
 - [ ] Configurar y comprobar los registros de memoria.

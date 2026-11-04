@@ -225,9 +225,8 @@ prevalecen sobre esta tabla.
   Memoria nativa          Memoria de Hermes       MEMORY.md, USER.md y
                                                   sesiones
 
-  Memoria contextual      OpenViking              Único proveedor externo;
-                                                  capas L0/L1/L2; API
-                                                  soportada
+  Memoria contextual      SQLite + FTS5           Tras el Memory Adapter;
+                                                  OpenViking desactivado en v1
 
   Contexto de código      ByteRover (opcional)    Utilidad opcional de
                                                   desarrollo; fuera de la
@@ -1198,6 +1197,10 @@ exclusivamente mediante herramientas validadas.
 
 ## FASE 16 --- Memoria persistente
 
+> ⚠️ **v1:** memoria SQLite + FTS5 tras el Memory Adapter. Lo que esta fase
+> dice de OpenViking pasa a futuro (decisión "Memoria v1 en SQLite + FTS5; OpenViking desactivado"),
+> desviación pendiente de confirmar por el usuario (U-1).
+
 **Objetivo:** dotar a Drakter de memoria entre sesiones y recuperación
 selectiva.
 
@@ -1241,7 +1244,7 @@ repositorio.
 -   [ ] Comprobar qué aportan OpenViking y Hermes en procedencia, fecha,
     confianza y caducidad de recuerdos; lo que falte, con ⚠️.
 -   [ ] Configurar y comprobar la extracción de candidatos en OpenViking.
--   [ ] Configurar OpenViking como proveedor de Hermes.
+-   [ ] Implementar la memoria SQLite + FTS5 tras el Memory Adapter.
 -   [ ] Configurar capas L0/L1/L2.
 -   [ ] Elegir embedding multilingüe.
 -   [ ] Configurar y comprobar en OpenViking la clasificación, la
@@ -1732,6 +1735,7 @@ DRAKTER_MODEL_NAME=claude-haiku-5-5
 HERMES_COMMAND=
 HERMES_CONFIG_PATH=
 
+# OpenViking desactivado en v1
 OPENVIKING_ENDPOINT=
 OPENVIKING_API_KEY=
 

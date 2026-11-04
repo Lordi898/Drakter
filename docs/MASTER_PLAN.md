@@ -66,7 +66,7 @@ Los tres estarán conectados mediante APIs internas.
 | Voz TTS principal | Kokoro |
 | Voz TTS alternativa | Piper |
 | Memoria nativa del agente | Memoria nativa de Hermes |
-| Memoria jerárquica (L0/L1/L2) | OpenViking |
+| Memoria jerárquica (L0/L1/L2) | OpenViking (desactivado en v1, ver §10) |
 | Contexto del repositorio de desarrollo (utilidad opcional, fuera del producto) | ByteRover |
 | Habilidades del agente | Hermes Skills |
 | Orquestación futura de voz | LiveKit Agents |
@@ -605,6 +605,8 @@ Hermes Skills será el mecanismo principal para las capacidades ejecutables.
 
 ## 10. Arquitectura de memoria
 
+> ⚠️ **v1:** la memoria es SQLite + FTS5 tras el Memory Adapter, y el backend la recupera. OpenViking queda desactivado, como opción posterior llamada desde el backend por HTTP, nunca como plugin de Hermes. Todo lo que este §10 dice de `memory.provider`, `viking_*` y las capas L0/L1/L2 pasa a **futuro** (decisión "Memoria v1 en SQLite + FTS5; OpenViking desactivado"). Desviación de una decisión del usuario, pendiente de su confirmación (U-1).
+
 La memoria de Drakter combina **la memoria nativa de Hermes** y **OpenViking**, con la base de datos del Workspace como fuente de verdad de los datos operativos. Decisión del usuario del 2026-11-04 (ver `DECISIONS.md`). Hindsight y Mem0 quedan fuera.
 
 ### 10.1. Reparto de responsabilidades
@@ -618,8 +620,6 @@ La memoria de Drakter combina **la memoria nativa de Hermes** y **OpenViking**, 
 La memoria nunca es la fuente de verdad de un dato operativo: guarda la referencia a la entidad, no una copia de su estado.
 
 Hermes solo admite un proveedor de memoria externo activo. Ese lugar lo ocupa OpenViking (`memory.provider: openviking`), y la memoria nativa sigue activa a su lado.
-
-> ⚠️ Con el runner propio no hay plugin de memoria en Hermes: lo que este §10 describe con `memory.provider` y `viking_*` queda pendiente de revisar (decisión "El backend recupera los recuerdos").
 
 **`USER.md`:** en el repositorio (`agent/context/USER.md`) solo hay una plantilla sin datos reales. El `USER.md` nativo, en el `HERMES_HOME` del perfil de Drakter, guarda lo esencial y OpenViking guarda lo demás. La plantilla rellenada por el usuario vive fuera del repositorio, en el directorio de datos de Drakter, y solo inicializa el `USER.md` nativo; a partir de ahí manda el nativo (decisión "agent/identity/USER.md es plantilla; el USER.md vivo es el de Hermes").
 
