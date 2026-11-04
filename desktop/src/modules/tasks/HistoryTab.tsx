@@ -12,7 +12,7 @@ export interface HistoryTabProps {
 
 export function HistoryTab({ taskId, version }: HistoryTabProps) {
   const [entries, setEntries] = useState<readonly HistoryEntry[]>([])
-  const [cursor, setCursor] = useState<string | null>(null)
+  const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [attempt, setAttempt] = useState(0)
@@ -25,7 +25,7 @@ export function HistoryTab({ taskId, version }: HistoryTabProps) {
       .then((page) => {
         if (!current) return
         setEntries(page.items)
-        setCursor(page.next_cursor)
+        setTotal(page.total)
       })
       .catch((e: unknown) => {
         if (current) setError(errorMessage(e))
@@ -39,11 +39,11 @@ export function HistoryTab({ taskId, version }: HistoryTabProps) {
   }, [taskId, version, attempt])
 
   async function more() {
-    if (cursor === null) return
+    if (entries.length >= total) return
     try {
-      const page = await taskHistory(taskId, 50, cursor)
+      const page = await taskHistory(taskId, 50, entries.length)
       setEntries((list) => [...list, ...page.items])
-      setCursor(page.next_cursor)
+      setTotal(page.total)
     } catch (e) {
       setError(errorMessage(e))
     }
@@ -85,7 +85,7 @@ export function HistoryTab({ taskId, version }: HistoryTabProps) {
           )
         })}
       </ol>
-      {cursor !== null ? (
+      {entries.length < total ? (
         <Button size="sm" variant="outline" className="self-start" onClick={() => void more()}>
           Cargar más
         </Button>

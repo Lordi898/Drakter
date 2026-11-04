@@ -12,12 +12,12 @@ import { TasksDrawing } from './TasksDrawing'
 import { useTaskActions } from './useTaskActions'
 import { useTaskRunner } from './useTaskRunner'
 import { useTasks } from './useTasks'
-import type { TaskListParams } from './types'
+import type { TaskListParams } from './api'
 
 function toParams(filters: TaskFilterState): TaskListParams {
   const q = filters.q.trim()
   return {
-    archived: filters.archived,
+    include_archived: filters.includeArchived,
     limit: 50,
     root_only: filters.rootOnly && q === '',
     ...(q === '' ? {} : { q }),
@@ -39,10 +39,10 @@ export function TasksPage() {
     setVersion((n) => n + 1)
   }, [reload])
   const { run, ticket, resolveConfirmation } = useTaskRunner(onChanged)
-  const actions = useTaskActions(run)
+  const actions = useTaskActions(run, () => setOpenId(null))
 
   const filtered =
-    filters.q.trim() !== '' || filters.status !== 'all' || filters.priority !== 'all' || filters.archived !== 'exclude'
+    filters.q.trim() !== '' || filters.status !== 'all' || filters.priority !== 'all' || filters.includeArchived
   const showEmpty = !list.loading && list.error === null && list.items.length === 0
 
   return (
@@ -83,7 +83,7 @@ export function TasksPage() {
         ) : (
           <div className="flex flex-col items-start gap-4">
             <EmptyState
-              title="Todavía no hay tareas"
+              title="Aún no hay tareas"
               description="Crea la primera y añade subtareas, prioridad y fecha límite cuando la necesites."
               drawing={<TasksDrawing />}
             />

@@ -64,6 +64,16 @@ export function parseTags(text: string): string[] {
   return [...seen]
 }
 
+const FIELD_KEYS: Readonly<Record<string, true>> = {
+  title: true,
+  description: true,
+  status: true,
+  priority: true,
+  due_date: true,
+  estimated_minutes: true,
+  tags: true
+}
+
 function sameList(a: readonly string[], b: readonly string[]): boolean {
   return a.length === b.length && a.every((value, index) => value === b[index])
 }
@@ -84,7 +94,7 @@ function TaskFormBody({
   const [dueDate, setDueDate] = useState(task?.due_date ?? '')
   const [minutes, setMinutes] = useState(task?.estimated_minutes?.toString() ?? '')
   const [tags, setTags] = useState(task?.tags.map((tag) => tag.name).join(', ') ?? '')
-  const [titleError, setTitleError] = useState<string | null>(null)
+  const [errors, setErrors] = useState<Readonly<Record<string, string>>>({})
   const [saving, setSaving] = useState(false)
   const completed = task?.status === 'completed'
 
@@ -92,10 +102,10 @@ function TaskFormBody({
     event.preventDefault()
     const cleanTitle = title.trim()
     if (cleanTitle === '') {
-      setTitleError('Escribe un título.')
+      setErrors({ title: 'Escribe un título.' })
       return
     }
-    setTitleError(null)
+    setErrors({})
     const estimated = minutes.trim() === '' ? null : Number(minutes)
     const cleanDescription = description.trim() === '' ? null : description.trim()
     const tagNames = parseTags(tags)
@@ -124,7 +134,14 @@ function TaskFormBody({
       if (Object.keys(patch).length > 0) result = await updateTask(task.id, patch, task.revision)
       if (!sameList(tagNames, task.tags.map((tag) => tag.name))) result = await replaceTaskTags(task.id, tagNames)
       return result
-    }, task === undefined ? 'Tarea creada' : 'Cambios guardados')
+    }, task === undefined ? 'Tarea creada' : 'Cambios guardados', (details) => {
+      const next: Record<string, string> = {}
+      for (const detail of details) {
+        const key = detail.field?.split('.').pop() ?? 'form'
+        next[key in FIELD_KEYS ? key : 'form'] ??= detail.message
+      }
+      setErrors(next)
+    })
     setSaving(false)
     if (saved !== undefined) {
       onSaved?.(saved)
@@ -134,7 +151,7 @@ function TaskFormBody({
 
   return (
     <form onSubmit={(event) => void submit(event)} className="flex flex-col gap-4" noValidate>
-      <Field label="Título" error={titleError}>
+      <Field label="Título" error={errors.title}>
         {(control) => (
           <TextInput
             {...control}
@@ -145,13 +162,17 @@ function TaskFormBody({
           />
         )}
       </Field>
-      <Field label="Descripción">
+      <Field label="Descripción" error={errors.description}>
         {(control) => (
           <Textarea {...control} rows={3} value={description} onChange={(event) => setDescription(event.target.value)} />
         )}
       </Field>
       <div className="grid grid-cols-2 gap-4">
-        <Field label="Estado" hint={completed ? 'Está completada: reábrela para cambiar el estado.' : undefined}>
+        <Field
+          label="Estado"
+          error={errors.status}
+          hint={completed ? 'Está completada: reábrela para cambiar el estado.' : undefined}
+        >
           {(control) => (
             <Select value={status} disabled={completed} onValueChange={(value) => setStatus(value as EditableTaskStatus)}>
               <SelectTrigger id={control.id} className="w-full" aria-describedby={control['aria-describedby']}>
@@ -167,7 +188,7 @@ function TaskFormBody({
             </Select>
           )}
         </Field>
-        <Field label="Prioridad">
+        <Field label="Prioridad" error={errors.priority}>
           {(control) => (
             <Select value={priority} onValueChange={(value) => setPriority(value as Priority)}>
               <SelectTrigger id={control.id} className="w-full">
@@ -183,12 +204,12 @@ function TaskFormBody({
             </Select>
           )}
         </Field>
-        <Field label="Fecha límite">
+        <Field label="Fecha límite" error={errors.due_date}>
           {(control) => (
             <TextInput {...control} type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} />
           )}
         </Field>
-        <Field label="Estimación (minutos)">
+        <Field label="Estimación (minutos)" error={errors.estimated_minutes}>
           {(control) => (
             <TextInput
               {...control}
@@ -201,9 +222,14 @@ function TaskFormBody({
           )}
         </Field>
       </div>
-      <Field label="Etiquetas" hint="Separadas por comas.">
+      <Field label="Etiquetas" hint="Separadas por comas." error={errors.tags}>
         {(control) => <TextInput {...control} value={tags} onChange={(event) => setTags(event.target.value)} />}
       </Field>
+      {errors.form ? (
+        <p role="alert" className="text-sm text-destructive">
+          {errors.form}
+        </p>
+      ) : null}
       <DialogFooter>
         <Button type="button" variant="outline" onClick={onClose}>
           Cancelar

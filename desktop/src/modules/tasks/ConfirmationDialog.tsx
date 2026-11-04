@@ -8,53 +8,45 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog'
-import { notify } from '@/services/notify'
-import { confirmations, type ConfirmationTicket } from './client'
-import { errorMessage } from './useTasks'
-
-export type ConfirmationOutcome = 'approved' | 'rejected'
+import { registerConfirmation, reviewConfirmation, type ReviewOutcome } from '@/stores/confirmations'
+import type { PendingTicket } from './useTaskRunner'
 
 export interface ConfirmationDialogProps {
-  /** Ticket devuelto por el backend; `null` mantiene el diálogo cerrado. */
-  readonly ticket: ConfirmationTicket | null
-  /** Se llama tras aprobar o rechazar en el backend. Nada se ejecuta sin la aprobación explícita. */
-  readonly onResolved: (outcome: ConfirmationOutcome) => void
+  /** Confirmación que el backend pidió; `null` mantiene el diálogo cerrado. */
+  readonly ticket: PendingTicket | null
+  /** `approved` recarga; `rejected` cierra; `dismissed` no hace nada; `expired`/`unavailable` avisan. */
+  readonly onResolved: (outcome: ReviewOutcome) => void
 }
 
-/** Muestra siempre lo que el backend pide confirmar. Cerrar sin aprobar equivale a rechazar. */
+/**
+ * Muestra lo que el backend pide confirmar. La decisión NO se toma aquí: el botón abre
+ * la revisión nativa del proceso principal, que es quien aprueba o rechaza.
+ */
 export function ConfirmationDialog({ ticket, onResolved }: ConfirmationDialogProps) {
   const [busy, setBusy] = useState(false)
 
-  async function resolve(outcome: ConfirmationOutcome) {
+  function review(event: React.MouseEvent<HTMLButtonElement>) {
     if (ticket === null || busy) return
+    const nativeEvent = event.nativeEvent
     setBusy(true)
-    try {
-      if (outcome === 'approved') await confirmations.approve(ticket.id)
-      else await confirmations.reject(ticket.id)
-      onResolved(outcome)
-    } catch (error) {
-      notify({
-        tone: 'error',
-        title: outcome === 'approved' ? 'No se pudo confirmar la acción' : 'No se pudo descartar la acción',
-        body: errorMessage(error)
-      })
-      onResolved('rejected')
-    } finally {
-      setBusy(false)
-    }
+    registerConfirmation(ticket)
+    reviewConfirmation(ticket.id, nativeEvent)
+      .then(onResolved)
+      .catch(() => onResolved('unavailable'))
+      .finally(() => setBusy(false))
   }
 
   return (
     <Dialog
       open={ticket !== null}
       onOpenChange={(open) => {
-        if (!open) void resolve('rejected')
+        if (!open) onResolved('rejected')
       }}
     >
       <DialogContent className="rounded-[var(--radius-sheet)]">
         <DialogHeader>
           <DialogTitle>Esto necesita tu confirmación</DialogTitle>
-          <DialogDescription>No se hará nada hasta que lo apruebes.</DialogDescription>
+          <DialogDescription>No se hará nada hasta que lo apruebes en la ventana de revisión.</DialogDescription>
         </DialogHeader>
         {ticket !== null ? (
           <div className="flex flex-col gap-2 rounded-md border border-destructive/40 bg-card p-4">
@@ -67,11 +59,11 @@ export function ConfirmationDialog({ ticket, onResolved }: ConfirmationDialogPro
           </div>
         ) : null}
         <DialogFooter>
-          <Button variant="outline" disabled={busy} onClick={() => void resolve('rejected')}>
-            Cancelar
+          <Button variant="outline" onClick={() => onResolved('rejected')}>
+            Cerrar
           </Button>
-          <Button variant="destructive" disabled={busy} onClick={() => void resolve('approved')}>
-            {busy ? 'Procesando…' : 'Confirmar'}
+          <Button variant="destructive" disabled={busy} onClick={review}>
+            {busy ? 'Esperando tu decisión…' : 'Revisar y decidir'}
           </Button>
         </DialogFooter>
       </DialogContent>

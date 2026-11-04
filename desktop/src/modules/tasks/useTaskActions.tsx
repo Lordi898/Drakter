@@ -24,7 +24,7 @@ export interface TaskActions {
 }
 
 /** Acciones de una tarea sobre `run`. Completar con subtareas abiertas pregunta antes. */
-export function useTaskActions(run: RunTask): TaskActions {
+export function useTaskActions(run: RunTask, onDeleted: () => void): TaskActions {
   const [asking, setAsking] = useState<Target | null>(null)
 
   function toggle(task: Target) {
@@ -71,7 +71,13 @@ export function useTaskActions(run: RunTask): TaskActions {
     toggle,
     archive: (task) => void run(() => archiveTask(task.id, task.revision), 'Tarea archivada'),
     unarchive: (task) => void run(() => unarchiveTask(task.id, task.revision), 'Tarea restaurada'),
-    remove: (task) => void run(() => deleteTask(task.id, task.revision)),
+    remove: (task) =>
+      void run(async () => {
+        await deleteTask(task.id, task.revision)
+        return true
+      }, 'Tarea eliminada').then((done) => {
+        if (done) onDeleted()
+      }),
     subtasksPrompt
   }
 }

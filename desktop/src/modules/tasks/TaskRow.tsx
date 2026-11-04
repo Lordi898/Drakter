@@ -1,6 +1,6 @@
 import { Check, ChevronRight, RotateCcw } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
+import { GuardedButton } from './GuardedButton'
 import { cn } from '@/lib/utils'
 import { BlockedBadge, DueBadge, PriorityLabel, StatusBadge } from './TaskBadges'
 import type { Task } from './types'
@@ -16,16 +16,22 @@ export function TaskRow({ task, onOpen, onToggle }: TaskRowProps) {
   const closed = done || task.status === 'cancelled'
   return (
     <li className="flex items-center gap-3 border-b px-4 py-3 last:border-b-0">
-      <Button
+      <GuardedButton
         variant="outline"
         size="icon-sm"
-        disabled={task.status === 'cancelled' || task.archived_at !== null}
+        unavailableReason={
+          task.archived_at !== null
+            ? 'Está archivada: restáurala para cambiarla.'
+            : task.status === 'cancelled'
+              ? 'Está cancelada: edítala para cambiar su estado.'
+              : null
+        }
         aria-label={done ? `Reabrir «${task.title}»` : `Completar «${task.title}»`}
         title={done ? 'Reabrir' : 'Completar'}
         onClick={() => onToggle(task)}
       >
         {done ? <RotateCcw aria-hidden="true" /> : <Check aria-hidden="true" className="opacity-60" />}
-      </Button>
+      </GuardedButton>
       <button
         type="button"
         onClick={() => onOpen(task)}

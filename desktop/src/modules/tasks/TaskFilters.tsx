@@ -16,7 +16,7 @@ export interface TaskFilterState {
   readonly q: string
   readonly status: TaskStatus | 'all'
   readonly priority: Priority | 'all'
-  readonly archived: 'exclude' | 'only'
+  readonly includeArchived: boolean
   readonly rootOnly: boolean
 }
 
@@ -24,7 +24,7 @@ export const DEFAULT_FILTERS: TaskFilterState = {
   q: '',
   status: 'all',
   priority: 'all',
-  archived: 'exclude',
+  includeArchived: false,
   rootOnly: true
 }
 
@@ -101,22 +101,14 @@ export function TaskFilters({ value, onChange }: TaskFiltersProps) {
           </Select>
         )}
       </Field>
-      <Field label="Mostrar">
-        {(control) => (
-          <Select
-            value={value.archived}
-            onValueChange={(archived) => onChange({ ...value, archived: archived as TaskFilterState['archived'] })}
-          >
-            <SelectTrigger id={control.id} className="w-36">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="exclude">Activas</SelectItem>
-              <SelectItem value="only">Archivadas</SelectItem>
-            </SelectContent>
-          </Select>
-        )}
-      </Field>
+      <div className="flex items-center gap-2 pb-2">
+        <Switch
+          id="tasks-archived"
+          checked={value.includeArchived}
+          onCheckedChange={(includeArchived) => onChange({ ...value, includeArchived })}
+        />
+        <Label htmlFor="tasks-archived">Incluir archivadas</Label>
+      </div>
       <div className="flex items-center gap-2 pb-2">
         <Switch
           id="tasks-root-only"

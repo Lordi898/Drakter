@@ -2,6 +2,7 @@ import { Archive, ArchiveRestore, Check, Pencil, RotateCcw, Trash2 } from 'lucid
 import { useState } from 'react'
 import { Tabs } from 'radix-ui'
 import { Button } from '@/components/ui/button'
+import { GuardedButton } from './GuardedButton'
 import {
   Dialog,
   DialogContent,
@@ -159,14 +160,30 @@ function DataTab({
         </Row>
       </dl>
       <div className="flex flex-wrap gap-2 border-t pt-4">
-        <Button size="sm" variant="outline" onClick={onEdit} disabled={archived}>
+        <GuardedButton
+          size="sm"
+          variant="outline"
+          onClick={onEdit}
+          unavailableReason={archived ? 'Está archivada: restáurala para editarla.' : null}
+        >
           <Pencil aria-hidden="true" />
           Editar
-        </Button>
-        <Button size="sm" variant="outline" onClick={() => actions.toggle(detail)} disabled={archived || detail.status === 'cancelled'}>
+        </GuardedButton>
+        <GuardedButton
+          size="sm"
+          variant="outline"
+          onClick={() => actions.toggle(detail)}
+          unavailableReason={
+            archived
+              ? 'Está archivada: restáurala para cambiar su estado.'
+              : detail.status === 'cancelled'
+                ? 'Está cancelada: edítala para cambiar su estado.'
+                : null
+          }
+        >
           {done ? <RotateCcw aria-hidden="true" /> : <Check aria-hidden="true" />}
           {done ? 'Reabrir' : 'Completar'}
-        </Button>
+        </GuardedButton>
         <Button
           size="sm"
           variant="outline"

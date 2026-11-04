@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { addTaskDependency, listTasks, removeTaskDependency } from './api'
 import { Field } from './Field'
+import { GuardedButton } from './GuardedButton'
 import { StatusBadge } from './TaskBadges'
 import type { RunTask } from './useTaskRunner'
 import { errorMessage } from './useTasks'
@@ -23,7 +24,7 @@ export function DependenciesTab({ detail, run, onOpen }: DependenciesTabProps) {
 
   useEffect(() => {
     let current = true
-    listTasks({ archived: 'exclude', limit: 100, sort: 'title' })
+    listTasks({ limit: 100 })
       .then((page) => {
         if (current) setCandidates(page.items)
       })
@@ -94,9 +95,9 @@ export function DependenciesTab({ detail, run, onOpen }: DependenciesTabProps) {
               </Select>
             )}
           </Field>
-          <Button
+          <GuardedButton
             variant="outline"
-            disabled={choice === ''}
+            unavailableReason={choice === '' ? 'Elige primero una tarea de la lista.' : null}
             onClick={() => {
               void run(() => addTaskDependency(detail.id, choice), 'Dependencia añadida').then((result) => {
                 if (result !== undefined) setChoice('')
@@ -104,7 +105,7 @@ export function DependenciesTab({ detail, run, onOpen }: DependenciesTabProps) {
             }}
           >
             Añadir
-          </Button>
+          </GuardedButton>
         </div>
       </section>
 

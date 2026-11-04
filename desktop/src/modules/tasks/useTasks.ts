@@ -1,11 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ApiError } from './client'
-import { getTask, listTasks } from './api'
-import type { Task, TaskDetail, TaskListParams } from './types'
+import { describeError } from '@/services/api'
+import { getTask, listTasks, type TaskListParams } from './api'
+import type { Task, TaskDetail } from './types'
 
 export function errorMessage(error: unknown): string {
-  if (error instanceof ApiError) return error.message
-  return error instanceof Error ? error.message : 'No se pudo completar la operación.'
+  return describeError(error, 'No se pudo completar la operación.')
 }
 
 export interface TasksState {
@@ -19,9 +18,9 @@ export interface TasksState {
 }
 
 /** Lista paginada por `next_cursor`. Una respuesta de una petición anterior se descarta. */
-export function useTasks(params: Omit<TaskListParams, 'cursor'>): TasksState {
+export function useTasks(params: Omit<TaskListParams, 'offset'>): TasksState {
   const [items, setItems] = useState<readonly Task[]>([])
-  const [cursor, setCursor] = useState<string | null>(null)
+  const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -37,12 +36,12 @@ export function useTasks(params: Omit<TaskListParams, 'cursor'>): TasksState {
       .then((page) => {
         if (id !== latest.current) return
         setItems(page.items)
-        setCursor(page.next_cursor)
+        setTotal(page.total)
       })
       .catch((e: unknown) => {
         if (id !== latest.current) return
         setItems([])
-        setCursor(null)
+        setTotal(0)
         setError(errorMessage(e))
       })
       .finally(() => {
@@ -51,14 +50,14 @@ export function useTasks(params: Omit<TaskListParams, 'cursor'>): TasksState {
   }, [key, tick])
 
   const loadMore = useCallback(() => {
-    if (cursor === null) return
+    if (items.length >= total) return
     const id = ++latest.current
     setLoadingMore(true)
-    listTasks({ ...(JSON.parse(key) as TaskListParams), cursor })
+    listTasks({ ...(JSON.parse(key) as TaskListParams), offset: items.length })
       .then((page) => {
         if (id !== latest.current) return
         setItems((current) => [...current, ...page.items])
-        setCursor(page.next_cursor)
+        setTotal(page.total)
       })
       .catch((e: unknown) => {
         if (id === latest.current) setError(errorMessage(e))
@@ -66,11 +65,11 @@ export function useTasks(params: Omit<TaskListParams, 'cursor'>): TasksState {
       .finally(() => {
         if (id === latest.current) setLoadingMore(false)
       })
-  }, [cursor, key])
+  }, [items.length, total, key])
 
   const reload = useCallback(() => setTick((n) => n + 1), [])
 
-  return { items, loading, loadingMore, error, hasMore: cursor !== null, loadMore, reload }
+  return { items, loading, loadingMore, error, hasMore: items.length < total, loadMore, reload }
 }
 
 export interface TaskDetailState {
