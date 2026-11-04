@@ -126,7 +126,7 @@ En websocket, cualquier rechazo se hace antes de aceptar: se consume `websocket.
 
 - `health.py`: `GET /health` (`ui`) → `{"status":"ok"}`; hace `SELECT 1` con `connect` sin `create`, así una base desaparecida da 503. Si falla → `AppError("service_unavailable", ..., 503)`, sin detalles.
 - `auth.py`: `GET /api/v1/auth/check` (`ui`) → `{"authenticated": true}`.
-- `events.py`: `WS /api/v1/events?after_seq&boot_id`, único WebSocket. Solo servidor→cliente: si el cliente ofreció `drakter.v1`, acepta con ese subprotocolo; cualquier mensaje entrante cierra con 1003. `after_seq` es entero ≥ 0 y `boot_id` un `Id`; opcionales. Esta base aún no emite eventos.
+- `events.py`: `WS /api/v1/events?after_seq&boot_id`, único WebSocket, servidor→cliente sobre `app.state.event_hub` (`app/events/`, de `drakter/agente-hermes`). Si el cliente ofreció `drakter.v1`, acepta con ese subprotocolo; cualquier mensaje entrante cierra con 1003. Detalle en `app/integrations/hermes/CONTRACT.md`.
 
 ## `app/database/`
 
