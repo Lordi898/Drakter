@@ -1,10 +1,69 @@
+import { useSyncExternalStore } from 'react'
 import type { CharacterState } from '@/character/types'
+import { getAgentStatus } from '@/services/api'
+import type { AgentState } from '@/services/protocol'
+import { getLinkStatus, startBackendLink, subscribeLinkStatus, subscribeServerEvents } from '@/services/ws'
 
 /**
- * Estado de Drakter visto por la interfaz. Sin backend no hay eventos, así que
- * es `offline` de forma honesta. El equipo de comunicación conectará aquí los
- * eventos reales; ningún componente debe simular otro estado.
+ * Estado de Drakter visto por la interfaz. `offline` si el enlace no está
+ * abierto; si no, el último `agent.status_changed` recibido (`idle` por defecto).
+ * Nada simulado.
  */
+let reported: AgentState = 'idle'
+/** Se incrementa con cada cambio; una siembra obsoleta no pisa un evento más reciente. */
+let version = 0
+const listeners = new Set<() => void>()
+let wired = false
+
+function emit(): void {
+  listeners.forEach((listener) => listener())
+}
+
+export function getDrakterState(): CharacterState {
+  return getLinkStatus() === 'open' ? reported : 'offline'
+}
+
+/** Al abrir el enlace se lee el estado real del agente; si falla, se queda en `idle` sin inventar nada. */
+async function seed(): Promise<void> {
+  const mine = version
+  try {
+    const info = await getAgentStatus()
+    if (mine !== version) return
+    reported = info.state
+    emit()
+  } catch {
+    console.warn('No se pudo leer el estado del agente.')
+  }
+}
+
+function wire(): void {
+  if (wired) return
+  wired = true
+  subscribeServerEvents((event) => {
+    if (event.type !== 'agent.status_changed') return
+    version += 1
+    reported = event.payload.state
+    emit()
+  })
+  // Al cambiar el enlace (perdido o recién abierto) se parte de un estado neutro.
+  subscribeLinkStatus((status) => {
+    version += 1
+    reported = 'idle'
+    emit()
+    if (status === 'open') void seed()
+  })
+}
+
+wire()
+
+export function subscribeDrakterState(listener: () => void): () => void {
+  listeners.add(listener)
+  startBackendLink()
+  return () => {
+    listeners.delete(listener)
+  }
+}
+
 export function useDrakterState(): CharacterState {
-  return 'offline'
+  return useSyncExternalStore(subscribeDrakterState, getDrakterState)
 }
