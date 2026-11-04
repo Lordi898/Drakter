@@ -31,15 +31,15 @@ class ApprovalSigner:
     def __init__(self) -> None:
         self._key = secrets.token_bytes(32)
 
-    def issue(self, action_id: str, tool_name: str, args_hash: str, expires_at: str) -> str:
-        material = "\x00".join((action_id, tool_name, args_hash, expires_at))
+    def issue(self, action_id: str, tool_name: str, params_hash: str, expires_at: str) -> str:
+        material = "\x00".join((action_id, tool_name, params_hash, expires_at))
         mac = hmac.new(self._key, material.encode("utf-8"), hashlib.sha256).digest()
         return base64.urlsafe_b64encode(mac).decode("ascii")
 
     def verify(
-        self, token: str, action_id: str, tool_name: str, args_hash: str, expires_at: str
+        self, token: str, action_id: str, tool_name: str, params_hash: str, expires_at: str
     ) -> bool:
-        expected = self.issue(action_id, tool_name, args_hash, expires_at)
+        expected = self.issue(action_id, tool_name, params_hash, expires_at)
         return hmac.compare_digest(expected.encode("ascii"), token.encode("utf-8"))
 
     def __repr__(self) -> str:

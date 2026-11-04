@@ -15,7 +15,7 @@ def canonical_json(value: Any) -> str:
     )
 
 
-def args_hash(tool_name: str, canonical_args: str) -> str:
+def compute_params_hash(tool_name: str, canonical_args: str) -> str:
     """Bind the tool to its exact arguments."""
     material = "\x00".join((tool_name, canonical_args))
     return hashlib.sha256(material.encode("utf-8")).hexdigest()

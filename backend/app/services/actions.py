@@ -40,7 +40,7 @@ from pydantic import BaseModel, ValidationError
 from app.audit.writer import AuditEvent, filter_params, write
 from app.core.errors import AppError
 from app.database.connection import connect
-from app.permissions.canonical import after, args_hash, canonical_json, utc_now
+from app.permissions.canonical import after, canonical_json, compute_params_hash, utc_now
 from app.permissions.credentials import ApprovalSigner
 from app.permissions.engine import DEFAULT_BULK_THRESHOLD, PermissionEngine
 from app.permissions.models import (
@@ -155,7 +155,7 @@ class ActionService:
                 return self._refuse(
                     conn, ctx, spec, ErrorCode.VALIDATION_ERROR.value, "Invalid arguments"
                 )
-            digest = args_hash(spec.name, canonical)
+            digest = compute_params_hash(spec.name, canonical)
             conn.execute("BEGIN IMMEDIATE")
             try:
                 decision, affected = self._decide(conn, ctx, spec, params)
@@ -211,7 +211,7 @@ class ActionService:
         try:
             args = params.model_dump(mode="json")
             canonical = canonical_json(args)
-            digest = args_hash(spec.name, canonical)
+            digest = compute_params_hash(spec.name, canonical)
             conn.execute("BEGIN IMMEDIATE")
             try:
                 decision, affected = self._decide(conn, ctx, spec, params)
@@ -616,7 +616,7 @@ class ActionService:
         spec = self.registry.get(row["tool_name"])
         if spec is None:
             raise _error(ErrorCode.CONFIRMATION_UNAVAILABLE, "Action no longer exists")
-        if args_hash(row["tool_name"], row["args_json"]) != row["args_hash"]:
+        if compute_params_hash(row["tool_name"], row["args_json"]) != row["args_hash"]:
             raise _error(ErrorCode.CONFLICT, "Stored arguments do not match")
         params = spec.args_model.model_validate(json.loads(row["args_json"]))
         targets = spec.resolve_targets(conn, params) if spec.resolve_targets else []
