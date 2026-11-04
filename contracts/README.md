@@ -82,7 +82,9 @@ Pipeline único en backend, para GUI y agente, independiente de Hermes:
 
 **Plantilla de `summary`,** calculada por el backend: `Vas a eliminar {n} {tipo}: «{nombre}»[ y {m} dependientes]. Esta acción {no se puede deshacer|se puede deshacer}.` Verbo único para borrar: eliminar. `{nombre}` es dato del usuario: la GUI lo muestra como texto, nunca como marcado.
 
-Exige confirmación: borrado definitivo, operaciones por encima de `bulk_threshold` (ajuste), cambios de configuración sensible y escrituras de un turno contaminado por contenido no confiable. Prohibido siempre, sin herramienta: ampliar permisos, alterar auditoría, gestionar ubicaciones permitidas, comandos arbitrarios.
+**Restauración:** restaurar devuelve `pending_confirmations` y `audit_events` al estado de la copia. Tras restaurar y antes de aceptar peticiones, toda fila `pending` pasa a `expired` y toda `approved` o `executing` a `failed`, sin ejecutar nada, y se audita la restauración. Una aprobación antigua nunca revive por una copia.
+
+Exige confirmación: borrado definitivo, restaurar copias, consolidar recuerdos candidatos, operaciones por encima de `bulk_threshold` (ajuste), cambios de configuración sensible y escrituras de un turno contaminado por contenido no confiable. Prohibido siempre, sin herramienta: ampliar permisos, alterar auditoría, gestionar ubicaciones permitidas, comandos arbitrarios.
 
 ## 6. Herramientas
 
