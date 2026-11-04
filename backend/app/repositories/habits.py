@@ -7,8 +7,7 @@ from typing import Any
 
 _HABIT_SELECT = (
     "SELECT h.id,h.name,h.description,h.timezone,h.target_note,h.preferred_local_time,"
-    "(SELECT r.target_id FROM relationships r WHERE r.source_id=h.id AND r.source_type='habit' "
-    "AND r.target_type='project' AND r.relationship_type='supports') AS goal_project_id,h.reminder_enabled,h.status,h.start_date,h.end_date,"
+    "h.goal_project_id,h.reminder_enabled,h.status,h.start_date,h.end_date,"
     "e.archived_at,e.revision,e.created_at,e.updated_at "
     "FROM habits h JOIN entities e ON e.id=h.id"
 )
@@ -33,30 +32,13 @@ def project_exists(conn: sqlite3.Connection, project_id: str) -> bool:
     return row is not None
 
 
-def set_goal_project(
-    conn: sqlite3.Connection, habit_id: str, project_id: str | None, relationship_id: str, created_at: str
-) -> None:
-    """Meta del hábito = relación `supports` hábito -> proyecto (como mucho una)."""
-    conn.execute(
-        "DELETE FROM relationships WHERE source_id=? AND source_type='habit' "
-        "AND target_type='project' AND relationship_type='supports'",
-        (habit_id,),
-    )
-    if project_id is not None:
-        conn.execute(
-            "INSERT INTO relationships(id,source_id,source_type,target_id,target_type,"
-            "relationship_type,created_at) VALUES(?,?,'habit',?,'project','supports',?)",
-            (relationship_id, habit_id, project_id, created_at),
-        )
-
-
 def insert_habit(conn: sqlite3.Connection, values: dict[str, Any]) -> None:
     conn.execute(
         "INSERT INTO habits(id,name,description,timezone,target_note,preferred_local_time,"
-        "reminder_enabled,status,start_date,end_date) VALUES(?,?,?,?,?,?,?,?,?,?)",
+        "goal_project_id,reminder_enabled,status,start_date,end_date) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
         (
             values["id"], values["name"], values["description"], values["timezone"],
-            values["target_note"], values["preferred_local_time"],
+            values["target_note"], values["preferred_local_time"], values["goal_project_id"],
             values["reminder_enabled"], values["status"], values["start_date"], values["end_date"],
         ),
     )  # fmt: skip

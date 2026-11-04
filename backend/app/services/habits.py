@@ -204,6 +204,7 @@ def create_habit(conn: sqlite3.Connection, ctx: RequestContext, data: HabitCreat
                 "timezone": data.timezone,
                 "target_note": data.goal_note,
                 "preferred_local_time": data.preferred_local_time,
+                "goal_project_id": data.goal_project_id,
                 "reminder_enabled": int(data.reminder_enabled),
                 "status": "active",
                 "start_date": data.start_date.isoformat(),
@@ -211,8 +212,6 @@ def create_habit(conn: sqlite3.Connection, ctx: RequestContext, data: HabitCreat
             },
         )
         repo.insert_version(conn, new_id(), habit_id, rrule, data.start_date.isoformat(), now_utc())
-        if data.goal_project_id is not None:
-            repo.set_goal_project(conn, habit_id, data.goal_project_id, new_id(), now_utc())
         record_audit(
             conn,
             ctx,
@@ -280,6 +279,7 @@ def update_habit(
                 raise _invalid("La fecha de fin no puede ser anterior a la de inicio", "end_date")
         if "goal_project_id" in sent:
             _check_project(conn, data.goal_project_id)
+            columns["goal_project_id"] = data.goal_project_id
         if "preferred_local_time" in sent:
             columns["preferred_local_time"] = data.preferred_local_time
         if "reminder_enabled" in sent:
@@ -287,8 +287,6 @@ def update_habit(
 
         touch_entity(conn, habit_id, expected_revision)
         repo.update_habit(conn, habit_id, columns)
-        if "goal_project_id" in sent:
-            repo.set_goal_project(conn, habit_id, data.goal_project_id, new_id(), now_utc())
 
         effective: date | None = None
         if new_rrule is not None:
