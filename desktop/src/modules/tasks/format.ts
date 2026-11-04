@@ -133,7 +133,9 @@ export function describeHistory(entry: HistoryEntry): HistoryLine {
   const details: string[] = []
   for (const [field, change] of Object.entries(entry.changes ?? {})) {
     const label = FIELD_LABELS[field] ?? field
-    if (isChange(change)) {
+    if (typeof change === 'object' && change !== null && 'changed' in change) {
+      details.push(`${label[0]?.toUpperCase() ?? ''}${label.slice(1)}: modificado`)
+    } else if (isChange(change)) {
       details.push(`${label[0]?.toUpperCase() ?? ''}${label.slice(1)}: ${formatValue(field, change.from)} → ${formatValue(field, change.to)}`)
     } else {
       details.push(`${label[0]?.toUpperCase() ?? ''}${label.slice(1)}: ${formatValue(field, change)}`)

@@ -51,7 +51,9 @@ function changes(entry: HistoryEntry): string[] {
   for (const [field, change] of Object.entries(entry.changes ?? {})) {
     const label = FIELDS[field]
     if (label === undefined) continue
-    if (typeof change === 'object' && change !== null && ('from' in change || 'to' in change)) {
+    if (typeof change === 'object' && change !== null && 'changed' in change) {
+      lines.push(`${label}: modificado`)
+    } else if (typeof change === 'object' && change !== null && ('from' in change || 'to' in change)) {
       const c = change as { from?: unknown; to?: unknown }
       lines.push(`${label}: ${show(field, c.from)} → ${show(field, c.to)}`)
     }
