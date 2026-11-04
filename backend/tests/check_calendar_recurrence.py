@@ -33,7 +33,7 @@ except AppError as e:
     assert e.code == "nonexistent_local_time"
 assert z("2026-03-29T02:30:00") == "2026-03-29T01:30:00.000Z"
 assert z("2026-10-25T02:30:00", strict=True) == "2026-10-25T00:30:00.000Z"
-assert to_display(to_utc(datetime(2026, 10, 26, 9), "Europe/Madrid", strict=True), "Europe/Madrid") == "2026-10-26T09:00:00"
+assert to_display(to_utc(datetime(2026, 10, 26, 9), "Europe/Madrid", strict=True), "Europe/Madrid") == "2026-10-26T09:00"
 
 # COUNT con ventana tardía (cuenta desde DTSTART)
 r = parse_rrule("FREQ=DAILY;COUNT=10")
