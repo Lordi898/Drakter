@@ -28,12 +28,17 @@ class TurnTracker:
     def __init__(self) -> None:
         self._lock = threading.Lock()
         self._active: ActiveTurn | None = None
+        self._in_flight = 0
         self._tainted: set[UUID] = set()
 
     def begin(self, session_id: UUID, turn_id: UUID) -> ActiveTurn:
-        """Admit a turn. Raises ``TurnBusyError`` if one is already active."""
+        """Admit a turn. Raises ``TurnBusyError`` if one is active or a tool still runs.
+
+        Interrupting Hermes does not cancel an MCP call: the handler keeps running here, and a
+        new turn must not overlap it.
+        """
         with self._lock:
-            if self._active is not None:
+            if self._active is not None or self._in_flight:
                 raise TurnBusyError("another turn is active")
             self._active = ActiveTurn(session_id=session_id, turn_id=turn_id)
             return self._active
@@ -51,6 +56,16 @@ class TurnTracker:
             yield active
         finally:
             self.end(turn_id)
+
+    @contextmanager
+    def tool_call(self) -> Iterator[None]:
+        with self._lock:
+            self._in_flight += 1
+        try:
+            yield
+        finally:
+            with self._lock:
+                self._in_flight -= 1
 
     def active(self) -> ActiveTurn | None:
         with self._lock:

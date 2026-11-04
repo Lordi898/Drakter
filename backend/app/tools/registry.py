@@ -352,7 +352,8 @@ class ToolRegistry:
         self, spec: ToolSpec, args: BaseModel, ctx: ToolContext
     ) -> ToolOutcome:
         try:
-            result = await _run_with_timeout(spec, ctx, args)
+            with self.turns.tool_call():
+                result = await _run_with_timeout(spec, ctx, args)
         except ToolError as exc:
             return tool_failure(
                 exc.code, exc.message, retryable=exc.retryable, details=exc.details
