@@ -36,9 +36,9 @@ Tabla única de rutas. Manda `contracts/README.md`; después, lo ya construido e
 | Método | Ruta | Entrada | Respuesta | Estado | Riesgo | Dueño |
 |---|---|---|---|---|---|---|
 | GET | `/api/v1/confirmations` | `status`, `limit`, `cursor` | `{items,next_cursor}` | construida | read | seguridad (12) |
-| GET | `/api/v1/confirmations/{id}` | - | acción, `summary`, `affected_count`, `targets`, `status`, `expires_at`, `params_hash` | construida | read | seguridad (12) |
-| POST | `/api/v1/confirmations/{id}/approve` | `ConfirmationApprove`: `{params_hash}` (`approver`) | resultado de la operación ejecutada; 409 `conflict` si `targets_json` cambió; 410/`expired` si caducó | construida | write (ejecuta lo guardado) | seguridad (12) |
-| POST | `/api/v1/confirmations/{id}/reject` | - (`approver`) | confirmación en `rejected` | construida | write | seguridad (12) |
+| GET | `/api/v1/confirmations/{id}` | - (`ui`; `approver` no lee: 403) | acción, `summary`, `affected_count`, `targets`, `status`, `expires_at`, `params_hash` | construida | read | seguridad (12) |
+| POST | `/api/v1/confirmations/{id}/approve` | `ConfirmationApprove`: `{params_hash}` (`approver`) | resultado de la operación ejecutada; 409 `conflict` si `targets_json` cambió o `confirmation_already_resolved`; 410 `confirmation_expired`; 404; 422 | construida | write (ejecuta lo guardado) | seguridad (12) |
+| POST | `/api/v1/confirmations/{id}/reject` | sin cuerpo (`approver`) | confirmación en `rejected` | construida | write | seguridad (12) |
 
 ## Agente y chat
 
@@ -255,12 +255,6 @@ El frente 20 solo tiene puertos (`services/improvement_ports.py`, `get_principal
 | POST | `/api/v1/improvement/feedback` | `{target, rating, note?}` | 201 | (sin construir) | write | automejora (20) |
 
 ## Desviaciones que deben corregirse
-
-### Aprobación y credenciales (D-14)
-
-| Frente | archivo:línea | Qué hace | Qué debe hacer |
-|---|---|---|---|
-| seguridad (12) | `backend/app/permissions/README.md` | `runtime_dir/approver.json` y cabecera `X-Drakter-Approver` | Token `approver` por stdin; nada en disco |
 
 ### Ajustes
 

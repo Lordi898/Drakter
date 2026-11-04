@@ -392,11 +392,6 @@ export interface ConfirmationCreate {
   risk: ConfirmationRisk;
 }
 
-/** Cuerpo opcional de reject. */
-export interface ConfirmationDecision {
-  reason?: string | null;
-}
-
 /** `args` ya sin secretos (lista blanca de auditoría). `params_hash` es la columna `args_hash`. */
 export interface ConfirmationOut {
   id: string;
@@ -456,11 +451,6 @@ export interface ConfirmationTicket {
   affected_count: number | null;
   expires_at: string;
   params_hash: string;
-}
-
-/** Cuerpo opcional de reject. */
-export interface ConfirmationUpdate {
-  reason?: string | null;
 }
 
 export interface ConversationCreate {
