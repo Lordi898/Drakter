@@ -12,7 +12,7 @@ export type SearchState =
 const DEBOUNCE_MS = 150
 
 function stateForError(error: unknown): SearchState {
-  if (error instanceof ApiError && error.code === 'no_session') {
+  if (error instanceof ApiError && error.code === 'backend_unavailable') {
     return { status: 'unavailable', reason: 'not-connected' }
   }
   if (error instanceof ApiError && error.status === 503) {
