@@ -3,13 +3,21 @@
 Interfaces congeladas de la base segura. Otro módulo solo puede depender de lo que aparece aquí.
 Fuera de alcance: tablas de dominio, rutas de dominio, eventos WebSocket de negocio y Hermes.
 
-## Arranque
+## Arranque (D-14)
 
-- Único punto de entrada: `python -m app` desde `backend/`. `app/__main__.py` pone `os.umask(0o077)`, carga la configuración, abre, enlaza y pone a escuchar él mismo el socket en `127.0.0.1:<port>` y se lo pasa a Uvicorn con `server.run(sockets=[sock])`. Si el puerto está ocupado, sale con código distinto de 0 sin tocar el archivo de sesión.
-- La dirección no es configurable: `BIND_HOST = "127.0.0.1"`, constante.
+Único punto de entrada: `python -m app` desde `backend/`. Lo lanza Electron main y es su único cliente.
+
+1. `app/__main__.py` pone `os.umask(0o077)` y aparta sus descriptores: stdin y stdout pasan a descriptores privados no heredables, fd 0 queda en `/dev/null` y fd 1 apunta a stderr. Ningún hijo hereda el canal y nada más puede escribir en él.
+2. Lee por stdin **una línea** JSON `{"v":1,"ui":"<token>","approver":"<token>"}\n`, máximo 4 KiB. Cada token son 32 bytes en base64url sin relleno (43 caracteres) y deben ser distintos. Una línea inválida o EOF: mensaje genérico en stderr, código 2, sin eco de la entrada.
+3. Enlaza y pone a escuchar en `127.0.0.1:0`. La dirección no es configurable y no hay `DRAKTER_HOST` ni `DRAKTER_PORT`. Un solo worker.
+4. Tras completar el `lifespan` de arranque escribe en stdout **una línea** `{"v":1,"port":N}\n` y cierra ese canal. Si el arranque falla no la escribe y sale con código distinto de 0.
+5. Mantiene stdin abierto. Al recibir EOF se apaga de forma ordenada (`timeout_graceful_shutdown=5`) y sale con 0. `SIGTERM` también apaga.
+
+Las credenciales no pasan nunca por argv, entorno, disco ni logs. Ya no existe `session.json`.
+
 - Uvicorn: `log_config=None`, `access_log=False`, `server_header=False`, `proxy_headers=False`, `ws="websockets-sansio"`, `ws_max_size=1048576`, `lifespan="on"`.
-- `create_app(settings: Settings) -> FastAPI` en `app/main.py`. No existe un `app` a nivel de módulo. `docs_url`, `redoc_url` y `openapi_url` son `None`.
-- Orden del `lifespan`: preparar directorios → `configure_logging` → `exclusive_instance` → `migrate` → escribir archivo de sesión. Al apagar, borrar el archivo de sesión. Si `migrate` falla, el arranque falla.
+- `create_app(settings, *, credentials, port, on_ready) -> FastAPI` en `app/main.py`. No existe un `app` a nivel de módulo. `docs_url`, `redoc_url` y `openapi_url` son `None`; `redirect_slashes=False`.
+- Orden del `lifespan`: preparar directorios → `configure_logging` → `exclusive_instance` → `migrate` → `on_ready()`. Si `migrate` falla, el arranque falla.
 
 ## `app/core/config.py`
 
@@ -19,13 +27,10 @@ BIND_HOST: Final = "127.0.0.1"
 class Settings(BaseSettings):
     # env_prefix="DRAKTER_", extra="ignore", frozen=True
     # env_file = Path(user_config_dir("drakter")) / ".env"; respeta XDG_CONFIG_HOME
-    port: int = 8765                        # 1024..65535
     data_dir: Path                          # por defecto user_data_dir("drakter")
-    runtime_dir: Path                       # por defecto user_runtime_dir("drakter")
     log_level: Literal["DEBUG","INFO","WARNING","ERROR"] = "INFO"
-    allowed_origins: Annotated[tuple[str, ...], NoDecode] = ("app://drakter",)
     # Propiedades: db_path = data_dir/"drakter.db", backups_dir = data_dir/"backups",
-    #              logs_dir = data_dir/"logs", session_file = runtime_dir/"session.json"
+    #              logs_dir = data_dir/"logs"
 
 def ensure_private_dir(path: Path) -> None: ...
 def load_settings() -> Settings: ...
@@ -33,8 +38,7 @@ def load_settings() -> Settings: ...
 
 `python -m app` captura `ValidationError` de `load_settings`: imprime solo los nombres de los campos inválidos y sale con 1, sin valores.
 
-- `DRAKTER_ALLOWED_ORIGINS` es una lista separada por comas. Rechaza `*`, `null`, y cualquier valor que no sea exactamente `scheme://host[:port]` (sin ruta, consulta, fragmento ni credenciales). Se normaliza a minúsculas.
-- `ensure_private_dir`: crea con 0700 y padres; si existe, es symlink, no es del usuario actual o da permisos a grupo u otros, lanza `ValueError` (no corrige en silencio salvo que el directorio sea del usuario y no sea symlink: entonces `chmod 0700`).
+`ensure_private_dir`: crea con 0700 y padres; si existe y es symlink, no es directorio o no es del usuario actual, lanza `ValueError`; si es del usuario, fuerza 0700.
 
 ## `app/core/logging.py`
 
@@ -51,11 +55,9 @@ class JsonFormatter(logging.Formatter): ...
 
 ## `app/core/errors.py`
 
-```python
-class ErrorDetail(BaseModel):  # field: str | None, code: str, message: str
-class ErrorBody(BaseModel):    # code: str, message: str, request_id: str, details: list[ErrorDetail]
-class ErrorEnvelope(BaseModel):# error: ErrorBody
+Los modelos `ErrorDetail`, `ErrorBody` y `ErrorEnvelope` vienen de `drakter_contracts.errors`.
 
+```python
 class AppError(Exception):
     def __init__(self, code: str, message: str, status_code: int = 400,
                  details: list[ErrorDetail] | None = None): ...
@@ -67,51 +69,64 @@ def install_error_handlers(app: FastAPI) -> None: ...
 
 - Todo error HTTP responde `{"error":{"code","message","request_id","details"}}` con `application/json`.
 - Cubre `AppError`, `RequestValidationError` (422, código `validation_error`; `details` con `field`, `code` y `message`, jamás `input` ni `ctx`), `StarletteHTTPException` (`http_404`, `http_405`, …, con mensaje fijo, conservando sus cabeceras) y `Exception` (500, código `internal_error`, mensaje fijo, traza solo en el log).
+- En validación, el mensaje se conserva para errores de plantilla de Pydantic y para `PydanticCustomError` sin `ctx`, cuyo texto escribimos nosotros. Un `PydanticCustomError` con `ctx`, cuyo texto puede interpolar lo recibido, y cualquier `ValueError` o `AssertionError` dan `Invalid value`.
 - `request_id` sale de `request.scope["state"]["request_id"]`; si no está, `uuid4`. Nunca se toma de la petición del cliente.
+
+## `app/core/bootstrap.py`
+
+```python
+class HandshakeError(Exception): ...
+@dataclass(frozen=True, slots=True)
+class Credentials:
+    ui: SessionToken; approver: SessionToken
+
+def take_standard_streams() -> tuple[int, int]: ...      # (control_in, control_out)
+def read_credentials(fd: int) -> Credentials: ...
+def announce_port(fd: int, port: int) -> None: ...
+def watch_eof(fd: int, on_eof: Callable[[], None]) -> threading.Thread: ...
+```
 
 ## `app/core/security.py`
 
 ```python
-PUBLIC_PATHS: Final = frozenset({"/health"})
 WS_SUBPROTOCOL: Final = "drakter.v1"
-WS_AUTH_PREFIX: Final = "drakter.auth."
+MAX_BODY_BYTES: Final = 1_048_576
 
 class SessionToken:
-    def __init__(self) -> None: ...             # secrets.token_urlsafe(32); registra con register_secret
-    def matches(self, candidate: bytes) -> bool: ...   # hmac.compare_digest sobre bytes
-    def reveal(self) -> str: ...                # solo para el archivo de sesión
+    def __init__(self, value: str) -> None: ...         # registra con register_secret
+    def matches(self, candidate: bytes) -> bool: ...    # hmac.compare_digest sobre bytes
     # __repr__ y __str__ nunca muestran el valor
 
-def write_session_file(path: Path, token: SessionToken, port: int) -> None: ...
-def remove_session_file(path: Path) -> None: ...
-
 class SecurityGuardMiddleware:                  # ASGI puro; http y websocket
-    def __init__(self, app, *, token: SessionToken, port: int,
-                 allowed_origins: tuple[str, ...]): ...
+    def __init__(self, app, *, credentials: Credentials, port: int): ...
 ```
 
-Archivo de sesión: JSON `{"token","port","pid","started_at"}`, escrito en un temporal 0600 con `O_CREAT|O_EXCL|O_NOFOLLOW` en el mismo directorio y publicado con `os.replace`. El token nunca va a logs, argumentos ni variables de entorno. `remove_session_file` no falla si no existe y solo borra el archivo si su `pid` es el actual.
+`SecurityGuardMiddleware` es la capa más externa y no hay CORS. Por este orden:
 
-`SecurityGuardMiddleware` es la capa más externa de las añadidas y, por este orden:
-
-1. Asigna `scope["state"]["request_id"] = str(uuid4())` y `lifespan` pasa sin más.
+1. Asigna `scope["state"]["request_id"] = str(uuid4())`; `lifespan` pasa sin más.
 2. Exige que `scope["client"]` sea `127.0.0.1` (403 `forbidden_client`).
-3. Exige exactamente una cabecera `Host`, igual a `127.0.0.1:<port>` o `localhost:<port>` (sin distinguir mayúsculas). Si no: 403 `forbidden_host`. Una petición sin `Host` o con dos la corta antes h11 con un 400 sin envelope; el guardia es la segunda barrera.
-4. Si hay `Origin`, exige exactamente uno y que esté en `allowed_origins`. Si no: 403 `forbidden_origin`. Sin `Origin` se continúa: los clientes que no son navegador no lo envían.
-5. Solo en HTTP, deja pasar sin token las rutas de `PUBLIC_PATHS` y las preflight CORS (`OPTIONS` con `Origin` ya validado y `Access-Control-Request-Method`). En websocket, `/health` también exige token.
-6. Todo lo demás, incluidas rutas inexistentes, exige token: `Authorization: Bearer <token>`. En websocket vale además el subprotocolo `drakter.auth.<token>`. Nunca por query string ni cookie. Si no: 401 `unauthorized` con `WWW-Authenticate: Bearer`.
+3. Exige exactamente una cabecera `Host`, igual a `127.0.0.1:<port>`. `localhost` ya no vale. Si no: 403 `forbidden_host`. Una petición sin `Host` o con dos la corta antes h11 con un 400 sin envelope; el guardia es la segunda barrera.
+4. Cualquier cabecera `Origin`, sea cual sea su valor: 403 `forbidden_origin`.
+5. Exige `Authorization: Bearer <token>` en http y websocket, una sola vez. Sin token válido: 401 `unauthorized` con `WWW-Authenticate: Bearer`. No hay token por consulta, cookie ni subprotocolo. Tampoco hay ruta pública ni excepción de preflight: `/health` exige token.
+6. Aplica la matriz. Un token válido con el rol equivocado da 403 `permission_denied`.
+
+| Ruta | `ui` | `approver` | otro o ninguno |
+|---|---|---|---|
+| `POST`/cualquier método en `/api/v1/confirmations/{id}/approve` y `/reject` | no | sí | 401 |
+| Métodos que no son `GET`/`HEAD` en `/api/v1/storage-locations/**` y `/api/v1/permissions/**` | no | sí | 401 |
+| Todo lo demás, incluidos `/health`, `/api/v1/**` y `WS /api/v1/events` | sí | no | 401 |
+
+El token `agent` no existe en este puerto y da 401: `/mcp` es un listener aparte de otro módulo.
+
+7. Límite de cuerpo: `Content-Length` mayor que `MAX_BODY_BYTES` o cuerpo en streaming que lo supera, 413 `file_too_large`.
 
 En websocket, cualquier rechazo se hace antes de aceptar: se consume `websocket.connect` y se envía `websocket.close` con código 1008, de modo que el cliente recibe un rechazo del handshake. El guardia nunca registra cabeceras, consulta ni token. Registra `event`, `method`, `path` sin consulta y truncado a 256 caracteres, `status` y `request_id`.
 
-Con un `Origin` validado, el guardia lo guarda en `scope["state"]["cors_origin"]` y sus 401 y el 500 de `install_error_handlers` añaden `Access-Control-Allow-Origin`, porque nacen fuera de `CORSMiddleware`. Una preflight con método no permitido devuelve el 400 en texto plano de `CORSMiddleware`.
-
-CORS: `CORSMiddleware` dentro del guardia, con `allow_origins=settings.allowed_origins`, `allow_credentials=False`, `allow_methods` GET/POST/PUT/PATCH/DELETE, `allow_headers` Authorization/Content-Type. Sin expresiones regulares.
-
 ## `app/api/`
 
-- `health.py`: `GET /health` (público) → `{"status":"ok"}`; hace `SELECT 1` con `connect` sin `create`, así una base desaparecida da 503. Si falla → `AppError("service_unavailable", ..., 503)`, sin detalles.
-- `auth.py`: `GET /api/v1/auth/check` → `{"authenticated": true}`.
-- `ws.py`: `WS /ws`. Si el cliente ofreció `drakter.v1`, acepta con ese subprotocolo; nunca devuelve el de autenticación. Si recibe el texto `ping`, responde `pong`. Cualquier otra entrada cierra con 1003.
+- `health.py`: `GET /health` (`ui`) → `{"status":"ok"}`; hace `SELECT 1` con `connect` sin `create`, así una base desaparecida da 503. Si falla → `AppError("service_unavailable", ..., 503)`, sin detalles.
+- `auth.py`: `GET /api/v1/auth/check` (`ui`) → `{"authenticated": true}`.
+- `events.py`: `WS /api/v1/events?after_seq&boot_id`, único WebSocket. Solo servidor→cliente: si el cliente ofreció `drakter.v1`, acepta con ese subprotocolo; cualquier mensaje entrante cierra con 1003. `after_seq` es entero ≥ 0 y `boot_id` un `Id`; opcionales. Esta base aún no emite eventos.
 
 ## `app/database/`
 
