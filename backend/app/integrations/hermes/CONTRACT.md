@@ -2,7 +2,7 @@
 
 Rama `drakter/agente-hermes`. `contracts/` (paquete `drakter_contracts`) manda sobre este archivo en formatos, errores, `ToolOutcome`, `UntrustedEnvelope`, eventos y tablas. Lo que aquí repita un nombre de allí debe importarse, no redefinirse.
 
-Base verificada: Hermes **v0.22.7**, commit `b200f5bc60e31588ba2cb60e288029c4a54ba5fa`, instalado desde git (`hermes --version` lo confirma; `pyproject.toml` del tag dice `0.0.0`). La 0.19.0 es la de PyPI, desfasada, y no se usa. Mecanismo: subproceso `hermes gateway run` con `/v1/runs`, herramientas por MCP desde el backend. Hermes y el modelo **no son confiables**: un control que dependa de que obedezcan no cuenta.
+Base verificada: Hermes **v0.22.7**, commit `b200f5bc60e31588ba2cb60e288029c4a54ba5fa`, instalado desde git (`hermes --version` lo confirma; `pyproject.toml` del tag dice `0.0.0`). Instalación: solo Python >=3.14, `uv sync --frozen`, venv propio separado del backend (3.12); nunca PyPI (0.19.0, retirado a propósito). Se compara **por commit**, no por el texto de versión. `aiohttp` no entra con `--extra anthropic --extra mcp`: el preflight lo comprueba. `platform_toolsets.cron: [no_mcp]` sigue sin verificar y el backend no usa nunca `/api/jobs`. `_repair_tool_call` puede reescribir nombres en Hermes: `dispatch` valida siempre por su cuenta. Mecanismo: subproceso `hermes gateway run` con `/v1/runs`, herramientas por MCP desde el backend. Hermes y el modelo **no son confiables**: un control que dependa de que obedezcan no cuenta.
 
 ## 1. Herramientas: `backend/app/tools/`
 
