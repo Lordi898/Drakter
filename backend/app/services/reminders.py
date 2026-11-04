@@ -6,36 +6,39 @@ no se avisa. La API lo expone en `/api/v1/notifications/status` y la GUI lo mues
 
 Emisión exactamente una vez: `dedupe_key` con índice único (`ddl_notifications.sql`).
 La clave incluye el momento vencido, así que reprogramar genera un aviso nuevo y
-reiniciar no repite. Sin ese índice el tick falla y no emite.
+reiniciar no repite. Sin ese índice (migración 0001) el tick falla y no emite.
 
 Títulos y descripciones son datos del usuario: no van a logs ni al agente, que no
 tiene herramientas sobre notificaciones.
 
 Montaje en `app/main.py`, dentro del `lifespan` y tras `migrate`:
 
-    app.state.reminders = ReminderTicker(settings.db_path, publish=<publicador de eventos>)
+    app.state.reminders = ReminderTicker(settings.db_path, publish=app.state.event_hub.publish)
     await app.state.reminders.start()
     try:
         yield
     finally:
         await app.state.reminders.stop()
 
-`publish(type, payload)` puede ser síncrono o asíncrono. Sin él, la GUI se entera por
-su sondeo de `GET /api/v1/notifications?unread=true`.
+`publish` es `EventHub.publish(type, payload)`, llamado solo tras COMMIT. Sin él, o si
+falla, la GUI se entera por su sondeo de `GET /api/v1/notifications?unread=true`.
 """
 
 from __future__ import annotations
 
 import asyncio
-import inspect
 import logging
 import sqlite3
-from collections.abc import Awaitable, Callable, Iterable
-from dataclasses import asdict, dataclass
+from collections.abc import Callable, Iterable
+from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta
 from pathlib import Path
 from typing import Any, Final, Protocol
-from zoneinfo import ZoneInfo
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+from drakter_contracts.common import format_instant
+from drakter_contracts.events import NotificationCreated
+from pydantic import BaseModel
 
 from app.database.connection import connect
 from app.repositories import notifications as repo
@@ -48,10 +51,11 @@ TICK_SECONDS: Final = 60  # D-29
 CATCH_UP: Final = timedelta(hours=6)  # Elección: al abrir, lo vencido hace menos de esto.
 MAX_PER_TICK: Final = 20  # Lo que no cabe sale en el siguiente tick, más antiguo primero.
 MORNING: Final = time(9, 0)  # Hora del aviso de lo que solo tiene fecha.
+FALLBACK_TIMEZONE: Final = "Europe/Madrid"  # contracts/README.md §4
 NOTIFICATION_CREATED: Final = "notification.created"
 _MAX_TITLE: Final = 120
 
-Publish = Callable[[str, dict[str, Any]], Awaitable[None] | None]
+Publish = Callable[[str, BaseModel], Any]
 
 
 @dataclass(frozen=True, slots=True)
@@ -85,29 +89,33 @@ def _clock(moment: datetime) -> str:
     return moment.strftime("%H:%M")
 
 
-def _local_morning(day: date) -> datetime:
-    # `astimezone` sobre hora ingenua aplica la zona del sistema con su DST de ese día.
-    return datetime.combine(day, MORNING).astimezone()
+def _user_zone(conn: sqlite3.Connection) -> ZoneInfo:
+    name = due.default_timezone(conn) or FALLBACK_TIMEZONE
+    try:
+        return ZoneInfo(name)
+    except (ZoneInfoNotFoundError, ValueError):
+        return ZoneInfo(FALLBACK_TIMEZONE)
 
 
 def _task_sources(conn: sqlite3.Connection, now: datetime, catch_up: timedelta) -> Iterable[ReminderDue]:
-    for task in due.tasks_due_at(conn, repo.format_utc(now - catch_up), repo.format_utc(now)):
+    zone = _user_zone(conn)
+    for task in due.tasks_due_at(conn, format_instant(now - catch_up), format_instant(now)):
         assert task.due_at is not None
         moment = _parse_utc(task.due_at)
         yield ReminderDue(
             key=f"task:{task.id}:{task.due_at}",
             kind="reminder.task",
             title=_clip(task.title),
-            body=f"Vence a las {_clock(moment.astimezone())}",
+            body=f"Vence a las {_clock(moment.astimezone(zone))}",
             severity="warning",
             entity_id=task.id,
             fire_at=moment,
         )
     # Con solo fecha, el aviso vale todo el día: la tarea sigue a tiempo hasta medianoche.
-    today = now.astimezone().date()
+    today = now.astimezone(zone).date()
     for task in due.tasks_due_on(conn, today.isoformat(), today.isoformat()):
         assert task.due_date is not None
-        fire_at = _local_morning(today)
+        fire_at = datetime.combine(today, MORNING, zone)
         if fire_at <= now:
             yield ReminderDue(
                 key=f"task:{task.id}:{task.due_date}",
@@ -121,7 +129,7 @@ def _task_sources(conn: sqlite3.Connection, now: datetime, catch_up: timedelta) 
 
 
 def _event_sources(conn: sqlite3.Connection, now: datetime, catch_up: timedelta) -> Iterable[ReminderDue]:
-    for event in due.timed_events_due(conn, repo.format_utc(now - catch_up), repo.format_utc(now)):
+    for event in due.timed_events_due(conn, format_instant(now - catch_up), format_instant(now)):
         assert event.starts_at_utc is not None
         start = _parse_utc(event.starts_at_utc)
         yield ReminderDue(
@@ -201,7 +209,7 @@ def run_tick(db_path: Path, now: datetime) -> tuple[list[NotificationRow], bool]
                 )
                 for item in fresh
             ),
-            repo.format_utc(now),
+            format_instant(now),
         )
     finally:
         conn.close()
@@ -255,18 +263,19 @@ class ReminderTicker:
                 extra={"event": "reminder_tick_failed", "error_type": type(exc).__name__},
             )
             return
-        self.last_tick_at = repo.format_utc(now)
+        self.last_tick_at = format_instant(now)
         self.last_error = "source_failed" if failed else None
         for row in created:
-            await self._emit(row)
+            self._emit(row)
 
-    async def _emit(self, row: NotificationRow) -> None:
+    def _emit(self, row: NotificationRow) -> None:
         if self._publish is None:
             return
         try:
-            result = self._publish(NOTIFICATION_CREATED, {"notification": asdict(row)})
-            if inspect.isawaitable(result):
-                await result
+            payload = NotificationCreated(
+                notification_id=row.id, kind=row.kind, title=row.title, severity=row.severity
+            )
+            self._publish(NOTIFICATION_CREATED, payload)
         except Exception:
             # La fila ya está guardada: la GUI la recoge en su sondeo.
             logger.warning("No se pudo publicar una notificación", extra={"event": "reminder_publish_failed"})

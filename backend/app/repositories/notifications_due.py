@@ -7,6 +7,7 @@ por `register_reminder_source`.
 
 from __future__ import annotations
 
+import json
 import sqlite3
 from dataclasses import dataclass
 from typing import Final
@@ -38,6 +39,13 @@ class DueEvent:
     starts_at_utc: str | None
     start_date: str | None
     minutes_before: int
+
+
+def default_timezone(conn: sqlite3.Connection) -> str | None:
+    """Ajuste `default_timezone`, con su forma JSON. `None` si falta o no es texto."""
+    row = conn.execute("SELECT value_json FROM settings WHERE key = 'default_timezone'").fetchone()
+    value = None if row is None else json.loads(row[0])
+    return value if isinstance(value, str) else None
 
 
 def tasks_due_at(conn: sqlite3.Connection, after: str, until: str) -> list[DueTask]:

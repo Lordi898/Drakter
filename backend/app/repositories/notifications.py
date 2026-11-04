@@ -9,11 +9,10 @@ from __future__ import annotations
 import sqlite3
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
-from datetime import UTC, datetime
 from typing import Final
 from uuid import uuid4
 
-_COLUMNS: Final = "id, kind, title, body, severity, entity_id, created_at, read_at"
+_COLUMNS: Final = "id, kind, title, body, severity, entity_id, created_at, read_at, dedupe_key"
 _INSERT: Final = (
     "INSERT INTO notifications(id, kind, title, body, severity, entity_id, created_at, dedupe_key) "
     "VALUES(?, ?, ?, ?, ?, ?, ?, ?) "
@@ -41,12 +40,7 @@ class NotificationRow:
     entity_id: str | None
     created_at: str
     read_at: str | None
-
-
-def format_utc(moment: datetime) -> str:
-    """Formato de instante del esquema: `YYYY-MM-DDTHH:MM:SS.sssZ`, comparable como texto."""
-    value = moment.astimezone(UTC)
-    return value.strftime("%Y-%m-%dT%H:%M:%S.") + f"{value.microsecond // 1000:03d}Z"
+    dedupe_key: str | None
 
 
 def insert_new(
@@ -82,6 +76,7 @@ def insert_new(
                         item.entity_id,
                         created_at,
                         None,
+                        item.dedupe_key,
                     )
                 )
     except BaseException:
@@ -109,22 +104,17 @@ def list_notifications(
     *,
     unread_only: bool,
     limit: int,
-    before: tuple[str, str] | None = None,
-) -> list[NotificationRow]:
-    """Más recientes primero. `before` es el par (created_at, id) de la última fila vista."""
-    where: list[str] = []
-    params: list[object] = []
-    if unread_only:
-        where.append("read_at IS NULL")
-    if before is not None:
-        where.append("(created_at, id) < (?, ?)")
-        params.extend(before)
-    clause = f"WHERE {' AND '.join(where)} " if where else ""
+    offset: int,
+) -> tuple[list[NotificationRow], int]:
+    """Una página, más recientes primero, y el total del filtro."""
+    clause = "WHERE read_at IS NULL " if unread_only else ""
+    total = conn.execute(f"SELECT count(*) FROM notifications {clause}").fetchone()[0]
     rows = conn.execute(
-        f"SELECT {_COLUMNS} FROM notifications {clause}ORDER BY created_at DESC, id DESC LIMIT ?",
-        (*params, limit),
+        f"SELECT {_COLUMNS} FROM notifications {clause}"
+        "ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?",
+        (limit, offset),
     )
-    return [NotificationRow(*row) for row in rows]
+    return [NotificationRow(*row) for row in rows], total
 
 
 def mark_read(conn: sqlite3.Connection, ids: Sequence[str], read_at: str) -> int:
