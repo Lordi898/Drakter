@@ -1,54 +1,26 @@
-"""Esquema mínimo para las comprobaciones de almacén y relaciones.
-
-`entities`, `tags` y `entity_tags` son de contracts; aquí hay una copia solo para
-comprobar el frente sin depender de la migración común. Las tablas de otros
-módulos se crean con lo justo para probar aristas virtuales.
-"""
+"""Base real para las comprobaciones: migraciones de drakter-11 más el delta del almacén."""
 
 from __future__ import annotations
 
 import sqlite3
 from pathlib import Path
 
-SCHEMAS = Path(__file__).resolve().parents[1] / "app" / "schemas"
+from app.database.connection import connect
+from app.database.migrator import migrate
 
-_COMMON = """
-CREATE TABLE entities (
-    id TEXT PRIMARY KEY,
-    entity_type TEXT NOT NULL,
-    created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL,
-    archived_at TEXT,
-    revision INTEGER NOT NULL DEFAULT 1,
-    metadata_json TEXT NOT NULL DEFAULT '{}',
-    UNIQUE (id, entity_type)
-);
-CREATE TABLE tags (
-    id TEXT PRIMARY KEY,
-    name TEXT NOT NULL,
-    name_normalized TEXT NOT NULL UNIQUE,
-    color TEXT,
-    created_at TEXT NOT NULL
-);
-CREATE TABLE entity_tags (
-    entity_id TEXT NOT NULL REFERENCES entities (id) ON DELETE CASCADE,
-    tag_id TEXT NOT NULL REFERENCES tags (id) ON DELETE RESTRICT,
-    created_at TEXT NOT NULL,
-    PRIMARY KEY (entity_id, tag_id)
-) WITHOUT ROWID;
-CREATE TABLE projects (id TEXT PRIMARY KEY, name TEXT NOT NULL);
-CREATE TABLE subjects (id TEXT PRIMARY KEY, name TEXT NOT NULL);
-CREATE TABLE tasks (
-    id TEXT PRIMARY KEY,
-    title TEXT NOT NULL,
-    parent_task_id TEXT,
-    project_id TEXT,
-    subject_id TEXT
-);
-"""
+DELTA = Path(__file__).resolve().parents[1] / "app" / "schemas" / "ddl_storage.sql"
 
 
-def apply_schema(conn: sqlite3.Connection) -> None:
-    conn.executescript(_COMMON)
-    conn.executescript((SCHEMAS / "ddl_storage.sql").read_text(encoding="utf-8"))
-    conn.executescript((SCHEMAS / "ddl_relations.sql").read_text(encoding="utf-8"))
+def open_database(directory: Path) -> sqlite3.Connection:
+    """Migra una base nueva en `directory` y devuelve una conexión con `sqlite3.Row`."""
+    database = directory / "drakter.db"
+    migrate(database, directory / "backups")
+    conn = connect(database)
+    conn.row_factory = sqlite3.Row
+    columns = {row["name"] for row in conn.execute("PRAGMA table_info(storage_locations)")}
+    if "agent_read" not in columns:
+        for statement in DELTA.read_text(encoding="utf-8").split(";"):
+            body = "\n".join(l for l in statement.splitlines() if not l.startswith("--")).strip()
+            if body:
+                conn.execute(body)
+    return conn

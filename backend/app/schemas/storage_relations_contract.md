@@ -1,7 +1,8 @@
 # Contrato del frente almacén + relaciones
 
 Local a `drakter/almacen-relaciones`. Lo que no fija este archivo lo fija `backend/CONTRACT.md`.
-Base común: `app/services/storage_ports.py`, `app/schemas/storage.py`, `app/schemas/relations.py`, `app/schemas/ddl_storage.sql`, `app/schemas/ddl_relations.sql`.
+Base común: `app/services/storage_ports.py`, `app/schemas/storage.py`, `app/schemas/relations.py`.
+Esquema real: `backend/migrations/0001`, `0005`, `0006`, `0008`, `0009` (solo drakter-11 las edita), más el delta propuesto `app/schemas/ddl_storage.sql` (`storage_locations.agent_read`, `root_dev`, `root_ino`). Instantes con `storage_ports.utc_now()`: 24 caracteres, milisegundos y `Z`. `entities.metadata_json` de un recurso guarda `{"file_dev","file_ino","index_content"}`.
 
 ## Reglas transversales
 
@@ -9,7 +10,7 @@ Base común: `app/services/storage_ports.py`, `app/schemas/storage.py`, `app/sch
 - Escrituras compuestas con `storage_ports.write_tx(conn)`.
 - Errores: `AppError(code, message, status)`, mensaje fijo en inglés, nunca la entrada ni una ruta. Códigos: `not_found` 404, `conflict` 409 (revisión), `confirmation_required` 409, `permission_denied` 403, `path_not_allowed` 403, `file_too_large` 413, `archive_limit_exceeded` 413, `unsupported_format` 415, `resource_unavailable` 409, `read_failed` 422, `url_not_allowed` 403, `link_fetch_failed` 502, `invalid_relationship` 422, `relationship_cycle` 422, `duplicate` 409, `entity_has_relationships` 409, `entity_archived` 409.
 - Todo acto mutador o de lectura de contenido llama a `deps.audit.record` con `action` (`storage.resource.read`, `relations.create`…). Nunca se audita contenido, `note_body` ni rutas absolutas.
-- Lo destructivo o masivo llama antes a `deps.gate.require(...)`, con `summary` y `affected_count` calculados por el backend. Vale para GUI y para agente: el aprobador es siempre la GUI.
+- Lo destructivo o masivo llama antes a `deps.gate.require(...)`, con `summary` y `affected_count` calculados por el backend. En REST lo impone `deps.gate`. En herramientas lo impone `ToolRegistry.dispatch` por `RiskClass.CONFIRM`, y el handler usa `tool_deps(ctx.state)`. El aprobador es siempre la GUI.
 - El contenido y los snippets son datos no confiables: viajan con `content_trust: "untrusted"` y nunca se concatenan en instrucciones.
 - Tablas ajenas (`entities`, `tags`, `entity_tags`) solo se tocan desde `repositories/storage.py` y `repositories/relations.py`.
 - El borrado de un recurso quita la entrada del catálogo. El archivo del usuario no se toca nunca: v1 no escribe en ubicaciones.
@@ -133,18 +134,27 @@ detach_entity(conn, deps, actor, entity_id) -> int   # dentro de la transacción
 
 - Tipos de origen y destino salen de `entities`; regla por `relationship_rules`; sin regla, `invalid_relationship`. Entidad archivada: `entity_archived`.
 - `related_to` es simétrica: se guarda con `source_id < target_id`, y se comprueba duplicado en esa forma.
-- Reglas `acyclic = 1`: comprobar con CTE recursivo dentro de `write_tx`; ciclo da `relationship_cycle`.
-- Aristas virtuales: tabla `VIRTUAL_EDGES` declarativa (tasks.project_id → `belongs_to`, tasks.subject_id → `belongs_to`, tasks.parent_task_id → `parent_of` invertido, resources.folder_id → `belongs_to`, folders.parent_folder_id → `parent_of` invertido, class_sessions.subject_id → `belongs_to`). Una tabla o columna inexistente se omite (`PRAGMA table_info`): otros módulos pueden llegar después.
-- Títulos: `TITLE_COLUMNS` declarativa por tipo, también tolerante a tablas ausentes; sin título, `"(sin título)"`.
+- Reglas `acyclic = 1`: las corta el trigger `trg_relationships_no_cycle`; traducir su `IntegrityError` (mensaje `relationship_cycle`) a `AppError`. Etiquetas `label`/`inverse_label` en español: dict en `services/relations.py`, la tabla no las tiene.
+- Aristas virtuales: tabla `VIRTUAL_EDGES` declarativa (tasks.project_id → `belongs_to`, tasks.subject_id → `belongs_to`, tasks.parent_task_id → `parent_of` invertido, resources.folder_id → `belongs_to`, folders.parent_folder_id → `parent_of` invertido, class_sessions.subject_id → `belongs_to`).
+- Títulos: vista `v_entity_labels`; `v_orphan_entities` queda para la comprobación de arranque.
 - `delete_relationship` con actor `user` no exige gate (una sola fila, reversible); con actor agente, sí.
 
-## Herramientas — `app/tools/storage_tools.py`, `app/tools/relations_tools.py`
+## Herramientas — `app/tools/storage.py`, `app/tools/relations.py`
 
-Cada archivo expone `TOOLS: tuple[ToolSpec, ...]`, con modelos de entrada y salida, descripción útil para el modelo, `permission`, `risk`, `confirmation`. Se ejecutan con `run_tool`.
+Contrato: `git show drakter/agente-hermes:backend/app/integrations/hermes/CONTRACT.md` §1. `from app.tools.spec import RiskClass, ToolContext, ToolError, ToolSpec`, y `untrusted_envelope` de donde indique esa rama; si `spec.py` aún no está en esta rama, se comprueba con un módulo sustituto en `tests/storage_tool_stub.py`, sin crear `app/tools/spec.py`. Cada archivo expone `TOOLS: tuple[ToolSpec, ...]` y se autodescubre.
 
-Storage: `search_resources`, `get_resource`, `read_resource`, `create_resource`, `update_resource_metadata`, `list_folders`, `index_resource`, `refresh_resource_index` (gate). Relaciones: `create_relationship`, `update_relationship`, `delete_relationship` (gate), `get_related_items`, `search_relationships`.
+Handler síncrono: abre `connect(ctx.state.settings.db_path)` con `row_factory`, cierra en `finally`, usa `tool_deps(ctx.state)` y `Actor("agent", "mcp", str(ctx.turn_id))`, y traduce `AppError` a `ToolError(code, message)`. `audit` por argumento: `q`, `query`, ids → `"log"`; `note_body`, `description`, `url` → `"hash"`. `returns_untrusted=True` en `read_resource` (sale con `untrusted_envelope`), `search_resources` y `get_resource` por los títulos y descripciones.
 
-No hay herramienta de ubicaciones, de borrado de recursos ni de escaneo con ruta. Ninguna acepta rutas absolutas: `create_resource` para agente solo admite enlaces y notas.
+| Herramienta | `domain` | `permission` | `risk` |
+|---|---|---|---|
+| `search_resources`, `get_resource`, `read_resource`, `list_folders` | storage | `storage.read` | READ |
+| `create_resource`, `update_resource_metadata`, `index_resource` | storage | `storage.write` | WRITE |
+| `refresh_resource_index` | storage | `storage.write` | CONFIRM, con `summarize` |
+| `get_related_items`, `search_relationships` | relationships | `relationships.read` | READ |
+| `create_relationship`, `update_relationship` | relationships | `relationships.write` | WRITE |
+| `delete_relationship` | relationships | `relationships.write` | CONFIRM, con `summarize` |
+
+No hay herramienta de ubicaciones, de borrado de recursos ni de escaneo. Ninguna acepta rutas: `create_resource` para agente solo admite enlaces y notas (`args_model` propio, sin `location_id`).
 
 ## Interfaz
 

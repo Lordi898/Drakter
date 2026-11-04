@@ -1,17 +1,15 @@
 """Interfaz fina entre almacén/relaciones y lo que aún fija el contrato común.
 
-Auditoría, confirmaciones y ToolSpec los define drakter-11 en `contracts/`. Hasta
-entonces los módulos solo dependen de lo que hay aquí; al integrar se sustituyen
-estas clases por adaptadores sin tocar los servicios. Sin adaptador real las
-confirmaciones fallan cerradas: nada destructivo se ejecuta.
+Auditoría y confirmaciones las cierra drakter/seguridad. Hasta entonces los servicios
+solo dependen de lo que hay aquí; al integrar se sustituyen estas clases sin tocarlos.
+Sin adaptador real las confirmaciones fallan cerradas: nada destructivo se ejecuta.
 """
 
 from __future__ import annotations
 
 import json
-import logging
 import sqlite3
-from collections.abc import Callable, Iterator, Mapping
+from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -19,18 +17,12 @@ from pathlib import Path
 from typing import Any, Final, Literal, Protocol
 from uuid import uuid4
 
-from pydantic import BaseModel, ValidationError
-
 from app.core.config import Settings
-from app.core.errors import AppError, ErrorDetail
-
-audit_logger = logging.getLogger("drakter.audit")
+from app.core.errors import AppError
 
 ActorKind = Literal["user", "agent", "automation", "system"]
 Origin = Literal["rest", "mcp", "scheduler", "internal"]
 AuditResult = Literal["success", "denied", "failed", "confirmation_required"]
-Risk = Literal["low", "medium", "high"]
-ToolConfirmation = Literal["never", "required"]
 
 MAX_AUDIT_VALUE_CHARS: Final = 200
 
@@ -90,8 +82,8 @@ def _redact_param(value: Any) -> Any:
     return f"<{type(value).__name__}>"
 
 
-class LoggingAudit:
-    """Provisional: va al log JSON, que ya redacta secretos. Sustituir por `audit_events`."""
+class SqlAudit:
+    """Escribe en `audit_events`. Dentro de `write_tx` se confirma con la operación."""
 
     def record(
         self,
@@ -106,26 +98,38 @@ class LoggingAudit:
         params: Mapping[str, Any] | None = None,
         error_code: str | None = None,
     ) -> None:
-        audit_logger.info(
-            "audit",
-            extra={
-                "event": "audit",
-                "actor_type": actor.kind,
-                "origin": actor.origin,
-                "correlation_id": actor.correlation_id,
-                "action": action,
-                "result": result,
-                "entity_type": entity_type,
-                "entity_id": entity_id,
-                "affected_count": affected_count,
-                "params": {k: _redact_param(v) for k, v in (params or {}).items()},
-                "error_code": error_code,
-            },
+        redacted = {k: _redact_param(v) for k, v in (params or {}).items()}
+        conn.execute(
+            "INSERT INTO audit_events (id, occurred_at, correlation_id, actor_type, origin, action,"
+            " entity_type, entity_id, affected_count, params_redacted_json, result, error_code)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                str(uuid4()), utc_now(), actor.correlation_id, actor.kind, actor.origin, action,
+                entity_type, entity_id, affected_count, json.dumps(redacted, ensure_ascii=False),
+                result, error_code,
+            ),
         )
 
 
+class ApprovedByDispatcher:
+    """Solo para herramientas: `ToolRegistry.dispatch` ya aplicó `ToolGate` antes del handler."""
+
+    def require(
+        self,
+        conn: sqlite3.Connection,
+        actor: Actor,
+        *,
+        tool: str,
+        args: Mapping[str, Any],
+        summary: str,
+        affected_count: int,
+        confirmation_id: str | None,
+    ) -> None:
+        return None
+
+
 class DenyAllConfirmations:
-    """Falla cerrada mientras no exista el flujo real de `pending_confirmations`."""
+    """Falla cerrada mientras drakter/seguridad no conecte `pending_confirmations`."""
 
     def require(
         self,
@@ -174,7 +178,7 @@ class StorageLimits:
 @dataclass(frozen=True)
 class StorageDeps:
     settings: Settings
-    audit: AuditSink = field(default_factory=LoggingAudit)
+    audit: AuditSink = field(default_factory=SqlAudit)
     gate: ConfirmationGate = field(default_factory=DenyAllConfirmations)
     limits: StorageLimits = field(default_factory=StorageLimits)
 
@@ -197,7 +201,8 @@ class StorageDeps:
 
 
 def utc_now() -> str:
-    return datetime.now(UTC).isoformat(timespec="microseconds").replace("+00:00", "Z")
+    """Formato del esquema: YYYY-MM-DDTHH:MM:SS.sssZ."""
+    return datetime.now(UTC).isoformat(timespec="milliseconds").replace("+00:00", "Z")
 
 
 def new_id() -> str:
@@ -216,65 +221,6 @@ def write_tx(conn: sqlite3.Connection) -> Iterator[sqlite3.Connection]:
     conn.execute("COMMIT")
 
 
-@dataclass(frozen=True)
-class ToolContext:
-    conn: sqlite3.Connection
-    actor: Actor
-    deps: StorageDeps
-
-
-ToolHandler = Callable[[ToolContext, Any], BaseModel]
-
-
-@dataclass(frozen=True)
-class ToolSpec:
-    """Forma local; se adapta al ToolSpec de `contracts/` al integrar."""
-
-    name: str
-    description: str
-    input_model: type[BaseModel]
-    output_model: type[BaseModel]
-    permission: str
-    risk: Risk
-    confirmation: ToolConfirmation
-    handler: ToolHandler
-
-
-def run_tool(spec: ToolSpec, ctx: ToolContext, raw_args: Mapping[str, Any]) -> dict[str, Any]:
-    """Valida, ejecuta, audita y devuelve siempre un resultado estructurado."""
-    audit_params = dict(raw_args)
-    try:
-        args = spec.input_model.model_validate(raw_args)
-    except ValidationError as exc:
-        ctx.deps.audit.record(
-            ctx.conn, ctx.actor, action=spec.name, result="failed",
-            params=audit_params, error_code="validation_error",
-        )
-        details = [
-            {"field": ".".join(str(p) for p in e["loc"]), "code": e["type"], "message": "Invalid value"}
-            for e in exc.errors()
-        ]
-        return {"ok": False, "error": {"code": "validation_error", "message": "Invalid arguments", "details": details}}
-    try:
-        output = spec.handler(ctx, args)
-    except AppError as exc:
-        result: AuditResult = "confirmation_required" if exc.code == "confirmation_required" else "failed"
-        ctx.deps.audit.record(
-            ctx.conn, ctx.actor, action=spec.name, result=result,
-            params=audit_params, error_code=exc.code,
-        )
-        details = [_detail_dict(d) for d in exc.details]
-        return {"ok": False, "error": {"code": exc.code, "message": exc.message, "details": details}}
-    except Exception:
-        audit_logger.exception("tool_failed", extra={"event": "tool_failed", "tool": spec.name})
-        ctx.deps.audit.record(
-            ctx.conn, ctx.actor, action=spec.name, result="failed",
-            params=audit_params, error_code="internal_error",
-        )
-        return {"ok": False, "error": {"code": "internal_error", "message": "Internal error", "details": []}}
-    ctx.deps.audit.record(ctx.conn, ctx.actor, action=spec.name, result="success", params=audit_params)
-    return {"ok": True, "result": json.loads(output.model_dump_json())}
-
-
-def _detail_dict(detail: ErrorDetail) -> dict[str, Any]:
-    return detail.model_dump()
+def tool_deps(state: Any) -> StorageDeps:
+    """Dependencias para un handler de herramienta. `state` es `ToolContext.state`."""
+    return StorageDeps(settings=state.settings, gate=ApprovedByDispatcher())

@@ -46,7 +46,6 @@ class StorageLocationOut(BaseModel):
     agent_read: bool
     enabled: bool
     created_at: str
-    updated_at: str
 
 
 class FolderCreate(StrictModel):
