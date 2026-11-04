@@ -2,7 +2,7 @@
 
 Rama `drakter/agente-hermes`. `contracts/` (paquete `drakter_contracts`) manda sobre este archivo en formatos, errores, `ToolOutcome`, `UntrustedEnvelope`, eventos y tablas. Lo que aquí repita un nombre de allí debe importarse, no redefinirse.
 
-Base verificada: Hermes **v0.22.7**, commit `b200f5bc60e31588ba2cb60e288029c4a54ba5fa`, instalado desde git (`hermes --version` lo confirma; `pyproject.toml` del tag dice `0.0.0`). Instalación: solo Python >=3.14, `uv sync --frozen`, venv propio separado del backend (3.12); nunca PyPI (0.19.0, retirado a propósito). Se compara **por commit**, no por el texto de versión. `aiohttp` no entra con `--extra anthropic --extra mcp`: el preflight lo comprueba. `platform_toolsets.cron: [no_mcp]` sigue sin verificar y el backend no usa nunca `/api/jobs`. `_repair_tool_call` puede reescribir nombres en Hermes: `dispatch` valida siempre por su cuenta. Mecanismo: subproceso `hermes gateway run` con `/v1/runs`, herramientas por MCP desde el backend. Hermes y el modelo **no son confiables**: un control que dependa de que obedezcan no cuenta.
+Base verificada: Hermes **v0.22.7**, commit `b200f5bc60e31588ba2cb60e288029c4a54ba5fa`, instalado desde git (`hermes --version` lo confirma; `pyproject.toml` del tag dice `0.0.0`). Instalación: solo Python >=3.14, `uv sync --frozen`, venv propio separado del backend (3.12); nunca PyPI (0.19.0, retirado a propósito). Se compara **por commit**, no por el texto de versión. Extras: `anthropic` y `mcp`; sin gateway no hace falta `aiohttp`. `_repair_tool_call` puede reescribir nombres en Hermes: `dispatch` valida siempre por su cuenta. Mecanismo: **runner propio** (§2bis), proceso separado que instancia `AIAgent`, con herramientas por MCP desde el backend. **Prohibido `hermes gateway run`**: su cron se salta la lista blanca (verificado por drakter-5). Hermes y el modelo **no son confiables**: un control que dependa de que obedezcan no cuenta.
 
 ## 1. Herramientas: `backend/app/tools/`
 
@@ -88,8 +88,7 @@ class AgentSettings:
     model_provider: Literal["anthropic","dev_stub"] = "anthropic"
     model_name: str = "claude-haiku-5-5"
     dev_stub_url: str = "http://127.0.0.1:28517"     # solo con model_provider=dev_stub; solo loopback
-    hermes_command: str = "hermes"                   # sin shell
-    hermes_port: int = 8767
+    hermes_python: Path                              # python del venv de Hermes; sin shell
     agent_max_turns: int = 12
     turn_timeout_s: float = 300; idle_timeout_s: float = 120
     anthropic_api_key: SecretStr | None   # alias ANTHROPIC_API_KEY, sin prefijo
@@ -104,15 +103,33 @@ def render_config(s: AgentSettings, tool_names: Sequence[str]) -> dict     # pur
 def materialize_home(s, data_dir, tool_names, repo_root) -> HomeManifest   # escribe y devuelve hashes
 # supervisor.py
 class HermesSupervisor:
-    def __init__(self, settings, data_dir, tool_names, agent_tool_token, agent_tools_url, repo_root, on_state)
+    def __init__(self, settings, data_dir, tool_names, agent_tool_token, agent_tools_url, repo_root, on_state)  # sin API HTTP
     async def start(self) -> None; async def stop(self) -> None
-    state: Literal["stopped","starting","ready","restarting","failed"]; api_base: str; api_key(): str
+    state: Literal["stopped","starting","ready","restarting","failed"]
+    def run_turn(self, turn_id, session_id, text, instructions) -> AsyncIterator[dict]   # eventos crudos del runner; siempre acaba en terminal
+    async def stop_turn(self, turn_id, grace_s: float = 5) -> None   # `stop`; si no hay terminal en grace_s, mata y rearranca
 # preflight.py: python -m app.integrations.hermes.preflight  (salida 0 solo si todo pasa)
 ```
 
-`render_config` (JSON válido como YAML, sin dependencia nueva) fija siempre: `platform_toolsets: {api_server: [drakter], cron: [no_mcp]}`; `agent.disabled_toolsets` con terminal, file, web, browser, code_execution, delegation, skills, cronjob, memory y demás; `agent.max_turns`; `approvals.mode: manual`; `tools.tool_search.enabled: off`; `auth.adopt_external_logins: false`; `auxiliary.background_review.enabled: false`; `curator.enabled: false`; `kanban.dispatch_in_gateway: false`; `updates.check: false`; `plugins.auto_update_check_hours: 0`; `plugins.load_timeout_seconds: 0`; `terminal.cwd` absoluto y vacío; `gateway.api_server.max_concurrent_runs: 1`; `memory.memory_enabled: false`, `memory.user_profile_enabled: false`, sin `memory.provider` (decisión F18 pendiente); `model.context_length: 1000000`; `compression.threshold_tokens: 80000`; `auxiliary.*` en el mismo modelo; `mcp_servers.drakter` con `url` y token por `${DRAKTER_MCP_URL}` y `${DRAKTER_MCP_TOKEN}` (el puerto es efímero: nunca entra en la config ni en su hash), `tools.include` nativo, `resources: false`, `prompts: false`, `sampling.enabled: false`. Toda clave se contrasta con el código del tag.
+`render_config` (JSON válido como YAML, sin dependencia nueva) fija: `agent.disabled_toolsets` con terminal, file, web, browser, code_execution, delegation, skills, cronjob, memory y demás; `approvals.mode: manual`; `tools.tool_search.enabled: "off"`; `auth.adopt_external_logins: false`; `auxiliary.background_review.enabled: false`; `curator.enabled: false`; `updates.check: false`; `plugins.auto_update_check_hours: 0`; `plugins.load_timeout_seconds: 0`; `terminal.cwd` absoluto y vacío; `memory.memory_enabled: false`, `memory.user_profile_enabled: false`, sin `memory.provider` (F18 pendiente); `model.context_length: 1000000`; `compression.threshold_tokens: 80000`; `auxiliary.*` en el mismo modelo; `mcp_servers.drakter` con `url` y token por `${DRAKTER_MCP_URL}` y `${DRAKTER_MCP_TOKEN}` (el puerto es efímero: nunca entra en la config ni en su hash), `tools.include` nativo, `resources: false`, `prompts: false`, `sampling.enabled: false`. Toda clave se contrasta con el código del tag.
 
-El subproceso arranca con entorno limpio (lista blanca), `HERMES_HOME` dedicado, `API_SERVER_ENABLED=true`, `API_SERVER_HOST=127.0.0.1`, `API_SERVER_KEY` aleatoria por arranque. Clave del modelo solo en el entorno del hijo. El guardián `drakter_guard` es defensa en profundidad y demuestra que está cargado con un nonce por arranque; sin esa señal no se aceptan runs.
+### 2bis. Runner: `backend/app/integrations/hermes/runner/drakter_runner.py`
+
+Proceso separado: `<hermes_python> -I <ruta>`, entorno limpio por lista blanca, `HERMES_HOME` y `HOME` dedicados, cwd vacío. Solo stdlib y Hermes; nunca importa `app`. Sin gateway, sin scheduler, sin cron.
+
+Arranque: duplica el fd 1 para el protocolo y redirige `sys.stdout` a stderr (nada de Hermes puede corromper el JSONL). `discover_mcp_tools(["drakter"])`. Crea `AIAgent(enabled_toolsets=["mcp-drakter"], max_iterations=agent_max_turns, skip_memory=True, skip_background_review=True, skip_context_files=True, load_soul_identity=True, cwd=<vacío>, callbacks...)`. **Comprueba `agent.tools` real**: si hay un nombre fuera de `mcp__drakter__*`, sale con error y no acepta turnos.
+
+Protocolo JSONL, una línea por mensaje, tamaño acotado, entrada no reconocida → error y sin ejecutar nada:
+
+```text
+entrada:  {"op":"turn","turn_id","session_id","input","instructions"} | {"op":"stop","turn_id"} | {"op":"shutdown"}
+salida:   {"ev":"ready","nonce","commit","tools":[...]}
+          {"ev":"thinking","turn_id"} {"ev":"delta","turn_id","text"}
+          {"ev":"tool_started","turn_id","tool","call_id"} {"ev":"tool_completed","turn_id","tool","call_id","error"}
+          {"ev":"completed","turn_id","output","usage"} {"ev":"cancelled","turn_id"} {"ev":"failed","turn_id","code","message"}
+```
+
+Un lector de stdin en su hilo atiende `stop` con `agent.hard_interrupt()` mientras `run_conversation` corre en otro hilo. Si no llega terminal en `grace_s`, el supervisor mata el grupo de procesos y rearranca: el turno acaba en `TurnCancelled` o `agent_disconnected`, nunca se repite. Un solo turno a la vez. `ready` debe traer el nonce del guardián y `commit == b200f5bc…`; `tools` se compara con el catálogo. Sin `ready` válido no hay turnos. Historial: `SessionDB` del home con `session_id` del backend, o lista en memoria reanudada desde ahí; un `AIAgent` por sesión para mantener `system` y `tools` estables (H-21).
 
 ## 3. Proveedor: `app/integrations/hermes/provider.py`
 
@@ -130,9 +147,9 @@ class AgentProvider(Protocol):
     async def cancel(self, turn_id: UUID) -> None
 ```
 
-`AgentEvent` (`events.py`, unión discriminada): `Thinking`, `MessageDelta(text)`, `ToolStarted(tool, call_id)`, `ToolCompleted(tool, call_id, error: bool)`, y terminales `TurnCompleted(text, usage)`, `TurnCancelled`, `TurnFailed(code, message, retryable)`. Códigos estables: `agent_unavailable`, `agent_busy`, `agent_timeout`, `agent_disconnected`, `provider_auth`, `provider_error`.
+`AgentEvent` (`integrations/hermes/events.py`, unión discriminada): `Thinking`, `MessageDelta(text)`, `ToolStarted(tool, call_id)`, `ToolCompleted(tool, call_id, error: bool)`, y terminales `TurnCompleted(text, usage)`, `TurnCancelled`, `TurnFailed(code, message, retryable)`. Códigos estables: `agent_unavailable`, `agent_busy`, `agent_timeout`, `agent_disconnected`, `provider_auth`, `provider_error`.
 
-Implementaciones: `HermesProvider` (`hermes_provider.py`) y `FakeProvider` (`fake.py`, sin red ni API de pago). `model` y `provider` no se reenvían a Hermes. `instructions` es estable por sesión. Un `approval.request` se deniega por código y se audita: la confirmación vive en el backend. No hay reintento automático de un turno con desenlace incierto.
+Implementaciones: `HermesProvider` (`hermes_provider.py`) y `FakeProvider` (`fake.py`, sin red ni API de pago). `model` y `provider` no se reenvían a Hermes. `instructions` es estable por sesión. Sin HTTP: `HermesProvider` consume `supervisor.run_turn`. Toda aprobación interna de Hermes se deniega por código en el runner: la confirmación vive en el backend. No hay reintento automático de un turno con desenlace incierto.
 
 ## 4. Chat: `backend/app/api/chat.py`
 
