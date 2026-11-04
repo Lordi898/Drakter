@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Drakter
+Comment=Tu agente personal de IA
+Exec=@EXEC@
+Icon=@ICON@
+Terminal=false
+Categories=Utility;
+StartupWMClass=Drakter
