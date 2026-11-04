@@ -56,18 +56,18 @@ def get_subject(conn: sqlite3.Connection, subject_id: str) -> dict[str, Any] | N
 
 
 def list_subjects(
-    conn: sqlite3.Connection, *, include_archived: bool, limit: int, offset: int
-) -> tuple[list[dict[str, Any]], int]:
-    where = "" if include_archived else " WHERE e.archived_at IS NULL"
-    total = conn.execute(
-        "SELECT count(*) FROM subjects s JOIN entities e ON e.id=s.id" + where
-    ).fetchone()[0]
-    rows = _rows(
-        conn.execute(
-            _SUBJECT_SELECT + where + " ORDER BY e.created_at,s.id LIMIT ? OFFSET ?", (limit, offset)
-        )
-    )
-    return rows, total
+    conn: sqlite3.Connection, *, include_archived: bool, after: list[Any] | None, limit: int
+) -> list[dict[str, Any]]:
+    clauses: list[str] = []
+    params: list[Any] = []
+    if not include_archived:
+        clauses.append("e.archived_at IS NULL")
+    if after is not None:
+        clauses.append("(e.created_at,s.id)>(?,?)")
+        params.extend(after)
+    where = (" WHERE " + " AND ".join(clauses)) if clauses else ""
+    params.append(limit)
+    return _rows(conn.execute(_SUBJECT_SELECT + where + " ORDER BY e.created_at,s.id LIMIT ?", params))
 
 
 def update_subject(conn: sqlite3.Connection, subject_id: str, columns: dict[str, Any]) -> None:
@@ -116,19 +116,26 @@ def get_session(conn: sqlite3.Connection, session_id: str) -> dict[str, Any] | N
 
 
 def list_sessions(
-    conn: sqlite3.Connection, subject_id: str, *, include_archived: bool, limit: int, offset: int
-) -> tuple[list[dict[str, Any]], int]:
-    where = " WHERE c.subject_id=?" + ("" if include_archived else " AND e.archived_at IS NULL")
-    total = conn.execute(
-        "SELECT count(*) FROM class_sessions c JOIN entities e ON e.id=c.id" + where, (subject_id,)
-    ).fetchone()[0]
-    rows = _rows(
-        conn.execute(
-            _SESSION_SELECT + where + " ORDER BY c.weekday,c.starts_local_time,c.id LIMIT ? OFFSET ?",
-            (subject_id, limit, offset),
-        )
+    conn: sqlite3.Connection,
+    subject_id: str,
+    *,
+    include_archived: bool,
+    after: list[Any] | None,
+    limit: int,
+) -> list[dict[str, Any]]:
+    clauses = ["c.subject_id=?"]
+    params: list[Any] = [subject_id]
+    if not include_archived:
+        clauses.append("e.archived_at IS NULL")
+    if after is not None:
+        clauses.append("(c.weekday,c.starts_local_time,c.id)>(?,?,?)")
+        params.extend(after)
+    params.append(limit)
+    sql = (
+        _SESSION_SELECT + " WHERE " + " AND ".join(clauses)
+        + " ORDER BY c.weekday,c.starts_local_time,c.id LIMIT ?"
     )
-    return rows, total
+    return _rows(conn.execute(sql, params))
 
 
 def update_session(conn: sqlite3.Connection, session_id: str, columns: dict[str, Any]) -> None:
