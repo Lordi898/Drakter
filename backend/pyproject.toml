@@ -12,7 +12,11 @@ dependencies = [
     "platformdirs",
     "httpx",
     "mcp",
+    "drakter-contracts",
 ]
 
 [tool.uv]
 package = false
+
+[tool.uv.sources]
+drakter-contracts = { path = "../contracts/python", editable = true }
