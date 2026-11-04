@@ -1,20 +1,20 @@
 import { useCallback, useState } from 'react'
 import { notify } from '@/services/notify'
-import { ApiError } from '@/services/api'
-import type { ConfirmationDialogProps, ConfirmationOutcome } from '../tasks/ConfirmationDialog'
+import { ApiError, type ConfirmationTicket } from '@/services/api'
+import type { ReviewOutcome } from '@/stores/confirmations'
 import { toLoadError } from './useLoad'
 
 export type RunProject = <T>(action: () => Promise<T>, success?: string) => Promise<boolean>
 
 export interface ProjectRunner {
   readonly run: RunProject
-  readonly ticket: ConfirmationDialogProps['ticket']
-  readonly resolveConfirmation: (outcome: ConfirmationOutcome) => void
+  readonly ticket: ConfirmationTicket | null
+  readonly resolveConfirmation: (outcome: ReviewOutcome) => void
 }
 
 /** Ejecuta una operación y traduce sus fallos. Devuelve `true` solo si se completó. */
 export function useProjectRunner(onChanged: () => void): ProjectRunner {
-  const [ticket, setTicket] = useState<ConfirmationDialogProps['ticket']>(null)
+  const [ticket, setTicket] = useState<ConfirmationTicket | null>(null)
 
   const run = useCallback<RunProject>(
     async (action, success) => {
@@ -24,7 +24,7 @@ export function useProjectRunner(onChanged: () => void): ProjectRunner {
         onChanged()
         return true
       } catch (error) {
-        if (error instanceof ApiError && error.confirmation != null) {
+        if (error instanceof ApiError && error.code === 'confirmation_required' && error.confirmation !== null) {
           setTicket(error.confirmation)
         } else if (error instanceof ApiError && error.code === 'revision_mismatch') {
           notify({
@@ -45,10 +45,25 @@ export function useProjectRunner(onChanged: () => void): ProjectRunner {
   )
 
   const resolveConfirmation = useCallback(
-    (outcome: ConfirmationOutcome) => {
+    (outcome: ReviewOutcome) => {
       setTicket(null)
-      if (outcome === 'approved') notify({ tone: 'success', title: 'Acción confirmada' })
-      onChanged()
+      if (outcome === 'approved') {
+        notify({ tone: 'success', title: 'Acción confirmada' })
+        onChanged()
+      } else if (outcome === 'conflict') {
+        notify({
+          tone: 'warning',
+          title: 'El proyecto había cambiado',
+          body: 'No se ha hecho ningún cambio. He recargado los datos; vuelve a intentarlo.'
+        })
+        onChanged()
+      } else if (outcome === 'expired' || outcome === 'failed') {
+        notify({
+          tone: 'warning',
+          title: outcome === 'expired' ? 'La confirmación ha caducado' : 'No se pudo completar la confirmación',
+          body: 'No se ha hecho ningún cambio. Vuelve a intentarlo.'
+        })
+      }
     },
     [onChanged]
   )

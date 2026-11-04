@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { ConfirmationDialog, type ConfirmationOutcome } from '../tasks/ConfirmationDialog'
+import type { ReviewOutcome } from '@/stores/confirmations'
+import { ConfirmationDialog } from '../tasks/ConfirmationDialog'
 import { formatDueDate } from '../tasks/format'
 import { archiveProject, deleteProject, getProject, unarchiveProject, updateProject } from './api'
 import { ProjectActivity } from './ProjectActivity'
@@ -51,7 +52,7 @@ export function ProjectDetail({
   }, [project.reload, onChanged])
   const runner = useProjectRunner(refresh)
 
-  function resolved(outcome: ConfirmationOutcome) {
+  function resolved(outcome: ReviewOutcome) {
     runner.resolveConfirmation(outcome)
     if (outcome === 'approved') onBack()
   }

@@ -1,4 +1,5 @@
 import { apiRequest } from '@/services/api'
+import { withRevision } from '../tasks/api'
 import type { HistoryEntry } from '../tasks/types'
 import type {
   ListPage,
@@ -12,10 +13,6 @@ import type {
 /** Rutas REST de proyectos. Las que cambian un proyecto llevan `If-Match` con su revisión. */
 
 const BASE = '/api/v1/projects'
-
-function ifMatch(revision: number): Readonly<Record<string, string>> {
-  return { 'If-Match': `"${revision}"` }
-}
 
 function toQuery(params: Readonly<Record<string, unknown>>): string {
   const query = new URLSearchParams()
@@ -44,20 +41,20 @@ export function createProject(data: ProjectCreate): Promise<Project> {
 }
 
 export function updateProject(id: string, patch: ProjectUpdate, revision: number): Promise<Project> {
-  return apiRequest<Project>(`${BASE}/${id}`, { method: 'PATCH', body: patch, headers: ifMatch(revision) })
+  return apiRequest<Project>(withRevision(`${BASE}/${id}`, revision), { method: 'PATCH', body: patch })
 }
 
 export function archiveProject(id: string, revision: number): Promise<Project> {
-  return apiRequest<Project>(`${BASE}/${id}/archive`, { method: 'POST', headers: ifMatch(revision) })
+  return apiRequest<Project>(withRevision(`${BASE}/${id}/archive`, revision), { method: 'POST' })
 }
 
 export function unarchiveProject(id: string, revision: number): Promise<Project> {
-  return apiRequest<Project>(`${BASE}/${id}/unarchive`, { method: 'POST', headers: ifMatch(revision) })
+  return apiRequest<Project>(withRevision(`${BASE}/${id}/unarchive`, revision), { method: 'POST' })
 }
 
 /** Siempre pide confirmación: el error trae `confirmation` y no se borra nada sin aprobarla. */
 export function deleteProject(id: string, revision: number): Promise<void> {
-  return apiRequest<void>(`${BASE}/${id}`, { method: 'DELETE', headers: ifMatch(revision) })
+  return apiRequest<void>(withRevision(`${BASE}/${id}`, revision), { method: 'DELETE' })
 }
 
 export function projectProgress(id: string): Promise<ProjectProgress> {
