@@ -2,11 +2,11 @@ import { CalendarOff, Pencil, Plus, Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { errorText } from '@/modules/calendar/workspaceClient'
+import { errorText } from '@/modules/calendar/workspaceApi'
 import { deleteSession, listSessions } from './api'
 import { ExceptionDialog } from './ExceptionDialog'
 import { FormError } from './fields'
-import { hhmm, validityText, weekdayName } from './format'
+import { hhmm, intervalText, validityText, weekdayName } from './format'
 import { colorOf } from './palette'
 import { SessionDialog } from './SessionDialog'
 import type { ClassSession, ConflictItem, Subject } from './types'
@@ -128,7 +128,7 @@ export function SubjectDetail({ subject, onEdit, onToggleArchive, onDelete, onCh
                   {s.room ? ` · Aula ${s.room}` : ''}
                 </p>
                 <p className="text-muted-foreground">
-                  {validityText(s.valid_from, s.valid_until)} · {s.timezone}
+                  {intervalText(s.interval_weeks)} · {validityText(s.valid_from, s.valid_until)} · {s.timezone}
                 </p>
               </div>
               <div className="flex gap-1">

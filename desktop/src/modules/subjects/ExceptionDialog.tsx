@@ -1,7 +1,7 @@
 import { useId, useState, type FormEvent } from 'react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { errorText } from '@/modules/calendar/workspaceClient'
+import { errorText } from '@/modules/calendar/workspaceApi'
 import { createException } from './api'
 import { Field, FormError, TextInput } from './fields'
 import { hhmm, minutesOf, toApiTime, weekdayName, weekdayOf } from './format'

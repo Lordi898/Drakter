@@ -1,4 +1,4 @@
-import { api, type ConfirmationRequired, type Page } from '@/modules/calendar/workspaceClient'
+import { api, type Page } from '@/modules/calendar/workspaceApi'
 import type {
   ClassSession,
   ExceptionInput,
@@ -9,8 +9,8 @@ import type {
   Timetable
 } from './types'
 
-/** DELETE responde 202 con la confirmación pendiente (o 204 si no hiciera falta). */
-export type DeleteResult = ConfirmationRequired | undefined
+/** DELETE no ejecuta: el backend responde 409 `confirmation_required` (ApiError con ticket). */
+export type DeleteResult = undefined
 
 export function listSubjects(includeArchived: boolean): Promise<Page<Subject>> {
   return api('GET', '/subjects', { query: { include_archived: includeArchived, limit: 200 } })

@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { cn } from '@/lib/utils'
-import { BackendUnavailableError, errorText } from '@/modules/calendar/workspaceClient'
+import { errorText, isBackendUnavailable } from '@/modules/calendar/workspaceApi'
 import { archiveSubject, deleteSubject, listSubjects, unarchiveSubject } from './api'
 import { colorOf } from './palette'
 import { SubjectDetail } from './SubjectDetail'
@@ -90,7 +90,7 @@ export function SubjectsPage() {
   )
 
   if (load.status === 'error') {
-    const unavailable = load.error instanceof BackendUnavailableError
+    const unavailable = isBackendUnavailable(load.error)
     return (
       <>
         <PageHeader title="Asignaturas" summary="Tus asignaturas con su horario, su aula y sus clases." />

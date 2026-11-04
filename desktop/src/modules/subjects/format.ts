@@ -4,14 +4,14 @@ export function weekdayName(weekday: number): string {
   return WEEKDAYS[weekday - 1] ?? ''
 }
 
-/** 'HH:MM:SS' -> 'HH:MM'. */
+/** 'HH:MM' (o con segundos) -> 'HH:MM'. */
 export function hhmm(time: string): string {
   return time.slice(0, 5)
 }
 
-/** 'HH:MM' (input time) -> 'HH:MM:SS'. */
+/** Valor de input time -> 'HH:MM'. */
 export function toApiTime(value: string): string {
-  return value.length === 5 ? `${value}:00` : value
+  return value.slice(0, 5)
 }
 
 export function minutesOf(time: string): number {
@@ -47,6 +47,10 @@ export function formatDate(iso: string): string {
 
 export function validityText(from: string, until: string | null): string {
   return until ? `Del ${formatDate(from)} al ${formatDate(until)}` : `Desde el ${formatDate(from)}`
+}
+
+export function intervalText(weeks: number): string {
+  return weeks === 1 ? 'Cada semana' : `Cada ${weeks} semanas`
 }
 
 /** 'AAAA-MM-DDTHH:MM:SS' -> 'DD/MM HH:MM'. */

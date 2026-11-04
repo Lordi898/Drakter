@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { errorText } from '@/modules/calendar/workspaceClient'
+import { errorText } from '@/modules/calendar/workspaceApi'
 import { getTimetable } from './api'
 import { Field, TextInput } from './fields'
 import { hhmm, minutesOf, todayIso, WEEKDAYS } from './format'

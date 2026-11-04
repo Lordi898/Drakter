@@ -1,4 +1,4 @@
-/** Espejo de backend/app/schemas/subjects.py. Horas 'HH:MM:SS' locales; weekday 1=lunes .. 7=domingo. */
+/** Espejo de backend/app/schemas/subjects.py. Horas 'HH:MM' locales; weekday 1=lunes .. 7=domingo. */
 export interface Subject {
   readonly id: string
   readonly name: string
@@ -28,6 +28,7 @@ export interface ClassSession {
   readonly timezone: string
   readonly valid_from: string
   readonly valid_until: string | null
+  readonly interval_weeks: number
   readonly room: string | null
   readonly archived_at: string | null
   readonly revision: number
@@ -42,6 +43,7 @@ export interface SessionInput {
   readonly timezone: string
   readonly valid_from: string
   readonly valid_until: string | null
+  readonly interval_weeks: number
   readonly room: string | null
 }
 
@@ -81,6 +83,7 @@ export interface TimetableEntry {
   readonly room: string | null
   readonly valid_from: string
   readonly valid_until: string | null
+  readonly interval_weeks: number
 }
 
 export interface Timetable {

@@ -2,7 +2,7 @@ import { useId, useState, type FormEvent } from 'react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { errorText } from '@/modules/calendar/workspaceClient'
+import { errorText } from '@/modules/calendar/workspaceApi'
 import { createSession, updateSession } from './api'
 import { Field, FormError, TextInput } from './fields'
 import { hhmm, localTimezone, minutesOf, toApiTime, todayIso, WEEKDAYS } from './format'
@@ -34,6 +34,10 @@ function SessionForm({ subjectId, session, onClose, onSaved }: Omit<Props, 'open
   const [end, setEnd] = useState(session ? hhmm(session.ends_local_time) : '10:00')
   const [room, setRoom] = useState(session?.room ?? '')
   const [timezone, setTimezone] = useState(session?.timezone ?? localTimezone())
+  const [intervalMode, setIntervalMode] = useState(
+    !session || session.interval_weeks === 1 ? '1' : session.interval_weeks === 2 ? '2' : 'n'
+  )
+  const [intervalN, setIntervalN] = useState(String(session?.interval_weeks ?? 3))
   const [validFrom, setValidFrom] = useState(session?.valid_from ?? todayIso())
   const [validUntil, setValidUntil] = useState(session?.valid_until ?? '')
   const [busy, setBusy] = useState(false)
@@ -57,6 +61,11 @@ function SessionForm({ subjectId, session, onClose, onSaved }: Omit<Props, 'open
       setError('Indica la zona horaria.')
       return
     }
+    const interval = intervalMode === 'n' ? Number(intervalN) : Number(intervalMode)
+    if (!Number.isInteger(interval) || interval < 1 || interval > 52) {
+      setError('El intervalo debe ser un número de semanas entre 1 y 52.')
+      return
+    }
     setBusy(true)
     setError(null)
     const body: SessionInput = {
@@ -66,6 +75,7 @@ function SessionForm({ subjectId, session, onClose, onSaved }: Omit<Props, 'open
       timezone: timezone.trim(),
       valid_from: validFrom,
       valid_until: validUntil || null,
+      interval_weeks: interval,
       room: room.trim() || null
     }
     try {
@@ -88,7 +98,7 @@ function SessionForm({ subjectId, session, onClose, onSaved }: Omit<Props, 'open
       <DialogHeader>
         <DialogTitle>{session ? 'Editar clase' : 'Nueva clase semanal'}</DialogTitle>
         <DialogDescription>
-          Se repite cada semana mientras esté vigente. Las horas son locales a la zona indicada.
+          Se repite con la frecuencia elegida mientras esté vigente. Las horas son locales a la zona indicada.
         </DialogDescription>
       </DialogHeader>
       <Field label="Día de la semana" htmlFor={`${id}-day`}>
@@ -126,6 +136,25 @@ function SessionForm({ subjectId, session, onClose, onSaved }: Omit<Props, 'open
         <Field label="Hasta (opcional)" htmlFor={`${id}-until`}>
           <TextInput id={`${id}-until`} type="date" value={validUntil} onChange={(e) => setValidUntil(e.target.value)} />
         </Field>
+      </div>
+      <div className="grid grid-cols-2 items-end gap-3">
+        <Field label="Frecuencia" htmlFor={`${id}-interval`}>
+          <Select value={intervalMode} onValueChange={setIntervalMode}>
+            <SelectTrigger id={`${id}-interval`} className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="1">Cada semana</SelectItem>
+              <SelectItem value="2">Cada 2 semanas</SelectItem>
+              <SelectItem value="n">Cada N semanas</SelectItem>
+            </SelectContent>
+          </Select>
+        </Field>
+        {intervalMode === 'n' ? (
+          <Field label="Número de semanas" htmlFor={`${id}-n`}>
+            <TextInput id={`${id}-n`} type="number" min={1} max={52} value={intervalN} onChange={(e) => setIntervalN(e.target.value)} />
+          </Field>
+        ) : null}
       </div>
       <FormError message={error} />
       <DialogFooter>

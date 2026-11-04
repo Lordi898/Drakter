@@ -4,10 +4,10 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { ConfirmationDialog } from '@/modules/calendar/ConfirmationDialog'
 import {
   ApiError,
+  confirmationOf,
   errorText,
-  isConfirmationRequired,
-  type ConfirmationRequired
-} from '@/modules/calendar/workspaceClient'
+  type ConfirmationTicket
+} from '@/modules/calendar/workspaceApi'
 import type { DeleteResult } from './api'
 import { FormError } from './fields'
 
@@ -20,11 +20,11 @@ interface Options {
 }
 
 /**
- * Flujo de borrado: DELETE -> 202 ConfirmationRequired -> ConfirmationDialog.
+ * Flujo de borrado: DELETE -> 409 confirmation_required -> ConfirmationDialog.
  * `element` debe renderizarse una vez; `start(fn)` ejecuta la llamada DELETE.
  */
 export function useDeletion({ onDeleted, onArchive, conflictTitle = 'No se puede eliminar' }: Options) {
-  const [confirmation, setConfirmation] = useState<ConfirmationRequired | null>(null)
+  const [confirmation, setConfirmation] = useState<ConfirmationTicket | null>(null)
   const [conflict, setConflict] = useState<string | null>(null)
   const [failure, setFailure] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -32,11 +32,12 @@ export function useDeletion({ onDeleted, onArchive, conflictTitle = 'No se puede
   async function start(call: () => Promise<DeleteResult>) {
     setFailure(null)
     try {
-      const result = await call()
-      if (isConfirmationRequired(result)) setConfirmation(result)
-      else onDeleted()
+      await call()
+      onDeleted()
     } catch (e) {
-      if (e instanceof ApiError && e.code === 'conflict') setConflict(e.message)
+      const ticket = confirmationOf(e)
+      if (ticket) setConfirmation(ticket)
+      else if (e instanceof ApiError && e.code === 'has_dependents') setConflict(errorText(e))
       else setFailure(errorText(e))
     }
   }
