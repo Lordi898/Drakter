@@ -243,3 +243,11 @@ Decisiones técnicas, cambios de tecnología y motivos.
 - **Alternativas descartadas:** copiar el catálogo a los planes (crearía una segunda fuente).
 - **Motivo:** un solo contrato.
 - **Impacto:** remisiones de `MASTER_PLAN` §6.5, `PLAN_DISEÑO` §6.4 y `ROADMAP` §5.4.
+
+## [2026-11-04] Interfaz del renderer y confirmación por REST
+- **Contexto:** el orquestador comunica cómo queda el puente Electron frente al borrador. Las referencias D-13 y D-14 solo constan en comentarios de `desktop/electron/shared/` de las ramas `drakter/electron-host` y `drakter/chat-personaje`, no en este archivo.
+- **Decisión:** la interfaz del renderer es `window.api.call(method, path, body)`, en lugar del `api.call(opId, args)` del borrador, y conserva la lista cerrada `ALLOWED_ROUTES` de D-14: main rechaza lo que no esté en ella y el renderer no conoce puerto ni credenciales. Se añaden `getConnection` y los resultados `conflict` y `failed` (D-13). En REST, una operación que necesita confirmación responde 409 con `error.code = "confirmation_required"`, igual que `contracts/python/drakter_contracts/errors.py`, nunca 2xx.
+- **Estado:** el token HMAC de confirmación es PROVISIONAL, pendiente del plan definitivo. `contracts/` no lo define.
+- **Alternativas descartadas:** `api.call(opId, args)`, el borrador anterior.
+- **Motivo:** decisión del orquestador; no se han recibido más motivos.
+- **Impacto:** `desktop/electron/`, contrato de rutas. No se ha comprobado en ejecución.
