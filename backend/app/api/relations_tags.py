@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, Query, Request
 from pydantic import BaseModel, ConfigDict
 
 from app.api.storage import db, get_deps
-from app.api.storage_confirmation import ConfirmationRoute
+from app.api._storage_confirmation import ConfirmationRoute
 from app.schemas.storage import Cursor, SearchQuery, TagName, Uuid
 from app.services import relations_tags as svc
 from app.services import storage_search_all as search

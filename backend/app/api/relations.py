@@ -7,7 +7,7 @@ from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, Query, Request, Response
 
-from app.api.storage_confirmation import ConfirmationRoute
+from app.api._storage_confirmation import ConfirmationRoute
 
 from app.api.storage import db, get_deps
 from app.schemas.relations import (

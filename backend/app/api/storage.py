@@ -10,7 +10,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Header, Path, Query, Request, Response
 from pydantic import BaseModel
 
-from app.api.storage_confirmation import ConfirmationRoute
+from app.api._storage_confirmation import ConfirmationRoute
 from app.database.connection import connect
 from app.schemas.storage import (
     Cursor,
