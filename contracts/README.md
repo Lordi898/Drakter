@@ -20,8 +20,8 @@ Backend: dependencia local `drakter-contracts = {path = "../contracts/python", e
 | Credencial | Alcance |
 |---|---|
 | Token de sesión (GUI), archivo de sesión | `/api/v1/*` y `WS /api/v1/events` en el puerto del backend (8765) |
-| `agent_tool_token`, aleatorio por arranque | Solo el servidor MCP, en **otro** puerto de loopback (8766). No alcanza ninguna ruta de la GUI |
-| `API_SERVER_KEY` de Hermes | Solo backend → Hermes (8767) |
+| `agent_tool_token`, aleatorio por arranque | Solo el servidor MCP, en un listener propio de loopback con **puerto efímero** (bind a `127.0.0.1:0`), ni fijo ni configurable. El backend lo pasa a Hermes por entorno filtrado. No alcanza ninguna ruta de la GUI |
+| `API_SERVER_KEY` de Hermes | Solo backend → Hermes, también en loopback |
 
 Actores: `user`, `agent`, `automation`, `system`. Orígenes: `rest`, `mcp`, `scheduler`, `internal`. La identidad de sesión y turno nunca sale de argumentos del modelo. Hay un turno activo a la vez; una llamada MCP sin turno se rechaza con `no_active_turn`.
 
@@ -61,7 +61,7 @@ Todo error HTTP: `{"error":{"code","message","request_id","details":[{"field","c
 Pipeline único en backend, para GUI y agente, independiente de Hermes:
 
 1. Una operación con riesgo efectivo `confirm` crea fila en `pending_confirmations` con argumentos, `targets_json` (ids y `revision` resueltos), `summary` y `affected_count`, calculados por el backend. Emite `confirmation.requested` y devuelve `confirmation_required`.
-2. Solo la GUI aprueba: `POST /api/v1/confirmations/{id}/approve|reject`. El agente no tiene herramienta de aprobar y su token no llega a ese puerto.
+2. Solo la GUI aprueba: `POST /api/v1/confirmations/{id}/approve|reject`. El agente no tiene herramienta de aprobar y su token no es válido en ese listener.
 3. Al aprobar se ejecutan exactamente los argumentos guardados, una vez: `pending → approved → executing → executed|failed`. Decidir es `UPDATE ... WHERE status='pending'`; reclamar la ejecución es `UPDATE ... SET status='executing' WHERE status='approved'`, y solo quien afecta una fila ejecuta. Al arrancar, lo que siga en `executing` pasa a `failed` sin reejecutar. Si `targets_json` ya no coincide: `conflict`.
 4. Expirar no ejecuta nunca. Voz en v1: confirmar solo en la GUI.
 
