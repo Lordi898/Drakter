@@ -1,0 +1,6 @@
+{
+  "description": "Conversacion normal: una respuesta de texto sin herramientas.",
+  "steps": [
+    {"text": "Hola, soy el stub de desarrollo de Drakter. Esta respuesta esta guionizada."}
+  ]
+}

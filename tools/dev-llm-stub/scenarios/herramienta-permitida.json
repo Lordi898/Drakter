@@ -1,0 +1,10 @@
+{
+  "description": "Llamada a una herramienta ofrecida (read_file) y respuesta con su resultado.",
+  "steps": [
+    {
+      "text": "Voy a leer la nota de prueba.",
+      "tool_calls": [{"name": "read_file", "input": {"path": "{{fixtures}}/nota.md"}}]
+    },
+    {"text": "Resultado recibido: {{tool_result}}"}
+  ]
+}
