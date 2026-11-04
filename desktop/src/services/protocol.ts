@@ -12,6 +12,21 @@
  * siempre como texto plano, nunca como HTML ni como instrucción.
  */
 
+import type {
+  AgentState,
+  ConfirmationOut,
+  ConfirmationRequested,
+  ConfirmationResolved,
+  ConfirmationTicket,
+  ConversationOut,
+  EventType as ContractEventType,
+  MessageOut,
+  Page,
+  TypedEvent
+} from '../../../contracts/ts'
+
+export type { AgentState, ConfirmationOut, ConfirmationTicket, MessageOut, Page }
+
 export const EVENT_VERSION = 1
 
 export const AGENT_STATES = [
@@ -24,16 +39,17 @@ export const AGENT_STATES = [
   'error',
   'interrupted',
   'offline'
-] as const
-export type AgentState = (typeof AGENT_STATES)[number]
+] as const satisfies readonly AgentState[]
 
 // ---- REST ------------------------------------------------------------------
 
-/** SUPUESTO: de `ChatSession` solo se usa `id`. */
-export interface ChatSessionInfo {
-  readonly id: string
-}
+/**
+ * `ChatSession` no está en los tipos generados: routes.md lo cita y su modelo es
+ * `ConversationOut`. De él solo se usa `id`.
+ */
+export type ChatSessionInfo = Pick<ConversationOut, 'id'>
 
+/** Hermes CONTRACT §4 y routes.md dicen `text`; `MessageCreate` generado dice `content`. Pedido aclararlo. */
 export interface SendMessageRequest {
   readonly text: string
   readonly client_message_id: string
@@ -52,23 +68,6 @@ export interface AgentStatusInfo {
   readonly detail: string | null
 }
 
-/** SUPUESTO: forma de cada elemento de `GET /chat/sessions/{id}/messages`. */
-export interface StoredChatMessage {
-  readonly id: string
-  readonly role: 'user' | 'agent'
-  readonly text: string
-  readonly turn_id: string | null
-}
-
-/** Cuerpo `confirmation` de un 409 `confirmation_required` (contracts/errors.py). */
-export interface ConfirmationTicket {
-  readonly id: string
-  readonly summary: string
-  readonly affected_count: number | null
-  readonly expires_at: string
-  readonly params_hash?: string
-}
-
 export interface ApiErrorDetail {
   readonly field: string | null
   readonly code: string
@@ -77,91 +76,42 @@ export interface ApiErrorDetail {
 
 // ---- Eventos WebSocket ------------------------------------------------------
 
-/** `summary` y `affected_count` los calcula el backend, nunca el modelo. */
-export interface PendingConfirmation {
-  readonly action_id: string
-  readonly session_id?: string | null
-  readonly turn_id?: string | null
-  readonly tool?: string
-  readonly summary: string
-  readonly affected_count?: number | null
-  readonly expires_at: string
-}
+/**
+ * Forma común de lo pendiente, llegue por `confirmation.requested`, por un ticket
+ * 409 o por `ConfirmationOut`. `summary` y `affected_count` los calcula el backend.
+ */
+export type PendingConfirmation = Pick<ConfirmationRequested, 'action_id' | 'summary' | 'expires_at'> &
+  Partial<Pick<ConfirmationRequested, 'session_id' | 'turn_id' | 'tool' | 'affected_count'>>
 
-export const CONFIRMATION_STATUSES = ['approved', 'rejected', 'expired', 'executed', 'failed'] as const
+export const CONFIRMATION_STATUSES = [
+  'approved',
+  'rejected',
+  'expired',
+  'executed',
+  'failed'
+] as const satisfies readonly ConfirmationResolved['status'][]
 
-interface TurnRef {
-  readonly session_id: string
-  readonly turn_id: string
-}
+/** Tipos del contrato que esta capa consume y valida; el resto se ignora en `ws.ts`. */
+export type EventType = Extract<
+  ContractEventType,
+  | 'agent.status_changed'
+  | 'agent.expression_changed'
+  | 'agent.turn_started'
+  | 'agent.turn_finished'
+  | 'agent.message_started'
+  | 'agent.message_delta'
+  | 'agent.message_completed'
+  | 'agent.tool_started'
+  | 'agent.tool_completed'
+  | 'agent.error'
+  | 'confirmation.requested'
+  | 'confirmation.resolved'
+  | 'notification.created'
+  | 'system.resync_required'
+>
 
-interface ToolCall extends TurnRef {
-  readonly tool: string
-  readonly call_id: string
-  readonly source?: 'drakter' | 'hermes'
-}
-
-export interface EventPayloads {
-  'agent.status_changed': {
-    readonly state: AgentState
-    readonly previous?: AgentState | null
-    readonly turn_id?: string | null
-    readonly reason?: string | null
-  }
-  'agent.expression_changed': {
-    readonly expression: string
-    readonly intensity?: number | null
-    readonly turn_id?: string | null
-  }
-  'agent.turn_started': TurnRef & { readonly input_source?: 'text' | 'voice' }
-  'agent.turn_finished': TurnRef & {
-    readonly outcome: 'completed' | 'failed' | 'cancelled' | 'interrupted'
-  }
-  'agent.message_started': TurnRef & { readonly message_id: string }
-  'agent.message_delta': TurnRef & { readonly delta: string }
-  'agent.message_completed': TurnRef & { readonly message_id: string; readonly text: string }
-  'agent.tool_started': ToolCall
-  'agent.tool_completed': ToolCall & { readonly error?: boolean }
-  'agent.error': {
-    readonly session_id?: string | null
-    readonly turn_id?: string | null
-    readonly code: string
-    readonly message: string
-    readonly retryable?: boolean
-  }
-  'confirmation.requested': PendingConfirmation
-  'confirmation.resolved': {
-    readonly action_id: string
-    readonly status: (typeof CONFIRMATION_STATUSES)[number]
-    readonly error_code?: string | null
-  }
-  'notification.created': {
-    readonly notification_id: string
-    readonly kind: string
-    readonly title: string
-    readonly severity?: 'info' | 'success' | 'warning' | 'error'
-  }
-  'system.resync_required': {
-    readonly reason: 'buffer_overflow' | 'boot_changed' | 'client_lagging'
-  }
-}
-
-export type EventType = keyof EventPayloads
-
-export interface EventEnvelope<T extends EventType = EventType> {
-  readonly event_id: string
-  /** Monótono por `boot_id`. Un hueco o un `boot_id` nuevo obligan a releer por REST. */
-  readonly seq: number
-  readonly boot_id: string
-  readonly timestamp: string
-  readonly type: T
-  readonly version: number
-  readonly correlation_id?: string | null
-  readonly payload: EventPayloads[T]
-}
-
-/** Unión discriminada: `switch (event.type)` estrecha `payload`. */
-export type ServerEvent = { readonly [T in EventType]: EventEnvelope<T> }[EventType]
+/** Unión discriminada generada: `switch (event.type)` estrecha `payload`. */
+export type ServerEvent = Extract<TypedEvent, { type: EventType }>
 
 // ---- Validación --------------------------------------------------------------
 
@@ -208,6 +158,21 @@ export function isPendingConfirmation(value: unknown): value is PendingConfirmat
   return isRecord(value) && has(value, CONFIRMATION)
 }
 
+/** Los listados del contrato no traen `session_id` ni `tool`, sino `tool_name`. */
+export function isConfirmationOut(value: unknown): value is ConfirmationOut {
+  return (
+    isRecord(value) &&
+    has(value, {
+      id: isString,
+      tool_name: isString,
+      summary: isString,
+      affected_count: (v) => v === null || v === undefined || isCount(v),
+      expires_at: isDate,
+      status: isString
+    })
+  )
+}
+
 export function isConfirmationTicket(value: unknown): value is ConfirmationTicket {
   return (
     isRecord(value) &&
@@ -216,19 +181,20 @@ export function isConfirmationTicket(value: unknown): value is ConfirmationTicke
       summary: isString,
       affected_count: (v) => v === null || v === undefined || isCount(v),
       expires_at: isDate,
-      params_hash: (v) => v === undefined || isString(v)
+      params_hash: isString
     })
   )
 }
 
-export function isStoredChatMessage(value: unknown): value is StoredChatMessage {
+export function isMessageOut(value: unknown): value is MessageOut {
   return (
     isRecord(value) &&
     has(value, {
       id: isString,
-      text: isString,
-      turn_id: isStringOrNull,
-      role: (v) => v === 'user' || v === 'agent'
+      content: isString,
+      turn_id: (v) => v === undefined || isStringOrNull(v),
+      role: (v) => v === 'user' || v === 'assistant' || v === 'system',
+      status: (v) => v === 'streaming' || v === 'complete' || v === 'cancelled' || v === 'failed'
     })
   )
 }

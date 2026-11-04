@@ -128,6 +128,25 @@ export function startBackendLink(): void {
   }
 }
 
+/**
+ * Vuelve a preguntar a main por el backend. Relanzarlo es cosa de main: esto solo
+ * refleja su estado real, y al volver a `ready` el paso a `open` relee por REST.
+ */
+export async function retryBackendLink(): Promise<void> {
+  if (!started) {
+    startBackendLink()
+    return
+  }
+  const api = typeof window !== 'undefined' ? window.api : undefined
+  if (typeof api === 'undefined') return
+  setStatus('connecting')
+  try {
+    applyConnection(await api.getConnection())
+  } catch {
+    setStatus('disconnected')
+  }
+}
+
 export function stopBackendLink(): void {
   started = false
   unsubscribeEvents?.()

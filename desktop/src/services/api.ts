@@ -1,8 +1,9 @@
 import type { ApiCallResult, DrakterApi, HttpMethod } from '../../electron/shared/bridge'
 import {
   isAgentState,
+  isConfirmationOut,
   isConfirmationTicket,
-  isStoredChatMessage,
+  isMessageOut,
   type AgentStatusInfo,
   type ApiErrorDetail,
   type ChatSessionInfo,
@@ -10,7 +11,7 @@ import {
   type PendingConfirmation,
   type SendMessageRequest,
   type SendMessageResponse,
-  type StoredChatMessage
+  type MessageOut
 } from '@/services/protocol'
 
 /**
@@ -242,12 +243,27 @@ export async function cancelTurn(turnId: string): Promise<void> {
   await apiRequest<unknown>(`/api/v1/chat/turns/${encodeURIComponent(turnId)}/cancel`, { method: 'POST' })
 }
 
-export async function listSessionMessages(sessionId: string): Promise<readonly StoredChatMessage[]> {
-  const body = asRecord(
-    await apiRequest<unknown>(`/api/v1/chat/sessions/${encodeURIComponent(sessionId)}/messages`)
-  )
-  if (!Array.isArray(body['items'])) throw badResponse()
-  return body['items'].filter(isStoredChatMessage)
+const MAX_PAGES = 20
+
+/** Recorre un listado `{items,next_cursor}`. `query` sin `?`; el cursor es opaco. */
+export async function listAllPages(path: string, query = ''): Promise<readonly unknown[]> {
+  const out: unknown[] = []
+  let cursor: string | null = null
+  for (let page = 0; page < MAX_PAGES; page += 1) {
+    const params = [query, cursor === null ? '' : `cursor=${encodeURIComponent(cursor)}`].filter(Boolean).join('&')
+    const body = asRecord(await apiRequest<unknown>(params === '' ? path : `${path}?${params}`))
+    if (!Array.isArray(body['items'])) throw badResponse()
+    out.push(...(body['items'] as unknown[]))
+    const next = body['next_cursor']
+    if (typeof next !== 'string' || next === '') return out
+    cursor = next
+  }
+  return out
+}
+
+export async function listSessionMessages(sessionId: string): Promise<readonly MessageOut[]> {
+  const path = `/api/v1/chat/sessions/${encodeURIComponent(sessionId)}/messages`
+  return (await listAllPages(path, 'limit=200')).filter(isMessageOut)
 }
 
 export async function getAgentStatus(): Promise<AgentStatusInfo> {
@@ -262,31 +278,17 @@ export async function getAgentStatus(): Promise<AgentStatusInfo> {
   }
 }
 
-/** `GET /api/v1/confirmations?status=pending`. SUPUESTO: elementos con `id` o `action_id`. */
 export async function listPendingConfirmations(): Promise<readonly PendingConfirmation[]> {
-  const body = asRecord(await apiRequest<unknown>('/api/v1/confirmations?status=pending'))
-  if (!Array.isArray(body['items'])) throw badResponse()
-  const out: PendingConfirmation[] = []
-  for (const raw of body['items']) {
-    const item = asRecord(raw)
-    const id = typeof item['action_id'] === 'string' ? item['action_id'] : item['id']
-    const count = item['affected_count']
-    if (
-      typeof id !== 'string' ||
-      typeof item['summary'] !== 'string' ||
-      typeof item['expires_at'] !== 'string' ||
-      Number.isNaN(Date.parse(item['expires_at'])) ||
-      !(count === undefined || count === null || (Number.isSafeInteger(count) && (count as number) >= 0))
-    ) {
-      continue
-    }
-    out.push({
-      action_id: id,
-      ...(typeof item['tool'] === 'string' ? { tool: item['tool'] } : {}),
-      summary: item['summary'],
-      affected_count: count === undefined ? null : (count as number | null),
-      expires_at: item['expires_at']
-    })
-  }
-  return out
+  const items = await listAllPages('/api/v1/confirmations', 'status=pending&limit=200')
+  return items
+    .filter(isConfirmationOut)
+    .filter((item) => item.status === 'pending')
+    .map((item) => ({
+      action_id: item.id,
+      tool: item.tool_name,
+      summary: item.summary,
+      affected_count: item.affected_count ?? null,
+      turn_id: item.turn_id ?? null,
+      expires_at: item.expires_at
+    }))
 }
