@@ -1,12 +1,12 @@
 # CHECKLISTS GENERALES DE IMPLEMENTACIÓN
 
-Las siguientes listas son el control de trabajo del proyecto. Se marcarán únicamente cuando la tarea esté implementada y probada.
+Las siguientes listas son el control de trabajo del proyecto y la única lista viva de casillas. Se marcarán cuando la tarea esté implementada y funcione como se espera (`CLAUDE.md` §4). Lo bloqueado se anota con ⚠️. La equivalencia entre checklists, pasos del orden real y fases de cada plan está en `DECISIONS.md`.
 
 ## Checklist 0. Arquitectura y preparación
 
 - [ ] Crear repositorio Drakter.
 - [ ] Configurar Git.
-- [ ] Crear estructura de carpetas.
+- [ ] Crear estructura de carpetas (cada carpeta se crea cuando entra código).
 - [ ] Crear README.
 - [ ] Crear CHANGELOG.
 - [ ] Documentar arquitectura.
@@ -64,6 +64,7 @@ Las siguientes listas son el control de trabajo del proyecto. Se marcarán únic
 - [ ] Crear gestión de desconexiones.
 - [ ] Crear primera Skill.
 - [ ] Probar conversación completa.
+  ⚠️ Sin clave de API no se cierra: el adaptador usa un doble identificado como mock, y ninguna casilla de conversación, personalidad, selección de herramientas o memoria se marca hasta probarla con clave.
 
 ## Checklist 4. Personalidad y contexto
 
@@ -92,6 +93,7 @@ Las siguientes listas son el control de trabajo del proyecto. Se marcarán únic
 - [ ] Diseñar boca.
 - [ ] Diseñar expresiones.
 - [ ] Crear proyecto Rive.
+  ⚠️ El `.riv` se diseña a mano en el editor de Rive. Por código solo se cubre el personaje provisional; las casillas de estados, transiciones e integración dependen de ese archivo hasta que el usuario lo entregue.
 - [ ] Crear estado idle.
 - [ ] Crear estado listening.
 - [ ] Crear estado thinking.
@@ -203,6 +205,8 @@ Las siguientes listas son el control de trabajo del proyecto. Se marcarán únic
 - [ ] Indexar nombres.
 - [ ] Indexar tipos.
 - [ ] Indexar descripciones.
+- [ ] Indexar rutas y metadatos.
+- [ ] Indexar texto extraído, de forma opcional.
 - [ ] Implementar búsqueda.
 - [ ] Implementar actualización del índice.
 - [ ] Detectar archivos ausentes.
@@ -236,23 +240,23 @@ Las siguientes listas son el control de trabajo del proyecto. Se marcarán únic
 ## Checklist 12. Memoria
 
 - [ ] Definir cuatro capas de memoria.
-- [ ] Crear estructura de archivos.
+- [ ] Crear configuración e integración de `memory/` (sin recuerdos ni datos personales).
 - [ ] Crear Memory Adapter.
 - [ ] Configurar OpenViking como proveedor de Hermes.
 - [ ] Configurar capas L0/L1/L2.
 - [ ] Elegir embedding multilingüe.
-- [ ] Integrar ByteRover para el repositorio.
-- [ ] Crear extracción de recuerdos.
-- [ ] Crear clasificación.
-- [ ] Crear deduplicación.
-- [ ] Crear detección de contradicciones.
-- [ ] Crear memoria de trabajo.
-- [ ] Crear memoria episódica.
-- [ ] Crear memoria semántica.
-- [ ] Crear memoria procedimental.
-- [ ] Crear recuperación selectiva.
-- [ ] Crear límites de contexto.
-- [ ] Crear registros de memoria.
+- [ ] Configurar y comprobar la extracción de recuerdos de OpenViking.
+- [ ] Configurar y comprobar la clasificación de OpenViking.
+- [ ] Configurar y comprobar la deduplicación de OpenViking.
+- [ ] Configurar y comprobar la detección de contradicciones de OpenViking.
+- [ ] Configurar y comprobar la memoria de trabajo en Hermes y OpenViking.
+- [ ] Configurar y comprobar la memoria episódica en Hermes y OpenViking.
+- [ ] Configurar y comprobar la memoria semántica en Hermes y OpenViking.
+- [ ] Configurar y comprobar la memoria procedimental en Hermes y OpenViking.
+- [ ] Configurar y comprobar la recuperación selectiva.
+- [ ] Configurar y comprobar los límites de contexto.
+- [ ] Configurar y comprobar los registros de memoria.
+- [ ] Crear Skill de memoria.
 - [ ] Probar persistencia.
 - [ ] Probar recuperación.
 - [ ] Probar recuerdos contradictorios.
@@ -268,7 +272,6 @@ Las siguientes listas son el control de trabajo del proyecto. Se marcarán únic
 - [ ] Crear Skill de asignaturas.
 - [ ] Crear Skill de almacén.
 - [ ] Crear Skill de relaciones.
-- [ ] Crear Skill de memoria.
 - [ ] Crear Skill de configuración.
 - [ ] Definir parámetros.
 - [ ] Definir permisos.
@@ -317,6 +320,7 @@ Las siguientes listas son el control de trabajo del proyecto. Se marcarán únic
 - [ ] Crear permisos por módulo.
 - [ ] Crear permisos por operación.
 - [ ] Crear confirmaciones.
+  ⚠️ Permisos, confirmación pendiente y auditoría se construyen antes de la primera herramienta. Las casillas de esta checklist son revisión y endurecimiento finales.
 - [ ] Proteger credenciales.
 - [ ] Validar rutas.
 - [ ] Limitar acceso a archivos.
@@ -334,7 +338,7 @@ Las siguientes listas son el control de trabajo del proyecto. Se marcarán únic
 
 - [ ] Medir consumo de RAM.
 - [ ] Medir CPU.
-- [ ] Medir VRAM.
+- [ ] Medir uso de CPU y RAM (no hay VRAM dedicada).
 - [ ] Medir latencia de STT.
 - [ ] Medir latencia de TTS.
 - [ ] Medir latencia de Hermes.
