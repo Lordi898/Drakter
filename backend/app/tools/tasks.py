@@ -41,6 +41,7 @@ _DOMAIN: Final = "tasks"
 _ERR_READ: Final = ("not_found", "validation_error")
 _ERR_WRITE: Final = ("not_found", "conflict", "revision_mismatch", "validation_error")
 _ERR_CYCLE: Final = (*_ERR_WRITE, "hierarchy_cycle")
+_ERR_UPDATE: Final = (*_ERR_CYCLE, "confirmation_required")
 _ERR_CONFIRM: Final = (*_ERR_WRITE, "confirmation_required", "confirmation_unavailable")
 
 
@@ -123,7 +124,7 @@ class TaskDependencyArgs(Strict):
 
 class DeleteTaskArgs(Strict):
     task_id: UUID
-    expected_revision: int | None = None
+    expected_revision: int
 
 
 # --- Handlers ------------------------------------------------------------------------------
@@ -234,22 +235,17 @@ def _remove_task_dependency(ctx: ToolContext, args: TaskDependencyArgs) -> TaskD
 
 
 def _delete_task(ctx: ToolContext, args: DeleteTaskArgs) -> Deleted:
-    # Solo se llega aquí tras el ToolGate (riesgo CONFIRM), de ahí pre_confirmed=True.
+    # Solo hojas y con la revisión aprobada; el servicio rechaza si la tarea tiene hijos.
     run_service(
         ctx,
         "delete_task",
-        lambda s: svc.delete_task(
-            s,
-            str(args.task_id),
-            expected_revision=args.expected_revision,
-            pre_confirmed=True,
-        ),
+        lambda s: svc.delete_leaf_task(s, str(args.task_id), args.expected_revision),
     )
     return Deleted(deleted=True, id=args.task_id)
 
 
 def _summarize_delete(args: DeleteTaskArgs) -> str:
-    return f"Eliminar la tarea {args.task_id} y todas sus subtareas"
+    return f"Vas a eliminar 1 tarea: «{args.task_id}». Esta acción no se puede deshacer."
 
 
 # --- Catálogo ------------------------------------------------------------------------------
@@ -316,7 +312,7 @@ TOOLS: tuple[ToolSpec, ...] = (
     ),
     _spec(
         "update_task", "Modifica campos de una tarea.", UpdateTaskArgs, TaskOut, _update_task,
-        "tasks.write", W_, _ERR_CYCLE, {**_ID_AUDIT, "patch": "hash"},
+        "tasks.write", W_, _ERR_UPDATE, {**_ID_AUDIT, "patch": "hash"},
     ),
     _spec(
         "complete_task", "Marca una tarea como completada.", CompleteTaskArgs, TaskOut,
@@ -371,7 +367,7 @@ TOOLS: tuple[ToolSpec, ...] = (
         {"task_id": "log", "depends_on_task_id": "log"},
     ),
     _spec(
-        "delete_task", "Elimina una tarea y sus subtareas.", DeleteTaskArgs, Deleted,
+        "delete_task", "Elimina una tarea sin subtareas.", DeleteTaskArgs, Deleted,
         _delete_task, "tasks.delete", C_, _ERR_CONFIRM, dict(_ID_AUDIT),
         summarize=_summarize_delete,
     ),
