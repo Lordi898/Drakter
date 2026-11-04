@@ -138,7 +138,7 @@ Decisiones técnicas, cambios de tecnología y motivos.
 - **Sin comprobar:** la carga real en Hermes.
 - **Alternativas descartadas:** mantener tres carpetas (rompería lo ya escrito sin beneficio); `~/.hermes/` como fuente (dejaría la personalidad fuera del repositorio).
 - **Motivo:** `CLAUDE.md` §8 y el código ya existente.
-- **Impacto:** `MASTER_PLAN` §8.1 y Parte XII, `ROADMAP` Fase 5 y árboles, `PLAN_DISEÑO` §Personalidad, `drakter-orquestator`.
+- **Impacto:** `MASTER_PLAN` §8.1 y Parte XII, `ROADMAP` Fase 5 y árboles, `PLAN_DISEÑO` §5, `drakter-orquestator`.
 
 ## [2026-11-04] Estado `offline` en lugar de `sleeping`
 - **Contexto:** `CLAUDE.md`, `MASTER_PLAN` y `ROADMAP` usan `offline` como noveno estado; `PLAN_DISEÑO` §6.2 usa `sleeping` (C-33).
@@ -179,7 +179,7 @@ Decisiones técnicas, cambios de tecnología y motivos.
 ## [2026-11-04] Eventos WebSocket distintos entre planes: pendiente de drakter/contratos
 - **Contexto:** `MASTER_PLAN` §6.5, `PLAN_DISEÑO` §6.4 y `ROADMAP` §5.4 dan listas distintas, y `MASTER_PLAN` no tiene evento para `idle` (C-32). `backend/CONTRACT.md` deja los eventos de negocio fuera de su alcance, y a fecha de esta entrada `drakter/contratos` no ha publicado el catálogo.
 - **Decisión:** no se decide aquí. Lo resuelve `drakter/contratos` con entrada propia. Hasta entonces, `ROADMAP` §5.4 es la base de trabajo por ser la única lista tipada y versionada, y las listas de `MASTER_PLAN` §6.5 y `PLAN_DISEÑO` §6.4 son orientativas.
-- **Estado:** PENDIENTE.
+- **Estado:** RESUELTA por la entrada "Eventos WebSocket resueltos en contracts/".
 - **Alternativas descartadas:** fijar aquí la lista final (es una decisión de contrato y otro frente la tiene asignada).
 - **Motivo:** evitar dos contratos.
 - **Impacto:** `MASTER_PLAN` §6.5, `PLAN_DISEÑO` §6.4 y `ROADMAP` §5.4 quedan remitidos a esa entrada.
@@ -211,7 +211,7 @@ Decisiones técnicas, cambios de tecnología y motivos.
 - **Decisión:** los datos de ejecución viven en `DRAKTER_DATA_DIR`, que por defecto es el `user_data_dir("drakter")` ya fijado en `backend/CONTRACT.md`; `workspace/` no guarda datos. La estructura es la de `MASTER_PLAN` Parte XII con las desviaciones registradas aquí, y se descartan `apps/` y `docker-compose`. Las carpetas se crean cuando entra código. La configuración no sensible puede versionarse; la sensible, nunca.
 - **Alternativas descartadas:** datos en `workspace/` ignorados por Git (se pierden con un `git clean` y mezclan código con datos personales).
 - **Motivo:** el código ya escrito lo hace así, y es la opción más segura.
-- **Impacto:** `MASTER_PLAN` Parte XII, `ROADMAP` árbol y §2, `PLAN_DISEÑO` estructura, `CLAUDE.md` §9.
+- **Impacto:** `MASTER_PLAN` Parte XII, `ROADMAP` árbol y §2, `PLAN_DISEÑO` §17, `CLAUDE.md` §9.
 
 ## [2026-11-04] Trabajo sin clave y alcance de automejora, copias y v1
 - **Contexto:** las reglas del plan impiden cerrar el paso 5 sin clave de API (C-47), `PLAN_DISEÑO` permitía cambios sin aprobación en automejora (C-50), las copias de seguridad difieren (C-19), `PLAN_DISEÑO` metía en la v1 lo que `MASTER_PLAN` aplaza (C-41) y las casillas del `.riv` no pueden cumplirse con código (C-43).
@@ -229,7 +229,17 @@ Decisiones técnicas, cambios de tecnología y motivos.
 ## [2026-11-04] Contratos de datos que resuelve drakter/contratos
 - **Contexto:** quedan conflictos de esquema y de catálogo que son decisiones de contrato: catálogo de herramientas y Skills (C-09, C-10), entidades y campos (C-23, C-24), pertenencia (C-25), estados (C-26), tipos de relación (C-27), calendario (C-28), asignaturas (C-29), hábitos (C-30), auditoría (C-31), permisos (C-34) y FTS (C-18).
 - **Decisión:** los planes no los resuelven: remiten al contrato. Cuando `drakter/contratos` publique, su entrada en este archivo y su contrato prevalecen sobre las listas de los planes. Criterios fijos ya: fuente única de pertenencia, toda eliminación confirma, y el agente no modifica permisos.
-- **Estado:** PENDIENTE.
+- **Estado:** RESUELTA EN PARTE por la entrada "Eventos WebSocket resueltos en contracts/". Sigue pendiente lo que allí se indica.
 - **Alternativas descartadas:** decidir el esquema desde documentación (un frente lo tiene asignado, y haría dos contratos).
 - **Motivo:** evitar dos fuentes.
 - **Impacto:** cabecera de los tres planes.
+
+## [2026-11-04] Eventos WebSocket resueltos en contracts/
+- **Contexto:** `drakter/contratos` publicó el commit `061975a` con `contracts/README.md`, `contracts/python/drakter_contracts/events.py` y las migraciones `0001` a `0010`. Cierra la entrada de eventos pendiente y parte de los contratos de datos.
+- **Decisión:** el catálogo de eventos es `contracts/python/drakter_contracts/events.py`, con 32 tipos, y sustituye a las listas de `MASTER_PLAN` §6.5, `PLAN_DISEÑO` §6.4 y `ROADMAP` §5.4. Hay un único flujo, `WS /api/v1/events`, solo de servidor a cliente. `agent.status_changed` lleva `state` con los 9 estados; `offline` lo deriva la GUI si cae el socket o llega por `system.health_changed`. `agent.confirmation_required` pasa a ser `confirmation.requested`. Esquema, formatos, errores, reglas de datos, confirmaciones y migraciones siguen `contracts/README.md` y `backend/migrations/`. Si contradicen esta bitácora, manda la bitácora, como dice ese README.
+- **Expresiones:** el objeto que genera el modelo sigue sin campo `expression` y la elige en `animation`. El evento `agent.expression_changed` la transporta en `expression`, de modo que el backend hace esa traducción.
+- **Pendiente:** a fecha de `061975a` no existen `contracts/tools/catalog.json`, `contracts/api/routes.md`, `contracts/python/drakter_contracts/models/` ni `contracts/ts/`, que el README anuncia. El catálogo de herramientas y Skills sigue abierto, y con él los huecos de `MASTER_PLAN` §19.
+- **Sin comprobar:** `contracts/` no está fusionado en `drakter/docs`, y esta entrada procede de leer la rama. `expression` es `str` y no un enumerado, así que el catálogo cerrado de 7 aún no lo impone el contrato. La traducción de `animation` a `expression` no se ha visto implementada.
+- **Alternativas descartadas:** copiar el catálogo a los planes (crearía una segunda fuente).
+- **Motivo:** un solo contrato.
+- **Impacto:** remisiones de `MASTER_PLAN` §6.5, `PLAN_DISEÑO` §6.4 y `ROADMAP` §5.4.

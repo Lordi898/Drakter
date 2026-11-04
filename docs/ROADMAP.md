@@ -11,6 +11,18 @@
 > fase y qué condiciones deben cumplirse antes de avanzar. No presupone
 > que las tecnologías estén instaladas ni que las integraciones externas
 > funcionen hasta comprobarlo.
+>
+> **Prevalencia:** este documento es subordinado. Manda la entrada más
+> reciente de `docs/DECISIONS.md` (véase "Jerarquía de documentos y
+> numeración única de fases"), luego `CLAUDE.md` y `docs/MASTER_PLAN.md`.
+> Los documentos viven en `docs/`. Las casillas de este roadmap son
+> históricas: la lista viva es `docs/IMPLEMENTATION_STATUS.md`. Sus fases
+> equivalen a los pasos de la tabla de `DECISIONS.md`: su Fase 15 son
+> Skills (obligatoria, paso 14) y las ampliaciones son su Fase 21 (fuera
+> de alcance). Donde haya choque con `DECISIONS.md`, ya se ha corregido
+> aquí o se remite a la decisión. Esquema de datos, catálogo de
+> herramientas y eventos WebSocket: véase "Contratos de datos que
+> resuelve drakter/contratos".
 
 ------------------------------------------------------------------------
 
@@ -41,14 +53,18 @@ verificable.
     que cumpla los requisitos.
 8.  **Mantén tipado y validación.** Usa TypeScript estricto en frontend
     y esquemas validados en backend.
-9.  **Prueba cada cambio.** Ejecuta pruebas, linters, comprobaciones de
-    tipos y build aplicables antes de declarar una tarea terminada.
+9.  **Comprueba cada cambio.** Ejecuta lint, comprobación de tipos y build
+    aplicables, y una comprobación rápida de que funciona y se ve bien,
+    antes de declarar una tarea terminada. Sin suites de tests ni tests
+    unitarios por defecto (`CLAUDE.md` §4); solo las excepciones allí
+    listadas (rutas y permisos del almacén, confirmaciones destructivas,
+    migraciones y copias, memoria frente a reglas de seguridad). Las
+    tareas "Crear pruebas..." de las fases se leen con ese criterio.
 10. **No marques tareas sin evidencia.** Una casilla solo se marca
     cuando el código existe y las comprobaciones correspondientes han
     pasado.
-11. **Actualiza documentación.** Mantén `ROADMAP.md`,
-    `IMPLEMENTATION_STATUS.md`, `DECISIONS.md` y el README alineados con
-    el estado real.
+11. **Actualiza documentación.** Mantén `docs/IMPLEMENTATION_STATUS.md`,
+    `docs/DECISIONS.md` y el README alineados con el estado real.
 12. **Registra decisiones.** Si una tecnología no es viable, documenta
     el problema, alternativas, decisión y consecuencias antes de
     sustituirla.
@@ -75,20 +91,23 @@ verificable.
 3.  Identificar dependencias y riesgos.
 4.  Proponer un plan breve.
 5.  Implementar el cambio mínimo completo.
-6.  Añadir o actualizar pruebas.
-7.  Ejecutar validaciones.
+6.  Añadir pruebas solo si aplica una excepción de `CLAUDE.md` §4.
+7.  Ejecutar la comprobación rápida (lint, tipos, build, arranque).
 8.  Revisar diff y posibles regresiones.
 9.  Actualizar documentación y estado.
-10. Informar de archivos modificados, pruebas ejecutadas, resultados y
-    tareas pendientes.
+10. Informar de archivos modificados, comprobaciones ejecutadas,
+    resultados y tareas pendientes.
 
 ### Política de avance
 
-No avances automáticamente a la siguiente fase si: - hay pruebas
-fallidas; - el build no funciona; - hay errores de tipos o lint
+Según `CLAUDE.md` §3, avanza sin esperar aprobación en lo reversible y
+paraleliza lo independiente. No avances a la siguiente fase si: - la
+comprobación rápida falla; - el build no funciona; - hay errores de tipos o lint
 relevantes; - existen decisiones arquitectónicas sin resolver que
-bloquean la fase; - se ha introducido una dependencia externa sin
-verificar; - la funcionalidad solo está simulada.
+bloquean la fase y alteran el objetivo del producto; - se ha introducido
+una dependencia externa sin verificar; - la funcionalidad solo está
+simulada. Las decisiones técnicas no se consultan: se eligen y se
+registran en `docs/DECISIONS.md`.
 
 Si falta información, inspecciona el repositorio y la documentación
 oficial. Pregunta al usuario únicamente cuando sea una decisión de
@@ -152,7 +171,9 @@ aprobación para cambios sensibles.
 # 2. Decisiones de arquitectura
 
 Estas son las decisiones iniciales. Deben validarse durante la Fase 0
-antes de considerarse definitivas.
+antes de considerarse definitivas. Las ya resueltas en `docs/DECISIONS.md`
+(memoria, Python 3.12, puente Hermes-backend, datos fuera del repositorio)
+prevalecen sobre esta tabla.
 
   -------------------------------------------------------------------------
   Área                    Selección inicial       Observaciones
@@ -176,7 +197,9 @@ antes de considerarse definitivas.
                                                   licencias/condiciones de
                                                   uso
 
-  Backend                 Python + FastAPI        API local
+  Backend                 Python 3.12 + FastAPI   API local; Hermes y
+                                                  OpenViking en entornos
+                                                  propios (ver `DECISIONS`)
 
   Persistencia principal  SQLite                  Una fuente de verdad para
                                                   el Workspace
@@ -206,10 +229,9 @@ antes de considerarse definitivas.
                                                   capas L0/L1/L2; API
                                                   soportada
 
-  Contexto de código      ByteRover               Uso de
-                                                  desarrollo/repositorio,
-                                                  no memoria personal
-                                                  principal
+  Contexto de código      ByteRover (opcional)    Utilidad opcional de
+                                                  desarrollo; fuera de la
+                                                  memoria del producto
 
   Skills                  Hermes Skills           Verificar formato y
                                                   compatibilidad de versión
@@ -234,6 +256,14 @@ antes de considerarse definitivas.
 -   Despliegue de OpenViking.
 -   Si las herramientas de memoria se ejecutan como servicios locales,
     librerías o procesos separados.
+
+Resueltas en `docs/DECISIONS.md`: versión de Python (3.12 para el
+backend; Hermes y OpenViking en entornos propios, sin compartir
+entorno), forma de ejecutar Hermes y contrato Hermes ↔ backend (entrada
+"Puente Hermes-backend y flujo de una petición": proceso aparte
+supervisado por FastAPI, herramientas servidas por el backend vía MCP en
+loopback, `AgentProvider` por encima) y ubicación de datos
+(`DRAKTER_DATA_DIR`, fuera del repositorio).
 
 No asumir que todas las herramientas elegidas se pueden combinar
 directamente. La integración se hará mediante adaptadores propios y
@@ -276,7 +306,7 @@ flowchart TB
     API <--> CORE[Drakter Agent Adapter]
     CORE <--> H[Hermes]
     H <--> LLM[Claude Haiku 5.5<br/>API intercambiable]
-    H <--> TOOLS[Drakter Tools / Skills]
+    H <--> TOOLS[Drakter Tools vía MCP loopback / Skills]
     TOOLS --> APP
 
     H <--> NM[Memoria nativa de Hermes]
@@ -295,7 +325,7 @@ flowchart TB
     UI --> RIVE[Character / Rive]
     VOICE --> RIVE
 
-    DEV[Repositorio Git] <--> BR[ByteRover<br/>contexto de desarrollo]
+    DEV[Repositorio Git] <--> BR[ByteRover<br/>opcional, solo desarrollo]
 ```
 
 El diagrama representa límites lógicos. No implica que todos los
@@ -357,18 +387,10 @@ Drakter/
 │   ├── migrations/
 │   └── tests/
 ├── agent/
-│   ├── identity/
-│   ├── context/
-│   ├── knowledge/
+│   ├── identity/          # los 14 archivos de identidad (Fase 5)
 │   ├── skills/
 │   └── configuration/
-├── memory/
-│   ├── working/
-│   ├── episodic/
-│   ├── semantic/
-│   ├── procedural/
-│   ├── indexes/
-│   └── logs/
+├── memory/                # solo configuración e integración; nunca recuerdos
 ├── voice/
 │   ├── wakeword/
 │   ├── vad/
@@ -377,12 +399,7 @@ Drakter/
 │   ├── personality/
 │   ├── audio/
 │   └── tests/
-├── workspace/
-│   ├── data/
-│   ├── storage/
-│   ├── indexes/
-│   ├── exports/
-│   └── backups/
+├── workspace/             # código del Workspace; sin datos (van en DRAKTER_DATA_DIR)
 ├── improvement/
 │   ├── feedback/
 │   ├── proposals/
@@ -400,11 +417,17 @@ Drakter/
 ├── tests/
 ├── .env.example
 ├── .gitignore
-├── README.md
-├── ROADMAP.md
-├── IMPLEMENTATION_STATUS.md
-└── DECISIONS.md
+└── README.md
 ```
+
+Los documentos de control viven en `docs/`: `MASTER_PLAN.md`,
+`ROADMAP.md`, `IMPLEMENTATION_STATUS.md`, `DECISIONS.md` y
+`RUN_STATE.md`. Los datos de ejecución (SQLite, almacén, índices,
+exportaciones, copias, recuerdos) viven fuera del repositorio, en
+`DRAKTER_DATA_DIR` (por defecto `user_data_dir("drakter")`). `agent/context/`
+y `agent/knowledge/` no existen. La configuración no sensible puede
+versionarse; la sensible, nunca (credenciales solo en
+`~/.config/drakter/.env`).
 
 ------------------------------------------------------------------------
 
@@ -434,8 +457,8 @@ Drakter/
 -   Errores con código estable, mensaje seguro y detalles de validación.
 -   Paginación para listados.
 -   Filtros y ordenación validados.
--   Operaciones destructivas con confirmación y/o mecanismo de undo
-    cuando sea viable.
+-   Operaciones destructivas con confirmación obligatoria; el undo es
+    un mecanismo adicional cuando sea viable, nunca un sustituto.
 
 ## 5.4. Eventos WebSocket
 
@@ -462,6 +485,10 @@ Crear un contrato tipado y versionado. Eventos iniciales:
 Los eventos deben incluir `event_id`, `timestamp`, `type`, `version` y
 un `payload` validado.
 
+Esta lista es histórica. El catálogo definitivo está en
+`contracts/python/drakter_contracts/events.py` (entrada "Eventos
+WebSocket resueltos en contracts/" de `docs/DECISIONS.md`).
+
 ## 5.5. Seguridad local
 
 -   No exponer FastAPI a la red local por defecto.
@@ -480,6 +507,14 @@ un `payload` validado.
 -   No guardar claves API en el repositorio ni en la base de datos del
     Workspace.
 -   No registrar cuerpos de petición que puedan contener secretos.
+-   La confirmación de acciones destructivas o masivas es obligatoria.
+    Flujo (entrada "Herramientas con su módulo; confirmación y auditoría
+    antes de la primera"): la herramienta crea una confirmación pendiente
+    y devuelve su id sin ejecutar; solo la GUI la resuelve, mediante un
+    endpoint que no es herramienta; la ejecución y la auditoría ocurren
+    después. Permisos, confirmación pendiente y auditoría existen antes
+    de la primera herramienta. Los detalles los congela
+    `drakter/contratos`.
 
 ## 5.6. Operaciones del agente
 
@@ -553,7 +588,7 @@ de la aplicación.
 -   [ ] Configurar formato y lint del frontend.
 -   [ ] Configurar formato y lint del backend.
 -   [ ] Configurar comprobación de tipos.
--   [ ] Configurar pruebas unitarias.
+-   [ ] Configurar comprobación rápida (lint, tipos, build); sin suites por defecto.
 -   [ ] Definir convenciones de commits.
 -   [ ] Crear README inicial.
 -   [ ] Crear documentación de arquitectura.
@@ -641,12 +676,16 @@ correctos de conexión y desconexión.
 
 ### Tareas
 
--   [ ] Instalar Hermes siguiendo documentación oficial.
+-   [ ] Instalar Hermes siguiendo documentación oficial, en entorno propio y con versión fijada (v0.22.7), sin compartir entorno con el backend (Python 3.12).
 -   [ ] Registrar versión instalada.
 -   [ ] Configurar Claude Haiku 5.5 mediante configuración segura.
 -   [ ] Crear interfaz interna `AgentProvider`.
 -   [ ] Crear adaptador Hermes.
--   [ ] Definir gestión del ciclo de vida del proceso Hermes.
+-   [ ] Gestionar el ciclo de vida del proceso Hermes según "Puente
+    Hermes-backend": `hermes gateway run` con API server en loopback,
+    supervisado por FastAPI.
+-   [ ] Servir las herramientas desde el backend por MCP en loopback
+    (Hermes solo cliente, perfil con lista de permitidos).
 -   [ ] Definir protocolo de mensajes.
 -   [ ] Implementar creación y cierre de sesiones.
 -   [ ] Implementar envío de mensajes.
@@ -659,14 +698,16 @@ correctos de conexión y desconexión.
 -   [ ] Mostrar mensajes del usuario y agente.
 -   [ ] Mostrar estado thinking.
 -   [ ] Mostrar errores recuperables.
--   [ ] Añadir pruebas con proveedor simulado.
--   [ ] Añadir prueba de integración real si hay credenciales
-    configuradas.
+-   [ ] Construir un doble del proveedor, identificado como mock.
+-   [ ] Probar con clave real (`~/.config/drakter/.env`). Sin clave, esta
+    fase queda con ⚠️ y ninguna casilla de conversación, personalidad,
+    selección de herramientas o memoria se marca hasta probarla con clave.
 
 ### Criterio de aceptación
 
 El usuario puede escribir desde Drakter Desktop y recibir una respuesta
-real de Hermes. Los tests no dependen de una API de pago.
+real de Hermes. Sin clave de API no se cumple: se anota con ⚠️ y no se
+presenta el mock como integración.
 
 ------------------------------------------------------------------------
 
@@ -677,37 +718,38 @@ Drakter.
 
 ### Archivos
 
+Los 14 archivos viven en `agent/identity/` (entrada "Los 14 archivos de
+identidad viven en agent/identity/"); `agent/context/` y
+`agent/knowledge/` no existen.
+
 ``` text
-agent/
-├── identity/
-│   ├── SOUL.md
-│   ├── PERSONALITY.md
-│   ├── BEHAVIOR.md
-│   ├── COMMUNICATION.md
-│   ├── EMOTIONAL_STYLE.md
-│   └── VALUES.md
-├── context/
-│   ├── USER.md
-│   ├── ENVIRONMENT.md
-│   ├── PREFERENCES.md
-│   └── CURRENT_CONTEXT.md
-└── knowledge/
-    ├── CAPABILITIES.md
-    ├── WORKSPACE_GUIDE.md
-    ├── TOOL_GUIDE.md
-    └── SYSTEM_GUIDE.md
+agent/identity/
+├── SOUL.md
+├── PERSONALITY.md
+├── BEHAVIOR.md
+├── COMMUNICATION.md
+├── EMOTIONAL_STYLE.md
+├── VALUES.md
+├── USER.md              (plantilla sin datos reales)
+├── ENVIRONMENT.md
+├── PREFERENCES.md       (plantilla sin datos reales)
+├── CURRENT_CONTEXT.md
+├── CAPABILITIES.md
+├── WORKSPACE_GUIDE.md
+├── TOOL_GUIDE.md
+└── SYSTEM_GUIDE.md
 ```
 
 ### Tareas
 
--   [ ] Crear directorios de identidad, contexto y conocimiento.
+-   [ ] Crear `agent/identity/`.
 -   [ ] Crear `SOUL.md`.
 -   [ ] Crear `PERSONALITY.md`.
 -   [ ] Crear `BEHAVIOR.md`.
 -   [ ] Crear `COMMUNICATION.md`.
 -   [ ] Crear `EMOTIONAL_STYLE.md`.
 -   [ ] Crear `VALUES.md`.
--   [ ] Crear `USER.md` con plantilla vacía y editable.
+-   [ ] Crear `USER.md` con plantilla vacía y editable (el `USER.md` vivo es el nativo de Hermes; la plantilla rellenada va fuera del repositorio).
 -   [ ] Crear `ENVIRONMENT.md`.
 -   [ ] Crear `PREFERENCES.md`.
 -   [ ] Crear `CURRENT_CONTEXT.md`.
@@ -715,16 +757,17 @@ agent/
 -   [ ] Crear `WORKSPACE_GUIDE.md`.
 -   [ ] Crear `TOOL_GUIDE.md`.
 -   [ ] Crear `SYSTEM_GUIDE.md`.
--   [ ] Crear cargador de contexto.
+-   [ ] Crear cargador de contexto: compone los 14 archivos y los publica en el `HERMES_HOME` del perfil de Drakter.
 -   [ ] Definir precedencia de instrucciones.
--   [ ] Limitar tamaño de contexto.
+-   [ ] Limitar tamaño de contexto (comprobar el tope de 20.000 caracteres de los archivos de contexto de Hermes, para que un recorte no elimine reglas del centro).
 -   [ ] Evitar duplicar instrucciones de seguridad.
--   [ ] Crear pruebas de carga y precedencia.
+-   [ ] Comprobar carga y precedencia (comprobación rápida).
 
 ### Criterio de aceptación
 
 Hermes recibe los archivos adecuados y demuestra un comportamiento
-consistente en un conjunto de pruebas conversacionales.
+consistente en conversaciones de prueba (requiere clave de API; sin ella,
+⚠️).
 
 ------------------------------------------------------------------------
 
@@ -1041,6 +1084,14 @@ relación tenga sentido para los tipos implicados.
 **Objetivo:** permitir que Hermes gestione el Workspace mediante
 lenguaje natural.
 
+Cada herramienta se construye con su módulo (Fases 7 a 14) y se comprueba
+por llamada directa; esta fase integra las Skills (obligatoria, paso 14)
+y comprueba la selección de herramientas con el modelo. Permisos,
+confirmación pendiente y auditoría existen antes de la primera
+herramienta (véase §5.5): las tareas de esta fase que los nombran son
+revisión y endurecimiento. El catálogo definitivo lo congela
+`drakter/contratos`; si difiere, manda su entrada posterior.
+
 ### Herramientas
 
 #### Tasks
@@ -1068,6 +1119,7 @@ lenguaje natural.
 -   `create_habit`
 -   `update_habit`
 -   `register_habit_completion`
+-   `list_habits`
 -   `get_habit_history`
 -   `get_habit_statistics`
 
@@ -1098,6 +1150,11 @@ lenguaje natural.
 -   `index_resource`
 -   `refresh_resource_index`
 
+Eliminar o mover recursos no tiene herramienta de agente en la v1: se
+hace solo desde la GUI, con confirmación. Si el agente recibe esa
+petición, lo dice y no improvisa un sustituto (entrada "Huecos de
+MASTER_PLAN §19").
+
 #### Relationships
 
 -   `create_relationship`
@@ -1115,17 +1172,17 @@ lenguaje natural.
 
 ### Tareas
 
--   [ ] Crear contrato común de herramientas.
--   [ ] Implementar validación de argumentos.
--   [ ] Implementar permisos por herramienta.
--   [ ] Implementar clasificación de riesgo.
--   [ ] Implementar confirmación de acciones sensibles.
+-   [ ] Revisar el contrato común de herramientas (creado con la primera).
+-   [ ] Revisar validación de argumentos.
+-   [ ] Revisar permisos por herramienta.
+-   [ ] Revisar clasificación de riesgo.
+-   [ ] Revisar confirmación de acciones sensibles (flujo de §5.5).
 -   [ ] Implementar idempotencia para operaciones que lo necesiten.
 -   [ ] Implementar timeout.
 -   [ ] Implementar errores estructurados.
 -   [ ] Crear Skills compatibles con la versión real de Hermes.
 -   [ ] Documentar cada Skill.
--   [ ] Probar operaciones desde Hermes.
+-   [ ] Probar operaciones desde Hermes (requiere clave de API; sin ella, ⚠️).
 -   [ ] Probar operaciones ambiguas.
 -   [ ] Probar intentos de acceso no autorizado.
 
@@ -1154,64 +1211,51 @@ selectiva.
     `USER.md`, sesiones).
 -   **OpenViking:** único proveedor externo; memorias extraídas y
     recursos con recuperación progresiva L0/L1/L2.
--   **ByteRover:** conocimiento del código y decisiones del repositorio
-    durante desarrollo.
+
+ByteRover queda fuera de la memoria del producto: es una utilidad
+opcional de desarrollo.
 
 El Memory Adapter es un servicio del backend para la interfaz y la
-ingesta, no una capa multiproveedor (ver `MASTER_PLAN.md` §10). Si una
-función no está disponible en una versión concreta, se documentará y se
-ofrecerá una implementación compatible o se aplazará.
+ingesta, no una capa multiproveedor (ver `docs/MASTER_PLAN.md` §10). No
+hay pipeline propio de memoria: extraer, clasificar, deduplicar y
+resolver contradicciones se configura y se comprueba en OpenViking, y lo
+que falte se anota con ⚠️ (entrada "Memoria sin pipeline propio ni
+recuerdos en el repositorio"). La ingesta del almacén en OpenViking es
+opcional por recurso, viene apagada por defecto y pasa siempre por el
+backend.
 
 ### Archivos de contexto
 
-``` text
-agent/
-├── identity/
-├── context/
-└── knowledge/
-
-memory/
-├── working/
-│   ├── CURRENT_SESSION.md
-│   ├── ACTIVE_CONTEXT.md
-│   └── ACTIVE_OPERATIONS.md
-├── episodic/
-├── semantic/
-├── procedural/
-├── indexes/
-└── logs/
-```
-
-Los archivos Markdown no sustituirán las bases de datos de los motores
-externos; servirán para contexto legible, configuración y auditoría
-cuando corresponda.
+`agent/identity/` guarda la identidad (Fase 5). `memory/` guarda solo
+configuración e integración, nunca recuerdos ni datos personales; los
+recuerdos viven en la memoria nativa de Hermes y en OpenViking, fuera del
+repositorio.
 
 ### Tareas
 
 -   [ ] Crear `MemoryAdapter`.
--   [ ] Definir esquema interno de recuerdo.
--   [ ] Definir procedencia y fecha de cada recuerdo.
--   [ ] Definir nivel de confianza.
--   [ ] Definir caducidad cuando aplique.
--   [ ] Implementar extracción de candidatos.
+-   [ ] Comprobar qué aportan OpenViking y Hermes en procedencia, fecha,
+    confianza y caducidad de recuerdos; lo que falte, con ⚠️.
+-   [ ] Configurar y comprobar la extracción de candidatos en OpenViking.
 -   [ ] Configurar OpenViking como proveedor de Hermes.
 -   [ ] Configurar capas L0/L1/L2.
 -   [ ] Elegir embedding multilingüe.
--   [ ] Integrar ByteRover en flujo de desarrollo.
--   [ ] Implementar deduplicación.
--   [ ] Implementar detección de contradicciones.
--   [ ] Implementar política de actualización.
--   [ ] Implementar recuperación por relevancia.
+-   [ ] Configurar y comprobar en OpenViking la clasificación, la
+    deduplicación, la detección de contradicciones y la política de
+    actualización; lo que falte, con ⚠️.
+-   [ ] Crear la Skill `memory-management` (aquí, no en la Fase 15).
+-   [ ] Ingesta del almacén en OpenViking: opcional por recurso, apagada
+    por defecto y siempre vía backend.
+-   [ ] Configurar recuperación por relevancia.
 -   [ ] Implementar límites de tokens/contexto.
 -   [ ] Implementar citas internas/procedencia de recuerdos.
 -   [ ] Implementar inspección y corrección de recuerdos.
 -   [ ] Implementar borrado de recuerdos con propagación a los almacenes
     implicados.
--   [ ] Crear pruebas de persistencia.
--   [ ] Crear pruebas de recuperación.
--   [ ] Crear pruebas de contradicciones.
--   [ ] Crear pruebas de aislamiento entre usuarios/sesiones, aunque
-    inicialmente sea single-user.
+-   [ ] Comprobar persistencia entre sesiones (con clave de API; sin ella, ⚠️).
+-   [ ] Comprobar recuperación y contradicciones.
+-   [ ] Comprobar que la memoria recuperada no puede sobrescribir reglas
+    de seguridad ni imponerse a la instrucción actual.
 
 ### Criterio de aceptación
 
@@ -1258,7 +1302,9 @@ servicios de voz en la nube.
 -   [ ] Añadir indicador visible de escucha.
 -   [ ] Añadir opción de desactivar micrófono.
 -   [ ] Crear pruebas con ruido y silencios.
--   [ ] Medir rendimiento en hardware objetivo.
+-   [ ] Medir rendimiento en el hardware real (i7-8665U, 8 hilos, 14 GB de
+    RAM, gráfica integrada sin VRAM dedicada; voz dimensionada para CPU).
+    Solo se publican cifras medidas.
 
 ### Restricción de implementación
 
@@ -1278,6 +1324,10 @@ clara y fiable.
 
 **Objetivo:** permitir propuestas de mejora sin autoalteración insegura.
 
+Lo publicado al agente en uso (Skills, identidad) cuenta como
+producción: toda modificación pasa por propuesta y autorización
+(entrada "Trabajo sin clave y alcance de automejora, copias y v1").
+
 ### Tareas
 
 -   [ ] Crear registro de feedback.
@@ -1289,7 +1339,7 @@ clara y fiable.
 -   [ ] Integrar Git para cambios propuestos.
 -   [ ] Crear changelog.
 -   [ ] Crear informes.
--   [ ] Exigir aprobación para cambios de código.
+-   [ ] Exigir propuesta y autorización para toda modificación (código, Skills, identidad, configuración).
 -   [ ] Impedir que el agente amplíe sus permisos.
 -   [ ] Impedir que modifique políticas de seguridad.
 -   [ ] Impedir que elimine auditoría.
@@ -1304,6 +1354,10 @@ producción ni sus controles de seguridad por iniciativa propia.
 
 ## FASE 19 --- Seguridad, resiliencia y backups
 
+Permisos, confirmación pendiente y auditoría ya existen desde antes de la
+primera herramienta; las tareas siguientes son revisión y
+endurecimiento.
+
 ### Tareas
 
 -   [ ] Revisar permisos por herramienta.
@@ -1314,11 +1368,13 @@ producción ni sus controles de seguridad por iniciativa propia.
 -   [ ] Revisar sandbox de Electron.
 -   [ ] Revisar tratamiento de contenido no confiable.
 -   [ ] Revisar operaciones destructivas.
--   [ ] Crear auditoría.
+-   [ ] Endurecer la auditoría (sin claves API ni datos sensibles).
 -   [ ] Crear backup de SQLite.
 -   [ ] Crear restauración de SQLite.
 -   [ ] Crear exportación de Workspace.
 -   [ ] Definir backup de configuración.
+-   [ ] Las copias incluyen SQLite, configuración, identidad, Skills, datos
+    de OpenViking y home de Hermes, sin secretos.
 -   [ ] Definir backup de metadatos e índices.
 -   [ ] Documentar qué archivos externos no se copian.
 -   [ ] Probar recuperación tras cierre inesperado.
@@ -1339,7 +1395,8 @@ corrompen la fuente de verdad del Workspace.
 
 -   [ ] Medir uso de RAM.
 -   [ ] Medir CPU.
--   [ ] Medir VRAM.
+-   [ ] Medir uso de CPU y RAM por componente (Hermes, OpenViking, voz);
+    la máquina no tiene VRAM dedicada.
 -   [ ] Medir latencia del modelo.
 -   [ ] Medir latencia STT.
 -   [ ] Medir latencia TTS.
@@ -1368,7 +1425,8 @@ restaurarse siguiendo documentación reproducible.
 
 ## FASE 21 --- Mejoras posteriores
 
-No bloquean la primera versión.
+Fuera de alcance; no bloquean la primera versión ni se tocan antes de
+tiempo (las ampliaciones de `MASTER_PLAN` Fase 15 equivalen a esta Fase 21).
 
 -   [ ] Evaluar LiveKit Agents para streaming de voz avanzado.
 -   [ ] Evaluar PostgreSQL si SQLite deja de ser suficiente.
@@ -1389,7 +1447,8 @@ No bloquean la primera versión.
 ## 7.1. Skills
 
 Crear Skills solo cuando la herramienta subyacente esté implementada y
-probada.
+comprobada. `memory-management` se crea en la Fase 16; el resto, en la
+Fase 15.
 
 ``` text
 agent/skills/
@@ -1597,6 +1656,14 @@ foráneas y estrategia polimórfica antes de cerrar el diseño.
 
 # 9. Estrategia de pruebas
 
+> Sustituida por `CLAUDE.md` §3 y §4: sin suites, sin tests de cierre de
+> fase y sin esperas de aprobación. Lo que sigue es un catálogo de qué
+> puede comprobarse; solo se escriben tests en las excepciones de
+> `CLAUDE.md` §4 (rutas y permisos del almacén, confirmaciones
+> destructivas, migraciones y copias, memoria frente a reglas de
+> seguridad). Se conservan: seguridad, secretos, acciones destructivas,
+> no marcar sin evidencia y no presentar mocks como integraciones.
+
 ## 9.1. Backend
 
 -   Unit tests de servicios.
@@ -1629,7 +1696,7 @@ foráneas y estrategia polimórfica antes de cerrar el diseño.
 
 ## 9.4. Calidad mínima antes de cerrar una fase
 
--   Tests relacionados pasando.
+-   Comprobación rápida de la funcionalidad correcta.
 -   Lint sin errores nuevos.
 -   Typecheck sin errores.
 -   Build correcto.
@@ -1728,9 +1795,8 @@ El estado debe proceder de eventos reales del agente y del sistema.
 
 ## Calidad
 
--   [ ] Tests backend pasan.
--   [ ] Tests frontend pasan.
--   [ ] Tests de integración pasan.
+-   [ ] Comprobación rápida del backend, del frontend y de la integración
+    correcta (sin suites; solo las excepciones de `CLAUDE.md` §4).
 -   [ ] Typecheck pasa.
 -   [ ] Lint pasa.
 -   [ ] Build pasa.
@@ -1751,8 +1817,9 @@ Claude Code debe mantener estos documentos:
 
 ## `ROADMAP.md`
 
-Este documento. Contiene fases, tareas, decisiones iniciales y criterios
-de aceptación.
+Este documento, subordinado a `docs/DECISIONS.md`. Contiene fases,
+tareas, decisiones iniciales y criterios de aceptación; sus casillas son
+históricas. Todos estos archivos viven en `docs/`.
 
 ## `IMPLEMENTATION_STATUS.md`
 
@@ -1783,11 +1850,12 @@ Al recibir este documento:
 4.  Compara el estado real con este roadmap.
 5.  Señala contradicciones, incompatibilidades y decisiones pendientes.
 6.  Propón el plan concreto de la Fase 0.
-7.  No empieces todavía a implementar funcionalidades.
-8.  Espera aprobación antes de realizar cambios estructurales.
+7.  Registra las decisiones y continúa: no se espera aprobación para lo
+    reversible (`CLAUDE.md` §3); se consulta al usuario solo si cambia el
+    objetivo del producto.
 
-Después de aprobar la Fase 0, trabaja fase por fase y actualiza los
-documentos de seguimiento.
+Después, trabaja fase por fase y actualiza los documentos de seguimiento
+(`docs/IMPLEMENTATION_STATUS.md` y `docs/DECISIONS.md`).
 
 **Regla final:** la prioridad es construir un sistema funcional,
 verificable y mantenible. No sacrifiques fiabilidad por aparentar
