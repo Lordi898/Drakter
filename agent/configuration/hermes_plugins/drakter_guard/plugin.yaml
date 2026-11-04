@@ -1,0 +1,6 @@
+name: drakter_guard
+version: 1.0.0
+description: Bloquea cualquier herramienta fuera de la lista permitida de Drakter.
+author: Drakter
+provides_hooks:
+  - pre_tool_call
