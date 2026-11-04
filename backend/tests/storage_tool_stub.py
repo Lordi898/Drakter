@@ -64,7 +64,7 @@ def install() -> None:
             "trust": "untrusted",
             "source_type": source_type,
             "source_id": source_id,
-            "retrieved_at": datetime.now(UTC).isoformat(),
+            "retrieved_at": datetime.now(UTC).isoformat(timespec="milliseconds").replace("+00:00", "Z"),
             "content_hash": hashlib.sha256(content.encode()).hexdigest(),
             "truncated": truncated,
             "content": content,

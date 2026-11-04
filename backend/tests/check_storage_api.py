@@ -73,7 +73,9 @@ def main() -> int:
         r = c.get("/api/v1/resources", params={"limit": 500})
         check("limit > 100 es 422", r.status_code == 422, r.status_code)
 
-        r = c.get("/api/v1/resources/search", params={"q": "zanahoria"})
+        r = c.post(f"/api/v1/resources/{note_id}/index")
+        check("indexar nota", r.status_code == 200, r.text)
+        r = c.get("/api/v1/resources/search", params={"q": "redes"})
         check("buscar encuentra la nota", r.status_code == 200 and any(
             h["resource"]["id"] == note_id for h in r.json()["items"]), r.text)
         r = c.get("/api/v1/resources/not-a-uuid")
@@ -86,8 +88,9 @@ def main() -> int:
               and r.json()["content_trust"] == "untrusted", r.text)
 
         r = c.delete(f"/api/v1/resources/{note_id}")
-        check("DELETE sin confirmar es 409 confirmation_required", r.status_code == 409
-              and r.json()["error"]["code"] == "confirmation_required", r.text)
+        check("DELETE sin gate real: 503 confirmation_unavailable (o 409 confirmation_required)",
+              (r.status_code, r.json()["error"]["code"]) in {(503, "confirmation_unavailable"),
+                                                             (409, "confirmation_required")}, r.text)
         r = c.get(f"/api/v1/resources/{note_id}")
         check("la nota sigue ahi", r.status_code == 200, r.text)
     print("FALLOS: " + ", ".join(FAILS) if FAILS else "TODO OK")

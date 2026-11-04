@@ -242,7 +242,7 @@ TOOLS: tuple[ToolSpec, ...] = (
         domain="storage", args_model=ReadArgs, result_model=ReadToolResult,
         permission="storage.read", risk=RiskClass.READ, handler=_read,
         errors=("not_found", "permission_denied", "resource_unavailable", "file_too_large",
-                "archive_limit_exceeded", "unsupported_format", "read_failed", "url_not_allowed",
+                "archive_limit_exceeded", "unsupported_media_type", "read_failed", "url_not_allowed",
                 "link_fetch_failed", "path_not_allowed"),
         idempotent=True, timeout_s=45.0, returns_untrusted=True,
         audit={**_LOG, "selector": "log", "offset": "log", "max_chars": "log"},
@@ -262,7 +262,7 @@ TOOLS: tuple[ToolSpec, ...] = (
         ),
         domain="storage", args_model=CreateResourceArgs, result_model=ResourceOut,
         permission="storage.write", risk=RiskClass.WRITE, handler=_create,
-        errors=("not_found", "validation_error", "url_not_allowed", "duplicate"),
+        errors=("not_found", "validation_error", "url_not_allowed", "conflict"),
         audit=_WRITE_AUDIT,
     ),
     ToolSpec(
@@ -273,7 +273,7 @@ TOOLS: tuple[ToolSpec, ...] = (
         ),
         domain="storage", args_model=UpdateMetadataArgs, result_model=ResourceOut,
         permission="storage.write", risk=RiskClass.WRITE, handler=_update,
-        errors=("not_found", "conflict", "validation_error"),
+        errors=("not_found", "revision_mismatch", "conflict", "validation_error"),
         audit={**_WRITE_AUDIT, "expected_revision": "log"},
     ),
     ToolSpec(
@@ -285,7 +285,7 @@ TOOLS: tuple[ToolSpec, ...] = (
         domain="storage", args_model=IndexArgs, result_model=ResourceOut,
         permission="storage.write", risk=RiskClass.WRITE, handler=_index,
         errors=("not_found", "permission_denied", "resource_unavailable", "file_too_large",
-                "unsupported_format", "read_failed", "link_fetch_failed", "url_not_allowed"),
+                "unsupported_media_type", "read_failed", "link_fetch_failed", "url_not_allowed"),
         idempotent=True, timeout_s=45.0, audit={**_LOG, "include_content": "log"},
     ),
     ToolSpec(
@@ -296,7 +296,7 @@ TOOLS: tuple[ToolSpec, ...] = (
         ),
         domain="storage", args_model=NoArgs, result_model=RefreshResult,
         permission="storage.write", risk=RiskClass.CONFIRM, handler=_refresh,
-        errors=("confirmation_required", "permission_denied"),
+        errors=("confirmation_required", "confirmation_unavailable", "permission_denied"),
         idempotent=True, timeout_s=45.0, summarize=_summarize_refresh,
     ),
 )
