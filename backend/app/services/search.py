@@ -2,32 +2,35 @@
 
 from __future__ import annotations
 
+import base64
+import binascii
+import json
+import math
 import re
 import sqlite3
 from collections.abc import Sequence
 from typing import Final
 
+from drakter_contracts.common import Page
+from drakter_contracts.models.system import SearchHitOut
+
+from app.core.errors import AppError
 from app.services.search_index import reconcile_structured
 from app.services.search_schemas import (
     ALL_ENTITY_TYPES,
+    DEFAULT_LIMIT,
     MAX_LIMIT,
-    MAX_OFFSET,
     MAX_QUERY_CHARS,
     SearchEntityType,
-    SearchItem,
-    SearchPage,
-    SnippetPart,
 )
+
+SearchPage = Page[SearchHitOut]
 
 MAX_TERMS: Final = 12
 MAX_TITLE_CHARS: Final = 300
 SNIPPET_TOKENS: Final = 16
 # bm25 por columna: título, cuerpo, etiquetas.
 _COLUMN_WEIGHTS: Final = "8.0, 1.0, 4.0"
-# Uso privado de Unicode: ningún documento puede imitar un marcador de HTML o texto.
-_MATCH_OPEN: Final = ""
-_MATCH_CLOSE: Final = ""
-_MARKER_SPLIT: Final = re.compile(f"([{_MATCH_OPEN}{_MATCH_CLOSE}])")
 # Controles y overrides bidi: el contenido no confiable no decide cómo se ve la fila.
 _UNSAFE_TEXT: Final = re.compile(r"[\x00-\x08\x0b-\x1f\x7f-\x9f‪-‮⁦-⁩]")
 _WHITESPACE: Final = re.compile(r"\s+")
@@ -57,20 +60,26 @@ def _plain(value: str) -> str:
     return _WHITESPACE.sub(" ", _UNSAFE_TEXT.sub(" ", value)).strip()
 
 
-def _snippet_parts(raw: str, title: str) -> list[SnippetPart]:
-    parts: list[SnippetPart] = []
-    inside = False
-    for piece in _MARKER_SPLIT.split(raw):
-        if piece == _MATCH_OPEN:
-            inside = True
-        elif piece == _MATCH_CLOSE:
-            inside = False
-        else:
-            text = _UNSAFE_TEXT.sub(" ", piece).replace("\n", " ").replace("\t", " ")
-            if text:
-                parts.append(SnippetPart(text=text, match=inside))
-    # Un extracto que solo repite el título no aporta nada a la fila.
-    return [] if _plain("".join(part.text for part in parts)) == title else parts
+def _encode_cursor(score: float, entity_id: str) -> str:
+    raw = json.dumps([score, entity_id], separators=(",", ":")).encode("ascii")
+    return base64.urlsafe_b64encode(raw).decode("ascii")
+
+
+def _decode_cursor(cursor: str) -> tuple[float, str]:
+    """Clave de orden (relevancia, id). Se comprueba porque llega del cliente."""
+    try:
+        raw = base64.b64decode(cursor.encode("ascii"), altchars=b"-_", validate=True)
+        score, entity_id = json.loads(raw)
+    except (ValueError, TypeError, binascii.Error):
+        raise AppError("invalid_query", "Invalid cursor", 400) from None
+    if (
+        type(score) is not float
+        or not math.isfinite(score)
+        or not isinstance(entity_id, str)
+        or len(entity_id) > 36
+    ):
+        raise AppError("invalid_query", "Invalid cursor", 400)
+    return score, entity_id
 
 
 def _matches_sql(type_count: int, visibility: str) -> str:
@@ -86,13 +95,14 @@ def _matches_sql(type_count: int, visibility: str) -> str:
     """
 
 
-def _select_sql(matches: str) -> str:
+def _select_sql(matches: str, *, after_cursor: bool) -> str:
+    keyset = "AND (r.score, r.entity_id) > (?, ?)" if after_cursor else ""
     # snippet() y bm25() solo existen dentro de la consulta que recorre el FTS.
     return f"""
         WITH matches AS (
             SELECT d.entity_id, d.entity_type, d.chunk_no, d.title,
                    bm25(search_fts, {_COLUMN_WEIGHTS}) AS score,
-                   snippet(search_fts, -1, ?, ?, '…', {SNIPPET_TOKENS}) AS excerpt
+                   snippet(search_fts, -1, '', '', '…', {SNIPPET_TOKENS}) AS excerpt
             {matches}
         ),
         ranked AS (
@@ -101,12 +111,12 @@ def _select_sql(matches: str) -> str:
             ) AS position
             FROM matches
         )
-        SELECT r.entity_id, r.entity_type, coalesce(h.title, r.title) AS title, r.excerpt
+        SELECT r.entity_id, r.entity_type, coalesce(h.title, r.title) AS title, r.excerpt, r.score
         FROM ranked AS r
         LEFT JOIN search_documents AS h ON h.entity_id = r.entity_id AND h.chunk_no = 0
-        WHERE r.position = 1
+        WHERE r.position = 1 {keyset}
         ORDER BY r.score, r.entity_id
-        LIMIT ? OFFSET ?
+        LIMIT ?
     """
 
 
@@ -115,20 +125,20 @@ def search_global(
     *,
     q: str,
     types: Sequence[SearchEntityType] | None = None,
-    limit: int = 20,
-    offset: int = 0,
+    limit: int = DEFAULT_LIMIT,
+    cursor: str | None = None,
     agent: bool = False,
 ) -> SearchPage:
     """Devuelve la mejor coincidencia de cada entidad no archivada.
 
     Con `agent=True` se ocultan los recursos de ubicaciones sin `agent_read` o
-    desactivadas. Todo lo que sale de un recurso va con `trust="untrusted"`.
+    desactivadas. Todo resultado sale marcado como contenido no confiable.
     """
     limit = max(1, min(limit, MAX_LIMIT))
-    offset = max(0, min(offset, MAX_OFFSET))
+    after = _decode_cursor(cursor) if cursor is not None else None
     match = build_match_query(q)
     if match is None:
-        return SearchPage(items=[], total=0)
+        return SearchPage(items=[], next_cursor=None, total=0)
 
     wanted = list(dict.fromkeys(types or ALL_ENTITY_TYPES))
     reconcile_structured(conn)
@@ -136,20 +146,25 @@ def search_global(
     filters = (match, *wanted)
     total = conn.execute(f"SELECT count(DISTINCT d.entity_id) {matches}", filters).fetchone()[0]
     rows = conn.execute(
-        _select_sql(matches),
-        (_MATCH_OPEN, _MATCH_CLOSE, *filters, limit, offset),
+        _select_sql(matches, after_cursor=after is not None),
+        (*filters, *(after or ()), limit + 1),
     ).fetchall()
 
-    items: list[SearchItem] = []
-    for entity_id, entity_type, raw_title, excerpt in rows:
+    items: list[SearchHitOut] = []
+    for entity_id, entity_type, raw_title, excerpt, _score in rows[:limit]:
         title = _plain(str(raw_title))[:MAX_TITLE_CHARS]
+        snippet = _plain(str(excerpt or ""))
         items.append(
-            SearchItem(
+            SearchHitOut(
                 entity_type=entity_type,
                 entity_id=str(entity_id),
                 title=title,
-                snippet=_snippet_parts(str(excerpt or ""), title),
-                trust="untrusted" if entity_type == "resource" else "workspace",
+                # Un extracto que solo repite el título no aporta nada a la fila.
+                snippet="" if snippet == title else snippet,
             )
         )
-    return SearchPage(items=items, total=int(total))
+    next_cursor = None
+    if len(rows) > limit:
+        last = rows[limit - 1]
+        next_cursor = _encode_cursor(float(last[4]), str(last[0]))
+    return SearchPage(items=items, next_cursor=next_cursor, total=int(total))
