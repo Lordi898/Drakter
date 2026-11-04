@@ -16,8 +16,8 @@ Fuera de alcance: tablas de dominio, rutas de dominio, eventos WebSocket de nego
 Las credenciales no pasan nunca por argv, entorno, disco ni logs. Ya no existe `session.json`.
 
 - Uvicorn: `log_config=None`, `access_log=False`, `server_header=False`, `proxy_headers=False`, `ws="websockets-sansio"`, `ws_max_size=1048576`, `lifespan="on"`.
-- `create_app(settings, *, credentials, port, on_ready) -> FastAPI` en `app/main.py`. No existe un `app` a nivel de módulo. `docs_url`, `redoc_url` y `openapi_url` son `None`; `redirect_slashes=False`.
-- Orden del `lifespan`: preparar directorios → `configure_logging` → `exclusive_instance` → `migrate` → `on_ready()`. Si `migrate` falla, el arranque falla.
+- `create_app(settings, *, credentials, port, on_ready) -> FastAPI` en `app/main.py`. No existe un `app` a nivel de módulo. Monta por autodescubrimiento todo `app/api/*.py` salvo los que empiezan por `_`: cada módulo exporta `router` y nadie edita `main.py` para añadir rutas. Inicializa `app.state`: `settings`, `agent_runtime`, `agent_settings`, `event_hub`, `memory_service` y `reminders`. Un servicio de otro frente cuyo módulo no exista queda en `None`; un fallo al importarlo tumba el arranque. `docs_url`, `redoc_url` y `openapi_url` son `None`; `redirect_slashes=False`.
+- Orden del `lifespan`: preparar directorios → `configure_logging` → `exclusive_instance` → `migrate` → `agent_runtime.start()` → `reminders.start()` → `on_ready()`. Al apagar, en orden inverso. Si `migrate` falla, el arranque falla.
 
 ## `app/core/config.py`
 
@@ -134,20 +134,23 @@ En websocket, cualquier rechazo se hace antes de aceptar: se consume `websocket.
 # connection.py
 def connect(db_path: Path, *, create: bool = False) -> sqlite3.Connection: ...
 
-# migrator.py
+# schema.py (migrator.py los reexporta; rompe el ciclo con backup.py)
 SCHEMA_VERSION_TABLE: Final = "schema_version"
 MIGRATIONS_DIR: Final = Path(__file__).resolve().parents[2] / "migrations"
 class MigrationError(Exception): ...
+def current_version(conn: sqlite3.Connection) -> int: ...
+
+# migrator.py
 @dataclass(frozen=True)
 class MigrationResult:
     from_version: int; to_version: int; applied: tuple[str, ...]; backup: Path | None
-def current_version(conn: sqlite3.Connection) -> int: ...
 def migrate(db_path: Path, backups_dir: Path, migrations_dir: Path = MIGRATIONS_DIR) -> MigrationResult: ...
 
 # backup.py
 class BackupError(Exception): ...
 def create_backup(db_path: Path, backups_dir: Path, label: str) -> Path: ...
 def verify_backup(backup_path: Path) -> None: ...
+def verify_copy(backup_path: Path) -> None: ...  # como verify_backup sin exigir schema_version; solo copias propias pre-migrate y pre-restore
 def restore_backup(db_path: Path, backups_dir: Path, backup_path: Path,
                    migrations_dir: Path = MIGRATIONS_DIR) -> Path: ...  # devuelve la copia previa o la cuarentena
 

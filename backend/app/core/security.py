@@ -26,7 +26,8 @@ logger = logging.getLogger("drakter.security")
 
 _WS_POLICY_VIOLATION: Final = 1008
 _MAX_LOGGED_PATH: Final = 256
-_APPROVAL_PATH: Final = re.compile(r"/api/v1/confirmations/[^/]+/(?:approve|reject)/*")
+_APPROVAL_PATH: Final = re.compile(r"/api/v1/confirmations(?:/[^/]+)?/(?:approve|reject)/?")
+_REPEATED_SLASHES: Final = re.compile(r"/{2,}")
 _APPROVER_WRITE_PATHS: Final = ("/api/v1/storage-locations", "/api/v1/permissions")
 _SAFE_METHODS: Final = frozenset({"GET", "HEAD"})
 
@@ -55,11 +56,13 @@ class Role(StrEnum):
 
 
 def required_role(method: str | None, path: str) -> Role:
-    if _APPROVAL_PATH.fullmatch(path):
+    # Las variantes de una ruta protegida también exigen `approver`, aunque no enruten.
+    normalized = _REPEATED_SLASHES.sub("/", path)
+    if _APPROVAL_PATH.fullmatch(normalized):
         return Role.APPROVER
     if method not in _SAFE_METHODS and method is not None:
         for protected in _APPROVER_WRITE_PATHS:
-            if path == protected or path.startswith(f"{protected}/"):
+            if normalized == protected or normalized.startswith(f"{protected}/"):
                 return Role.APPROVER
     return Role.UI
 

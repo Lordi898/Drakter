@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
-"""Comprobacion de seguridad del backend contra un servidor real (`python -m app`).
+"""Comprobacion de seguridad del backend (D-14) contra un servidor real (`python -m app`).
 
 Escrita a partir de backend/CONTRACT.md. Uso (desde backend/):
-    TMPDIR=/var/tmp/drakter-8 .venv/bin/python tests/check_security.py [--port 18830]
-Sin --port prueba 18830-18839 y usa el primero libre. Sale != 0 si algo falla.
+    TMPDIR=/var/tmp/drakter-8 .venv/bin/python tests/check_security.py
+El puerto lo elige el servidor (127.0.0.1:0). Sale != 0 si algo falla.
 Todo el estado (config, datos, runtime, HOME) va a un directorio temporal nuevo.
 """
 from __future__ import annotations
 
-import argparse
 import asyncio
 import base64
 import json
 import os
+import secrets
 import shutil
 import signal
 import socket
@@ -20,12 +20,15 @@ import stat
 import subprocess
 import sys
 import tempfile
+import threading
 import time
+import uuid
 from pathlib import Path
 
 BACKEND = Path(__file__).resolve().parents[1]
-ALLOWED_ORIGIN = "app://drakter"
 RESULTS: list[tuple[bool, str]] = []
+ALL_RESPONSE_HEADERS: list[tuple[str, str]] = []
+STATE_FLAGS: dict[str, bool] = {}
 
 
 def check(name: str, cond: bool, detail: str = "") -> bool:
@@ -48,6 +51,10 @@ class Resp:
         except Exception:  # noqa: BLE001
             return None
 
+    def error_code(self) -> str | None:
+        j = self.json()
+        return j["error"].get("code") if isinstance(j, dict) and isinstance(j.get("error"), dict) else None
+
     def envelope(self, code: str | None = None) -> bool:
         j = self.json()
         if not (isinstance(j, dict) and set(j) == {"error"} and isinstance(j["error"], dict)):
@@ -59,22 +66,33 @@ class Resp:
         return ok and (code is None or e["code"] == code)
 
 
-def raw_request(port: int, method: str, path: str, *, host: str | list[str] | None = "default",
-                headers: list[tuple[str, str]] | None = None, token: str | None = None,
-                timeout: float = 5.0) -> Resp:
+def raw_request(port: int, method: str, path: str, *, host="default", headers=None, token: str | None = None,
+                body: bytes = b"", declared_len: int | None = None, chunks=None, timeout: float = 5.0) -> Resp:
     lines = [f"{method} {path} HTTP/1.1"]
     hosts = [f"127.0.0.1:{port}"] if host == "default" else ([] if host is None else ([host] if isinstance(host, str) else host))
     lines += [f"Host: {h}" for h in hosts]
     if token is not None:
         lines.append(f"Authorization: Bearer {token}")
-    lines += [f"{k}: {v}" for k, v in (headers or [])]
-    if not any(k.lower() == "upgrade" for k, _ in (headers or [])):
+    hdrs = list(headers or [])
+    lines += [f"{k}: {v}" for k, v in hdrs]
+    if chunks is not None:
+        lines.append("Transfer-Encoding: chunked")
+    elif body or declared_len is not None:
+        lines.append(f"Content-Length: {declared_len if declared_len is not None else len(body)}")
+    if not any(k.lower() == "upgrade" for k, _ in hdrs):
         lines.append("Connection: close")
-    data = ("\r\n".join(lines) + "\r\n\r\n").encode("utf-8")
+    data = ("\r\n".join(lines) + "\r\n\r\n").encode("utf-8") + (body if chunks is None else b"")
     s = socket.create_connection(("127.0.0.1", port), timeout=timeout)
+    buf = b""
     try:
-        s.sendall(data)
-        buf = b""
+        try:
+            s.sendall(data)
+            if chunks is not None:
+                for c in chunks:
+                    s.sendall(f"{len(c):x}\r\n".encode() + c + b"\r\n")
+                s.sendall(b"0\r\n\r\n")
+        except (BrokenPipeError, ConnectionResetError, socket.timeout):
+            pass
         while True:
             if b"\r\n\r\n" in buf:
                 head, _, rest = buf.partition(b"\r\n\r\n")
@@ -92,80 +110,123 @@ def raw_request(port: int, method: str, path: str, *, host: str | list[str] | No
             buf += chunk
     finally:
         s.close()
-    head, _, body = buf.partition(b"\r\n\r\n")
+    head, _, rbody = buf.partition(b"\r\n\r\n")
     hl = head.decode("latin-1").split("\r\n")
-    if len(hl) < 1 or not hl[0].startswith("HTTP/"):
+    if not hl or not hl[0].startswith("HTTP/"):
         return Resp(0, [], buf)
-    hdrs = [tuple(x.split(":", 1)[0:1] + [x.split(":", 1)[1].strip()]) for x in hl[1:] if ":" in x]
-    return Resp(int(hl[0].split()[1]), hdrs, body)  # type: ignore[arg-type]
+    parsed = []
+    for x in hl[1:]:
+        if ":" in x:
+            k, v = x.split(":", 1)
+            parsed.append((k.strip(), v.strip()))
+    ALL_RESPONSE_HEADERS.extend(parsed)
+    return Resp(int(hl[0].split()[1]), parsed, rbody)
 
 
-def ws_handshake_raw(port: int, *, host="default", token: str | None = None,
-                     headers: list[tuple[str, str]] | None = None) -> Resp:
+def ws_handshake_raw(port: int, path: str = "/api/v1/events", *, host="default", token: str | None = None,
+                     headers=None) -> Resp:
     key = base64.b64encode(os.urandom(16)).decode()
     h = [("Upgrade", "websocket"), ("Connection", "Upgrade"), ("Sec-WebSocket-Version", "13"),
-         ("Sec-WebSocket-Key", key)] + (headers or [])
-    return raw_request(port, "GET", "/ws", host=host, headers=h, token=token)
+         ("Sec-WebSocket-Key", key)] + list(headers or [])
+    return raw_request(port, "GET", path, host=host, headers=h, token=token)
 
 
 # ---------------------------------------------------------------- proceso
-class Server:
-    def __init__(self, root: Path, port: int):
-        self.root, self.port = root, port
-        self.config, self.data, self.run = root / "config", root / "data", root / "run"
-        for d in (self.config, self.data, self.run):
+class Backend:
+    """Un `python -m app` real con stdin/stdout/stderr en pipes."""
+
+    def __init__(self, root: Path, name: str, creds: dict[str, str], data_dir: Path | None = None):
+        self.root, self.name, self.creds = root, name, creds
+        root.mkdir(parents=True, exist_ok=True)
+        self.config, self.run = root / "config", root / "run"
+        self.xdg_data = root / "xdg-data"
+        for d in (self.config, self.run, self.xdg_data):
             d.mkdir(mode=0o700, exist_ok=True)
         (root / "home").mkdir(exist_ok=True)
-        self.session = self.run / "drakter" / "session.json"
-        self.logfile = self.data / "drakter" / "logs" / "backend.log"
+        self.data_dir = data_dir or (self.xdg_data / "drakter")
         self.proc: subprocess.Popen | None = None
-        self.n = 0
+        self.port: int | None = None
+        self.out, self.err = bytearray(), bytearray()
+        self.stdout_ino = self.stderr_ino = 0
 
     def env(self) -> dict[str, str]:
         e = {k: v for k, v in os.environ.items() if not k.startswith("DRAKTER_")
              and k.lower() not in ("http_proxy", "https_proxy", "all_proxy")}
-        e.update(XDG_CONFIG_HOME=str(self.config), XDG_DATA_HOME=str(self.data),
-                 XDG_RUNTIME_DIR=str(self.run), HOME=str(self.root / "home"),
-                 DRAKTER_PORT=str(self.port), PYTHONUNBUFFERED="1")
+        e.update(XDG_CONFIG_HOME=str(self.config), XDG_DATA_HOME=str(self.xdg_data),
+                 XDG_RUNTIME_DIR=str(self.run), HOME=str(self.root / "home"), PYTHONUNBUFFERED="1")
+        if self.data_dir != self.xdg_data / "drakter":
+            e["DRAKTER_DATA_DIR"] = str(self.data_dir)
         return e
 
-    def start(self) -> None:
-        self.n += 1
-        self.out = (self.root / f"stdout{self.n}.txt").open("wb")
-        self.err = (self.root / f"stderr{self.n}.txt").open("wb")
+    def launch(self, line: bytes | None, *, close_stdin: bool = False) -> "Backend":
         self.proc = subprocess.Popen([sys.executable, "-m", "app"], cwd=BACKEND, env=self.env(),
-                                     stdout=self.out, stderr=self.err, stdin=subprocess.DEVNULL)
-        deadline = time.time() + 30
+                                     stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        self.stdout_ino = os.fstat(self.proc.stdout.fileno()).st_ino
+        self.stderr_ino = os.fstat(self.proc.stderr.fileno()).st_ino
+        for stream, buf in ((self.proc.stdout, self.out), (self.proc.stderr, self.err)):
+            threading.Thread(target=self._drain, args=(stream, buf), daemon=True).start()
+        try:
+            if line is not None:
+                self.proc.stdin.write(line)
+                self.proc.stdin.flush()
+            if close_stdin:
+                self.proc.stdin.close()
+        except BrokenPipeError:
+            pass
+        return self
+
+    @staticmethod
+    def _drain(stream, buf: bytearray) -> None:
+        try:
+            while True:
+                c = os.read(stream.fileno(), 65536)
+                if not c:
+                    return
+                buf.extend(c)
+        except OSError:
+            return
+
+    def handshake_line(self, **over) -> bytes:
+        d = {"v": 1, "ui": self.creds["ui"], "approver": self.creds["approver"]}
+        d.update(over)
+        return (json.dumps(d, separators=(",", ":")) + "\n").encode()
+
+    def wait_port(self, timeout: float = 30.0) -> int:
+        deadline = time.time() + timeout
         while time.time() < deadline:
+            if b"\n" in self.out:
+                msg = json.loads(bytes(self.out).split(b"\n", 1)[0])
+                self.port = int(msg["port"])
+                return self.port
             if self.proc.poll() is not None:
-                raise RuntimeError(f"el servidor termino al arrancar (codigo {self.proc.returncode}):\n"
-                                   + self.output()[-2000:])
-            if self.session.exists():
-                try:
-                    if raw_request(self.port, "GET", "/health", timeout=2).status == 200:
-                        return
-                except OSError:
-                    pass
-            time.sleep(0.2)
-        raise RuntimeError("el servidor no quedo listo en 30 s:\n" + self.output()[-2000:])
+                time.sleep(0.3)
+                if b"\n" in self.out:
+                    continue
+                raise RuntimeError(f"{self.name}: termino sin anunciar puerto (codigo {self.proc.returncode}); "
+                                   f"stderr={bytes(self.err)[-1500:]!r}")
+            time.sleep(0.1)
+        raise RuntimeError(f"{self.name}: no anuncio puerto en {timeout:.0f} s; stderr={bytes(self.err)[-1500:]!r}")
 
-    def output(self) -> str:
-        self.out.flush(), self.err.flush()
-        return ((self.root / f"stdout{self.n}.txt").read_bytes() + b"\n--stderr--\n"
-                + (self.root / f"stderr{self.n}.txt").read_bytes()).decode("utf-8", "replace")
+    def start_ok(self) -> "Backend":
+        self.launch(self.handshake_line())
+        self.wait_port()
+        return self
 
-    def token(self) -> str:
-        return json.loads(self.session.read_text())["token"]
+    def stop_stdin(self, timeout: float = 15.0) -> int | None:
+        try:
+            self.proc.stdin.close()
+        except Exception:  # noqa: BLE001
+            pass
+        return self._wait(timeout)
 
-    def stop(self, timeout: float = 15.0) -> int | None:
-        if not self.proc or self.proc.poll() is not None:
-            return self.proc.returncode if self.proc else None
+    def sigterm(self, timeout: float = 15.0) -> int | None:
         self.proc.send_signal(signal.SIGTERM)
+        return self._wait(timeout)
+
+    def _wait(self, timeout: float) -> int | None:
         try:
             return self.proc.wait(timeout)
         except subprocess.TimeoutExpired:
-            self.proc.kill()
-            self.proc.wait()
             return None
 
     def kill(self) -> None:
@@ -173,135 +234,204 @@ class Server:
             self.proc.kill()
             self.proc.wait()
 
+    @property
+    def logfile(self) -> Path:
+        return self.data_dir / "logs" / "backend.log"
+
+    def alive_and_healthy(self) -> bool:
+        try:
+            return self.proc.poll() is None and raw_request(self.port, "GET", "/health", token=self.creds["ui"], timeout=3).status == 200
+        except OSError:
+            return False
+
 
 def mode(p: Path) -> int:
     return stat.S_IMODE(p.stat().st_mode)
 
 
-def pick_port(arg: int | None) -> int:
-    cands = [arg] if arg else list(range(18830, 18840))
-    for p in cands:
-        with socket.socket() as s:
-            try:
-                s.bind(("127.0.0.1", p))
-                return p
-            except OSError:
-                continue
-    raise SystemExit(f"ningun puerto libre en {cands}")
+def tree_contains(root: Path, needles: list[bytes]) -> list[str]:
+    hits = []
+    for p in root.rglob("*"):
+        try:
+            if p.is_file() and not p.is_symlink():
+                data = p.read_bytes()
+                if any(n in data for n in needles):
+                    hits.append(str(p.relative_to(root)))
+        except OSError:
+            continue
+    return hits
 
 
-# ---------------------------------------------------------------- casos HTTP
-def http_cases(srv: Server, token: str) -> None:
-    port = srv.port
+# ---------------------------------------------------------------- handshake
+def handshake_cases(root: Path, creds: dict[str, str]) -> None:
+    canary = "CANARYECHO" + secrets.token_hex(4)
+    good = {"ui": creds["ui"], "approver": creds["approver"]}
+    t1, t2 = secrets.token_urlsafe(32), secrets.token_urlsafe(32)
+    cases = {
+        "JSON roto": (f'{{"v":1,"ui":"{canary}\n'.encode(), [canary]),
+        "v incorrecto": ((json.dumps({"v": 2, "ui": t1, "approver": t2}) + "\n").encode(), [t1, t2]),
+        "token corto": ((json.dumps({"v": 1, "ui": canary, "approver": t2}) + "\n").encode(), [canary, t2]),
+        "tokens iguales": ((json.dumps({"v": 1, "ui": t1, "approver": t1}) + "\n").encode(), [t1]),
+        "linea de mas de 4 KiB": ((f'{{"v":1,"ui":"{canary}' + "A" * 5000 + '"}\n').encode(), [canary]),
+        "EOF inmediato": (None, []),
+    }
+    _ = good
+    for label, (line, secrets_) in cases.items():
+        b = Backend(root / f"hs-{abs(hash(label))}", label, creds)
+        try:
+            b.launch(line, close_stdin=(line is None))
+            rc = b._wait(20)
+            time.sleep(0.2)
+            leaked = [s for s in secrets_ if s.encode() in bytes(b.err) or s.encode() in bytes(b.out)]
+            check(f"handshake invalido ({label}): codigo 2, sin puerto ni eco",
+                  rc == 2 and b"\n" not in b.out and not b.out and not leaked,
+                  f"rc={rc} out={bytes(b.out)[:100]!r} eco={leaked} err={bytes(b.err)[:200]!r}")
+        finally:
+            b.kill()
+
+
+# ---------------------------------------------------------------- HTTP
+def http_cases(be: Backend, agent: str) -> None:
+    port, ui, ap = be.port, be.creds["ui"], be.creds["approver"]
     R = lambda *a, **k: raw_request(port, *a, **k)  # noqa: E731
-    bad_token = "TOKEN-CANARIO-INVALIDO-12345"
 
-    # /health
-    r = R("GET", "/health")
-    check("/health 200 sin token con {status: ok}", r.status == 200 and r.json() == {"status": "ok"}, f"{r.status} {r.body[:100]!r}")
-    check("/health no contiene token ni cabecera Server",
-          token.encode() not in r.body and not r.h("server") and all(token not in v for _, v in r.headers), repr(r.headers))
+    # Matriz basica: /health y auth/check
+    for path in ("/health", "/api/v1/auth/check"):
+        r = R("GET", path)
+        check(f"{path} sin token: 401 unauthorized con envelope y WWW-Authenticate",
+              r.status == 401 and r.envelope("unauthorized") and r.h("www-authenticate") == ["Bearer"], f"{r.status} {r.body[:100]!r}")
+        r = R("GET", path, token=ui)
+        want = {"/health": {"status": "ok"}, "/api/v1/auth/check": {"authenticated": True}}[path]
+        check(f"{path} con ui: 200 {want}", r.status == 200 and r.json() == want, f"{r.status} {r.body[:100]!r}")
+        r = R("GET", path, token=ap)
+        check(f"{path} con approver: 403 permission_denied", r.status == 403 and r.envelope("permission_denied"), f"{r.status} {r.body[:100]!r}")
+        r = R("GET", path, token=agent)
+        check(f"{path} con tercer token (agent): 401", r.status == 401 and r.envelope("unauthorized"), f"{r.status}")
+    r = R("GET", "/health", token=ui)
+    check("/health: sin cabecera Server ni token en la respuesta",
+          not r.h("server") and ui.encode() not in r.body and all(ui not in v for _, v in r.headers), repr(r.headers))
+    r = R("GET", f"/health?token={ui}")
+    check("?token= no autentica", r.status == 401, f"{r.status}")
+    r = R("GET", "/health", headers=[("Authorization", f"Basic {ui}")])
+    check("esquema Basic con el token correcto: 401", r.status == 401, f"{r.status}")
+    r = R("GET", "/health", headers=[("Authorization", "Bearer tókén-中文")])
+    check("token no ASCII: 401 (no 500)", r.status == 401 and r.envelope("unauthorized"), f"{r.status}")
+    r = R("GET", "/health", headers=[("Authorization", f"Bearer {ui}"), ("Authorization", f"Bearer {ui}")])
+    check("dos cabeceras Authorization (ambas validas): 401", r.status == 401, f"{r.status}")
+    r = R("GET", "/health", headers=[("Cookie", f"token={ui}")])
+    check("cookie con el token no autentica", r.status == 401, f"{r.status}")
 
-    # autenticacion
-    r = R("GET", "/api/v1/auth/check")
-    check("sin token: 401 con envelope, code unauthorized y WWW-Authenticate: Bearer",
-          r.status == 401 and r.envelope("unauthorized") and r.h("www-authenticate") == ["Bearer"], f"{r.status} {r.body[:120]!r} {r.headers}")
-    r = R("GET", "/api/v1/auth/check", token=bad_token)
-    check("token malo: 401 con envelope", r.status == 401 and r.envelope("unauthorized"), f"{r.status}")
-    r = R("GET", "/api/v1/auth/check", headers=[("Authorization", "Bearer t\u00f3k\u00e9n-\u4e2d\u6587")])
-    check("token no ASCII: 401 (no 500)", r.status == 401 and r.envelope("unauthorized"), f"{r.status} {r.body[:100]!r}")
-    r = R("GET", "/api/v1/auth/check", headers=[("Authorization", f"Basic {token}")])
-    check("esquema distinto de Bearer con el token correcto: 401", r.status == 401, f"{r.status}")
-    r = R("GET", "/api/v1/auth/check", token=token)
-    check("token correcto: 200 {authenticated: true}", r.status == 200 and r.json() == {"authenticated": True}, f"{r.status} {r.body[:100]!r}")
-    r = R("GET", f"/api/v1/auth/check?token={token}")
-    check("?token= en query NO autentica", r.status == 401, f"{r.status}")
-    r = R("GET", "/api/v1/auth/check", headers=[("Cookie", f"token={token}")])
-    check("cookie con el token NO autentica", r.status == 401, f"{r.status}")
-
-    # rutas inexistentes
+    # Rutas inexistentes / docs
     r = R("GET", "/no/existe")
-    check("ruta inexistente sin token: 401 (no revela 404)", r.status == 401 and r.envelope("unauthorized"), f"{r.status}")
-    r = R("GET", "/no/existe", token=token)
-    check("ruta inexistente con token: 404 con envelope", r.status == 404 and r.envelope(), f"{r.status} {r.body[:100]!r}")
-    r = R("POST", "/health", token=token)
-    check("metodo no permitido (POST /health): 405 con envelope", r.status == 405 and r.envelope(), f"{r.status}")
-
-    # docs
+    check("ruta inexistente sin token: 401", r.status == 401, f"{r.status}")
+    r = R("GET", "/no/existe", token=ui)
+    check("ruta inexistente con ui: 404 http_404 con envelope", r.status == 404 and r.envelope("http_404"), f"{r.status} {r.body[:100]!r}")
     for p in ("/docs", "/redoc", "/openapi.json"):
-        a, b = R("GET", p), R("GET", p, token=token)
-        check(f"{p} no accesible (401 sin token, 404 con token)", a.status == 401 and b.status == 404, f"{a.status}/{b.status}")
+        r = R("GET", p, token=ui)
+        check(f"{p} con ui: 404 http_404", r.status == 404 and r.envelope("http_404"), f"{r.status}")
+        check(f"{p} sin token: 401", R("GET", p).status == 401)
+    r = R("GET", "/health/", token=ui)
+    check("barra final en /health (redirect_slashes=False): 404 sin redireccion", r.status == 404 and not r.h("location"), f"{r.status}")
 
-    # Host
-    for label, host in (("evil.com:puerto", f"evil.com:{port}"), ("127.0.0.1:otro puerto", f"127.0.0.1:{port + 1}"),
-                        ("127.0.0.1 sin puerto", "127.0.0.1"), ("evil.com", "evil.com")):
-        r = R("GET", "/api/v1/auth/check", host=host, token=token)
-        check(f"Host falso ({label}) con token valido: 403 forbidden_host",
-              r.status == 403 and r.envelope("forbidden_host"), f"{r.status} {r.body[:100]!r}")
-    r = R("GET", "/health", host=f"evil.com:{port}")
-    check("Host falso tambien en ruta publica (/health): 403", r.status == 403, f"{r.status}")
-    r = R("GET", "/api/v1/auth/check", host=f"evil.com:{port}")
-    check("Host falso sin token: 403 (el Host se valida antes que el token)", r.status == 403, f"{r.status}")
-    r = R("GET", "/api/v1/auth/check", host=None, token=token)
-    check("sin cabecera Host: rechazado (400/403, nunca 200)", r.status in (400, 403), f"{r.status}")
-    r = R("GET", "/api/v1/auth/check", host=[f"127.0.0.1:{port}", f"evil.com:{port}"], token=token)
-    check("dos cabeceras Host (valida + falsa): rechazado", r.status in (400, 403), f"{r.status}")
-    r = R("GET", "/api/v1/auth/check", host=[f"127.0.0.1:{port}", f"127.0.0.1:{port}"], token=token)
-    check("dos cabeceras Host identicas: rechazado", r.status in (400, 403), f"{r.status}")
-    for h in (f"localhost:{port}", f"LOCALHOST:{port}", f"127.0.0.1:{port}"):
-        r = R("GET", "/api/v1/auth/check", host=h, token=token)
-        check(f"Host legitimo {h}: 200 (control)", r.status == 200, f"{r.status}")
+    # Matriz de roles protegidos
+    protected = []
+    for p in ("/api/v1/confirmations/x/approve", "/api/v1/confirmations/x/reject"):
+        protected.append(("POST", p))
+    for base in ("/api/v1/storage-locations", "/api/v1/storage-locations/x", "/api/v1/permissions", "/api/v1/permissions/x"):
+        for m in ("POST", "PATCH", "DELETE"):
+            protected.append((m, base))
+    for m, p in protected:
+        a, b, c = R(m, p), R(m, p, token=ui), R(m, p, token=ap)
+        d = R(m, p, token=agent)
+        check(f"{m} {p}: sin token 401, ui 403 permission_denied, approver pasa (404 http_404), agent 401",
+              a.status == 401 and b.status == 403 and b.envelope("permission_denied")
+              and c.status == 404 and c.envelope("http_404") and d.status == 401,
+              f"none={a.status} ui={b.status} approver={c.status}/{c.error_code()} agent={d.status}")
+    r = R("GET", "/api/v1/storage-locations", token=ui)
+    check("GET /api/v1/storage-locations con ui pasa el guardia (404 http_404)", r.status == 404 and r.envelope("http_404"), f"{r.status}")
+    r = R("GET", "/api/v1/storage-locations", token=ap)
+    check("GET /api/v1/storage-locations con approver: 403 permission_denied", r.status == 403 and r.envelope("permission_denied"), f"{r.status}")
+    r = R("GET", "/api/v1/confirmations/x/approve", token=ui)
+    check("GET /api/v1/confirmations/x/approve con ui (cualquier metodo): 403", r.status == 403, f"{r.status}")
 
-    # Origin
-    r = R("GET", "/api/v1/auth/check", token=token, headers=[("Origin", "http://evil.com")])
-    check("Origin falso con token valido: 403 forbidden_origin", r.status == 403 and r.envelope("forbidden_origin"), f"{r.status}")
-    r = R("GET", "/api/v1/auth/check", token=token, headers=[("Origin", "null")])
-    check("Origin: null con token valido: 403", r.status == 403 and r.envelope("forbidden_origin"), f"{r.status}")
-    r = R("GET", "/health", headers=[("Origin", "http://evil.com")])
-    check("Origin falso tambien en /health: 403", r.status == 403, f"{r.status}")
-    r = R("GET", "/api/v1/auth/check", token=token, headers=[("Origin", ALLOWED_ORIGIN), ("Origin", "http://evil.com")])
-    check("dos cabeceras Origin: 403", r.status == 403, f"{r.status}")
-    r = R("GET", "/api/v1/auth/check", token=token, headers=[("Origin", ALLOWED_ORIGIN)])
-    check("Origin permitido: 200 con Access-Control-Allow-Origin y sin credenciales",
-          r.status == 200 and r.h("access-control-allow-origin") == [ALLOWED_ORIGIN]
-          and not r.h("access-control-allow-credentials"), f"{r.status} {r.headers}")
-    r = R("GET", "/api/v1/auth/check", headers=[("Origin", ALLOWED_ORIGIN)])
-    check("401 de origen permitido legible: incluye Access-Control-Allow-Origin",
-          r.status == 401 and r.h("access-control-allow-origin") == [ALLOWED_ORIGIN], f"{r.status} {r.headers}")
-    r = R("GET", "/api/v1/auth/check", headers=[("Origin", "http://evil.com")])
-    check("403 de origen falso sin Access-Control-Allow-Origin",
-          r.status == 403 and not r.h("access-control-allow-origin"), f"{r.status} {r.headers}")
-    pre = [("Origin", ALLOWED_ORIGIN), ("Access-Control-Request-Method", "GET"),
-           ("Access-Control-Request-Headers", "authorization")]
-    r = R("OPTIONS", "/api/v1/auth/check", headers=pre)
-    check("preflight de origen permitido sin token: 200 con CORS",
-          r.status == 200 and r.h("access-control-allow-origin") == [ALLOWED_ORIGIN]
-          and "GET" in ",".join(r.h("access-control-allow-methods")), f"{r.status} {r.headers}")
-    r = R("OPTIONS", "/api/v1/auth/check", headers=[("Origin", "http://evil.com")] + pre[1:])
-    check("preflight con Origin falso: 403", r.status == 403, f"{r.status}")
-    r = R("OPTIONS", "/api/v1/auth/check", host=f"evil.com:{port}", headers=pre)
-    check("preflight con Host falso: 403", r.status == 403, f"{r.status}")
-    r = R("OPTIONS", "/api/v1/auth/check")
-    check("OPTIONS sin Origin ni cabeceras CORS requiere token: 401", r.status == 401, f"{r.status}")
+    # Variantes de ruta que no deben rodear el rol
+    variants = [
+        ("POST", "/api/v1/confirmations/x/approve/"), ("POST", "/api/v1/confirmations/x/reject/"),
+        ("POST", "/api/v1/confirmations//approve"), ("POST", "/api/v1/confirmations/x//approve"),
+        ("POST", "/api/v1/confirmations/x%2fapprove"), ("POST", "/api/v1/confirmations/x/%61pprove"),
+        ("POST", "/api/v1/confirmations%2fx/approve"),
+        ("POST", "/api/v1/storage-locations/"), ("POST", "/api/v1/storage-locations//x"),
+        ("POST", "/api/v1/storage-locations%2fx"), ("POST", "/api/v1/%73torage-locations"),
+        ("DELETE", "/api/v1/storage-locations/x/"), ("PATCH", "/api/v1/permissions/"),
+        ("PATCH", "/api/v1/permissions%2fx"), ("DELETE", "/api/v1/permissions//x"),
+        ("POST", "/api/v1//permissions"), ("POST", "//api/v1/permissions"),
+    ]
+    for m, p in variants:
+        b = R(m, p, token=ui)
+        c = R(m, p, token=ap)
+        check(f"variante {m} {p}: ui 403 (no rodea el rol) y approver no recibe 2xx",
+              b.status == 403 and c.status not in range(200, 300), f"ui={b.status} approver={c.status}")
+
+    # Host y Origin con token ui valido
+    for label, host in (("localhost", f"localhost:{port}"), ("evil.com", f"evil.com:{port}"),
+                        ("otro puerto", f"127.0.0.1:{port + 1}"), ("sin puerto", "127.0.0.1")):
+        r = R("GET", "/health", host=host, token=ui)
+        check(f"Host {label} con ui: 403 forbidden_host", r.status == 403 and r.envelope("forbidden_host"), f"{r.status} {r.body[:100]!r}")
+    r = R("GET", "/health", host=None, token=ui)
+    check("sin Host: rechazado (400/403)", r.status in (400, 403), f"{r.status}")
+    r = R("GET", "/health", host=[f"127.0.0.1:{port}", f"127.0.0.1:{port}"], token=ui)
+    check("dos Host identicos: rechazado (400/403)", r.status in (400, 403), f"{r.status}")
+    r = R("GET", "/health", host=[f"127.0.0.1:{port}", f"evil.com:{port}"], token=ui)
+    check("dos Host (valido + falso): rechazado (400/403)", r.status in (400, 403), f"{r.status}")
+    for ov in ("app://drakter", "null", "http://evil.com", f"http://127.0.0.1:{port}", ""):
+        r = R("GET", "/health", token=ui, headers=[("Origin", ov)])
+        check(f"Origin {ov!r} con ui: 403 forbidden_origin", r.status == 403 and r.envelope("forbidden_origin"), f"{r.status} {r.body[:100]!r}")
+    r = R("GET", "/health", token=ui, headers=[("Origin", "app://drakter"), ("Origin", "app://drakter")])
+    check("dos Origin: 403", r.status == 403, f"{r.status}")
+    for ov in ("app://drakter", "http://evil.com", "null"):
+        for tok in (None, ui):
+            r = R("OPTIONS", "/health", token=tok, headers=[("Origin", ov), ("Access-Control-Request-Method", "GET"),
+                                                          ("Access-Control-Request-Headers", "authorization")])
+            check(f"preflight OPTIONS Origin {ov!r} ({'con ui' if tok else 'sin token'}): 403 forbidden_origin",
+                  r.status == 403 and r.envelope("forbidden_origin"), f"{r.status}")
+    r = R("OPTIONS", "/health", headers=[("Access-Control-Request-Method", "GET")])
+    check("OPTIONS sin Origin ni token: 401 (sin excepcion de preflight)", r.status == 401, f"{r.status}")
+
+    # Cuerpo
+    r = R("POST", "/api/v1/auth/check", token=ui, declared_len=1048577)
+    check("Content-Length 1 MiB + 1: 413 file_too_large", r.status == 413 and r.envelope("file_too_large"), f"{r.status} {r.body[:100]!r}")
+    chunk = b"a" * 65536
+    r = R("POST", "/api/v1/auth/check", token=ui, chunks=[chunk] * 17, timeout=10)
+    # Ninguna ruta de esta base lee cuerpos: el 405 sale antes de leerlo. El 413 en streaming
+    # de una ruta que lee el cuerpo se comprueba en la integracion con rutas reales.
+    check("chunked > 1 MiB sobre ruta sin cuerpo no llega a 200", r.status in (405, 413), f"{r.status} {r.body[:100]!r}")
+    r = R("GET", "/health", token=ui)
+    check("servidor sigue respondiendo tras el chunked excedido", r.status == 200, f"{r.status}")
+    r = R("POST", "/api/v1/auth/check", token=ui, body=b"a" * 1048576, timeout=10)
+    check("cuerpo de exactamente 1 MiB: no da 413", r.status != 413 and r.status != 0, f"{r.status}")
+    r = R("POST", "/api/v1/auth/check", token=ui, chunks=[chunk] * 16, timeout=10)
+    check("chunked de exactamente 1 MiB: no da 413", r.status != 413 and r.status != 0, f"{r.status}")
+    r = R("POST", "/api/v1/storage-locations", token=ui, declared_len=1048577)
+    check("cuerpo enorme con ui en ruta protegida: no pasa (403 o 413)", r.status in (403, 413), f"{r.status}")
+    r = R("GET", "/health", token=ui)
+    check("servidor sigue respondiendo tras los cuerpos de prueba", r.status == 200, f"{r.status}")
 
 
-# ---------------------------------------------------------------- casos WS
-def ws_cases(srv: Server, token: str) -> None:
-    import websockets
+# ---------------------------------------------------------------- WS
+def ws_cases(be: Backend, agent: str) -> None:
     from websockets.asyncio.client import connect
     from websockets.exceptions import ConnectionClosed, InvalidStatus
 
-    port = srv.port
-    uri = f"ws://127.0.0.1:{port}/ws"
-    auth = {"Authorization": f"Bearer {token}"}
+    port, ui, ap = be.port, be.creds["ui"], be.creds["approver"]
+    base = f"ws://127.0.0.1:{port}/api/v1/events"
+    auth = {"Authorization": f"Bearer {ui}"}
 
-    async def dial(**kw):
-        return await connect(uri if "uri" not in kw else kw.pop("uri"), proxy=None, open_timeout=5, **kw)
+    async def dial(uri=base, **kw):
+        return await connect(uri, proxy=None, open_timeout=5, **kw)
 
-    async def outcome(**kw) -> str:
-        """'OPEN' si conecta, 'HTTP <n>' si el handshake es rechazado, otro texto si es otro error."""
+    async def outcome(uri=base, **kw) -> str:
         try:
-            ws = await dial(**kw)
+            ws = await dial(uri, **kw)
         except InvalidStatus as e:
             return f"HTTP {e.response.status_code}"
         except Exception as e:  # noqa: BLE001
@@ -310,70 +440,63 @@ def ws_cases(srv: Server, token: str) -> None:
         return "OPEN"
 
     async def main() -> None:
-        # Control: el mismo cliente conecta con credenciales validas
-        ctl = await outcome(additional_headers=auth)
-        ctl_ok = check("WS control: el cliente conecta con Authorization valido", ctl == "OPEN", ctl)
-
-        def rej(name: str, res: str) -> None:
-            check(name, ctl_ok and res in ("HTTP 401", "HTTP 403"), res if ctl_ok else f"{res} (control fallido: no valido)")
-
-        rej("WS sin token rechazado en el handshake", await outcome())
-        rej("WS con token en query rechazado", await outcome(uri=f"{uri}?token={token}"))
-        rej("WS con token malo en Authorization rechazado", await outcome(additional_headers={"Authorization": "Bearer nope"}))
-        rej("WS con subprotocolo de auth malo rechazado", await outcome(subprotocols=["drakter.v1", "drakter.auth.nope"]))
-        rej("WS con Origin falso (token valido) rechazado", await outcome(additional_headers=auth, origin="http://evil.com"))
-        res = await outcome(additional_headers=auth, origin=ALLOWED_ORIGIN)
-        check("WS con Origin permitido y token valido conecta (control)", res == "OPEN", res)
-
-        # Host falso: handshake crudo para controlar el Host exacto
-        good = ws_handshake_raw(port, token=token)
-        check("WS crudo con Host correcto: 101 (control)", good.status == 101, f"{good.status}")
-        for label, host in (("evil.com:puerto", f"evil.com:{port}"), ("127.0.0.1:otro puerto", f"127.0.0.1:{port + 1}")):
-            r = ws_handshake_raw(port, host=host, token=token)
-            check(f"WS con Host falso ({label}) y token valido rechazado",
-                  good.status == 101 and r.status == 403, f"{r.status}")
-        r = ws_handshake_raw(port, token=token, headers=[("Origin", "null")])
-        check("WS con Origin: null y token valido rechazado", good.status == 101 and r.status == 403, f"{r.status}")
-
-        r = ws_handshake_raw(port, headers=[("Authorization", "Bearer t\u00f6ken")])
-        check("WS con cabecera no ASCII rechazado sin 500", good.status == 101 and r.status in (400, 401, 403), f"{r.status}")
         try:
-            async with await dial(additional_headers=auth, max_size=None) as ws:
-                await ws.send("x" * (1048576 + 1))
-                await asyncio.wait_for(ws.recv(), 5)
-            check("WS con trama mayor de 1 MiB cerrado", False, "no cerro")
-        except Exception as e:  # noqa: BLE001
-            close = getattr(getattr(e, "rcvd", None), "code", None)
-            check("WS con trama mayor de 1 MiB cerrado (1009)", close == 1009, repr(e))
-
-        # Subprotocolo de autenticacion
-        try:
-            async with await dial(subprotocols=["drakter.v1", f"drakter.auth.{token}"]) as ws:
+            async with await dial(additional_headers=auth) as ws:
                 sp = ws.subprotocol
-                await ws.send("ping")
-                pong = await asyncio.wait_for(ws.recv(), 5)
-            check("WS con subprotocolo: acepta con drakter.v1 y ping -> pong", sp == "drakter.v1" and pong == "pong", f"{sp!r} {pong!r}")
+            ctl = check("WS control: ui conecta sin subprotocolo (subprotocolo None)", sp is None, repr(sp))
         except Exception as e:  # noqa: BLE001
-            check("WS con subprotocolo: acepta con drakter.v1 y ping -> pong", False, repr(e))
-        r = ws_handshake_raw(port, headers=[("Sec-WebSocket-Protocol", f"drakter.v1, drakter.auth.{token}")])
-        sp = r.h("sec-websocket-protocol")
-        check("WS: la respuesta nunca devuelve el subprotocolo de autenticacion",
-              r.status == 101 and sp == ["drakter.v1"] and token not in str(r.headers), f"{r.status} {r.headers}")
-        r = ws_handshake_raw(port, headers=[("Sec-WebSocket-Protocol", f"drakter.auth.{token}, drakter.v1")])
-        check("WS: igual con el orden de subprotocolos invertido",
-              r.status == 101 and r.h("sec-websocket-protocol") == ["drakter.v1"], f"{r.status} {r.headers}")
-
-        # Authorization
+            ctl = check("WS control: ui conecta sin subprotocolo (subprotocolo None)", False, repr(e))
         try:
             async with await dial(additional_headers=auth, subprotocols=["drakter.v1"]) as ws:
-                await ws.send("ping")
-                pong = await asyncio.wait_for(ws.recv(), 5)
                 sp = ws.subprotocol
-            check("WS con Authorization: ping -> pong y subprotocolo drakter.v1", pong == "pong" and sp == "drakter.v1", f"{pong!r} {sp!r}")
+            check("WS ofreciendo drakter.v1 lo devuelve", sp == "drakter.v1", repr(sp))
         except Exception as e:  # noqa: BLE001
-            check("WS con Authorization: ping -> pong y subprotocolo drakter.v1", False, repr(e))
+            check("WS ofreciendo drakter.v1 lo devuelve", False, repr(e))
+        res = await outcome(f"{base}?after_seq=0&boot_id={uuid.uuid4()}", additional_headers=auth)
+        check("WS con ?after_seq=0&boot_id=<uuid> conecta", res == "OPEN", res)
 
-        # Entrada invalida -> 1003
+        # after_seq=-1: no queda abierto
+        try:
+            ws = await dial(f"{base}?after_seq=-1", additional_headers=auth)
+            try:
+                await asyncio.wait_for(ws.recv(), 3)
+                state = "recibio datos"
+            except ConnectionClosed:
+                state = "closed"
+            except asyncio.TimeoutError:
+                state = "ABIERTO"
+            await ws.close()
+        except InvalidStatus as e:
+            state = f"closed (HTTP {e.response.status_code})"
+        except Exception as e:  # noqa: BLE001
+            state = f"ERR {e!r}"
+        check("WS con after_seq=-1 no queda abierto", state.startswith("closed"), state)
+
+        def rej(name: str, res: str) -> None:
+            check(name, ctl and res in ("HTTP 401", "HTTP 403"), res if ctl else f"{res} (control fallido: no valido)")
+
+        rej("WS sin token rechazado en handshake", await outcome())
+        rej("WS con token ui en query rechazado", await outcome(f"{base}?token={ui}"))
+        rej("WS con drakter.auth.<ui> como subprotocolo, sin Authorization, rechazado",
+            await outcome(subprotocols=["drakter.v1", f"drakter.auth.{ui}"]))
+        rej("WS con token approver rechazado", await outcome(additional_headers={"Authorization": f"Bearer {ap}"}))
+        rej("WS con tercer token rechazado", await outcome(additional_headers={"Authorization": f"Bearer {agent}"}))
+        rej("WS con Origin falso (token ui) rechazado", await outcome(additional_headers=auth, origin="http://evil.com"))
+        rej("WS con Origin app://drakter (token ui) rechazado", await outcome(additional_headers=auth, origin="app://drakter"))
+
+        good = ws_handshake_raw(port, token=ui)
+        check("WS crudo con Host correcto y ui: 101 (control)", good.status == 101, f"{good.status}")
+        for label, host in (("evil.com", f"evil.com:{port}"), ("otro puerto", f"127.0.0.1:{port + 1}"), ("localhost", f"localhost:{port}")):
+            r = ws_handshake_raw(port, host=host, token=ui)
+            check(f"WS con Host falso ({label}) y ui rechazado", good.status == 101 and r.status == 403, f"{r.status}")
+        r = ws_handshake_raw(port, token=ui, headers=[("Origin", "null")])
+        check("WS con Origin: null y ui rechazado", good.status == 101 and r.status == 403, f"{r.status}")
+
+        # /ws antiguo
+        res = await outcome(f"ws://127.0.0.1:{port}/ws", additional_headers=auth)
+        check("/ws ya no acepta conexion (control: /api/v1/events si)", ctl and res != "OPEN" and res.startswith("HTTP "), res)
+
+        # mensaje entrante -> 1003
         for label, payload in (("texto", "hola"), ("binario", b"\x00\x01")):
             try:
                 async with await dial(additional_headers=auth) as ws:
@@ -383,114 +506,188 @@ def ws_cases(srv: Server, token: str) -> None:
                         code = "respuesta inesperada"
                     except ConnectionClosed as e:
                         code = e.rcvd.code if e.rcvd else None
-                check(f"WS entrada invalida ({label}) cierra con 1003", code == 1003, repr(code))
+                check(f"WS mensaje entrante ({label}) cierra con 1003", code == 1003, repr(code))
             except Exception as e:  # noqa: BLE001
-                check(f"WS entrada invalida ({label}) cierra con 1003", False, repr(e))
+                check(f"WS mensaje entrante ({label}) cierra con 1003", False, repr(e))
+        # trama > 1 MiB -> 1009
+        try:
+            async with await dial(additional_headers=auth) as ws:
+                code = None
+                try:
+                    await ws.send(b"a" * (1048576 + 1))
+                    await asyncio.wait_for(ws.recv(), 10)
+                    code = "respuesta inesperada"
+                except ConnectionClosed as e:
+                    code = e.rcvd.code if e.rcvd else None
+                except asyncio.TimeoutError:
+                    code = "timeout (conexion abierta)"
+            check("WS trama de mas de 1 MiB cierra con 1009", code == 1009, repr(code))
+        except Exception as e:  # noqa: BLE001
+            check("WS trama de mas de 1 MiB cierra con 1009", False, repr(e))
 
-    _ = websockets
     asyncio.run(main())
 
 
 # ---------------------------------------------------------------- sistema
-def system_cases(srv: Server, token: str) -> None:
-    port = srv.port
-    marker = "query-marker-7f3a"
-    r = raw_request(port, "GET", f"/api/v1/auth/check?{marker}=1", token=token)
-    time.sleep(0.2)
-    check("la consulta de una peticion no llega a backend.log",
-          r.status == 200 and srv.logfile.exists() and marker not in srv.logfile.read_text(), f"{r.status}")
-    ss = subprocess.run(["ss", "-ltnH"], capture_output=True, text=True).stdout.splitlines()
+def system_cases(be: Backend, tokens: list[str], root: Path) -> None:
+    port, pid = be.port, be.proc.pid
+    nb = [t.encode() for t in tokens]
+    ss = subprocess.run(["ss", "-ltnpH"], capture_output=True, text=True).stdout.splitlines()
     mine = [l.split()[3] for l in ss if len(l.split()) > 3 and l.split()[3].rsplit(":", 1)[-1] == str(port)]
     check("ss -ltn: el puerto solo escucha en 127.0.0.1", bool(mine) and all(a == f"127.0.0.1:{port}" for a in mine), repr(mine))
+    own = [l.split()[3] for l in ss if f"pid={pid}," in l or f"pid={pid})" in l]
+    check("ss -ltnp: todos los listeners del proceso son 127.0.0.1:<puerto>", all(a == f"127.0.0.1:{port}" for a in own), repr(own))
+    check("puerto anunciado dentro de 1024..65535", 1024 <= port <= 65535, str(port))
 
-    sd = srv.session.parent
-    check("session.json con permisos 600", srv.session.exists() and mode(srv.session) == 0o600, oct(mode(srv.session)) if srv.session.exists() else "no existe")
-    check("directorio de sesion con permisos 700", mode(sd) == 0o700, oct(mode(sd)))
-    sj = json.loads(srv.session.read_text())
-    check("session.json con token/port/pid/started_at correctos",
-          set(sj) == {"token", "port", "pid", "started_at"} and sj["port"] == port and sj["pid"] == srv.proc.pid
-          and len(sj["token"]) >= 32, repr({k: v for k, v in sj.items() if k != "token"}))
-    datadir = srv.data / "drakter"
-    check("directorio de datos 700", datadir.is_dir() and mode(datadir) == 0o700, oct(mode(datadir)) if datadir.exists() else "no existe")
-    for name in ("drakter.db", "drakter.db-wal", "drakter.db-shm"):
-        p = datadir / name
-        if name == "drakter.db":
-            check("drakter.db existe con permisos 600", p.exists() and mode(p) == 0o600, oct(mode(p)) if p.exists() else "no existe")
-        elif p.exists():
-            check(f"{name} con permisos 600", mode(p) == 0o600, oct(mode(p)))
-        else:
-            print(f"----  {name} no existe ahora (el contrato solo lo exige cuando existe)")
-    check("backend.log existe, no esta vacio y tiene permisos 600",
-          srv.logfile.exists() and srv.logfile.stat().st_size > 0 and mode(srv.logfile) == 0o600,
-          oct(mode(srv.logfile)) if srv.logfile.exists() else "no existe")
-    check("directorio de logs 700", srv.logfile.parent.is_dir() and mode(srv.logfile.parent) == 0o700, oct(mode(srv.logfile.parent)))
+    fd0 = os.readlink(f"/proc/{pid}/fd/0")
+    fd1 = os.readlink(f"/proc/{pid}/fd/1")
+    check("fd 0 del proceso apunta a /dev/null", fd0 == "/dev/null", fd0)
+    check("fd 1 del proceso no es el pipe de stdout", fd1 != f"pipe:[{be.stdout_ino}]", fd1)
+    check("fd 1 del proceso apunta a stderr (pipe de stderr)", fd1 == f"pipe:[{be.stderr_ino}]", fd1)
+    check("stdout contiene exactamente la linea {\"v\":1,\"port\":N} y nada mas",
+          bytes(be.out) == (json.dumps({"v": 1, "port": port}, separators=(",", ":")) + "\n").encode()
+          or (json.loads(bytes(be.out).split(b"\n", 1)[0]) == {"v": 1, "port": port}
+              and bytes(be.out).count(b"\n") == 1 and bytes(be.out).endswith(b"\n")), repr(bytes(be.out)[:200]))
+    check("el token no esta en /proc/<pid>/cmdline ni /proc/<pid>/environ",
+          not any(t in Path(f"/proc/{pid}/cmdline").read_bytes() or t in Path(f"/proc/{pid}/environ").read_bytes() for t in nb))
+    check("los hijos no heredan nada: ningun otro proceso hijo con el token",
+          not any(t in _children_cmd(pid) for t in nb))
+    check("no existe session.json en ningun sitio", not list(root.rglob("session.json")))
+    log = be.logfile.read_bytes() if be.logfile.exists() else b""
+    check("backend.log existe con permisos 600 y no esta vacio", be.logfile.exists() and mode(be.logfile) == 0o600 and len(log) > 0,
+          oct(mode(be.logfile)) if be.logfile.exists() else "no existe")
+    check("directorio de datos 700", mode(be.data_dir) == 0o700, oct(mode(be.data_dir)))
+    db = be.data_dir / "drakter.db"
+    check("drakter.db con permisos 600", db.exists() and mode(db) == 0o600, oct(mode(db)) if db.exists() else "no existe")
+    for n in ("drakter.db-wal", "drakter.db-shm"):
+        p = be.data_dir / n
+        if p.exists():
+            check(f"{n} con permisos 600", mode(p) == 0o600, oct(mode(p)))
+    check("los tokens no aparecen en backend.log", not any(t in log for t in nb))
+    check("los tokens no aparecen en stderr", not any(t in bytes(be.err) for t in nb))
+    check("los tokens no aparecen en stdout", not any(t in bytes(be.out) for t in nb))
+    hits = tree_contains(root, nb)
+    check("los tokens no aparecen en ningun archivo bajo el directorio temporal", not hits, repr(hits))
 
-    # el token no debe aparecer en logs, salida ni proceso
-    logtxt = srv.logfile.read_bytes() if srv.logfile.exists() else b""
-    out = srv.output().encode()
-    check("el token no aparece en backend.log", token.encode() not in logtxt)
-    check("el token no aparece en stdout/stderr", token.encode() not in out)
-    check("tokens de prueba (malo y no ASCII) no se registran en backend.log",
-          b"TOKEN-CANARIO-INVALIDO-12345" not in logtxt and "t\u00f3k\u00e9n".encode() not in logtxt)
-    pid = srv.proc.pid
-    check("el token no esta en cmdline ni en environ del proceso",
-          token.encode() not in Path(f"/proc/{pid}/cmdline").read_bytes()
-          and token.encode() not in Path(f"/proc/{pid}/environ").read_bytes())
+
+def _safe_readlink(p: str):
+    try:
+        return os.readlink(p)
+    except OSError:
+        return None
+
+
+def _children_cmd(pid: int) -> bytes:
+    out = b""
+    try:
+        r = subprocess.run(["pgrep", "-P", str(pid)], capture_output=True, text=True).stdout.split()
+        for c in r:
+            out += Path(f"/proc/{c}/cmdline").read_bytes() + Path(f"/proc/{c}/environ").read_bytes()
+    except OSError:
+        pass
+    return out
+
+
+def log_cases(be: Backend, tokens: list[str]) -> None:
+    port, ui = be.port, be.creds["ui"]
+    marker = "query-marker-" + secrets.token_hex(6)
+    marker2 = "query-marker-" + secrets.token_hex(6)
+    badtok = "BADTOKEN-CANARY-" + secrets.token_hex(6)
+    r = raw_request(port, "GET", f"/health?{marker}", token=ui)
+    check("control de logs: /health?marker con ui responde 200", r.status == 200, f"{r.status}")
+    raw_request(port, "GET", f"/health?{marker2}")  # sin token
+    r = raw_request(port, "GET", "/health", token=badtok)
+    check("control de logs: token malo da 401", r.status == 401, f"{r.status}")
+    raw_request(port, "GET", "/api/v1/auth/check", token=be.creds["approver"])
+    time.sleep(0.5)
+    log = be.logfile.read_bytes()
+    check("?query-marker no aparece en backend.log (ni con ni sin token)", marker.encode() not in log and marker2.encode() not in log)
+    check("un rechazo no registra el token recibido", badtok.encode() not in log and not any(t.encode() in log for t in tokens))
+    check("backend.log registra la ruta de las peticiones (control no vacuo)", b"/health" in log)
 
 
 # ---------------------------------------------------------------- principal
-def run(root: Path, port: int) -> None:
-    srv = Server(root, port)
+def run(root: Path) -> None:
+    creds = {"ui": secrets.token_urlsafe(32), "approver": secrets.token_urlsafe(32)}
+    agent = secrets.token_urlsafe(32)
+    tokens = [creds["ui"], creds["approver"], agent]
+    started: list[Backend] = []
     try:
-        srv.start()
-    except RuntimeError as e:
-        check("el servidor arranca (sin esto ningun rechazo es valido)", False, str(e))
-        return
-    try:
-        token = srv.token()
-        check("el servidor arranca y publica session.json", True)
-        http_cases(srv, token)
-        ws_cases(srv, token)
-        system_cases(srv, token)
+        handshake_cases(root, creds)
 
-        rc = srv.stop()
-        check("SIGTERM: el servidor termina (0 o -15, uvicorn re-emite la senal) y borra session.json",
-              rc in (0, -15) and not srv.session.exists(), f"rc={rc} session_existe={srv.session.exists()}")
+        A = Backend(root / "A", "A", creds)
+        started.append(A)
+        try:
+            A.start_ok()
+        except RuntimeError as e:
+            check("el servidor arranca y anuncia el puerto (sin esto ningun caso es valido)", False, str(e))
+            return
+        out = bytes(A.out)
+        j = json.loads(out.split(b"\n", 1)[0])
+        check("el servidor arranca y anuncia exactamente {v:1, port:N}", set(j) == {"v", "port"} and j["v"] == 1 and isinstance(j["port"], int))
 
-        # segundo arranque
-        srv.start()
-        token2 = srv.token()
-        check("segundo arranque: token distinto", token2 != token)
-        r_old = raw_request(port, "GET", "/api/v1/auth/check", token=token)
-        r_new = raw_request(port, "GET", "/api/v1/auth/check", token=token2)
-        check("segundo arranque: token viejo 401 y nuevo 200",
-              r_old.status == 401 and r_new.status == 200, f"{r_old.status}/{r_new.status}")
-        logtxt = srv.logfile.read_bytes()
-        check("segundo arranque: ningun token en backend.log ni en salida",
-              token.encode() not in logtxt and token2.encode() not in logtxt
-              and token2.encode() not in srv.output().encode())
-        rc = srv.stop()
-        check("segundo SIGTERM borra session.json", rc in (0, -15) and not srv.session.exists(), f"rc={rc}")
+        # Segundo arranque con el mismo data_dir: falla y A sigue vivo
+        B = Backend(A.root, "B-mismo-data-dir", creds, data_dir=A.data_dir)
+        started.append(B)
+        B.launch(B.handshake_line())
+        rc = B._wait(30)
+        check("segundo arranque con el mismo data_dir: sale != 0 y no anuncia puerto",
+              rc not in (None, 0) and b"\n" not in B.out and not B.out, f"rc={rc} out={bytes(B.out)[:100]!r}")
+        check("el primer servidor sigue vivo y sano tras el segundo intento", A.alive_and_healthy())
+        check("el segundo intento no deja tokens en stderr", not any(t.encode() in bytes(B.err) for t in tokens))
+
+        http_cases(A, agent)
+        ws_cases(A, agent)
+        log_cases(A, tokens)
+        system_cases(A, tokens, root)
+
+        # Tercer arranque con otro data_dir: puerto distinto
+        C = Backend(root / "C", "C", creds)
+        started.append(C)
+        try:
+            C.start_ok()
+            check("dos arranques con data_dir distinto: puertos distintos y ambos sanos",
+                  C.port != A.port and C.alive_and_healthy() and A.alive_and_healthy(), f"{A.port} {C.port}")
+            rc = C.sigterm()
+            check("SIGTERM apaga el servidor (codigo 0 o -15)", rc in (0, -15), f"rc={rc}")
+            check("tras SIGTERM el puerto deja de escuchar", _refused(C.port))
+            check("no existe session.json tras apagar", not list(root.rglob("session.json")))
+        except RuntimeError as e:
+            check("dos arranques con data_dir distinto: puertos distintos", False, str(e))
+
+        rc = A.stop_stdin()
+        check("cerrar stdin apaga el servidor con codigo 0", rc == 0, f"rc={rc}")
+        check("tras cerrar stdin el puerto deja de escuchar", _refused(A.port))
+        hits = tree_contains(root, [t.encode() for t in tokens])
+        check("tras apagar, los tokens siguen sin aparecer en ningun archivo", not hits, repr(hits))
+        check("ninguna respuesta llevo Access-Control-Allow-Origin",
+              not any(k.lower() == "access-control-allow-origin" for k, _ in ALL_RESPONSE_HEADERS))
+        check("tokens ausentes en stderr final de A", not any(t.encode() in bytes(A.err) for t in tokens))
     finally:
-        srv.kill()
+        for b in started:
+            b.kill()
+
+
+def _refused(port: int) -> bool:
+    try:
+        socket.create_connection(("127.0.0.1", port), timeout=2).close()
+        return False
+    except OSError:
+        return True
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--port", type=int)
-    ns = ap.parse_args()
     for k in ("http_proxy", "https_proxy", "all_proxy", "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY"):
         os.environ.pop(k, None)
-    port = pick_port(ns.port)
     base = os.environ.get("TMPDIR") or "/var/tmp/drakter-8"
     Path(base).mkdir(parents=True, exist_ok=True)
     root = Path(tempfile.mkdtemp(prefix="drakter-sec-", dir=base))
     try:
-        run(root, port)
+        run(root)
     finally:
         shutil.rmtree(root, ignore_errors=True)
     bad = [n for ok, n in RESULTS if not ok]
-    print(f"\nResumen: {len(RESULTS) - len(bad)}/{len(RESULTS)} OK, {len(bad)} FAIL (puerto {port})")
+    print(f"\nResumen: {len(RESULTS) - len(bad)}/{len(RESULTS)} OK, {len(bad)} FAIL")
     for n in bad:
         print(f"  FAIL: {n}")
     return 1 if bad else 0
