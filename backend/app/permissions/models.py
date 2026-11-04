@@ -64,6 +64,7 @@ class ActorContext:
     turn_id: str | None = None
     session_id: str | None = None
     tainted: bool = False
+    agent_provider: str | None = None
 
 
 Handler = Callable[[sqlite3.Connection, BaseModel], Mapping[str, Any]]
@@ -77,8 +78,9 @@ class ActionSpec:
     """One operation of the backend.
 
     `handler` runs inside the transaction of the gate and must not commit. With
-    `external=True` it runs outside any transaction: its effects cannot be rolled
-    back, so a crash between start and end ends as `outcome_uncertain`.
+    `external=True` it runs outside any transaction, as anything with its own
+    connections or with effects outside SQLite must: those cannot be rolled back, so
+    a crash between start and end ends as `outcome_uncertain`.
 
     `resolve_targets` returns ids with their `revision`, or a `content_hash`. If the
     result differs at approval time the confirmation fails with `conflict`.
@@ -105,11 +107,11 @@ class ActionSpec:
             raise ValueError(f"{self.name}: invalid permission {self.permission}")
         if self.args_model.model_config.get("extra") != "forbid":
             raise ValueError(f"{self.name}: args_model must set extra='forbid'")
+        if self.permission.endswith(".read") and self.risk is not RiskClass.READ:
+            raise ValueError(f"{self.name}: a read permission cannot write")
         # Anything that may reach a confirmation needs a backend-made summary.
         if self.risk is not RiskClass.READ and self.summarize is None:
             raise ValueError(f"{self.name}: a summary is required")
-        if self.external and self.risk is not RiskClass.CONFIRM:
-            raise ValueError(f"{self.name}: external effects always confirm")
         for name in self.audit:
             if name not in self.args_model.model_fields:
                 raise ValueError(f"{self.name}: unknown audit field {name}")
