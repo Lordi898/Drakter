@@ -261,7 +261,6 @@ El frente 20 solo tiene puertos (`services/improvement_ports.py`, `get_principal
 | Frente | archivo:línea | Qué hace | Qué debe hacer |
 |---|---|---|---|
 | seguridad (12) | `backend/app/permissions/README.md` | `runtime_dir/approver.json` y cabecera `X-Drakter-Approver` | Token `approver` por stdin; nada en disco |
-| Electron (24) | `desktop/electron/main/approvals.ts:47` | Exige `affected_count` numérico | Aceptar `null`: la columna y `ConfirmationTicket` lo admiten |
 
 ### Ajustes
 
