@@ -2,6 +2,7 @@ import { realpath } from 'node:fs/promises'
 import { extname, join, resolve, sep } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { net, protocol } from 'electron'
+import { RENDERER_HEADER_CSP } from '../shared/csp'
 import { describeError, logError } from './log'
 
 const SCHEME = 'app'
@@ -19,21 +20,6 @@ const MIME: Record<string, string> = {
   '.woff2': 'font/woff2',
   '.riv': 'application/octet-stream'
 }
-
-// connect-src 'self' solo alcanza app://drakter (p. ej. rive.wasm): el renderer no tiene red hacia el backend.
-const CSP = [
-  "default-src 'none'",
-  "script-src 'self' 'wasm-unsafe-eval'",
-  "style-src 'self' 'unsafe-inline'",
-  "font-src 'self'",
-  "img-src 'self' data: blob:",
-  "connect-src 'self'",
-  'media-src blob:',
-  "base-uri 'none'",
-  "form-action 'none'",
-  "object-src 'none'",
-  "frame-ancestors 'none'"
-].join('; ')
 
 /** Antes de `ready`. */
 export function registerRendererScheme(): void {
@@ -92,7 +78,7 @@ export function registerRendererProtocol(): void {
       })
       const length = upstream.headers.get('Content-Length')
       if (length) headers.set('Content-Length', length)
-      if (ext === '.html') headers.set('Content-Security-Policy', CSP)
+      if (ext === '.html') headers.set('Content-Security-Policy', RENDERER_HEADER_CSP)
       return new Response(request.method === 'HEAD' ? null : upstream.body, { status: 200, headers })
     } catch (reason) {
       logError('protocol', 'Fallo sirviendo el renderer', describeError(reason))

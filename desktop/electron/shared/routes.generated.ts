@@ -103,6 +103,8 @@ export const GENERATED_ROUTES = [
   ['POST', '/api/v1/resources/{id}/unarchive'],
   ['POST', '/api/v1/resources/{id}/read'],
   ['POST', '/api/v1/resources/{id}/index'],
+  ['GET', '/api/v1/tasks/tags'],
+  ['PUT', '/api/v1/tasks/{id}/tags'],
   ['GET', '/api/v1/tags'],
   ['GET', '/api/v1/entities/{id}/tags'],
   ['PUT', '/api/v1/entities/{id}/tags'],
@@ -138,7 +140,5 @@ export const GENERATED_ROUTES = [
   ['GET', '/api/v1/improvement/proposals/{id}'],
   ['POST', '/api/v1/improvement/proposals/{id}/approve'],
   ['POST', '/api/v1/improvement/proposals/{id}/reject'],
-  ['POST', '/api/v1/improvement/feedback'],
-  ['GET', '/api/v1/tasks/tags'],
-  ['PUT', '/api/v1/tasks/{id}/tags']
+  ['POST', '/api/v1/improvement/feedback']
 ] as const
