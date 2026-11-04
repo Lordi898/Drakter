@@ -10,6 +10,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import logging
 import sqlite3
 import threading
 from collections.abc import Mapping
@@ -19,6 +20,7 @@ from typing import Any, Final
 
 from app.core.config import Settings
 from app.core.errors import AppError
+from app.services import improvement_lab, improvement_policy
 from app.services.improvement_lab import (
     AppliedChange,
     EvaluationOutcome,
@@ -47,12 +49,15 @@ from app.services.improvement_store import (
     utc_now,
 )
 
+logger = logging.getLogger("drakter.improvement")
+
 ACTION_APPROVE: Final = "improvement.approve"
 ACTION_APPROVE_PROTECTED: Final = "improvement.approve_protected"
 ACTION_REVERT: Final = "improvement.revert"
 
 _ENTITY: Final = "improvement_proposal"
 _RESTORE_ACTOR: Final = Principal(kind="system", id="restore")
+_RECOVERY_ACTOR: Final = Principal(kind="system", id="startup")
 _MAX_OUTPUT_CHARS: Final = 16384
 _REEVALUABLE: Final = frozenset(
     {"draft", "evaluated_passed", "evaluated_failed", "evaluation_blocked"}
@@ -573,6 +578,18 @@ def _verified_digest(proposal: Proposal, evaluation: Evaluation | None) -> str:
     return digest
 
 
+def _require_no_pending_restore(settings: Settings) -> None:
+    # Deferred: keeps this module importable without loading the backup service.
+    from app.services.backup_service import restore_hooks_pending
+
+    if restore_hooks_pending(settings):
+        raise AppError(
+            "restore_hooks_pending",
+            "Hay una restauración pendiente de completar; no se puede aplicar",
+            409,
+        )
+
+
 def apply(ctx: FlowContext, proposal_id: str) -> dict[str, Any]:
     with audited(
         ctx.audit, ctx.principal, "improvement.apply", _ENTITY, proposal_id, ctx.correlation_id
@@ -589,8 +606,15 @@ def apply(ctx: FlowContext, proposal_id: str) -> dict[str, Any]:
             digest = _verified_digest(proposal, evaluation)
             assert evaluation is not None and evaluation.base_commit is not None
             scope.detail["digest"] = digest
+            _require_no_pending_restore(ctx.settings)
+            if improvement_policy.check_paths(
+                evaluation.changed_paths,
+                proposal.author_kind,  # type: ignore[arg-type]
+            ):
+                raise _protected_final()
             # Fixed message: the title is untrusted and must not reach git history.
             message = f"improvement: apply proposal {proposal.id}"
+            scope.attempt()
             try:
                 config = load_lab_config(ctx.settings)
                 change = apply_patch(
@@ -684,6 +708,7 @@ def revert(ctx: FlowContext, proposal_id: str, confirmation_id: str) -> dict[str
             scope.detail["digest"] = approval.digest
             ctx.gate.consume(confirmation_id, approval, ctx.principal)
             change = AppliedChange(proposal.applied_branch, proposal.applied_commit)
+            scope.attempt()
             try:
                 revert_change(load_lab_config(ctx.settings), change)
             except Exception as exc:
@@ -730,35 +755,37 @@ def reject(ctx: FlowContext, proposal_id: str, reason: str) -> dict[str, Any]:
             return _load_public(conn, proposal.id)
 
 
-def invalidate_after_restore(conn: sqlite3.Connection) -> int:
-    """Drop approvals and in-flight evaluations a restored database cannot vouch for.
+def _has_schema(conn: sqlite3.Connection) -> bool:
+    return (
+        conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'improvement_proposals'"
+        ).fetchone()
+        is not None
+    )
 
-    ``approved`` returns to ``evaluated_passed`` without its digest and
-    ``evaluating`` to ``draft``, each with an ``invalidated_by_restore`` event.
-    Joins the caller's transaction if there is one. Returns the rows changed.
-    """
-    known = conn.execute(
-        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'improvement_proposals'"
-    ).fetchone()
-    if known is None:  # A copy older than this schema has nothing to invalidate.
+
+def _reset_stale(
+    conn: sqlite3.Connection, statuses: tuple[str, ...], event: str, actor: Principal
+) -> int:
+    """Roll back stale states in one transaction, joining the caller's if there is one."""
+    if not _has_schema(conn):  # A copy older than this schema has nothing to reset.
         return 0
     own_transaction = not conn.in_transaction
     if own_transaction:
         conn.execute("BEGIN IMMEDIATE")
     try:
+        marks = ", ".join("?" for _ in statuses)
         rows = conn.execute(
-            "SELECT id, status FROM improvement_proposals"
-            " WHERE status IN ('approved', 'evaluating')"
+            f"SELECT id, status FROM improvement_proposals WHERE status IN ({marks})", statuses
         ).fetchall()
         for proposal_id, status in rows:
-            target = "evaluated_passed" if status == "approved" else "draft"
             _transition(
                 conn,
                 proposal_id,
                 expected=status,
-                target=target,
-                event="invalidated_by_restore",
-                actor=_RESTORE_ACTOR,
+                target="evaluated_passed" if status == "approved" else "draft",
+                event=event,
+                actor=actor,
                 fields={
                     "approved_digest": None,
                     "approved_at": None,
@@ -772,3 +799,28 @@ def invalidate_after_restore(conn: sqlite3.Connection) -> int:
     if own_transaction:
         conn.execute("COMMIT")
     return len(rows)
+
+
+def invalidate_after_restore(conn: sqlite3.Connection) -> int:
+    """Drop approvals and in-flight evaluations a restored database cannot vouch for.
+
+    ``approved`` returns to ``evaluated_passed`` without its digest and
+    ``evaluating`` to ``draft``, each with an ``invalidated_by_restore`` event.
+    Joins the caller's transaction if there is one. Returns the rows changed.
+    """
+    return _reset_stale(
+        conn, ("approved", "evaluating"), "invalidated_by_restore", _RESTORE_ACTOR
+    )
+
+
+def recover_interrupted(settings: Settings) -> int:
+    """Startup step: evaluations cut short by a stop go back to ``draft``.
+
+    Also sweeps their leftover experiments. Returns the proposals recovered.
+    """
+    with open_db(settings.db_path) as conn:
+        recovered = _reset_stale(
+            conn, ("evaluating",), "recovered_after_interrupt", _RECOVERY_ACTOR
+        )
+    improvement_lab.sweep_experiments(load_lab_config(settings))
+    return recovered

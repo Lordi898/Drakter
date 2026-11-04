@@ -78,8 +78,56 @@ WHEN OLD.id IS NOT NEW.id
   OR OLD.patch IS NOT NEW.patch
   OR OLD.patch_sha256 IS NOT NEW.patch_sha256
   OR OLD.author_kind IS NOT NEW.author_kind
+  OR OLD.author_id IS NOT NEW.author_id
+  OR OLD.rationale IS NOT NEW.rationale
+  OR OLD.feedback_id IS NOT NEW.feedback_id
+  OR OLD.category IS NOT NEW.category
 BEGIN
     SELECT RAISE(ABORT, 'improvement proposal content is immutable');
+END;
+
+-- The digest changes only when entering `approved` or when a restore drops it;
+-- the applied_* columns only on approved -> applied.
+CREATE TRIGGER improvement_proposals_approval_fields
+BEFORE UPDATE ON improvement_proposals
+WHEN (
+        (OLD.approved_digest IS NOT NEW.approved_digest
+         OR OLD.approved_at IS NOT NEW.approved_at)
+        AND NOT (NEW.status = 'approved' AND OLD.status IN ('draft', 'evaluated_passed'))
+        AND NOT (OLD.status = 'approved' AND NEW.status = 'evaluated_passed')
+     )
+  OR (
+        (OLD.applied_branch IS NOT NEW.applied_branch
+         OR OLD.applied_commit IS NOT NEW.applied_commit
+         OR OLD.applied_at IS NOT NEW.applied_at)
+        AND NOT (OLD.status = 'approved' AND NEW.status = 'applied')
+     )
+BEGIN
+    SELECT RAISE(ABORT, 'improvement approval fields change only on their transition');
+END;
+
+-- evaluating -> draft and approved -> evaluated_passed exist only for restore and
+-- recovery; the latter must drop the digest.
+CREATE TRIGGER improvement_proposals_transitions
+BEFORE UPDATE ON improvement_proposals
+WHEN OLD.status <> NEW.status AND NOT (
+       (OLD.status IN ('draft', 'evaluated_passed', 'evaluated_failed', 'evaluation_blocked')
+        AND NEW.status = 'evaluating')
+    OR (OLD.status = 'evaluating'
+        AND NEW.status IN ('evaluated_passed', 'evaluated_failed', 'evaluation_blocked', 'draft'))
+    OR (OLD.status = 'draft' AND NEW.status = 'approved' AND NEW.patch IS NULL)
+    OR (OLD.status = 'evaluated_passed' AND NEW.status = 'approved'
+        AND (NEW.patch IS NULL OR NEW.current_evaluation_id IS NOT NULL))
+    OR (OLD.status = 'approved' AND NEW.status = 'applied' AND NEW.patch IS NOT NULL)
+    OR (OLD.status = 'approved' AND NEW.status = 'evaluated_passed'
+        AND NEW.approved_digest IS NULL)
+    OR (OLD.status = 'applied' AND NEW.status = 'reverted')
+    OR (OLD.status IN ('draft', 'evaluating', 'evaluated_passed', 'evaluated_failed',
+                       'evaluation_blocked', 'approved')
+        AND NEW.status = 'rejected')
+)
+BEGIN
+    SELECT RAISE(ABORT, 'invalid improvement proposal transition');
 END;
 
 CREATE TRIGGER improvement_proposals_no_delete
@@ -133,7 +181,8 @@ CREATE TABLE improvement_events (
                     'feedback_recorded', 'feedback_reclassified', 'proposal_created',
                     'evaluation_started', 'evaluation_finished', 'approval_requested',
                     'approved', 'apply_failed', 'applied', 'revert_requested',
-                    'revert_failed', 'reverted', 'rejected', 'invalidated_by_restore')),
+                    'revert_failed', 'reverted', 'rejected', 'invalidated_by_restore',
+                    'recovered_after_interrupt')),
     from_status TEXT,
     to_status   TEXT,
     actor_kind  TEXT NOT NULL CHECK (actor_kind IN ('user', 'agent', 'system')),

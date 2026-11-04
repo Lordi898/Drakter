@@ -58,6 +58,7 @@ EventType = Literal[
     "reverted",
     "rejected",
     "invalidated_by_restore",
+    "recovered_after_interrupt",
 ]
 
 CATEGORIES: Final[tuple[str, ...]] = get_args(Category)

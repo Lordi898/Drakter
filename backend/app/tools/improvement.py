@@ -133,7 +133,7 @@ TOOLS: tuple[ToolSpec, ...] = (
     ToolSpec(
         name="record_improvement_feedback",
         description="Registra una observación de mejora sobre Drakter.",
-        domain="system",
+        domain="improvement",
         args_model=RecordFeedbackParams,
         result_model=FeedbackResult,
         permission="improvement.write",
@@ -147,7 +147,7 @@ TOOLS: tuple[ToolSpec, ...] = (
     ToolSpec(
         name="create_improvement_proposal",
         description="Crea un borrador de propuesta de mejora, con parche opcional.",
-        domain="system",
+        domain="improvement",
         args_model=CreateProposalParams,
         result_model=ProposalCreated,
         permission="improvement.write",
@@ -166,7 +166,7 @@ TOOLS: tuple[ToolSpec, ...] = (
     ToolSpec(
         name="list_improvement_proposals",
         description="Lista propuestas de mejora y su estado.",
-        domain="system",
+        domain="improvement",
         args_model=ListProposalsParams,
         result_model=ProposalPage,
         permission="improvement.read",
@@ -180,7 +180,7 @@ TOOLS: tuple[ToolSpec, ...] = (
     ToolSpec(
         name="get_improvement_proposal",
         description="Consulta una propuesta de mejora y su última evaluación, sin el parche.",
-        domain="system",
+        domain="improvement",
         args_model=GetProposalParams,
         result_model=ProposalDetail,
         permission="improvement.read",

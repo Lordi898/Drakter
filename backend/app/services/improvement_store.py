@@ -7,8 +7,9 @@ past the immutability triggers.
 from __future__ import annotations
 
 import json
+import logging
 import sqlite3
-from collections.abc import Iterator, Mapping
+from collections.abc import Callable, Iterator, Mapping
 from contextlib import closing, contextmanager
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -19,6 +20,8 @@ from uuid import uuid4
 from app.core.errors import AppError
 from app.database.connection import connect
 from app.services.improvement_ports import AuditEvent, AuditSink, Principal
+
+logger = logging.getLogger("drakter.improvement")
 
 _TS_FORMAT: Final = "%Y-%m-%dT%H:%M:%S.%fZ"
 
@@ -95,6 +98,13 @@ class AuditScope:
 
     detail: dict[str, str | int | bool | None] = field(default_factory=dict)
     failed: bool = False
+    attempted: bool = False
+    record_attempt: Callable[[], None] = lambda: None
+
+    def attempt(self) -> None:
+        """Audit the intent before an effect. If this raises, the effect must not run."""
+        self.record_attempt()
+        self.attempted = True
 
 
 @contextmanager
@@ -109,7 +119,7 @@ def audited(
     """Record one audit event per act, including denials and failures."""
     scope = AuditScope()
 
-    def record(result: Any, **extra: str) -> None:
+    def write(result: Any, **extra: str) -> None:
         audit.record(
             AuditEvent(
                 actor_type=actor.kind,
@@ -122,6 +132,25 @@ def audited(
             )
         )
 
+    def record(result: Any, **extra: str) -> None:
+        """After an attempted effect the outcome stands: a sink failure is only logged."""
+        try:
+            write(result, **extra)
+        except Exception as exc:
+            if not scope.attempted:
+                raise
+            logger.error(
+                "audit_outcome_lost",
+                extra={
+                    "event": "audit_outcome_lost",
+                    "action": action,
+                    "entity_id": entity_id,
+                    "result": result,
+                    "error_type": type(exc).__name__,
+                },
+            )
+
+    scope.record_attempt = lambda: write("attempted")
     try:
         yield scope
     except AppError as exc:
