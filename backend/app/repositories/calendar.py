@@ -6,7 +6,7 @@ import sqlite3
 from typing import Any
 
 _EVENT_SELECT = (
-    "SELECT c.id,c.title,c.description,c.kind,c.status,c.timezone,c.all_day,c.local_start,c.local_end,"
+    "SELECT c.id,c.title,c.description,c.location,c.reminder_minutes_before,c.kind,c.status,c.timezone,c.all_day,c.local_start,c.local_end,"
     "c.start_date,c.end_date_exclusive,c.starts_at_utc,c.ends_at_utc,c.rrule,"
     "e.archived_at,e.revision,e.created_at,e.updated_at "
     "FROM calendar_events c JOIN entities e ON e.id=c.id"
@@ -18,8 +18,8 @@ _BLOCK_SELECT = (
 )
 EVENT_COLUMNS = frozenset(
     {
-        "title", "description", "kind", "status", "timezone", "all_day", "local_start", "local_end",
-        "start_date", "end_date_exclusive", "starts_at_utc", "ends_at_utc", "rrule",
+        "title", "description", "location", "reminder_minutes_before", "kind", "status", "timezone",
+        "all_day", "local_start", "local_end", "start_date", "end_date_exclusive", "starts_at_utc", "ends_at_utc", "rrule",
         "recurrence_until_utc",
     }
 )  # fmt: skip
@@ -56,11 +56,12 @@ def task_exists(conn: sqlite3.Connection, task_id: str) -> bool:
 
 def insert_event(conn: sqlite3.Connection, values: dict[str, Any]) -> None:
     conn.execute(
-        "INSERT INTO calendar_events(id,title,description,kind,status,timezone,all_day,local_start,"
+        "INSERT INTO calendar_events(id,title,description,location,reminder_minutes_before,kind,status,timezone,all_day,local_start,"
         "local_end,start_date,end_date_exclusive,starts_at_utc,ends_at_utc,rrule,recurrence_until_utc)"
-        " VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        " VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
         (
-            values["id"], values["title"], values["description"], values["kind"], values["status"],
+            values["id"], values["title"], values["description"], values["location"],
+            values["reminder_minutes_before"], values["kind"], values["status"],
             values["timezone"], values["all_day"], values["local_start"], values["local_end"],
             values["start_date"], values["end_date_exclusive"], values["starts_at_utc"],
             values["ends_at_utc"], values["rrule"], values["recurrence_until_utc"],
@@ -78,9 +79,9 @@ def list_events(
     *,
     include_archived: bool,
     status: str | None,
-    after: tuple[str, str] | None,
     limit: int,
-) -> list[dict[str, Any]]:
+    offset: int,
+) -> tuple[list[dict[str, Any]], int]:
     clauses: list[str] = []
     params: list[Any] = []
     if not include_archived:
@@ -88,12 +89,16 @@ def list_events(
     if status is not None:
         clauses.append("c.status=?")
         params.append(status)
-    if after is not None:
-        clauses.append("(e.created_at,c.id)>(?,?)")
-        params.extend(after)
     where = (" WHERE " + " AND ".join(clauses)) if clauses else ""
-    params.append(limit)
-    return _rows(conn.execute(_EVENT_SELECT + where + " ORDER BY e.created_at,c.id LIMIT ?", params))
+    total = conn.execute(
+        "SELECT count(*) FROM calendar_events c JOIN entities e ON e.id=c.id" + where, params
+    ).fetchone()[0]
+    rows = _rows(
+        conn.execute(
+            _EVENT_SELECT + where + " ORDER BY e.created_at,c.id LIMIT ? OFFSET ?", (*params, limit, offset)
+        )
+    )
+    return rows, int(total)
 
 
 def update_event(conn: sqlite3.Connection, event_id: str, columns: dict[str, Any]) -> None:
@@ -131,10 +136,16 @@ def events_in_window(
     return _rows(conn.execute(sql, params))
 
 
+def count_relationships(conn: sqlite3.Connection, entity_id: str) -> int:
+    row = conn.execute(
+        "SELECT count(*) FROM relationships WHERE source_id=? OR target_id=?", (entity_id, entity_id)
+    ).fetchone()
+    return int(row[0])
+
+
 def delete_event(conn: sqlite3.Connection, event_id: str) -> None:
     conn.execute("DELETE FROM recurrence_exceptions WHERE event_id=?", (event_id,))
     conn.execute("DELETE FROM calendar_events WHERE id=?", (event_id,))
-    conn.execute("DELETE FROM entities WHERE id=?", (event_id,))
 
 
 # ------------------------------------------------------------ excepciones
@@ -222,9 +233,9 @@ def list_time_blocks(
     include_archived: bool,
     task_id: str | None,
     status: str | None,
-    after: tuple[str, str] | None,
     limit: int,
-) -> list[dict[str, Any]]:
+    offset: int,
+) -> tuple[list[dict[str, Any]], int]:
     clauses: list[str] = []
     params: list[Any] = []
     if not include_archived:
@@ -235,12 +246,17 @@ def list_time_blocks(
     if status is not None:
         clauses.append("b.status=?")
         params.append(status)
-    if after is not None:
-        clauses.append("(b.starts_at_utc,b.id)>(?,?)")
-        params.extend(after)
     where = (" WHERE " + " AND ".join(clauses)) if clauses else ""
-    params.append(limit)
-    return _rows(conn.execute(_BLOCK_SELECT + where + " ORDER BY b.starts_at_utc,b.id LIMIT ?", params))
+    total = conn.execute(
+        "SELECT count(*) FROM time_blocks b JOIN entities e ON e.id=b.id" + where, params
+    ).fetchone()[0]
+    rows = _rows(
+        conn.execute(
+            _BLOCK_SELECT + where + " ORDER BY b.starts_at_utc,b.id LIMIT ? OFFSET ?",
+            (*params, limit, offset),
+        )
+    )
+    return rows, int(total)
 
 
 def update_time_block(conn: sqlite3.Connection, block_id: str, columns: dict[str, Any]) -> None:
@@ -259,4 +275,3 @@ def blocks_in_window(conn: sqlite3.Connection, start_utc: str, end_utc: str) -> 
 
 def delete_time_block(conn: sqlite3.Connection, block_id: str) -> None:
     conn.execute("DELETE FROM time_blocks WHERE id=?", (block_id,))
-    conn.execute("DELETE FROM entities WHERE id=?", (block_id,))

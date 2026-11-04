@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import sqlite3
-from datetime import date, datetime
+from datetime import date
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header, Query
+from fastapi.responses import JSONResponse
 
 from app.core.errors import AppError
 from app.schemas.calendar import (
@@ -24,7 +25,12 @@ from app.schemas.calendar import (
     TimeBlockWriteResult,
 )
 from app.services import calendar as service
-from app.services.habits_calendar_support import ConfirmationRef, RequestContext, get_db, rest_context
+from app.services.habits_calendar_support import (
+    RequestContext,
+    confirmation_response,
+    get_db,
+    rest_context,
+)
 
 router = APIRouter(prefix="/api/v1", tags=["calendar"])
 
@@ -39,9 +45,9 @@ def _revision(value: str | None) -> int | None:
     if value is None:
         return None
     try:
-        return int(value.strip().strip('"'))
+        return int(value.strip().removeprefix("W/").strip('"'))
     except ValueError:
-        raise AppError("validation_error", "If-Match debe ser la revisión numérica", 422) from None
+        raise AppError("validation_error", "La versión indicada no es válida.", 422) from None
 
 
 # ---------------------------------------------------------------------- eventos
@@ -50,10 +56,10 @@ def _revision(value: str | None) -> int | None:
 @router.get("/calendar/events", response_model=service.EventPage)
 def list_events(
     conn: Conn, ctx: Ctx, include_archived: bool = False, status: str | None = None,
-    limit: int | None = None, cursor: str | None = None,
+    limit: int | None = None, offset: int | None = None,
 ) -> service.EventPage:  # fmt: skip
     return service.list_events(
-        conn, ctx, include_archived=include_archived, status=status, limit=limit, cursor=cursor
+        conn, ctx, include_archived=include_archived, status=status, limit=limit, offset=offset
     )
 
 
@@ -74,9 +80,9 @@ def update_event(
     return service.update_event(conn, ctx, event_id, body, _revision(if_match))
 
 
-@router.delete("/calendar/events/{event_id}", response_model=ConfirmationRef, status_code=202)
-def delete_event(event_id: str, conn: Conn, ctx: Ctx) -> ConfirmationRef:
-    return service.request_delete_event(conn, ctx, event_id)
+@router.delete("/calendar/events/{event_id}", response_model=None, responses={409: {"description": "Pide confirmación"}})
+def delete_event(event_id: str, conn: Conn, ctx: Ctx) -> JSONResponse:
+    return confirmation_response(ctx, service.request_delete_event(conn, ctx, event_id))
 
 
 @router.get("/calendar/events/{event_id}/exceptions", response_model=service.ExceptionList)
@@ -99,11 +105,11 @@ def create_exception(
 @router.get("/calendar/time-blocks", response_model=service.TimeBlockPage)
 def list_time_blocks(
     conn: Conn, ctx: Ctx, include_archived: bool = False, task_id: str | None = None,
-    status: str | None = None, limit: int | None = None, cursor: str | None = None,
+    status: str | None = None, limit: int | None = None, offset: int | None = None,
 ) -> service.TimeBlockPage:  # fmt: skip
     return service.list_time_blocks(
         conn, ctx, include_archived=include_archived, task_id=task_id, status=status,
-        limit=limit, cursor=cursor,
+        limit=limit, offset=offset,
     )  # fmt: skip
 
 
@@ -124,9 +130,11 @@ def update_time_block(
     return service.update_time_block(conn, ctx, block_id, body, _revision(if_match))
 
 
-@router.delete("/calendar/time-blocks/{block_id}", response_model=ConfirmationRef, status_code=202)
-def delete_time_block(block_id: str, conn: Conn, ctx: Ctx) -> ConfirmationRef:
-    return service.request_delete_time_block(conn, ctx, block_id)
+@router.delete(
+    "/calendar/time-blocks/{block_id}", response_model=None, responses={409: {"description": "Pide confirmación"}}
+)
+def delete_time_block(block_id: str, conn: Conn, ctx: Ctx) -> JSONResponse:
+    return confirmation_response(ctx, service.request_delete_time_block(conn, ctx, block_id))
 
 
 # ----------------------------------------------------------------------- agenda
@@ -142,7 +150,7 @@ def get_agenda(
 
 @router.get("/calendar/availability", response_model=AvailabilityResponse)
 def get_availability(
-    conn: Conn, local_start: datetime, local_end: datetime, timezone: str
+    conn: Conn, local_start: str, local_end: str, timezone: str
 ) -> AvailabilityResponse:
     return service.availability(conn, local_start, local_end, timezone)
 

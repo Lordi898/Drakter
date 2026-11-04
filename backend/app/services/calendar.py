@@ -14,7 +14,7 @@ from typing import Any
 
 from pydantic import BaseModel, ValidationError
 
-from app.core.errors import AppError
+from app.core.errors import AppError, ErrorDetail
 from app.repositories import calendar as repo
 from app.schemas.calendar import (
     AgendaItem,
@@ -48,8 +48,8 @@ from app.services.habits_calendar_support import (
     RequestContext,
     bounded_limit,
     confirmed_action,
-    decode_cursor,
-    encode_cursor,
+    bounded_offset,
+    deletion_summary,
     ensure_timezone,
     insert_entity,
     new_id,
@@ -72,17 +72,17 @@ _TEMPORAL = ("timezone", "all_day", "local_start", "local_end", "start_date", "e
 
 class EventPage(BaseModel):
     items: list[EventOut]
-    next_cursor: str | None
+    total: int
 
 
 class TimeBlockPage(BaseModel):
     items: list[TimeBlockOut]
-    next_cursor: str | None
+    total: int
 
 
 class ExceptionList(BaseModel):
     items: list[RecurrenceExceptionOut]
-    next_cursor: str | None = None
+    total: int
 
 
 class OverlapsResponse(BaseModel):
@@ -114,12 +114,16 @@ def _atomic(conn: sqlite3.Connection) -> Iterator[sqlite3.Connection]:
             yield conn
 
 
+def _query(message: str) -> AppError:
+    return AppError("invalid_query", message, 400)
+
+
 def _invalid(message: str) -> AppError:
     return AppError("validation_error", message, 422)
 
 
 def _not_found() -> AppError:
-    return AppError("not_found", "No existe ese elemento", 404)
+    return AppError("not_found", "No se encuentra el elemento. Puede que se haya eliminado.", 404)
 
 
 def _dt(value: str) -> datetime:
@@ -127,16 +131,7 @@ def _dt(value: str) -> datetime:
 
 
 def _local_iso(value: datetime) -> str:
-    return value.replace(microsecond=0).isoformat()
-
-
-def _cursor(cursor: str | None, first: str, second: str) -> tuple[str, str] | None:
-    if cursor is None:
-        return None
-    data = decode_cursor(cursor)
-    if not isinstance(data.get(first), str) or not isinstance(data.get(second), str):
-        raise AppError("invalid_cursor", "Cursor no válido", 422)
-    return data[first], data[second]
+    return value.strftime("%Y-%m-%dT%H:%M")
 
 
 def _day_start_utc(day: date, tz: str) -> datetime:
@@ -165,7 +160,8 @@ def _derive_event(data: EventCreate) -> dict[str, Any]:
     ensure_timezone(data.timezone)
     rrule = normalize_rrule(data.rrule) if data.rrule else None
     values: dict[str, Any] = {
-        "title": data.title, "description": data.description, "kind": data.kind,
+        "title": data.title, "description": data.description, "location": data.location,
+        "reminder_minutes_before": data.reminder_minutes_before, "kind": data.kind,
         "status": data.status, "timezone": data.timezone, "all_day": int(data.all_day),
         "local_start": None, "local_end": None, "start_date": None, "end_date_exclusive": None,
         "starts_at_utc": None, "ends_at_utc": None, "rrule": rrule, "recurrence_until_utc": None,
@@ -175,12 +171,13 @@ def _derive_event(data: EventCreate) -> dict[str, Any]:
         values["end_date_exclusive"] = data.end_date_exclusive.isoformat()  # type: ignore[union-attr]
     else:
         assert data.local_start is not None and data.local_end is not None
-        starts = to_utc(data.local_start, data.timezone, strict=True)
-        ends = to_utc(data.local_end, data.timezone, strict=True)
+        local_start, local_end = _dt(data.local_start), _dt(data.local_end)
+        starts = to_utc(local_start, data.timezone, strict=True)
+        ends = to_utc(local_end, data.timezone, strict=True)
         if ends <= starts:
-            raise _invalid("local_end debe ser posterior a local_start")
+            raise _invalid("El evento debe terminar después de empezar.")
         values.update(
-            local_start=_local_iso(data.local_start), local_end=_local_iso(data.local_end),
+            local_start=_local_iso(local_start), local_end=_local_iso(local_end),
             starts_at_utc=utc_iso(starts), ends_at_utc=utc_iso(ends),
         )  # fmt: skip
     if rrule:
@@ -194,13 +191,14 @@ def _derive_event(data: EventCreate) -> dict[str, Any]:
 
 def _derive_block(data: TimeBlockCreate) -> dict[str, Any]:
     ensure_timezone(data.timezone)
-    starts = to_utc(data.local_start, data.timezone, strict=True)
-    ends = to_utc(data.local_end, data.timezone, strict=True)
+    local_start, local_end = _dt(data.local_start), _dt(data.local_end)
+    starts = to_utc(local_start, data.timezone, strict=True)
+    ends = to_utc(local_end, data.timezone, strict=True)
     if ends <= starts:
-        raise _invalid("local_end debe ser posterior a local_start")
+        raise _invalid("El bloque debe terminar después de empezar.")
     return {
         "title": data.title, "description": data.description, "timezone": data.timezone,
-        "local_start": _local_iso(data.local_start), "local_end": _local_iso(data.local_end),
+        "local_start": _local_iso(local_start), "local_end": _local_iso(local_end),
         "starts_at_utc": utc_iso(starts), "ends_at_utc": utc_iso(ends), "status": data.status,
         "task_id": data.task_id,
     }  # fmt: skip
@@ -209,9 +207,8 @@ def _derive_block(data: TimeBlockCreate) -> dict[str, Any]:
 def _validated(model: type[BaseModel], payload: dict[str, Any]) -> Any:
     try:
         return model(**payload)
-    except ValidationError as exc:
-        first = exc.errors()[0]
-        raise _invalid(str(first.get("msg", "Datos no válidos"))) from None
+    except ValidationError:
+        raise _invalid("Revisa los datos del calendario: alguno no es válido.") from None
 
 
 # --------------------------------------------------------------- agenda: items
@@ -222,6 +219,7 @@ def _item(
     all_day: bool, tz: str, occurrence: str, starts: datetime | None, ends: datetime | None,
     start_date: date | None, end_date: date | None, display_tz: str, recurring: bool,
     modified: bool, room: str | None = None, task_id: str | None = None,
+    location: str | None = None,
 ) -> AgendaItem:  # fmt: skip
     return AgendaItem(
         occurrence_id=f"{source_id}:{occurrence}", source_type=source_type,  # type: ignore[arg-type]
@@ -231,7 +229,7 @@ def _item(
         start_date=start_date, end_date_exclusive=end_date,
         display_start=to_display(starts, display_tz) if starts else None,
         display_end=to_display(ends, display_tz) if ends else None,
-        recurring=recurring, modified=modified, room=room, task_id=task_id,
+        recurring=recurring, modified=modified, room=room, task_id=task_id, location=location,
     )  # fmt: skip
 
 
@@ -273,6 +271,7 @@ def _expand_event(
             continue
         override = _parse_override(exc[1]) if exc else None
         title, description, room = row["title"], row["description"], None
+        location = row["location"]
         if override:
             title = override.title or title
             description = override.description if override.description is not None else description
@@ -286,15 +285,16 @@ def _expand_event(
                 description=description, kind=row["kind"], status=row["status"], all_day=True,
                 tz=tz, occurrence=key, starts=None, ends=None, start_date=day, end_date=end_day,
                 display_tz=display_tz, recurring=recurring, modified=exc is not None, room=room,
+                location=location,
             ))  # fmt: skip
             continue
         local_start = datetime.combine(day, local_time)
         local_end = local_start + duration
         if override and override.local_start is not None:
-            local_start = override.local_start
+            local_start = _dt(override.local_start)
             local_end = local_start + duration
         if override and override.local_end is not None:
-            local_end = override.local_end
+            local_end = _dt(override.local_end)
         starts = to_utc(local_start, tz, strict=False)
         ends = to_utc(local_end, tz, strict=False)
         if not (starts < win_end and ends > win_start):
@@ -303,14 +303,13 @@ def _expand_event(
             source_type="calendar_event", source_id=row["id"], title=title, description=description,
             kind=row["kind"], status=row["status"], all_day=False, tz=tz, occurrence=key,
             starts=starts, ends=ends, start_date=None, end_date=None, display_tz=display_tz,
-            recurring=recurring, modified=exc is not None, room=room,
+            recurring=recurring, modified=exc is not None, room=room, location=location,
         ))  # fmt: skip
     return out
 
 
 def _block_item(row: dict[str, Any], display_tz: str) -> AgendaItem:
-    starts = datetime.fromisoformat(row["starts_at_utc"].replace("Z", "+00:00"))
-    ends = datetime.fromisoformat(row["ends_at_utc"].replace("Z", "+00:00"))
+    starts, ends = _parse_utc(row["starts_at_utc"]), _parse_utc(row["ends_at_utc"])
     return _item(
         source_type="time_block", source_id=row["id"], title=row["title"],
         description=row["description"], kind="time_block", status=row["status"], all_day=False,
@@ -358,9 +357,9 @@ def _sort_key(item: AgendaItem) -> tuple[str, str]:
 
 def _check_window(from_date: date, to_date: date) -> None:
     if to_date <= from_date:
-        raise _invalid("`to` debe ser posterior a `from`")
+        raise _query("La fecha final debe ser posterior a la inicial.")
     if (to_date - from_date).days > MAX_WINDOW_DAYS:
-        raise AppError("window_too_large", f"La ventana máxima es de {MAX_WINDOW_DAYS} días", 422)
+        raise _query(f"El rango máximo es de {MAX_WINDOW_DAYS} días.")
 
 
 def agenda(
@@ -455,20 +454,24 @@ def _group(items: list[AgendaItem], end: str) -> OverlapGroup:
 
 
 def availability(
-    conn: sqlite3.Connection, local_start: datetime, local_end: datetime, tz: str
+    conn: sqlite3.Connection, local_start: str, local_end: str, tz: str
 ) -> AvailabilityResponse:
     ensure_timezone(tz)
-    if local_start.tzinfo or local_end.tzinfo:
-        raise _invalid("local_start y local_end son hora local: sin desfase")
-    if local_end <= local_start:
-        raise _invalid("local_end debe ser posterior a local_start")
-    if local_end - local_start > timedelta(days=MAX_WINDOW_DAYS):
-        raise AppError("window_too_large", f"La ventana máxima es de {MAX_WINDOW_DAYS} días", 422)
-    starts = to_utc(local_start, tz, strict=True)
-    ends = to_utc(local_end, tz, strict=True)
+    try:
+        start_local, end_local = _dt(local_start), _dt(local_end)
+    except ValueError:
+        raise _query("Las horas deben tener el formato AAAA-MM-DDTHH:MM.") from None
+    if start_local.tzinfo or end_local.tzinfo:
+        raise _query("Las horas son locales: sin desfase horario.")
+    if end_local <= start_local:
+        raise _query("El intervalo debe terminar después de empezar.")
+    if end_local - start_local > timedelta(days=MAX_WINDOW_DAYS):
+        raise _query(f"El rango máximo es de {MAX_WINDOW_DAYS} días.")
+    starts = to_utc(start_local, tz, strict=True)
+    ends = to_utc(end_local, tz, strict=True)
     probe = _item(
         source_type="time_block", source_id="probe", title="", description=None, kind="time_block",
-        status="planned", all_day=False, tz=tz, occurrence=_local_iso(local_start), starts=starts,
+        status="planned", all_day=False, tz=tz, occurrence=_local_iso(start_local), starts=starts,
         ends=ends, start_date=None, end_date=None, display_tz=tz, recurring=False, modified=False,
     )  # fmt: skip
     conflicts = _conflicts(conn, [probe], tz, None)
@@ -520,6 +523,17 @@ def _parse_utc(value: str) -> datetime:
 # ---------------------------------------------------------------------- eventos
 
 
+def _no_dependents(conn: sqlite3.Connection, entity_id: str) -> None:
+    count = repo.count_relationships(conn, entity_id)
+    if count:
+        raise AppError(
+            "has_dependents",
+            "No se puede eliminar porque tiene elementos relacionados. Quita antes las relaciones.",
+            409,
+            [ErrorDetail(code="has_dependents", message=f"{count} relaciones")],
+        )
+
+
 def _event_params(event_id: str, row: dict[str, Any]) -> dict[str, Any]:
     return {
         "event_id": event_id, "kind": row["kind"], "status": row["status"],
@@ -558,18 +572,13 @@ def list_events(
     include_archived: bool = False,
     status: str | None = None,
     limit: int | None = None,
-    cursor: str | None = None,
+    offset: int | None = None,
 ) -> EventPage:
-    size = bounded_limit(limit)
-    rows = repo.list_events(
-        conn, include_archived=include_archived, status=status,
-        after=_cursor(cursor, "c", "i"), limit=size + 1,
+    rows, total = repo.list_events(
+        conn, include_archived=include_archived, status=status, limit=bounded_limit(limit),
+        offset=bounded_offset(offset),
     )  # fmt: skip
-    page = rows[:size]
-    next_cursor = (
-        encode_cursor({"c": page[-1]["created_at"], "i": page[-1]["id"]}) if len(rows) > size else None
-    )
-    return EventPage(items=[EventOut(**r) for r in page], next_cursor=next_cursor)
+    return EventPage(items=[EventOut(**r) for r in rows], total=total)
 
 
 def update_event(
@@ -583,8 +592,9 @@ def update_event(
     changes = data.model_dump(exclude_unset=True)
     merged = {
         k: current[k]
-        for k in ("title", "description", "kind", "status", "timezone", "all_day", "local_start",
-                  "local_end", "start_date", "end_date_exclusive", "rrule")
+        for k in ("title", "description", "location", "reminder_minutes_before", "kind", "status",
+                  "timezone", "all_day", "local_start", "local_end", "start_date",
+                  "end_date_exclusive", "rrule")
     }  # fmt: skip
     merged["all_day"] = bool(merged["all_day"])
     merged.update(changes)
@@ -602,7 +612,7 @@ def update_event(
                                       "end_date_exclusive", "rrule")
     )  # fmt: skip
     if temporal_changed and repo.count_exceptions(conn, event_id):
-        raise AppError("conflict", "La serie tiene excepciones: no se puede cambiar su rango temporal", 409)
+        raise AppError("conflict", "Esta serie tiene ocurrencias modificadas o canceladas: no se puede cambiar su horario.", 409)
     with transaction(conn):
         touch_entity(conn, event_id, if_match)
         repo.update_event(conn, event_id, {k: values[k] for k in changed_fields})
@@ -615,10 +625,11 @@ def update_event(
 
 def request_delete_event(conn: sqlite3.Connection, ctx: RequestContext, event_id: str) -> ConfirmationRef:
     row = _event_row(conn, event_id)
+    _no_dependents(conn, event_id)
     with transaction(conn):
         return request_confirmation(
             conn, ctx, "delete_event", {"event_id": event_id},
-            f"Eliminar el evento «{row['title']}» y sus excepciones",
+            deletion_summary("evento", row["title"], repo.count_exceptions(conn, event_id)),
             entity_type="calendar_event", entity_id=event_id,
         )  # fmt: skip
 
@@ -629,6 +640,7 @@ def execute_delete_event(
 ) -> dict[str, Any]:
     event_id = str(args["event_id"])
     _event_row(conn, event_id)
+    _no_dependents(conn, event_id)
     with _atomic(conn):
         repo.delete_event(conn, event_id)
         record_audit(
@@ -651,7 +663,8 @@ def _exception_out(row: dict[str, Any]) -> RecurrenceExceptionOut:
 
 def list_exceptions(conn: sqlite3.Connection, ctx: RequestContext, event_id: str) -> ExceptionList:
     _event_row(conn, event_id)
-    return ExceptionList(items=[_exception_out(r) for r in repo.list_exceptions(conn, event_id)])
+    items = [_exception_out(r) for r in repo.list_exceptions(conn, event_id)]
+    return ExceptionList(items=items, total=len(items))
 
 
 def create_exception(
@@ -663,7 +676,7 @@ def create_exception(
 ) -> RecurrenceExceptionOut:
     row = _event_row(conn, event_id)
     if row["rrule"] is None:
-        raise AppError("conflict", "El evento no es recurrente", 409)
+        raise AppError("conflict", "Este evento no se repite, así que no tiene ocurrencias sueltas.", 409)
     all_day = bool(row["all_day"])
     key = data.occurrence_local_start
     try:
@@ -674,26 +687,24 @@ def create_exception(
         else:
             parsed = datetime.fromisoformat(key)
             day, dtstart = parsed.date(), _dt(row["local_start"]).date()
-            matches_time = len(key) == 19 and parsed.time() == _dt(row["local_start"]).time()
+            matches_time = len(key) == 16 and parsed.time() == _dt(row["local_start"]).time()
     except ValueError:
-        raise _invalid("occurrence_local_start no es una fecha/hora local válida") from None
+        raise _invalid("La fecha de la ocurrencia no es válida.") from None
     if not matches_time or day < dtstart or not rule_matches(parse_rrule(row["rrule"]), dtstart, day):
-        raise _invalid("occurrence_local_start no corresponde a una ocurrencia de la serie")
+        raise _invalid("Esa fecha no corresponde a ninguna ocurrencia de la serie.")
     if data.override is not None:
         ov = data.override
-        if ov.local_start is not None and ov.local_start.tzinfo or ov.local_end and ov.local_end.tzinfo:
-            raise _invalid("El override usa hora local: sin desfase")
         if all_day and (ov.local_start or ov.local_end):
-            raise _invalid("Un evento de día completo no admite horas en el override")
+            raise _invalid("Un evento de día completo no admite cambiar la hora.")
         if not all_day and (ov.local_start or ov.local_end):
-            start = ov.local_start or datetime.combine(day, _dt(row["local_start"]).time())
-            end = ov.local_end or start + (_dt(row["local_end"]) - _dt(row["local_start"]))
+            start = _dt(ov.local_start) if ov.local_start else datetime.combine(day, _dt(row["local_start"]).time())
+            end = _dt(ov.local_end) if ov.local_end else start + (_dt(row["local_end"]) - _dt(row["local_start"]))
             if end <= start:
-                raise _invalid("El override debe terminar después de empezar")
+                raise _invalid("La ocurrencia debe terminar después de empezar.")
             to_utc(start, row["timezone"], strict=True)
             to_utc(end, row["timezone"], strict=True)
     if repo.get_exception(conn, event_id, key):
-        raise AppError("conflict", "Esa ocurrencia ya tiene una excepción", 409)
+        raise AppError("conflict", "Esa ocurrencia ya estaba modificada o cancelada.", 409)
     override_json = (
         None
         if data.override is None
@@ -723,7 +734,7 @@ def create_exception(
 
 def _check_task(conn: sqlite3.Connection, task_id: str | None) -> None:
     if task_id is not None and not repo.task_exists(conn, task_id):
-        raise AppError("not_found", "La tarea indicada no existe", 404)
+        raise AppError("not_found", "No se encuentra la tarea indicada. Puede que se haya eliminado.", 404)
 
 
 def _block_result(conn: sqlite3.Connection, block_id: str) -> TimeBlockWriteResult:
@@ -764,18 +775,13 @@ def list_time_blocks(
     task_id: str | None = None,
     status: str | None = None,
     limit: int | None = None,
-    cursor: str | None = None,
+    offset: int | None = None,
 ) -> TimeBlockPage:
-    size = bounded_limit(limit)
-    rows = repo.list_time_blocks(
+    rows, total = repo.list_time_blocks(
         conn, include_archived=include_archived, task_id=task_id, status=status,
-        after=_cursor(cursor, "s", "i"), limit=size + 1,
+        limit=bounded_limit(limit), offset=bounded_offset(offset),
     )  # fmt: skip
-    page = rows[:size]
-    next_cursor = (
-        encode_cursor({"s": page[-1]["starts_at_utc"], "i": page[-1]["id"]}) if len(rows) > size else None
-    )
-    return TimeBlockPage(items=[TimeBlockOut(**r) for r in page], next_cursor=next_cursor)
+    return TimeBlockPage(items=[TimeBlockOut(**r) for r in rows], total=total)
 
 
 def update_time_block(
@@ -809,8 +815,8 @@ def move_time_block(
     conn: sqlite3.Connection,
     ctx: RequestContext,
     block_id: str,
-    local_start: datetime,
-    local_end: datetime,
+    local_start: str,
+    local_end: str,
     if_match: int | None = None,
 ) -> TimeBlockWriteResult:
     """Nuevo local_start/local_end; todo lo demás se conserva."""
@@ -823,10 +829,11 @@ def request_delete_time_block(
     conn: sqlite3.Connection, ctx: RequestContext, block_id: str
 ) -> ConfirmationRef:
     row = _block_row(conn, block_id)
+    _no_dependents(conn, block_id)
     with transaction(conn):
         return request_confirmation(
             conn, ctx, "delete_time_block", {"time_block_id": block_id},
-            f"Eliminar el bloque de tiempo «{row['title']}»",
+            deletion_summary("bloque de tiempo", row["title"]),
             entity_type="time_block", entity_id=block_id,
         )  # fmt: skip
 
@@ -837,6 +844,7 @@ def execute_delete_time_block(
 ) -> dict[str, Any]:
     block_id = str(args["time_block_id"])
     _block_row(conn, block_id)
+    _no_dependents(conn, block_id)
     with _atomic(conn):
         repo.delete_time_block(conn, block_id)
         record_audit(

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import sqlite3
-from datetime import date, datetime
+from datetime import date
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -14,6 +14,7 @@ from app.schemas.calendar import (
     EventOut,
     EventUpdate,
     EventWriteResult,
+    LocalDateTime,
     RecurrenceExceptionCreate,
     RecurrenceExceptionOut,
     TimeBlockCreate,
@@ -47,8 +48,8 @@ class UpdateTimeBlockArgs(TimeBlockUpdate):
 
 class MoveTimeBlockArgs(_Args):
     block_id: str = Field(description="UUID del bloque de tiempo")
-    local_start: datetime = Field(description="Nuevo inicio, hora local sin desfase")
-    local_end: datetime = Field(description="Nuevo fin, hora local sin desfase")
+    local_start: LocalDateTime = Field(description="Nuevo inicio, hora local sin desfase")
+    local_end: LocalDateTime = Field(description="Nuevo fin, hora local sin desfase")
 
 
 class DeleteTimeBlockArgs(_Args):
@@ -65,8 +66,8 @@ class GetScheduleArgs(_Args):
 
 
 class CheckAvailabilityArgs(_Args):
-    local_start: datetime = Field(description="Inicio, hora local sin desfase")
-    local_end: datetime = Field(description="Fin, hora local sin desfase")
+    local_start: LocalDateTime = Field(description="Inicio, hora local sin desfase")
+    local_end: LocalDateTime = Field(description="Fin, hora local sin desfase")
     timezone: str = Field(max_length=64)
 
 
@@ -133,7 +134,7 @@ def _availability(
 
 
 _NOT_FOUND = ("not_found",)
-_TIME_ERRORS = ("validation_error", "invalid_rrule", "invalid_timezone", "nonexistent_local_time")
+_TIME_ERRORS = ("validation_error", "invalid_query", "nonexistent_local_time")
 
 TOOLS: tuple[ToolSpec, ...] = (
     ToolSpec(
@@ -153,7 +154,7 @@ TOOLS: tuple[ToolSpec, ...] = (
         errors=_TIME_ERRORS,
         audit={"kind": "log", "status": "log", "timezone": "log", "all_day": "log", "local_start": "log",
                "local_end": "log", "start_date": "log", "end_date_exclusive": "log", "rrule": "log",
-               "title": "omit", "description": "omit"},
+               "location": "omit", "reminder_minutes_before": "log", "title": "omit", "description": "omit"},
     ),
     ToolSpec(
         name="get_event",
@@ -183,7 +184,7 @@ TOOLS: tuple[ToolSpec, ...] = (
         errors=(*_TIME_ERRORS, "not_found", "conflict"),
         audit={"event_id": "log", "kind": "log", "status": "log", "timezone": "log", "all_day": "log",
                "local_start": "log", "local_end": "log", "start_date": "log",
-               "end_date_exclusive": "log", "rrule": "log", "title": "omit", "description": "omit"},
+               "end_date_exclusive": "log", "rrule": "log", "location": "omit", "reminder_minutes_before": "log", "title": "omit", "description": "omit"},
     ),
     ToolSpec(
         name="delete_event",
@@ -197,7 +198,7 @@ TOOLS: tuple[ToolSpec, ...] = (
         permission="calendar.write",
         risk=RiskClass.CONFIRM,
         handler=service_handler("delete_event", _delete_event),
-        errors=_NOT_FOUND,
+        errors=(*_NOT_FOUND, "has_dependents"),
         audit={"event_id": "log"},
         summarize=lambda args: f"Eliminar el evento {args.event_id} y sus excepciones",  # type: ignore[attr-defined]
     ),
@@ -267,7 +268,7 @@ TOOLS: tuple[ToolSpec, ...] = (
         permission="calendar.write",
         risk=RiskClass.CONFIRM,
         handler=service_handler("delete_time_block", _delete_block),
-        errors=_NOT_FOUND,
+        errors=(*_NOT_FOUND, "has_dependents"),
         audit={"block_id": "log"},
         summarize=lambda args: f"Eliminar el bloque de tiempo {args.block_id}",  # type: ignore[attr-defined]
     ),
@@ -283,7 +284,7 @@ TOOLS: tuple[ToolSpec, ...] = (
         permission="calendar.read",
         risk=RiskClass.READ,
         handler=service_handler("get_schedule", _schedule),
-        errors=("window_too_large", "invalid_timezone", "validation_error"),
+        errors=("invalid_query", "validation_error"),
         idempotent=True,
         returns_untrusted=False,
         audit={"from_date": "log", "to_date": "log", "timezone": "log", "types": "log"},
@@ -299,7 +300,7 @@ TOOLS: tuple[ToolSpec, ...] = (
         permission="calendar.read",
         risk=RiskClass.READ,
         handler=service_handler("check_availability", _availability),
-        errors=("validation_error", "invalid_timezone", "nonexistent_local_time", "window_too_large"),
+        errors=("validation_error", "invalid_query", "nonexistent_local_time"),
         idempotent=True,
         audit={"local_start": "log", "local_end": "log", "timezone": "log"},
     ),
