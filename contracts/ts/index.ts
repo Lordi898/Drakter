@@ -2,10 +2,11 @@
 export const CONTRACT_VERSION = "1.0.0";
 export const SCHEMA_VERSION = 10;
 
-/** Listado: `limit` y `offset` los acota el servidor. */
+/** Listado con cursor opaco: `limit` lo acota el servidor. */
 export interface Page<T> {
   items: T[];
-  total: number;
+  next_cursor: string | null;
+  total?: number | null;
 }
 
 export type ActorType = "user" | "agent" | "automation" | "system";
