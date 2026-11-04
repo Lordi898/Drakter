@@ -104,17 +104,22 @@ def list_notifications(
     *,
     unread_only: bool,
     limit: int,
-    offset: int,
-) -> tuple[list[NotificationRow], int]:
-    """Una página, más recientes primero, y el total del filtro."""
-    clause = "WHERE read_at IS NULL " if unread_only else ""
-    total = conn.execute(f"SELECT count(*) FROM notifications {clause}").fetchone()[0]
+    before: tuple[str, str] | None = None,
+) -> list[NotificationRow]:
+    """Más recientes primero. `before` es el par (created_at, id) de la última fila vista."""
+    where: list[str] = []
+    params: list[object] = []
+    if unread_only:
+        where.append("read_at IS NULL")
+    if before is not None:
+        where.append("(created_at, id) < (?, ?)")
+        params.extend(before)
+    clause = f"WHERE {' AND '.join(where)} " if where else ""
     rows = conn.execute(
-        f"SELECT {_COLUMNS} FROM notifications {clause}"
-        "ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?",
-        (limit, offset),
+        f"SELECT {_COLUMNS} FROM notifications {clause}ORDER BY created_at DESC, id DESC LIMIT ?",
+        (*params, limit),
     )
-    return [NotificationRow(*row) for row in rows], total
+    return [NotificationRow(*row) for row in rows]
 
 
 def mark_read(conn: sqlite3.Connection, ids: Sequence[str], read_at: str) -> int:
