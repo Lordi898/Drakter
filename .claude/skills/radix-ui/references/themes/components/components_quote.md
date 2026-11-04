@@ -1,0 +1,117 @@
+Quote – Radix Themes
+
+[Radix Homepage](/)[Made by WorkOS](https://workos.com)
+
+[Radix Homepage](/)[Made by WorkOS](https://workos.com)
+
+[ThemesThemes](/)[PrimitivesPrimitives](/primitives)[IconsIcons](/icons)[ColorsColors](/colors)
+
+[Documentation](/themes/docs/overview/getting-started)[Playground](/themes/playground)[Blog](/blog)
+
+#### Overview
+
+[Getting started](/themes/docs/overview/getting-started)[Styling](/themes/docs/overview/styling)[Layout](/themes/docs/overview/layout)[Releases](/themes/docs/overview/releases)[Resources](/themes/docs/overview/resources)
+
+#### Theme
+
+[Overview](/themes/docs/theme/overview)[Color](/themes/docs/theme/color)[Dark mode](/themes/docs/theme/dark-mode)[Typography](/themes/docs/theme/typography)[Spacing](/themes/docs/theme/spacing)[Breakpoints](/themes/docs/theme/breakpoints)[Radius](/themes/docs/theme/radius)[Shadows](/themes/docs/theme/shadows)[Cursors](/themes/docs/theme/cursors)
+
+#### Layout
+
+[Box](/themes/docs/components/box)[Flex](/themes/docs/components/flex)[Grid](/themes/docs/components/grid)[Container](/themes/docs/components/container)[Section](/themes/docs/components/section)
+
+#### Typography
+
+[Text](/themes/docs/components/text)[Heading](/themes/docs/components/heading)[Blockquote](/themes/docs/components/blockquote)[Code](/themes/docs/components/code)[Em](/themes/docs/components/em)[Kbd](/themes/docs/components/kbd)[Link](/themes/docs/components/link)[Quote](/themes/docs/components/quote)[Strong](/themes/docs/components/strong)
+
+#### Components
+
+[Alert Dialog](/themes/docs/components/alert-dialog)[Aspect Ratio](/themes/docs/components/aspect-ratio)[Avatar](/themes/docs/components/avatar)[Badge](/themes/docs/components/badge)[Button](/themes/docs/components/button)[Callout](/themes/docs/components/callout)[Card](/themes/docs/components/card)[Checkbox](/themes/docs/components/checkbox)[Checkbox Group](/themes/docs/components/checkbox-group)[Checkbox Cards](/themes/docs/components/checkbox-cards)[Context Menu](/themes/docs/components/context-menu)[Data List](/themes/docs/components/data-list)[Dialog](/themes/docs/components/dialog)[Dropdown Menu](/themes/docs/components/dropdown-menu)[Hover Card](/themes/docs/components/hover-card)[Icon Button](/themes/docs/components/icon-button)[Inset](/themes/docs/components/inset)[Popover](/themes/docs/components/popover)[Progress](/themes/docs/components/progress)[Radio](/themes/docs/components/radio)[Radio Group](/themes/docs/components/radio-group)[Radio Cards](/themes/docs/components/radio-cards)[Scroll Area](/themes/docs/components/scroll-area)[Segmented Control](/themes/docs/components/segmented-control)[Select](/themes/docs/components/select)[Separator](/themes/docs/components/separator)[Skeleton](/themes/docs/components/skeleton)[Slider](/themes/docs/components/slider)[Spinner](/themes/docs/components/spinner)[Switch](/themes/docs/components/switch)[Table](/themes/docs/components/table)[Tabs](/themes/docs/components/tabs)[Tab Nav](/themes/docs/components/tab-nav)[Text Area](/themes/docs/components/text-area)[Text Field](/themes/docs/components/text-field)[Tooltip](/themes/docs/components/tooltip)
+
+#### Utilities
+
+[Accessible Icon](/themes/docs/components/accessible-icon)[Portal](/themes/docs/components/portal)[Reset](/themes/docs/components/reset)[Slot](/themes/docs/components/slot)[Theme](/themes/docs/components/theme)[Visually Hidden](/themes/docs/components/visually-hidden)
+
+Components
+
+# Quote
+
+Short inline quotation.
+
+[View source](https://github.com/radix-ui/themes/blob/main/packages/radix-ui-themes/src/components/quote.tsx)[Report an issue](https://github.com/radix-ui/themes/issues/new?title=[Quote] Issue)[View in Playground](/themes/playground#quote)
+
+His famous quote, "Styles come and go. Good design is a language, not a style", elegantly summs up Massimo’s philosophy of design.
+
+```
+<Text>
+
+
+
+His famous quote,{" "}
+
+
+
+<Quote>Styles come and go. Good design is a language, not a style</Quote>,
+
+
+
+elegantly summs up Massimo’s philosophy of design.
+
+
+
+</Text>
+```
+
+## [API Reference](#api-reference)
+
+This component is based on the `q` element and supports [common margin props](/themes/docs/overview/layout#margin-props).
+
+| Prop | Type | Default |
+| --- | --- | --- |
+| `asChild` Prop description | `boolean` | No default value |
+| `truncate` Prop description | `boolean` | No default value |
+| `wrap` Prop description | `Responsive<"wrap" | "nowrap" | "pretty" | "balance">` | No default value |
+
+## [Examples](#examples)
+
+### [Truncate](#truncate)
+
+Use the `truncate` prop to truncate text with an ellipsis when it overflows its container.
+
+"The goal of typography is to relate font size, line height, and line width in a proportional way that maximizes beauty and makes reading easier and more pleasant."
+
+```
+<Flex maxWidth="300px">
+
+
+
+<Quote truncate>
+
+
+
+The goal of typography is to relate font size, line height, and line width
+
+
+
+in a proportional way that maximizes beauty and makes reading easier and
+
+
+
+more pleasant.
+
+
+
+</Quote>
+
+
+
+</Flex>
+```
+
+#### Quick nav
+
+Previous[Link](/themes/docs/components/link)
+
+Next[Strong](/themes/docs/components/strong)
+
+[Edit this page on GitHub.](https://github.com/radix-ui/website/edit/main/data/themes/docs/components/quote.mdx "Edit this page on GitHub.")

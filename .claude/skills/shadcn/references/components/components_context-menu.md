@@ -1,0 +1,115 @@
+# Context Menu
+
+Copy Page
+
+[Previous](/docs/components/command)[Next](/docs/components/data-table)
+
+Displays a menu to the user — such as a set of actions or functions — triggered by a button.
+
+[Docs ](https://www.radix-ui.com/docs/primitives/components/context-menu)[API Reference ](https://www.radix-ui.com/docs/primitives/components/context-menu#api-reference)
+
+Right click here
+
+Copy
+    
+    
+    import {
+      ContextMenu,
+      ContextMenuCheckboxItem,
+      ContextMenuContent,
+      ContextMenuItem,
+      ContextMenuLabel,
+      ContextMenuRadioGroup,
+      ContextMenuRadioItem,
+      ContextMenuSeparator,
+      ContextMenuShortcut,
+      ContextMenuSub,
+      ContextMenuSubContent,
+      ContextMenuSubTrigger,
+      ContextMenuTrigger,
+    } from "@/components/ui/context-menu"
+    
+    export function ContextMenuDemo() {
+      return (
+        <ContextMenu>
+          <ContextMenuTrigger className="flex h-[150px] w-[300px] items-center justify-center rounded-md border border-dashed text-sm">
+            Right click here
+          </ContextMenuTrigger>
+          <ContextMenuContent className="w-52">
+            <ContextMenuItem inset>
+              Back
+              <ContextMenuShortcut>⌘[</ContextMenuShortcut>
+            </ContextMenuItem>
+            <ContextMenuItem inset disabled>
+              Forward
+              <ContextMenuShortcut>⌘]</ContextMenuShortcut>
+            </ContextMenuItem>
+            <ContextMenuItem inset>
+              Reload
+              <ContextMenuShortcut>⌘R</ContextMenuShortcut>
+            </ContextMenuItem>
+            <ContextMenuSub>
+              <ContextMenuSubTrigger inset>More Tools</ContextMenuSubTrigger>
+              <ContextMenuSubContent className="w-44">
+                <ContextMenuItem>Save Page...</ContextMenuItem>
+                <ContextMenuItem>Create Shortcut...</ContextMenuItem>
+                <ContextMenuItem>Name Window...</ContextMenuItem>
+                <ContextMenuSeparator />
+                <ContextMenuItem>Developer Tools</ContextMenuItem>
+                <ContextMenuSeparator />
+                <ContextMenuItem variant="destructive">Delete</ContextMenuItem>
+              </ContextMenuSubContent>
+            </ContextMenuSub>
+            <ContextMenuSeparator />
+            <ContextMenuCheckboxItem checked>
+              Show Bookmarks
+            </ContextMenuCheckboxItem>
+            <ContextMenuCheckboxItem>Show Full URLs</ContextMenuCheckboxItem>
+            <ContextMenuSeparator />
+            <ContextMenuRadioGroup value="pedro">
+              <ContextMenuLabel inset>People</ContextMenuLabel>
+              <ContextMenuRadioItem value="pedro">
+                Pedro Duarte
+              </ContextMenuRadioItem>
+              <ContextMenuRadioItem value="colm">Colm Tuite</ContextMenuRadioItem>
+            </ContextMenuRadioGroup>
+          </ContextMenuContent>
+        </ContextMenu>
+      )
+    }
+    
+
+## Installation
+
+CLIManual
+    
+    
+    pnpmnpmyarnbun
+    
+    
+    pnpm dlx shadcn@latest add context-menu
+
+Copy
+
+## Usage
+    
+    
+    Copyimport {
+      ContextMenu,
+      ContextMenuContent,
+      ContextMenuItem,
+      ContextMenuTrigger,
+    } from "@/components/ui/context-menu"
+    
+    
+    Copy<ContextMenu>
+      <ContextMenuTrigger>Right click</ContextMenuTrigger>
+      <ContextMenuContent>
+        <ContextMenuItem>Profile</ContextMenuItem>
+        <ContextMenuItem>Billing</ContextMenuItem>
+        <ContextMenuItem>Team</ContextMenuItem>
+        <ContextMenuItem>Subscription</ContextMenuItem>
+      </ContextMenuContent>
+    </ContextMenu>
+
+[ Command](/docs/components/command)[Data Table ](/docs/components/data-table)

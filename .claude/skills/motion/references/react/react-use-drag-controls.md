@@ -1,0 +1,253 @@
+# useDragControls
+
+Usually, dragging is initiated by pressing down on [a](./react-gestures#drag) `motion` [component with a](./react-gestures#drag) `drag` [prop](./react-gestures#drag) and then moving the pointer.
+
+For some use-cases, for example clicking at an arbitrary point on a video scrubber, we might want to initiate that dragging from a different element.
+
+With `useDragControls`, we can create a set of controls to manually start dragging from any pointer event.
+
+## [Usage](#usage)
+
+Import `useDragControls` from Motion:
+
+```
+import { useDragControls } from "motion/react"
+```
+
+`useDragControls` returns drag controls that can be passed to a draggable `motion` component:
+
+```
+const controls = useDragControls()
+
+return <motion.div drag dragControls={controls} />
+```
+
+Now we can start a drag session from another any element's `onPointerDown` event via the `start` method.
+
+```
+<div onPointerDown={event => controls.start(event)} />
+```
+
+### [Touch support](#touch-support)
+
+To support touch screens, the triggering element should have the `touch-action: none` style applied.
+
+```
+<div onPointerDown={startDrag} style={{ touchAction: "none" }} />
+```
+
+### [Snap to cursor](#snap-to-cursor)
+
+By default, the drag gesture will only apply **changes** to the pointer position.
+
+We can also make the `motion` component immediately snap to the cursor by passing `snapToCursor: true` to the `start` method.
+
+```
+controls.start(event, { snapToCursor: true })
+```
+
+### [Disable automatic drag](#disable-automatic-drag)
+
+With this configuration, the `motion` component will still automatically start a drag gesture when it receives a `pointerdown` event itself.
+
+We can stop this behaviour by passing it a `dragListener={false}` prop.
+
+```
+<motion.div
+  drag
+  dragListener={false}
+  dragControls={controls}
+/>
+```
+
+### [Configure drag threshold](#configure-drag-threshold)
+
+By default, a drag gesture will take `3` pixels of cursor travel before initialising and, if using `directionLock`, determining which axis to lock on to.
+
+This distance can be configured with the `distanceThreshold` option.
+
+```
+controls.start(event, { distanceThreshold: 10 })
+```
+
+### [Manually stop and cancel](#manually-stop-and-cancel)
+
+The drag gesture will automatically stop when the `pointerup` event is detected. It's also possible to end the gesture manually, with the `.stop()` and `.cancel()` methods.
+
+```
+controls.stop()
+// or
+controls.cancel()
+```
+
+Cancelling the event will skip calling the `onDragEnd` callback.
+
+Usually, dragging is initiated by pressing down on [a](./react-gestures#drag) `motion` [component with a](./react-gestures#drag) `drag` [prop](./react-gestures#drag) and then moving the pointer.
+
+For some use-cases, for example clicking at an arbitrary point on a video scrubber, we might want to initiate that dragging from a different element.
+
+With `useDragControls`, we can create a set of controls to manually start dragging from any pointer event.
+
+## [Usage](#usage)
+
+Import `useDragControls` from Motion:
+
+```
+import { useDragControls } from "motion/react"
+```
+
+`useDragControls` returns drag controls that can be passed to a draggable `motion` component:
+
+```
+const controls = useDragControls()
+
+return <motion.div drag dragControls={controls} />
+```
+
+Now we can start a drag session from another any element's `onPointerDown` event via the `start` method.
+
+```
+<div onPointerDown={event => controls.start(event)} />
+```
+
+### [Touch support](#touch-support)
+
+To support touch screens, the triggering element should have the `touch-action: none` style applied.
+
+```
+<div onPointerDown={startDrag} style={{ touchAction: "none" }} />
+```
+
+### [Snap to cursor](#snap-to-cursor)
+
+By default, the drag gesture will only apply **changes** to the pointer position.
+
+We can also make the `motion` component immediately snap to the cursor by passing `snapToCursor: true` to the `start` method.
+
+```
+controls.start(event, { snapToCursor: true })
+```
+
+### [Disable automatic drag](#disable-automatic-drag)
+
+With this configuration, the `motion` component will still automatically start a drag gesture when it receives a `pointerdown` event itself.
+
+We can stop this behaviour by passing it a `dragListener={false}` prop.
+
+```
+<motion.div
+  drag
+  dragListener={false}
+  dragControls={controls}
+/>
+```
+
+### [Configure drag threshold](#configure-drag-threshold)
+
+By default, a drag gesture will take `3` pixels of cursor travel before initialising and, if using `directionLock`, determining which axis to lock on to.
+
+This distance can be configured with the `distanceThreshold` option.
+
+```
+controls.start(event, { distanceThreshold: 10 })
+```
+
+### [Manually stop and cancel](#manually-stop-and-cancel)
+
+The drag gesture will automatically stop when the `pointerup` event is detected. It's also possible to end the gesture manually, with the `.stop()` and `.cancel()` methods.
+
+```
+controls.stop()
+// or
+controls.cancel()
+```
+
+Cancelling the event will skip calling the `onDragEnd` callback.
+
+Usually, dragging is initiated by pressing down on [a](./react-gestures#drag) `motion` [component with a](./react-gestures#drag) `drag` [prop](./react-gestures#drag) and then moving the pointer.
+
+For some use-cases, for example clicking at an arbitrary point on a video scrubber, we might want to initiate that dragging from a different element.
+
+With `useDragControls`, we can create a set of controls to manually start dragging from any pointer event.
+
+## [Usage](#usage)
+
+Import `useDragControls` from Motion:
+
+```
+import { useDragControls } from "motion/react"
+```
+
+`useDragControls` returns drag controls that can be passed to a draggable `motion` component:
+
+```
+const controls = useDragControls()
+
+return <motion.div drag dragControls={controls} />
+```
+
+Now we can start a drag session from another any element's `onPointerDown` event via the `start` method.
+
+```
+<div onPointerDown={event => controls.start(event)} />
+```
+
+### [Touch support](#touch-support)
+
+To support touch screens, the triggering element should have the `touch-action: none` style applied.
+
+```
+<div onPointerDown={startDrag} style={{ touchAction: "none" }} />
+```
+
+### [Snap to cursor](#snap-to-cursor)
+
+By default, the drag gesture will only apply **changes** to the pointer position.
+
+We can also make the `motion` component immediately snap to the cursor by passing `snapToCursor: true` to the `start` method.
+
+```
+controls.start(event, { snapToCursor: true })
+```
+
+### [Disable automatic drag](#disable-automatic-drag)
+
+With this configuration, the `motion` component will still automatically start a drag gesture when it receives a `pointerdown` event itself.
+
+We can stop this behaviour by passing it a `dragListener={false}` prop.
+
+```
+<motion.div
+  drag
+  dragListener={false}
+  dragControls={controls}
+/>
+```
+
+### [Configure drag threshold](#configure-drag-threshold)
+
+By default, a drag gesture will take `3` pixels of cursor travel before initialising and, if using `directionLock`, determining which axis to lock on to.
+
+This distance can be configured with the `distanceThreshold` option.
+
+```
+controls.start(event, { distanceThreshold: 10 })
+```
+
+### [Manually stop and cancel](#manually-stop-and-cancel)
+
+The drag gesture will automatically stop when the `pointerup` event is detected. It's also possible to end the gesture manually, with the `.stop()` and `.cancel()` methods.
+
+```
+controls.stop()
+// or
+controls.cancel()
+```
+
+Cancelling the event will skip calling the `onDragEnd` callback.
+
+[useAnimationFrame](./react-use-animation-frame)
+
+Next
+
+[useInView](./react-use-in-view)
