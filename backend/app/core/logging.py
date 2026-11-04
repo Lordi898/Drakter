@@ -179,9 +179,15 @@ def configure_logging(level: str, logs_dir: Path) -> None:
         root.addHandler(handler)
     root.setLevel(numeric)
 
-    for name in ("uvicorn", "uvicorn.error", "uvicorn.access"):
+    for name in ("uvicorn", "uvicorn.error"):
         lg = logging.getLogger(name)
         for old in list(lg.handlers):
             lg.removeHandler(old)
         lg.propagate = True
         lg.setLevel(numeric)
+
+    # Uvicorn activa el log de acceso si este logger alcanza algún handler, y ese log
+    # incluye la consulta de cada petición.
+    access = logging.getLogger("uvicorn.access")
+    access.handlers.clear()
+    access.propagate = False
