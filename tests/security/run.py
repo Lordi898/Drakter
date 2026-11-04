@@ -28,8 +28,13 @@ def main() -> int:
     contract = dict(CONTRACT)
     if args.contract:
         contract.update(json.loads(args.contract.read_text("utf-8")))
+    broken = 0
     for module in sorted(HERE.glob("attacks_*.py")):
-        importlib.import_module(module.stem)
+        try:
+            importlib.import_module(module.stem)
+        except Exception as exc:  # noqa: BLE001 - un módulo roto no debe ocultar el resto
+            broken += 1
+            print(f"ERROR          {module.name}: {exc!r}")
     selected = [item for item in ATTACKS if not args.only or item.id.startswith(args.only)]
 
     context = start_target(args.backend.resolve(), args.python, contract)
@@ -42,6 +47,7 @@ def main() -> int:
         verdict: sum(item["verdict"] == verdict for item in results)
         for verdict in ("BLOCKED", "BREACH", "NOT_APPLICABLE", "ERROR")
     }
+    totals["ERROR"] += broken
     print(json.dumps(totals))
     if args.report:
         args.report.write_text(json.dumps(results, ensure_ascii=False, indent=2), "utf-8")
