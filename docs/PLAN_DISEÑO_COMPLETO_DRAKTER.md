@@ -244,7 +244,7 @@ La aplicación tendrá una barra lateral fija con las siguientes secciones:
 8. Relaciones.
 9. Configuración.
 
-La cara de Drakter será la pantalla principal.
+La pantalla inicial es Hoy, con pestaña propia; la cara sigue en la suya (decisión "Hoy es la pantalla inicial", que desvía este apartado).
 
 También existirá una zona de conversación accesible desde las distintas secciones. El usuario podrá pedir operaciones relacionadas con el módulo que está visualizando.
 

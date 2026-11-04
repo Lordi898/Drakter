@@ -403,3 +403,11 @@ Decisiones técnicas, cambios de tecnología y motivos.
 - **Consecuencia:** se pierde en v1 la carga progresiva L0/L1/L2 y la búsqueda semántica: FTS5 busca por texto. Si U-1 se rechaza, hay que retomar `MASTER_PLAN` §10 tal como está.
 - **Sin comprobar:** la calidad de recuperación con FTS5 en español.
 - **Impacto:** `MASTER_PLAN` §10, `ROADMAP` §2 y Fase 16, `PLAN_DISEÑO` §8, `IMPLEMENTATION_STATUS.md` Checklist 12, `CLAUDE.md` §1 y §2, `RUN_STATE.md`. `.claude/skills/drakter-toolkit/SKILL.md` aún dice que la memoria es la nativa de Hermes + OpenViking.
+
+## [2026-11-04] Hoy es la pantalla inicial
+- **Contexto:** `MASTER_PLAN` §5.3 y `PLAN_DISEÑO` §3.2 hacían de la cara la pantalla principal.
+- **Decisión:** Hoy es la pantalla inicial, con pestaña propia, y pasan a ser 10 pestañas. La cara sigue en su pestaña. Atajos: Ctrl+0 para Hoy y Ctrl+K para la búsqueda.
+- **Alternativas descartadas:** mantener la cara como inicio.
+- **Motivo:** prioridad del usuario de uso diario.
+- **⚠️ Estado en código:** a fecha de `815976f`, `desktop/src/navigation/sections.ts` en `drakter/build` tiene 9 secciones con `home` primero, sin Hoy, y `useAppShortcuts.ts` documenta Ctrl+1 a Ctrl+9. En `drakter/desktop-shell` sí consta. Ctrl+K sí está en `SearchPalette.tsx`.
+- **Impacto:** `MASTER_PLAN` §5.3, `PLAN_DISEÑO` §3.2 y §3.3, `desktop/src/navigation/`, `desktop/src/app/useAppShortcuts.ts`.

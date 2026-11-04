@@ -249,6 +249,8 @@ Sí se permitirá crear libremente los elementos de trabajo que correspondan a c
 
 ### 5.3. Pestañas
 
+> **Desviación:** Hoy es la pantalla inicial, con pestaña propia, y hay 10 pestañas (decisión "Hoy es la pantalla inicial"). La cara sigue en su pestaña.
+
 1. Cara de Drakter.
 2. Hábitos.
 3. Tareas.
