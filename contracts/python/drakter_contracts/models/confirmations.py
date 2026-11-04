@@ -42,7 +42,7 @@ class ConfirmationCreate(ContractModel):
 
 
 class ConfirmationDecision(ContractModel):
-    """Cuerpo (vacío salvo nota) de approve|reject; la decisión es la ruta."""
+    """Cuerpo opcional de reject."""
 
     reason: str | None = None
 
@@ -50,8 +50,15 @@ class ConfirmationDecision(ContractModel):
 ConfirmationUpdate = ConfirmationDecision
 
 
+class ConfirmationApprove(ContractModel):
+    """Cuerpo de approve. `approval_token` es opcional y solo vive mientras dure el HMAC de seguridad."""
+
+    params_hash: str
+    approval_token: str | None = None
+
+
 class ConfirmationOut(OutModel):
-    """`args` ya sin secretos (lista blanca de auditoría). `decided_via` solo vale `desktop`."""
+    """`args` ya sin secretos (lista blanca de auditoría). `params_hash` es la columna `args_hash`."""
 
     id: Id
     tool_name: str
@@ -60,7 +67,7 @@ class ConfirmationOut(OutModel):
     turn_id: Id | None = None
     correlation_id: str
     args: dict[str, Any] = {}
-    args_hash: str
+    params_hash: str
     targets: list[ConfirmationTarget] = []
     summary: str
     affected_count: int | None = None
