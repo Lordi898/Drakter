@@ -72,13 +72,19 @@ export interface BackendConnection {
 /** `events`: cada evento de `/ws`, parseado y SIN validar. `connection`: `BackendConnection`. */
 export type ApiTopic = 'events' | 'connection'
 
+/** Solo estas dos cabeceras; main las valida y no acepta cabeceras libres. */
+export interface ApiCallOptions {
+  readonly ifMatch?: string
+  readonly idempotencyKey?: string
+}
+
 /**
  * `window.api`: ÚNICA interfaz del renderer con el backend (D-14). El renderer no
  * tiene token, puerto ni red. Main valida método y ruta contra `ALLOWED_ROUTES` y
  * añade la credencial; `path` puede llevar query (`/api/v1/tasks?status=open`).
  */
 export interface DrakterApi {
-  call(method: HttpMethod, path: string, body?: unknown): Promise<ApiCallResult>
+  call(method: HttpMethod, path: string, body?: unknown, options?: ApiCallOptions): Promise<ApiCallResult>
   subscribe(topic: ApiTopic, callback: (event: unknown) => void): () => void
   /** Abre el diálogo nativo en main. El renderer no puede aprobar por otra vía. */
   requestApproval(actionId: string): Promise<ApprovalOutcome>

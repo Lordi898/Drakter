@@ -61,7 +61,8 @@ function subscribe(topic: ApiTopic, callback: Listener): () => void {
 }
 
 const api: DrakterApi = {
-  call: (method, path, body) => ipcRenderer.invoke(IPC_CHANNELS.apiCall, { method, path, body }),
+  call: (method, path, body, options) =>
+    ipcRenderer.invoke(IPC_CHANNELS.apiCall, { method, path, body, options }),
   subscribe,
   requestApproval: (actionId) => ipcRenderer.invoke(IPC_CHANNELS.requestApproval, actionId),
   getConnection: () => ipcRenderer.invoke(IPC_CHANNELS.getConnection)
