@@ -7,6 +7,7 @@ from datetime import date
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header, Query
+from fastapi.responses import JSONResponse
 
 from app.core.errors import AppError
 from app.schemas.calendar import RecurrenceExceptionOut
@@ -22,8 +23,8 @@ from app.schemas.subjects import (
 )
 from app.services import subjects as service
 from app.services.habits_calendar_support import (
-    ConfirmationRef,
     RequestContext,
+    confirmation_response,
     get_db,
     rest_context,
 )
@@ -58,10 +59,10 @@ def list_subjects(
     ctx: Ctx,
     include_archived: bool = False,
     limit: Annotated[int | None, Query(ge=1)] = None,
-    cursor: str | None = None,
+    offset: Annotated[int | None, Query(ge=0)] = None,
 ) -> SubjectList:
     return service.list_subjects(
-        conn, ctx, include_archived=include_archived, limit=limit, cursor=cursor
+        conn, ctx, include_archived=include_archived, limit=limit, offset=offset
     )
 
 
@@ -82,9 +83,9 @@ def update_subject(
     return service.update_subject(conn, ctx, subject_id, body, _revision(if_match))
 
 
-@router.delete("/subjects/{subject_id}", response_model=ConfirmationRef, status_code=202)
-def delete_subject(subject_id: str, conn: Db, ctx: Ctx) -> ConfirmationRef:
-    return service.request_delete_subject(conn, ctx, subject_id)
+@router.delete("/subjects/{subject_id}", status_code=409, response_model=None)
+def delete_subject(subject_id: str, conn: Db, ctx: Ctx) -> JSONResponse:
+    return confirmation_response(ctx, service.request_delete_subject(conn, ctx, subject_id))
 
 
 @router.post("/subjects/{subject_id}/archive", response_model=SubjectOut)
@@ -99,9 +100,14 @@ def unarchive_subject(subject_id: str, conn: Db, ctx: Ctx) -> SubjectOut:
 
 @router.get("/subjects/{subject_id}/sessions", response_model=SessionList)
 def list_sessions(
-    subject_id: str, conn: Db, ctx: Ctx, include_archived: bool = False
+    subject_id: str,
+    conn: Db,
+    ctx: Ctx,
+    include_archived: bool = False,
+    limit: Annotated[int | None, Query(ge=1)] = None,
+    offset: Annotated[int | None, Query(ge=0)] = None,
 ) -> SessionList:
-    return service.list_class_sessions(conn, ctx, subject_id, include_archived)
+    return service.list_class_sessions(conn, ctx, subject_id, include_archived, limit, offset)
 
 
 @router.post(
@@ -130,9 +136,9 @@ def update_session(
     return service.update_class_session(conn, ctx, session_id, body, _revision(if_match))
 
 
-@router.delete("/class-sessions/{session_id}", response_model=ConfirmationRef, status_code=202)
-def delete_session(session_id: str, conn: Db, ctx: Ctx) -> ConfirmationRef:
-    return service.request_delete_class_session(conn, ctx, session_id)
+@router.delete("/class-sessions/{session_id}", status_code=409, response_model=None)
+def delete_session(session_id: str, conn: Db, ctx: Ctx) -> JSONResponse:
+    return confirmation_response(ctx, service.request_delete_class_session(conn, ctx, session_id))
 
 
 @router.post(

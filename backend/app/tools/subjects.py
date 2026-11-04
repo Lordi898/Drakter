@@ -22,7 +22,7 @@ from app.services import subjects as service
 from app.services.habits_calendar_support import RequestContext
 from app.tools.habits_calendar_toolspec import RiskClass, ToolSpec, service_handler
 
-_ERRORS = ("not_found", "conflict", "revision_mismatch", "invalid_timezone", "validation_error")
+_ERRORS = ("not_found", "has_dependents", "revision_mismatch", "invalid_timezone", "validation_error")
 
 
 class _Args(BaseModel):
@@ -40,7 +40,7 @@ class UpdateSubjectArgs(SubjectUpdate):
 class ListSubjectsArgs(_Args):
     include_archived: bool = False
     limit: int | None = Field(default=None, ge=1, le=200)
-    cursor: str | None = None
+    offset: int | None = Field(default=None, ge=0)
 
 
 class CreateClassSessionArgs(ClassSessionCreate):
@@ -65,7 +65,7 @@ class CreateScheduleExceptionArgs(ScheduleExceptionCreate):
 
 
 class GetTimetableArgs(_Args):
-    on: date | None = Field(default=None, description="Fecha de vigencia; por defecto hoy")
+    on: date = Field(description="Fecha (AAAA-MM-DD) en la que se consulta el horario vigente")
 
 
 def _create_subject(conn: sqlite3.Connection, ctx: RequestContext, args: SubjectCreate) -> SubjectOut:
@@ -88,7 +88,7 @@ def _list_subjects(
     conn: sqlite3.Connection, ctx: RequestContext, args: ListSubjectsArgs
 ) -> service.SubjectList:
     return service.list_subjects(
-        conn, ctx, include_archived=args.include_archived, limit=args.limit, cursor=args.cursor
+        conn, ctx, include_archived=args.include_archived, limit=args.limit, offset=args.offset
     )
 
 
@@ -192,9 +192,9 @@ TOOLS: tuple[ToolSpec, ...] = (
         permission="subjects.read",
         risk=RiskClass.READ,
         handler=service_handler("list_subjects", _list_subjects),
-        errors=("invalid_cursor",),
+        errors=(),
         idempotent=True,
-        audit={"include_archived": "log", "limit": "log", "cursor": "omit"},
+        audit={"include_archived": "log", "limit": "log", "offset": "log"},
     ),
     ToolSpec(
         name="create_class_session",
@@ -248,12 +248,12 @@ TOOLS: tuple[ToolSpec, ...] = (
         permission="subjects.write",
         risk=RiskClass.WRITE,
         handler=service_handler("create_schedule_exception", _create_schedule_exception),
-        errors=("not_found", "invalid_occurrence"),
+        errors=("not_found", "validation_error"),
         audit={"session_id": "log", "occurrence_date": "log", "kind": "log", "override": "omit"},
     ),
     ToolSpec(
         name="get_timetable",
-        description="Horario semanal vigente en una fecha (por defecto hoy), ordenado por día y hora.",
+        description="Horario semanal vigente en una fecha, ordenado por día y hora.",
         domain="subjects",
         args_model=GetTimetableArgs,
         result_model=Timetable,

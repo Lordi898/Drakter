@@ -14,12 +14,12 @@ _SUBJECT_SELECT = (
 )
 _SESSION_SELECT = (
     "SELECT c.id,c.subject_id,c.weekday,c.starts_local_time,c.ends_local_time,c.timezone,"
-    "c.valid_from,c.valid_until,c.room,e.archived_at,e.revision,e.created_at,e.updated_at "
+    "c.valid_from,c.valid_until,c.interval_weeks,c.room,e.archived_at,e.revision,e.created_at,e.updated_at "
     "FROM class_sessions c JOIN entities e ON e.id=c.id"
 )
 SUBJECT_COLUMNS = frozenset({"name", "description", "teacher", "color"})
 SESSION_COLUMNS = frozenset(
-    {"weekday", "starts_local_time", "ends_local_time", "timezone", "valid_from", "valid_until", "room"}
+    {"weekday", "starts_local_time", "ends_local_time", "timezone", "valid_from", "valid_until", "interval_weeks", "room"}
 )
 
 
@@ -56,18 +56,18 @@ def get_subject(conn: sqlite3.Connection, subject_id: str) -> dict[str, Any] | N
 
 
 def list_subjects(
-    conn: sqlite3.Connection, *, include_archived: bool, after: tuple[str, str] | None, limit: int
-) -> list[dict[str, Any]]:
-    clauses: list[str] = []
-    params: list[Any] = []
-    if not include_archived:
-        clauses.append("e.archived_at IS NULL")
-    if after is not None:
-        clauses.append("(e.created_at,s.id)>(?,?)")
-        params.extend(after)
-    where = (" WHERE " + " AND ".join(clauses)) if clauses else ""
-    params.append(limit)
-    return _rows(conn.execute(_SUBJECT_SELECT + where + " ORDER BY e.created_at,s.id LIMIT ?", params))
+    conn: sqlite3.Connection, *, include_archived: bool, limit: int, offset: int
+) -> tuple[list[dict[str, Any]], int]:
+    where = "" if include_archived else " WHERE e.archived_at IS NULL"
+    total = conn.execute(
+        "SELECT count(*) FROM subjects s JOIN entities e ON e.id=s.id" + where
+    ).fetchone()[0]
+    rows = _rows(
+        conn.execute(
+            _SUBJECT_SELECT + where + " ORDER BY e.created_at,s.id LIMIT ? OFFSET ?", (limit, offset)
+        )
+    )
+    return rows, total
 
 
 def update_subject(conn: sqlite3.Connection, subject_id: str, columns: dict[str, Any]) -> None:
@@ -75,8 +75,7 @@ def update_subject(conn: sqlite3.Connection, subject_id: str, columns: dict[str,
 
 
 def delete_subject(conn: sqlite3.Connection, subject_id: str) -> None:
-    conn.execute("DELETE FROM subjects WHERE id=?", (subject_id,))
-    conn.execute("DELETE FROM entities WHERE id=?", (subject_id,))
+    conn.execute("DELETE FROM subjects WHERE id=?", (subject_id,))  # el trigger borra `entities`
 
 
 def count_sessions(conn: sqlite3.Connection, subject_id: str) -> int:
@@ -86,11 +85,14 @@ def count_sessions(conn: sqlite3.Connection, subject_id: str) -> int:
 
 
 def count_tasks(conn: sqlite3.Connection, subject_id: str) -> int:
-    """`tasks` la crea otro módulo: si aún no existe (o no tiene subject_id), no hay tareas."""
-    columns = {row[1] for row in conn.execute("PRAGMA table_info(tasks)")}
-    if "subject_id" not in columns:
-        return 0
     return conn.execute("SELECT count(*) FROM tasks WHERE subject_id=?", (subject_id,)).fetchone()[0]
+
+
+def count_relationships(conn: sqlite3.Connection, subject_id: str) -> int:
+    return conn.execute(
+        "SELECT count(*) FROM relationships WHERE source_id=? OR target_id=?",
+        (subject_id, subject_id),
+    ).fetchone()[0]
 
 
 # --- sesiones de clase ---------------------------------------------------------------------
@@ -99,11 +101,11 @@ def count_tasks(conn: sqlite3.Connection, subject_id: str) -> int:
 def insert_session(conn: sqlite3.Connection, values: dict[str, Any]) -> None:
     conn.execute(
         "INSERT INTO class_sessions(id,subject_id,weekday,starts_local_time,ends_local_time,"
-        "timezone,valid_from,valid_until,room) VALUES(?,?,?,?,?,?,?,?,?)",
+        "timezone,valid_from,valid_until,interval_weeks,room) VALUES(?,?,?,?,?,?,?,?,?,?)",
         (
             values["id"], values["subject_id"], values["weekday"], values["starts_local_time"],
             values["ends_local_time"], values["timezone"], values["valid_from"],
-            values["valid_until"], values["room"],
+            values["valid_until"], values["interval_weeks"], values["room"],
         ),
     )  # fmt: skip
 
@@ -114,14 +116,19 @@ def get_session(conn: sqlite3.Connection, session_id: str) -> dict[str, Any] | N
 
 
 def list_sessions(
-    conn: sqlite3.Connection, subject_id: str, *, include_archived: bool
-) -> list[dict[str, Any]]:
+    conn: sqlite3.Connection, subject_id: str, *, include_archived: bool, limit: int, offset: int
+) -> tuple[list[dict[str, Any]], int]:
     where = " WHERE c.subject_id=?" + ("" if include_archived else " AND e.archived_at IS NULL")
-    return _rows(
+    total = conn.execute(
+        "SELECT count(*) FROM class_sessions c JOIN entities e ON e.id=c.id" + where, (subject_id,)
+    ).fetchone()[0]
+    rows = _rows(
         conn.execute(
-            _SESSION_SELECT + where + " ORDER BY c.weekday,c.starts_local_time,c.id", (subject_id,)
+            _SESSION_SELECT + where + " ORDER BY c.weekday,c.starts_local_time,c.id LIMIT ? OFFSET ?",
+            (subject_id, limit, offset),
         )
     )
+    return rows, total
 
 
 def update_session(conn: sqlite3.Connection, session_id: str, columns: dict[str, Any]) -> None:
@@ -130,8 +137,7 @@ def update_session(conn: sqlite3.Connection, session_id: str, columns: dict[str,
 
 def delete_session(conn: sqlite3.Connection, session_id: str) -> None:
     conn.execute("DELETE FROM recurrence_exceptions WHERE class_session_id=?", (session_id,))
-    conn.execute("DELETE FROM class_sessions WHERE id=?", (session_id,))
-    conn.execute("DELETE FROM entities WHERE id=?", (session_id,))
+    conn.execute("DELETE FROM class_sessions WHERE id=?", (session_id,))  # el trigger borra `entities`
 
 
 def sessions_same_weekday(
@@ -153,7 +159,7 @@ def sessions_same_weekday(
 def timetable_rows(conn: sqlite3.Connection, on_date: str) -> list[dict[str, Any]]:
     sql = (
         "SELECT c.id AS session_id,c.subject_id,s.name AS subject_name,s.color,s.teacher,c.weekday,"
-        "c.starts_local_time,c.ends_local_time,c.timezone,c.room,c.valid_from,c.valid_until "
+        "c.starts_local_time,c.ends_local_time,c.timezone,c.room,c.valid_from,c.valid_until,c.interval_weeks "
         "FROM class_sessions c JOIN subjects s ON s.id=c.subject_id "
         "JOIN entities e ON e.id=c.id JOIN entities se ON se.id=s.id "
         "WHERE e.archived_at IS NULL AND se.archived_at IS NULL "
@@ -168,7 +174,7 @@ def projectable_sessions(conn: sqlite3.Connection, first: str, last: str) -> lis
     sql = (
         "SELECT c.id,c.subject_id,s.name AS subject_name,s.description AS subject_description,"
         "s.color,c.weekday,c.starts_local_time,c.ends_local_time,c.timezone,c.room,"
-        "c.valid_from,c.valid_until "
+        "c.valid_from,c.valid_until,c.interval_weeks "
         "FROM class_sessions c JOIN subjects s ON s.id=c.subject_id "
         "JOIN entities e ON e.id=c.id JOIN entities se ON se.id=s.id "
         "WHERE e.archived_at IS NULL AND se.archived_at IS NULL "
@@ -194,16 +200,28 @@ def session_exceptions(conn: sqlite3.Connection, session_ids: list[str]) -> list
     )
 
 
-def replace_exception(conn: sqlite3.Connection, values: dict[str, Any]) -> None:
-    conn.execute(
-        "DELETE FROM recurrence_exceptions WHERE class_session_id=? AND occurrence_local_start=?",
-        (values["class_session_id"], values["occurrence_local_start"]),
-    )
-    conn.execute(
-        "INSERT INTO recurrence_exceptions(id,event_id,class_session_id,occurrence_local_start,"
-        "kind,override_json,created_at) VALUES(?,NULL,?,?,?,?,?)",
+def replace_exception(conn: sqlite3.Connection, values: dict[str, Any]) -> tuple[str, str]:
+    """Actualiza la excepción de esa ocurrencia si existe; si no, la inserta."""
+    cur = conn.execute(
+        "UPDATE recurrence_exceptions SET kind=?,override_json=? "
+        "WHERE class_session_id=? AND occurrence_local_start=?",
         (
-            values["id"], values["class_session_id"], values["occurrence_local_start"],
-            values["kind"], values["override_json"], values["created_at"],
+            values["kind"], values["override_json"], values["class_session_id"],
+            values["occurrence_local_start"],
         ),
     )  # fmt: skip
+    if not cur.rowcount:
+        conn.execute(
+            "INSERT INTO recurrence_exceptions(id,event_id,class_session_id,occurrence_local_start,"
+            "kind,override_json,created_at) VALUES(?,NULL,?,?,?,?,?)",
+            (
+                values["id"], values["class_session_id"], values["occurrence_local_start"],
+                values["kind"], values["override_json"], values["created_at"],
+            ),
+        )  # fmt: skip
+    row = conn.execute(
+        "SELECT id,created_at FROM recurrence_exceptions "
+        "WHERE class_session_id=? AND occurrence_local_start=?",
+        (values["class_session_id"], values["occurrence_local_start"]),
+    ).fetchone()
+    return row[0], row[1]

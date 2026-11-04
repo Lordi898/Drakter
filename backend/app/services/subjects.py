@@ -7,12 +7,14 @@ desde `class_sessions` + `recurrence_exceptions`. La auditoría solo lleva ids, 
 from __future__ import annotations
 
 import sqlite3
+from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import date, datetime, time, timedelta
 from typing import Any
 
 from pydantic import BaseModel
 
-from app.core.errors import AppError
+from app.core.errors import AppError, ErrorDetail
 from app.repositories import subjects as repo
 from app.schemas.calendar import AgendaItem, OccurrenceOverride, RecurrenceExceptionOut
 from app.schemas.subjects import (
@@ -31,9 +33,9 @@ from app.services.habits_calendar_support import (
     ConfirmationRef,
     RequestContext,
     bounded_limit,
+    bounded_offset,
     confirmed_action,
-    decode_cursor,
-    encode_cursor,
+    deletion_summary,
     ensure_timezone,
     insert_entity,
     new_id,
@@ -46,13 +48,12 @@ from app.services.habits_calendar_support import (
     transaction,
 )
 
-_TIME_FMT = "%H:%M:%S"
-_DT_FMT = "%Y-%m-%dT%H:%M:%S"
+_DT_FMT = "%Y-%m-%dT%H:%M"
 
 
 class SubjectList(BaseModel):
     items: list[SubjectOut]
-    next_cursor: str | None
+    total: int
 
 
 class ClassSessionWriteResult(BaseModel):
@@ -64,10 +65,21 @@ class ClassSessionWriteResult(BaseModel):
 
 class SessionList(BaseModel):
     items: list[ClassSessionOut]
+    total: int
 
 
 class SubjectResources(BaseModel):
     items: list[dict[str, Any]]
+
+
+@contextmanager
+def _atomic(conn: sqlite3.Connection) -> Iterator[sqlite3.Connection]:
+    """Una transacción propia, o la ya abierta por el pipeline de confirmaciones."""
+    if conn.in_transaction:
+        yield conn
+    else:
+        with transaction(conn):
+            yield conn
 
 
 # --- asignaturas ---------------------------------------------------------------------------
@@ -82,7 +94,7 @@ def _subject_out(conn: sqlite3.Connection, subject_id: str) -> SubjectOut:
 
 def create_subject(conn: sqlite3.Connection, ctx: RequestContext, data: SubjectCreate) -> SubjectOut:
     subject_id = new_id()
-    with transaction(conn):
+    with _atomic(conn):
         insert_entity(conn, subject_id, "subject")
         repo.insert_subject(conn, {"id": subject_id, **data.model_dump()})
         record_audit(
@@ -102,19 +114,13 @@ def list_subjects(
     *,
     include_archived: bool = False,
     limit: int | None = None,
-    cursor: str | None = None,
+    offset: int | None = None,
 ) -> SubjectList:
-    size = bounded_limit(limit)
-    after = None
-    if cursor:
-        decoded = decode_cursor(cursor)
-        after = (str(decoded.get("c", "")), str(decoded.get("i", "")))
-    rows = repo.list_subjects(conn, include_archived=include_archived, after=after, limit=size + 1)
-    page = rows[:size]
-    next_cursor = (
-        encode_cursor({"c": page[-1]["created_at"], "i": page[-1]["id"]}) if len(rows) > size else None
-    )
-    return SubjectList(items=[SubjectOut(**row) for row in page], next_cursor=next_cursor)
+    rows, total = repo.list_subjects(
+        conn, include_archived=include_archived, limit=bounded_limit(limit),
+        offset=bounded_offset(offset),
+    )  # fmt: skip
+    return SubjectList(items=[SubjectOut(**row) for row in rows], total=total)
 
 
 def update_subject(
@@ -127,7 +133,7 @@ def update_subject(
     columns = {name: getattr(data, name) for name in data.model_fields_set}
     if "name" in columns and columns["name"] is None:
         raise AppError("validation_error", "El nombre no puede quedar vacío", 422)
-    with transaction(conn):
+    with _atomic(conn):
         require_entity(conn, subject_id, "subject")
         touch_entity(conn, subject_id, if_match)
         repo.update_subject(conn, subject_id, columns)
@@ -142,7 +148,7 @@ def archive_subject(
     conn: sqlite3.Connection, ctx: RequestContext, subject_id: str, archived: bool
 ) -> SubjectOut:
     action = "archive_subject" if archived else "unarchive_subject"
-    with transaction(conn):
+    with _atomic(conn):
         require_entity(conn, subject_id, "subject")
         set_archived(conn, subject_id, archived)
         record_audit(
@@ -152,29 +158,41 @@ def archive_subject(
     return _subject_out(conn, subject_id)
 
 
+def _dependents(conn: sqlite3.Connection, subject_id: str) -> dict[str, int]:
+    return {
+        "sessions": repo.count_sessions(conn, subject_id),
+        "tasks": repo.count_tasks(conn, subject_id),
+        "relationships": repo.count_relationships(conn, subject_id),
+    }
+
+
 def _check_subject_deletable(conn: sqlite3.Connection, subject_id: str) -> None:
-    sessions = repo.count_sessions(conn, subject_id)
-    tasks = repo.count_tasks(conn, subject_id)
-    if sessions or tasks:
+    counts = _dependents(conn, subject_id)
+    if any(counts.values()):
         raise AppError(
-            "conflict",
-            f"La asignatura tiene {sessions} sesiones y {tasks} tareas vinculadas: "
-            "elimina primero las sesiones y desvincula las tareas",
+            "has_dependents",
+            "La asignatura tiene sesiones, tareas o relaciones vinculadas. "
+            "Elimínalas o desvincúlalas antes de borrarla.",
             409,
+            [
+                ErrorDetail(field=name, code="has_dependents", message=str(count))
+                for name, count in counts.items()
+                if count
+            ],
         )
 
 
 def request_delete_subject(
     conn: sqlite3.Connection, ctx: RequestContext, subject_id: str
 ) -> ConfirmationRef:
-    with transaction(conn):
+    with _atomic(conn):
         subject = repo.get_subject(conn, subject_id)
         if subject is None:
             raise AppError("not_found", "No existe esa asignatura", 404)
         _check_subject_deletable(conn, subject_id)
         return request_confirmation(
             conn, ctx, "delete_subject", {"subject_id": subject_id},
-            f"Eliminar la asignatura «{subject['name']}»",
+            deletion_summary("asignatura", subject["name"]),
             entity_type="subject", entity_id=subject_id, affected_count=1,
         )  # fmt: skip
 
@@ -184,7 +202,7 @@ def execute_delete_subject(
     conn: sqlite3.Connection, ctx: RequestContext, args: dict[str, Any]
 ) -> dict[str, Any]:
     subject_id = str(args["subject_id"])
-    with transaction(conn):
+    with _atomic(conn):
         require_entity(conn, subject_id, "subject")
         _check_subject_deletable(conn, subject_id)
         repo.delete_subject(conn, subject_id)
@@ -235,7 +253,7 @@ def _conflicts(
 
 def _session_params(row: dict[str, Any]) -> dict[str, Any]:
     return {
-        "session_id": row["id"], "subject_id": row["subject_id"], "weekday": row["weekday"],
+        "session_id": row["id"], "interval_weeks": row["interval_weeks"], "subject_id": row["subject_id"], "weekday": row["weekday"],
         "starts_local_time": row["starts_local_time"], "ends_local_time": row["ends_local_time"],
         "valid_from": row["valid_from"], "valid_until": row["valid_until"],
     }  # fmt: skip
@@ -246,10 +264,15 @@ def list_class_sessions(
     ctx: RequestContext,
     subject_id: str,
     include_archived: bool = False,
+    limit: int | None = None,
+    offset: int | None = None,
 ) -> SessionList:
     require_entity(conn, subject_id, "subject")
-    rows = repo.list_sessions(conn, subject_id, include_archived=include_archived)
-    return SessionList(items=[ClassSessionOut(**row) for row in rows])
+    rows, total = repo.list_sessions(
+        conn, subject_id, include_archived=include_archived, limit=bounded_limit(limit),
+        offset=bounded_offset(offset),
+    )  # fmt: skip
+    return SessionList(items=[ClassSessionOut(**row) for row in rows], total=total)
 
 
 def get_class_session(
@@ -267,14 +290,15 @@ def create_class_session(
         "id": session_id,
         "subject_id": subject_id,
         "weekday": data.weekday,
-        "starts_local_time": data.starts_local_time.strftime(_TIME_FMT),
-        "ends_local_time": data.ends_local_time.strftime(_TIME_FMT),
+        "starts_local_time": data.starts_local_time,
+        "ends_local_time": data.ends_local_time,
         "timezone": data.timezone,
         "valid_from": data.valid_from.isoformat(),
         "valid_until": data.valid_until.isoformat() if data.valid_until else None,
+        "interval_weeks": data.interval_weeks,
         "room": data.room,
     }
-    with transaction(conn):
+    with _atomic(conn):
         require_entity(conn, subject_id, "subject")
         conflicts = _conflicts(conn, values, None)
         insert_entity(conn, session_id, "class_session")
@@ -298,14 +322,12 @@ def update_class_session(
         value = getattr(data, name)
         if value is None and name not in ("valid_until", "room"):
             raise AppError("validation_error", f"{name} no puede ser nulo", 422)
-        if isinstance(value, time):
-            value = value.strftime(_TIME_FMT)
-        elif isinstance(value, date):
+        if isinstance(value, date):
             value = value.isoformat()
         columns[name] = value
     if "timezone" in columns:
         ensure_timezone(columns["timezone"])
-    with transaction(conn):
+    with _atomic(conn):
         current = repo.get_session(conn, session_id)
         if current is None:
             raise AppError("not_found", "No existe esa sesión de clase", 404)
@@ -327,11 +349,15 @@ def update_class_session(
 def request_delete_class_session(
     conn: sqlite3.Connection, ctx: RequestContext, session_id: str
 ) -> ConfirmationRef:
-    with transaction(conn):
-        require_entity(conn, session_id, "class_session")
+    with _atomic(conn):
+        row = repo.get_session(conn, session_id)
+        if row is None:
+            raise AppError("not_found", "No existe esa sesión de clase", 404)
+        subject = repo.get_subject(conn, row["subject_id"])
+        subject_name = subject["name"] if subject else "clase"
         return request_confirmation(
             conn, ctx, "delete_class_session", {"session_id": session_id},
-            "Eliminar una sesión de clase semanal y sus excepciones",
+            deletion_summary("sesión de clase", subject_name),
             entity_type="class_session", entity_id=session_id, affected_count=1,
         )  # fmt: skip
 
@@ -341,7 +367,7 @@ def execute_delete_class_session(
     conn: sqlite3.Connection, ctx: RequestContext, args: dict[str, Any]
 ) -> dict[str, Any]:
     session_id = str(args["session_id"])
-    with transaction(conn):
+    with _atomic(conn):
         require_entity(conn, session_id, "class_session")
         repo.delete_session(conn, session_id)
         record_audit(
@@ -354,15 +380,27 @@ def execute_delete_class_session(
 def create_schedule_exception(
     conn: sqlite3.Connection, ctx: RequestContext, session_id: str, data: ScheduleExceptionCreate
 ) -> RecurrenceExceptionOut:
-    with transaction(conn):
+    with _atomic(conn):
         row = repo.get_session(conn, session_id)
         if row is None:
             raise AppError("not_found", "No existe esa sesión de clase", 404)
         day = data.occurrence_date
         until = row["valid_until"] or "9999-12-31"
-        if day.isoweekday() != row["weekday"] or not (row["valid_from"] <= day.isoformat() <= until):
+        if (
+            day.isoweekday() != row["weekday"]
+            or not (row["valid_from"] <= day.isoformat() <= until)
+            or not _in_cycle(row, day)
+        ):
             raise AppError(
-                "invalid_occurrence", "Esa fecha no es una ocurrencia de la sesión de clase", 422
+                "validation_error",
+                "Esa fecha no es una clase de esta sesión. Elige un día que se imparta.",
+                422,
+                [
+                    ErrorDetail(
+                        field="occurrence_date", code="invalid_occurrence",
+                        message="No coincide con el día, la vigencia o la frecuencia",
+                    )
+                ],
             )
         occurrence = f"{day.isoformat()}T{row['starts_local_time']}"
         override = (
@@ -372,7 +410,7 @@ def create_schedule_exception(
             "id": new_id(), "class_session_id": session_id, "occurrence_local_start": occurrence,
             "kind": data.kind, "override_json": override, "created_at": now_utc(),
         }  # fmt: skip
-        repo.replace_exception(conn, values)
+        values["id"], values["created_at"] = repo.replace_exception(conn, values)
         record_audit(
             conn, ctx, "create_schedule_exception", entity_type="class_session",
             entity_id=session_id,
@@ -391,13 +429,28 @@ def create_schedule_exception(
 def get_timetable(
     conn: sqlite3.Connection, ctx: RequestContext, on_date: date | None = None
 ) -> Timetable:
-    day = on_date or date.today()
+    if on_date is None:
+        raise AppError(
+            "invalid_query", "Indica la fecha (on) para consultar el horario.", 422,
+            [ErrorDetail(field="on", code="required", message="Falta la fecha")],
+        )  # fmt: skip
+    day = on_date
     rows = repo.timetable_rows(conn, day.isoformat())
     return Timetable(on_date=day, entries=[TimetableEntry(**row) for row in rows])
 
 
-def _local(value: datetime) -> datetime:
-    return value.replace(tzinfo=None, microsecond=0)
+def _local(value: str) -> datetime:
+    return datetime.fromisoformat(value)
+
+
+def _monday(day: date) -> date:
+    return day - timedelta(days=day.isoweekday() - 1)
+
+
+def _in_cycle(row: dict[str, Any], day: date) -> bool:
+    """La semana ISO de `day` dista de la de `valid_from` un múltiplo de interval_weeks."""
+    weeks = (_monday(day) - _monday(date.fromisoformat(row["valid_from"]))).days // 7
+    return weeks % row["interval_weeks"] == 0
 
 
 def project_class_sessions(
@@ -419,13 +472,16 @@ def project_class_sessions(
         stop = min(last, date.fromisoformat(row["valid_until"])) if row["valid_until"] else last
         day += timedelta(days=(row["weekday"] - day.isoweekday()) % 7)
         while day <= stop:
-            original = datetime.combine(day, start_t)
+            current = day
+            day += timedelta(days=7)
+            if not _in_cycle(row, current):
+                continue
+            original = datetime.combine(current, start_t)
             occurrence = original.strftime(_DT_FMT)
             exc = exceptions.get((row["id"], occurrence))
-            day += timedelta(days=7)
             if exc is not None and exc["kind"] == "cancelled":
                 continue
-            local_start, local_end = original, datetime.combine(original.date(), end_t)
+            local_start, local_end = original, datetime.combine(current, end_t)
             override = OccurrenceOverride()
             if exc is not None and exc["override_json"]:
                 override = OccurrenceOverride.model_validate_json(exc["override_json"])
