@@ -402,4 +402,4 @@ Decisiones técnicas, cambios de tecnología y motivos.
 - **Alternativas descartadas:** OpenViking activo en v1, como plugin o por HTTP (por lo anterior, en una máquina de 14 GB).
 - **Consecuencia:** se pierde en v1 la carga progresiva L0/L1/L2 y la búsqueda semántica: FTS5 busca por texto. Si U-1 se rechaza, hay que retomar `MASTER_PLAN` §10 tal como está.
 - **Sin comprobar:** la calidad de recuperación con FTS5 en español.
-- **Impacto:** `MASTER_PLAN` §10, `ROADMAP` §2 y Fase 16, `PLAN_DISEÑO` §8, `IMPLEMENTATION_STATUS.md` Checklist 12, `CLAUDE.md` §1 y §2, `RUN_STATE.md`. `.claude/skills/drakter-toolkit/SKILL.md` y `agent/knowledge/TOOL_GUIDE.md` están fuera de esta rama de trabajo y aún citan OpenViking.
+- **Impacto:** `MASTER_PLAN` §10, `ROADMAP` §2 y Fase 16, `PLAN_DISEÑO` §8, `IMPLEMENTATION_STATUS.md` Checklist 12, `CLAUDE.md` §1 y §2, `RUN_STATE.md`. `.claude/skills/drakter-toolkit/SKILL.md` aún dice que la memoria es la nativa de Hermes + OpenViking.
