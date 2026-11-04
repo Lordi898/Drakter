@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from 'react'
 import type { ApprovalOutcome } from '../../electron/shared/bridge'
 import { listPendingConfirmations, subscribeConfirmationRequired } from '@/services/api'
-import type { PendingConfirmation } from '@/services/protocol'
+import type { ConfirmationTicket, PendingConfirmation } from '@/services/protocol'
 import { subscribeResync, subscribeServerEvents } from '@/services/ws'
 
 /**
@@ -106,14 +106,22 @@ subscribeServerEvents((event) => {
   if (event.type === 'confirmation.requested') add(event.payload)
   else if (event.type === 'confirmation.resolved') remove(event.payload.action_id)
 })
-subscribeConfirmationRequired((ticket) => {
+
+/**
+ * Hace revisable un ticket de un 409 `confirmation_required`. Idempotente, y solo
+ * lo deja pendiente: decidir sigue exigiendo el diálogo nativo. `apiRequest` ya lo
+ * registra solo; esto es para quien reciba un ticket por otra vía.
+ */
+export function registerConfirmation(ticket: ConfirmationTicket): void {
   add({
     action_id: ticket.id,
     summary: ticket.summary,
     affected_count: ticket.affected_count,
     expires_at: ticket.expires_at
   })
-})
+}
+
+subscribeConfirmationRequired(registerConfirmation)
 subscribeResync(() => void refresh())
 
 export async function reviewConfirmation(actionId: string, proof: TrustedGesture): Promise<ReviewOutcome> {

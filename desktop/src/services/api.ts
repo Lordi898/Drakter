@@ -1,4 +1,4 @@
-import type { ApiCallResult, DrakterApi } from '../../electron/shared/bridge'
+import type { ApiCallResult, DrakterApi, HttpMethod } from '../../electron/shared/bridge'
 import {
   isAgentState,
   isConfirmationTicket,
@@ -135,9 +135,21 @@ export function subscribeConfirmationRequired(listener: (ticket: ConfirmationTic
 }
 
 export interface ApiRequestInit {
-  readonly method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
+  readonly method?: HttpMethod
   readonly body?: unknown
+  /** Solo `If-Match`: la credencial la pone main y el renderer no la conoce. */
+  readonly headers?: { readonly 'If-Match'?: string }
 }
+
+/** Cuarto argumento de `window.api.call`. Pendiente en bridge.ts (drakter-24): hasta entonces main lo ignora. */
+type CallWithOptions = (
+  method: HttpMethod,
+  path: string,
+  body?: unknown,
+  options?: { readonly ifMatch: string }
+) => Promise<ApiCallResult>
+
+const IF_MATCH_PATTERN = /^[\x21-\x7e]{1,128}$/
 
 function getApi(): DrakterApi | null {
   return typeof window !== 'undefined' && typeof window.api !== 'undefined' ? window.api : null
@@ -180,12 +192,17 @@ export async function apiRequest<T>(path: string, init: ApiRequestInit = {}): Pr
   if (!path.startsWith('/') || path.startsWith('//') || path.includes('\\') || path.includes('://')) {
     throw new ApiError(0, 'invalid_request', CODE_MESSAGES['invalid_request'] ?? 'La solicitud no es válida.')
   }
+  const ifMatch = init.headers?.['If-Match']
+  if (ifMatch !== undefined && !IF_MATCH_PATTERN.test(ifMatch)) {
+    throw new ApiError(0, 'invalid_request', CODE_MESSAGES['invalid_request'] ?? 'La solicitud no es válida.')
+  }
   const api = getApi()
   if (!api) throw new ApiError(0, 'backend_unavailable', messageFor(0, 'backend_unavailable'))
 
   let result: ApiCallResult
   try {
-    result = await api.call(init.method ?? 'GET', path, init.body)
+    const call = api.call as CallWithOptions
+    result = await call(init.method ?? 'GET', path, init.body, ifMatch === undefined ? undefined : { ifMatch })
   } catch {
     throw new ApiError(0, 'backend_unavailable', messageFor(0, 'backend_unavailable'))
   }
