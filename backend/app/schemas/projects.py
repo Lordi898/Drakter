@@ -7,12 +7,13 @@ from typing import Annotated, Any, Final, Literal, Self
 from uuid import UUID
 
 from pydantic import Field, field_validator, model_validator
+from pydantic_core import PydanticCustomError
 
 from app.schemas.tasks import (
     DEFAULT_LIMIT,
     MAX_DESCRIPTION,
     MAX_LIMIT,
-    ArchivedFilter,
+    MAX_OFFSET,
     Metadata,
     Out,
     Priority,
@@ -49,7 +50,10 @@ class ProjectCreate(Strict):
     @model_validator(mode="after")
     def _ordered_dates(self) -> Self:
         if self.start_date and self.target_date and self.start_date > self.target_date:
-            raise ValueError("start_after_target")
+            raise PydanticCustomError(
+                "start_after_target",
+                "La fecha de inicio no puede ser posterior a la fecha objetivo.",
+            )
         return self
 
 
@@ -70,9 +74,11 @@ class ProjectUpdate(Strict):
     def _no_null_required(self) -> Self:
         for name in ("name", "status", "priority", "metadata"):
             if name in self.model_fields_set and getattr(self, name) is None:
-                raise ValueError(f"{name}_cannot_be_null")
+                raise PydanticCustomError(
+                    "required_field_null", "Este campo no se puede dejar vacío."
+                )
         if not self.model_fields_set:
-            raise ValueError("empty_update")
+            raise PydanticCustomError("empty_update", "No hay ningún cambio que guardar.")
         return self
 
 
@@ -115,10 +121,10 @@ class ProjectListQuery(Strict):
     status: list[ProjectStatus] = []
     priority: list[Priority] = []
     q: Annotated[str, Field(max_length=200)] | None = None
-    archived: ArchivedFilter = "exclude"
+    include_archived: bool = False
     sort: Annotated[str, Field(max_length=100)] = "-updated_at"
     limit: Annotated[int, Field(ge=1, le=MAX_LIMIT)] = DEFAULT_LIMIT
-    cursor: Annotated[str, Field(max_length=200)] | None = None
+    offset: Annotated[int, Field(ge=0, le=MAX_OFFSET)] = 0
 
     @field_validator("sort")
     @classmethod

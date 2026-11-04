@@ -40,17 +40,21 @@ def service_context(request: Request) -> Iterator[ServiceContext]:
 
 
 def parse_if_match(value: str | None) -> int | None:
-    """`If-Match: "<revision>"`, entity-tag entre comillas (C-19)."""
+    """`If-Match` con la revisión, con o sin comillas de entity-tag."""
     if value is None:
         return None
-    text = value.strip()
-    if len(text) < 3 or text[0] != '"' or text[-1] != '"' or not text[1:-1].isdecimal():
-        raise AppError("invalid_query", "La cabecera If-Match no es válida.", 400)
-    return int(text[1:-1])
+    text = value.strip().removeprefix('"').removesuffix('"')
+    if not text.isdecimal() or len(text) > 18:
+        raise AppError(
+            "invalid_query",
+            "No se pudo comprobar si el elemento cambió. Recarga e inténtalo de nuevo.",
+            400,
+        )
+    return int(text)
 
 
 def confirmation_response(request: Request, required: ConfirmationRequired) -> JSONResponse:
-    """409 con el envelope común y la extensión `confirmation` (C-20)."""
+    """409 con el sobre común y `confirmation` a su lado (`contracts/README.md` §5)."""
     envelope = ErrorEnvelope(
         error=ErrorBody(
             code="confirmation_required",

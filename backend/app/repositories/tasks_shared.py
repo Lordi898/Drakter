@@ -1,6 +1,6 @@
 """Acceso a las tablas comunes (entities, tags, depends_on, audit_events).
 
-Único archivo de este módulo que conoce esos nombres. Sigue el borrador `schema_v1`; si
+Único archivo de este módulo que conoce esos nombres. Sigue `backend/migrations/`; si
 `contracts/` los cambia, se adapta aquí. Sin `INSERT OR REPLACE` (C-16). Nada de esto
 abre transacción: lo hace el servicio.
 """
@@ -234,22 +234,25 @@ def write_audit(
 
 def history_for(
     conn: sqlite3.Connection, entity_ids: Sequence[str], limit: int, offset: int
-) -> list[dict[str, Any]]:
-    """Más reciente primero. Devuelve hasta `limit + 1` para saber si hay otra página."""
+) -> tuple[list[dict[str, Any]], int]:
+    """Más reciente primero. Devuelve la página y el total."""
     if not entity_ids:
-        return []
+        return [], 0
+    marks = _placeholders(entity_ids)
+    total = conn.execute(
+        f"SELECT count(*) FROM audit_events WHERE entity_id IN ({marks})", tuple(entity_ids)
+    ).fetchone()[0]
     rows = conn.execute(
         "SELECT id, occurred_at, actor_type, origin, action, tool_name, entity_type, entity_id,"
-        f" result, error_code, changes_json FROM audit_events"
-        f" WHERE entity_id IN ({_placeholders(entity_ids)})"
+        f" result, error_code, changes_json FROM audit_events WHERE entity_id IN ({marks})"
         " ORDER BY seq DESC LIMIT ? OFFSET ?",
-        (*entity_ids, limit + 1, offset),
+        (*entity_ids, limit, offset),
     ).fetchall()
     keys = (
         "id", "occurred_at", "actor_type", "origin", "action", "tool_name",
         "entity_type", "entity_id", "result", "error_code",
     )
     return [
-        {**dict(zip(keys, row[:10], strict=True)), "changes": json.loads(row[10]) if row[10] else None}
+        {**dict(zip(keys, tuple(row)[:10], strict=True)), "changes": json.loads(row[10]) if row[10] else None}
         for row in rows
-    ]
+    ], total

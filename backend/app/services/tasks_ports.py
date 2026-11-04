@@ -6,9 +6,6 @@ las piezas reales, se cambia la implementación aquí sin tocar los servicios.
 
 from __future__ import annotations
 
-import base64
-import binascii
-import json
 import sqlite3
 from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager
@@ -17,12 +14,11 @@ from datetime import UTC, datetime
 from typing import Any, Final, Literal, Protocol
 from uuid import uuid4
 
-from app.core.errors import AppError
+from app.core.errors import AppError, ErrorDetail
 from app.schemas.tasks import ConfirmationTicket, format_timestamp
 
 BULK_THRESHOLD: Final = 10  # Más de este número de filas afectadas es "masivo" (C-06).
 MAX_TASK_DEPTH: Final = 8  # Una tarea raíz tiene profundidad 0.
-MAX_CURSOR_OFFSET: Final = 1_000_000
 
 ActorType = Literal["user", "agent", "automation", "system"]
 Origin = Literal["rest", "mcp", "scheduler", "internal"]
@@ -127,7 +123,16 @@ def not_found(what: str) -> AppError:
 
 
 def conflict(message: str) -> AppError:
-    return AppError("conflict", message, 409)
+    """`details` lleva el motivo: el cliente no muestra `message` del servidor."""
+    return AppError(
+        "conflict", message, 409, [ErrorDetail(code="conflict", message=message)]
+    )
+
+
+def hierarchy_cycle(message: str) -> AppError:
+    return AppError(
+        "hierarchy_cycle", message, 409, [ErrorDetail(code="hierarchy_cycle", message=message)]
+    )
 
 
 def check_revision(current: int, expected: int | None) -> None:
@@ -137,23 +142,3 @@ def check_revision(current: int, expected: int | None) -> None:
             "El elemento cambió desde que se leyó. Vuelve a cargarlo.",
             412,
         )
-
-
-def encode_cursor(offset: int) -> str:
-    raw = json.dumps({"o": offset}, separators=(",", ":")).encode()
-    return base64.urlsafe_b64encode(raw).decode().rstrip("=")
-
-
-def decode_cursor(cursor: str | None) -> int:
-    if cursor is None:
-        return 0
-    try:
-        padded = cursor + "=" * (-len(cursor) % 4)
-        offset = json.loads(base64.urlsafe_b64decode(padded.encode()))["o"]
-    except (binascii.Error, ValueError, KeyError, TypeError, UnicodeError):
-        raise AppError("invalid_query", "El cursor no es válido.", 400) from None
-    if not isinstance(offset, int) or isinstance(offset, bool):
-        raise AppError("invalid_query", "El cursor no es válido.", 400)
-    if not 0 <= offset <= MAX_CURSOR_OFFSET:
-        raise AppError("invalid_query", "El cursor no es válido.", 400)
-    return offset

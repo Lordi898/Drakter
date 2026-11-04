@@ -17,13 +17,13 @@ from pydantic import (
     field_validator,
     model_validator,
 )
+from pydantic_core import PydanticCustomError
 
 TaskStatus = Literal["pending", "in_progress", "on_hold", "completed", "cancelled"]
 # `completed` solo se alcanza con complete_task: así hay un único camino que comprueba
 # subtareas y dependencias. Reabrir es reopen_task.
 EditableTaskStatus = Literal["pending", "in_progress", "on_hold", "cancelled"]
 Priority = Literal["low", "medium", "high", "urgent"]
-ArchivedFilter = Literal["exclude", "only", "include"]
 
 MAX_TITLE: Final = 300
 MAX_DESCRIPTION: Final = 20_000
@@ -32,6 +32,7 @@ MAX_TAG_NAME: Final = 64
 MAX_METADATA_BYTES: Final = 16_384
 DEFAULT_LIMIT: Final = 50
 MAX_LIMIT: Final = 200
+MAX_OFFSET: Final = 1_000_000
 TASK_SORT_FIELDS: Final = frozenset(
     {"position", "created_at", "updated_at", "due", "priority", "title"}
 )
@@ -48,7 +49,7 @@ def format_timestamp(value: datetime) -> str:
 
 def check_metadata(value: dict[str, Any]) -> dict[str, Any]:
     if len(json.dumps(value, ensure_ascii=False).encode()) > MAX_METADATA_BYTES:
-        raise ValueError("metadata_too_large")
+        raise PydanticCustomError("metadata_too_large", "Los metadatos son demasiado grandes.")
     return value
 
 
@@ -74,8 +75,10 @@ class Out(BaseModel):
 
 
 class Page(Out, Generic[T]):
+    """Listado de `contracts/README.md` §2: `total` cuenta todo lo que cumple el filtro."""
+
     items: list[T]
-    next_cursor: str | None = None
+    total: int
 
 
 class TagOut(Out):
@@ -109,7 +112,9 @@ class TaskCreate(Strict):
     @model_validator(mode="after")
     def _single_due(self) -> Self:
         if self.due_at is not None and self.due_date is not None:
-            raise ValueError("due_at_and_due_date")
+            raise PydanticCustomError(
+                "due_at_and_due_date", "Indica fecha límite con hora o sin hora, no las dos."
+            )
         return self
 
 
@@ -141,9 +146,11 @@ class TaskUpdate(Strict):
     def _no_null_required(self) -> Self:
         for name in ("title", "status", "priority", "position", "tags", "metadata"):
             if name in self.model_fields_set and getattr(self, name) is None:
-                raise ValueError(f"{name}_cannot_be_null")
+                raise PydanticCustomError(
+                    "required_field_null", "Este campo no se puede dejar vacío."
+                )
         if not self.model_fields_set:
-            raise ValueError("empty_update")
+            raise PydanticCustomError("empty_update", "No hay ningún cambio que guardar.")
         return self
 
 
@@ -208,10 +215,10 @@ class TaskListQuery(Strict):
     due_before: UtcTimestamp | None = None
     due_after: UtcTimestamp | None = None
     q: Annotated[str, Field(max_length=200)] | None = None
-    archived: ArchivedFilter = "exclude"
+    include_archived: bool = False
     sort: Annotated[str, Field(max_length=100)] = "position,-created_at"
     limit: Annotated[int, Field(ge=1, le=MAX_LIMIT)] = DEFAULT_LIMIT
-    cursor: Annotated[str, Field(max_length=200)] | None = None
+    offset: Annotated[int, Field(ge=0, le=MAX_OFFSET)] = 0
 
     @field_validator("sort")
     @classmethod
@@ -222,7 +229,7 @@ class TaskListQuery(Strict):
 def check_sort(value: str, allowed: frozenset[str]) -> str:
     parts = [part.removeprefix("-") for part in value.split(",")]
     if not all(part in allowed for part in parts) or len(set(parts)) != len(parts):
-        raise ValueError("invalid_sort")
+        raise PydanticCustomError("invalid_sort", "Ese orden no está disponible.")
     return value
 
 
@@ -241,8 +248,10 @@ class HistoryEntry(Out):
 
 
 class ConfirmationTicket(Out):
+    """Objeto `confirmation` del 409 (`contracts/README.md` §5). `params_hash` es `args_hash`."""
+
     id: UUID
-    tool_name: str
     summary: str
     affected_count: int
     expires_at: str
+    params_hash: str
