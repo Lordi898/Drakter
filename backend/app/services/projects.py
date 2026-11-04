@@ -7,9 +7,12 @@ from collections.abc import Callable, Mapping, Sequence
 from datetime import date
 from typing import Any, Final
 
-from app.core.errors import AppError
+import logging
+
+from app.core.errors import AppError, ErrorDetail
 from app.repositories import projects as repo
 from app.repositories.tasks_shared import (
+    audits_failure,
     history_for,
     insert_entity,
     set_archived,
@@ -36,6 +39,8 @@ from app.services.tasks_ports import (
     transaction,
     utc_now,
 )
+
+logger = logging.getLogger(__name__)
 
 _ENTITY = "project"
 _PLAIN_FIELDS: Final = (
@@ -93,11 +98,23 @@ def _out_one(conn: sqlite3.Connection, project_id: str) -> ProjectOut:
     return _out(row, counts)
 
 
-def _publish(ctx: ServiceContext, kind: str, project_id: str, revision: int) -> None:
-    ctx.ports.events.publish(
-        f"workspace.entity_{kind}",
-        {"entity_type": _ENTITY, "entity_id": project_id, "revision": revision},
-    )
+def _publish(
+    ctx: ServiceContext, kind: str, entities: Sequence[tuple[str, str, int]]
+) -> None:
+    """Ya hubo `COMMIT`: un fallo del canal de eventos no puede hacer creer que no se guardó."""
+    for entity_type, entity_id, revision in entities:
+        try:
+            ctx.ports.events.publish(
+                f"workspace.entity_{kind}",
+                {"entity_type": entity_type, "entity_id": entity_id, "revision": revision},
+            )
+        except Exception:
+            logger.exception("event_publish_failed", extra={"entity_id": entity_id})
+
+
+def _has_dependents(message: str, count: int) -> AppError:
+    detail = ErrorDetail(code="has_dependents", message=f"{message} ({count})")
+    return AppError("has_dependents", message, 409, [detail])
 
 
 def _validate_dates(start: str | None, target: str | None) -> None:
@@ -109,6 +126,7 @@ def _translate(exc: sqlite3.IntegrityError) -> AppError:
     return conflict("La operación entra en conflicto con los datos existentes.")
 
 
+@audits_failure("project.create", "project")
 def create_project(ctx: ServiceContext, data: ProjectCreate) -> ProjectOut:
     project_id = new_id()
     now = utc_now()
@@ -137,12 +155,12 @@ def create_project(ctx: ServiceContext, data: ProjectCreate) -> ProjectOut:
             repo.insert_project(ctx.conn, values)
             write_audit(
                 ctx.conn, ctx.actor, action="project.create", entity_type=_ENTITY,
-                entity_id=project_id, changes=changes,
+                entity_id=project_id, params={"fields": sorted(changes)}, changes=changes,
             )
     except sqlite3.IntegrityError as exc:
         raise _translate(exc) from exc
     out = _out_one(ctx.conn, project_id)
-    _publish(ctx, "created", project_id, out.revision)
+    _publish(ctx, "created", [(_ENTITY, project_id, out.revision)])
     return out
 
 
@@ -168,6 +186,7 @@ def list_projects(ctx: ServiceContext, query: ProjectListQuery) -> Page[ProjectO
     )
 
 
+@audits_failure("project.update", "project")
 def update_project(
     ctx: ServiceContext,
     project_id: str,
@@ -221,13 +240,13 @@ def update_project(
             touch_entity(ctx.conn, project_id, now)
             write_audit(
                 ctx.conn, ctx.actor, action="project.update", entity_type=_ENTITY,
-                entity_id=project_id, changes=changes,
+                entity_id=project_id, params={"fields": sorted(changes)}, changes=changes,
             )
             revision = row["revision"] + 1
     except sqlite3.IntegrityError as exc:
         raise _translate(exc) from exc
     if revision is not None:
-        _publish(ctx, "updated", project_id, revision)
+        _publish(ctx, "updated", [(_ENTITY, project_id, revision)])
     return _out_one(ctx.conn, project_id)
 
 
@@ -251,22 +270,30 @@ def _set_archived(
             changes={"archived_at": {"from": row["archived_at"], "to": target}},
         )
         revision = row["revision"] + 1
-    _publish(ctx, "archived" if archive else "restored", project_id, revision)
+    _publish(ctx, "archived" if archive else "restored", [(_ENTITY, project_id, revision)])
     return _out_one(ctx.conn, project_id)
 
 
+@audits_failure("project.archive", "project")
 def archive_project(
     ctx: ServiceContext, project_id: str, *, expected_revision: int | None = None
 ) -> ProjectOut:
     return _set_archived(ctx, project_id, True, expected_revision)
 
 
+@audits_failure("project.unarchive", "project")
 def unarchive_project(
     ctx: ServiceContext, project_id: str, *, expected_revision: int | None = None
 ) -> ProjectOut:
     return _set_archived(ctx, project_id, False, expected_revision)
 
 
+def _delete_summary(name: str, tasks: int) -> str:
+    text = f"Vas a eliminar 1 proyecto: «{name}». Esta acción no se puede deshacer."
+    return f"{text} Sus {tasks} tareas se conservan sin proyecto." if tasks else text
+
+
+@audits_failure("project.delete", "project")
 def delete_project(
     ctx: ServiceContext,
     project_id: str,
@@ -274,48 +301,69 @@ def delete_project(
     expected_revision: int | None = None,
     pre_confirmed: bool = False,
 ) -> None:
-    if not pre_confirmed:
-        row = _load(ctx.conn, project_id)
-        check_revision(row["revision"], expected_revision)
-        affected = len(repo.task_ids_of_project(ctx.conn, project_id))
-        dependents = f" y {affected} dependientes" if affected else ""
-        summary = (
-            f"Vas a eliminar 1 proyecto: «{row['name']}»{dependents}."
-            " Esta acción no se puede deshacer."
-        )
-        ticket = ctx.ports.confirmations.request(
-            ctx.conn,
-            actor=ctx.actor,
-            tool_name="delete_project",
-            args={"project_id": project_id},
-            summary=summary,
-            affected_count=affected,
-            targets=[ConfirmationTarget(entity_id=project_id, revision=row["revision"])],
-        )
-        with transaction(ctx.conn):
-            write_audit(
-                ctx.conn, ctx.actor, action="project.delete", entity_type=_ENTITY,
-                entity_id=project_id, affected_count=affected, result="confirmation_required",
-            )
-        raise ConfirmationRequired(ticket)
-
-    now = utc_now()
+    if pre_confirmed:
+        _execute_delete(ctx, project_id, expected_revision, None)
+        return
+    row = _load(ctx.conn, project_id)
+    check_revision(row["revision"], expected_revision)
+    blocking = repo.count_blocking(ctx.conn, project_id)
+    if blocking:
+        raise _has_dependents("El proyecto sigue vinculado a otros elementos.", blocking)
+    tasks = repo.task_revisions_of_project(ctx.conn, project_id)
+    targets = [
+        ConfirmationTarget(entity_id=project_id, revision=row["revision"]),
+        *(ConfirmationTarget(entity_id=tid, revision=rev) for tid, rev in tasks),
+    ]
+    ticket = ctx.ports.confirmations.request(
+        ctx.conn,
+        actor=ctx.actor,
+        tool_name="delete_project",
+        args={"project_id": project_id},
+        summary=_delete_summary(row["name"], len(tasks)),
+        affected_count=1 + len(tasks),
+        targets=targets,
+    )
     with transaction(ctx.conn):
-        row = _load(ctx.conn, project_id)
-        check_revision(row["revision"], expected_revision)
-        released = repo.release_tasks(ctx.conn, project_id, now)
-        repo.delete_project(ctx.conn, project_id)
         write_audit(
             ctx.conn, ctx.actor, action="project.delete", entity_type=_ENTITY,
-            entity_id=project_id, affected_count=len(released),
-            changes={"name": {"from": row["name"], "to": None}},
+            entity_id=project_id, affected_count=1 + len(tasks),
+            result="confirmation_required",
         )
-    _publish(ctx, "deleted", project_id, row["revision"])
-    for task_id, task_revision in released:
-        ctx.ports.events.publish(
-            "workspace.entity_updated",
-            {"entity_type": "task", "entity_id": task_id, "revision": task_revision},
-        )
+    raise ConfirmationRequired(ticket)
+
+
+def _execute_delete(
+    ctx: ServiceContext,
+    project_id: str,
+    expected_revision: int | None,
+    targets: Sequence[ConfirmationTarget] | None,
+) -> None:
+    now = utc_now()
+    try:
+        with transaction(ctx.conn):
+            row = _load(ctx.conn, project_id)
+            check_revision(row["revision"], expected_revision)
+            blocking = repo.count_blocking(ctx.conn, project_id)
+            if blocking:
+                raise _has_dependents("El proyecto sigue vinculado a otros elementos.", blocking)
+            if targets is not None:
+                current = {(project_id, row["revision"])} | set(
+                    repo.task_revisions_of_project(ctx.conn, project_id)
+                )
+                if current != {(t.entity_id, t.revision) for t in targets}:
+                    raise conflict("El proyecto o sus tareas cambiaron desde que se pidió la confirmación.")
+            released = repo.release_tasks(ctx.conn, ctx.actor, project_id, now)
+            repo.delete_project(ctx.conn, project_id)
+            write_audit(
+                ctx.conn, ctx.actor, action="project.delete", entity_type=_ENTITY,
+                entity_id=project_id, affected_count=1 + len(released),
+                params={"project_id": project_id},
+                changes={"name": {"from": row["name"], "to": None}},
+            )
+    except sqlite3.IntegrityError as exc:
+        raise _has_dependents("El proyecto sigue vinculado a otros elementos.", 1) from exc
+    _publish(ctx, "deleted", [(_ENTITY, project_id, row["revision"])])
+    _publish(ctx, "updated", [("task", tid, rev) for tid, rev in released])
 
 
 def get_project_progress(ctx: ServiceContext, project_id: str) -> ProjectProgress:
@@ -335,16 +383,20 @@ def project_activity(
     )
 
 
+@audits_failure("project.delete", "project")
+def _run_confirmed_delete(
+    ctx: ServiceContext, project_id: str, targets: Sequence[ConfirmationTarget]
+) -> None:
+    _execute_delete(ctx, project_id, None, targets)
+
+
 def _confirmed_delete(
     ctx: ServiceContext, args: Mapping[str, Any], targets: Sequence[ConfirmationTarget]
 ) -> None:
     project_id = args.get("project_id")
-    if not isinstance(project_id, str) or len(targets) != 1 or targets[0].entity_id != project_id:
+    if not isinstance(project_id, str) or not any(t.entity_id == project_id for t in targets):
         raise conflict("La confirmación no corresponde a este proyecto.")
-    row = _load(ctx.conn, project_id)
-    if row["revision"] != targets[0].revision:
-        raise conflict("El proyecto cambió desde que se pidió la confirmación.")
-    delete_project(ctx, project_id, expected_revision=targets[0].revision, pre_confirmed=True)
+    _run_confirmed_delete(ctx, project_id, targets)
 
 
 PROJECT_CONFIRMABLE: Final[

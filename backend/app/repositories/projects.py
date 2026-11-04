@@ -11,7 +11,8 @@ import sqlite3
 from collections.abc import Mapping, Sequence
 from typing import Any, Final
 
-from app.repositories.tasks_shared import touch_entity
+from app.repositories.tasks_shared import touch_entity, write_audit
+from app.services.tasks_ports import Actor
 
 _SELECT: Final = (
     "SELECT p.id, p.name, p.description, p.status, p.priority, p.start_date, p.target_date,"
@@ -175,8 +176,31 @@ def task_ids_of_project(conn: sqlite3.Connection, project_id: str) -> list[str]:
     return [row[0] for row in rows]
 
 
-def release_tasks(conn: sqlite3.Connection, project_id: str, now: str) -> list[tuple[str, int]]:
-    """Deja las tareas del proyecto sin proyecto y sube su revisión. Devuelve (id, revisión)."""
+def task_revisions_of_project(conn: sqlite3.Connection, project_id: str) -> list[tuple[str, int]]:
+    rows = conn.execute(
+        "SELECT t.id, e.revision FROM tasks t JOIN entities e ON e.id = t.id"
+        " WHERE t.project_id = ? ORDER BY t.id",
+        (project_id,),
+    ).fetchall()
+    return [(row[0], row[1]) for row in rows]
+
+
+def count_blocking(conn: sqlite3.Connection, project_id: str) -> int:
+    """Filas que impiden borrar el proyecto: relaciones (FK RESTRICT) y hábitos que lo apuntan."""
+    related = conn.execute(
+        "SELECT count(*) FROM relationships WHERE source_id = ? OR target_id = ?",
+        (project_id, project_id),
+    ).fetchone()[0]
+    habits = conn.execute(
+        "SELECT count(*) FROM habits WHERE goal_project_id = ?", (project_id,)
+    ).fetchone()[0]
+    return related + habits
+
+
+def release_tasks(
+    conn: sqlite3.Connection, actor: Actor, project_id: str, now: str
+) -> list[tuple[str, int]]:
+    """Deja las tareas sin proyecto, sube su revisión y audita `task.update` por cada una."""
     task_ids = task_ids_of_project(conn, project_id)
     if not task_ids:
         return []
@@ -185,6 +209,10 @@ def release_tasks(conn: sqlite3.Connection, project_id: str, now: str) -> list[t
     for task_id in task_ids:
         touch_entity(conn, task_id, now)
         row = conn.execute("SELECT revision FROM entities WHERE id = ?", (task_id,)).fetchone()
+        write_audit(
+            conn, actor, action="task.update", entity_type="task", entity_id=task_id,
+            changes={"project_id": {"from": project_id, "to": None}},
+        )
         released.append((task_id, row[0]))
     return released
 
