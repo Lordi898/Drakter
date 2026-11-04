@@ -1,8 +1,9 @@
-import type { ApiCallResult, DrakterApi, HttpMethod } from '../../electron/shared/bridge'
+import type { ApiCallOptions, ApiCallResult, DrakterApi, HttpMethod } from '../../electron/shared/bridge'
 import {
   isAgentState,
+  isConfirmationOut,
   isConfirmationTicket,
-  isStoredChatMessage,
+  isMessageOut,
   type AgentStatusInfo,
   type ApiErrorDetail,
   type ChatSessionInfo,
@@ -10,7 +11,7 @@ import {
   type PendingConfirmation,
   type SendMessageRequest,
   type SendMessageResponse,
-  type StoredChatMessage
+  type MessageOut
 } from '@/services/protocol'
 
 /**
@@ -137,19 +138,11 @@ export function subscribeConfirmationRequired(listener: (ticket: ConfirmationTic
 export interface ApiRequestInit {
   readonly method?: HttpMethod
   readonly body?: unknown
-  /** Solo `If-Match`: la credencial la pone main y el renderer no la conoce. */
-  readonly headers?: { readonly 'If-Match'?: string }
+  /** Solo estas cabeceras, y no en GET: la credencial la pone main y el renderer no la conoce. */
+  readonly headers?: { readonly 'If-Match'?: string; readonly 'Idempotency-Key'?: string }
 }
 
-/** Cuarto argumento de `window.api.call`. Pendiente en bridge.ts (drakter-24): hasta entonces main lo ignora. */
-type CallWithOptions = (
-  method: HttpMethod,
-  path: string,
-  body?: unknown,
-  options?: { readonly ifMatch: string }
-) => Promise<ApiCallResult>
-
-const IF_MATCH_PATTERN = /^[\x21-\x7e]{1,128}$/
+const HEADER_VALUE_PATTERN = /^[\x21-\x7e]{1,128}$/
 
 function getApi(): DrakterApi | null {
   return typeof window !== 'undefined' && typeof window.api !== 'undefined' ? window.api : null
@@ -192,17 +185,23 @@ export async function apiRequest<T>(path: string, init: ApiRequestInit = {}): Pr
   if (!path.startsWith('/') || path.startsWith('//') || path.includes('\\') || path.includes('://')) {
     throw new ApiError(0, 'invalid_request', CODE_MESSAGES['invalid_request'] ?? 'La solicitud no es válida.')
   }
+  const method = init.method ?? 'GET'
   const ifMatch = init.headers?.['If-Match']
-  if (ifMatch !== undefined && !IF_MATCH_PATTERN.test(ifMatch)) {
+  const idempotencyKey = init.headers?.['Idempotency-Key']
+  const headerValues = [ifMatch, idempotencyKey].filter((value) => value !== undefined)
+  if (headerValues.some((value) => method === 'GET' || !HEADER_VALUE_PATTERN.test(value))) {
     throw new ApiError(0, 'invalid_request', CODE_MESSAGES['invalid_request'] ?? 'La solicitud no es válida.')
+  }
+  const options: ApiCallOptions = {
+    ...(ifMatch === undefined ? {} : { ifMatch }),
+    ...(idempotencyKey === undefined ? {} : { idempotencyKey })
   }
   const api = getApi()
   if (!api) throw new ApiError(0, 'backend_unavailable', messageFor(0, 'backend_unavailable'))
 
   let result: ApiCallResult
   try {
-    const call = api.call as CallWithOptions
-    result = await call(init.method ?? 'GET', path, init.body, ifMatch === undefined ? undefined : { ifMatch })
+    result = await api.call(method, path, init.body, headerValues.length === 0 ? undefined : options)
   } catch {
     throw new ApiError(0, 'backend_unavailable', messageFor(0, 'backend_unavailable'))
   }
@@ -242,12 +241,27 @@ export async function cancelTurn(turnId: string): Promise<void> {
   await apiRequest<unknown>(`/api/v1/chat/turns/${encodeURIComponent(turnId)}/cancel`, { method: 'POST' })
 }
 
-export async function listSessionMessages(sessionId: string): Promise<readonly StoredChatMessage[]> {
-  const body = asRecord(
-    await apiRequest<unknown>(`/api/v1/chat/sessions/${encodeURIComponent(sessionId)}/messages`)
-  )
-  if (!Array.isArray(body['items'])) throw badResponse()
-  return body['items'].filter(isStoredChatMessage)
+const MAX_PAGES = 20
+
+/** Recorre un listado `{items,next_cursor}`. `query` sin `?`; el cursor es opaco. */
+export async function listAllPages(path: string, query = ''): Promise<readonly unknown[]> {
+  const out: unknown[] = []
+  let cursor: string | null = null
+  for (let page = 0; page < MAX_PAGES; page += 1) {
+    const params = [query, cursor === null ? '' : `cursor=${encodeURIComponent(cursor)}`].filter(Boolean).join('&')
+    const body = asRecord(await apiRequest<unknown>(params === '' ? path : `${path}?${params}`))
+    if (!Array.isArray(body['items'])) throw badResponse()
+    out.push(...(body['items'] as unknown[]))
+    const next = body['next_cursor']
+    if (typeof next !== 'string' || next === '') return out
+    cursor = next
+  }
+  return out
+}
+
+export async function listSessionMessages(sessionId: string): Promise<readonly MessageOut[]> {
+  const path = `/api/v1/chat/sessions/${encodeURIComponent(sessionId)}/messages`
+  return (await listAllPages(path, 'limit=200')).filter(isMessageOut)
 }
 
 export async function getAgentStatus(): Promise<AgentStatusInfo> {
@@ -262,31 +276,17 @@ export async function getAgentStatus(): Promise<AgentStatusInfo> {
   }
 }
 
-/** `GET /api/v1/confirmations?status=pending`. SUPUESTO: elementos con `id` o `action_id`. */
 export async function listPendingConfirmations(): Promise<readonly PendingConfirmation[]> {
-  const body = asRecord(await apiRequest<unknown>('/api/v1/confirmations?status=pending'))
-  if (!Array.isArray(body['items'])) throw badResponse()
-  const out: PendingConfirmation[] = []
-  for (const raw of body['items']) {
-    const item = asRecord(raw)
-    const id = typeof item['action_id'] === 'string' ? item['action_id'] : item['id']
-    const count = item['affected_count']
-    if (
-      typeof id !== 'string' ||
-      typeof item['summary'] !== 'string' ||
-      typeof item['expires_at'] !== 'string' ||
-      Number.isNaN(Date.parse(item['expires_at'])) ||
-      !(count === undefined || count === null || (Number.isSafeInteger(count) && (count as number) >= 0))
-    ) {
-      continue
-    }
-    out.push({
-      action_id: id,
-      ...(typeof item['tool'] === 'string' ? { tool: item['tool'] } : {}),
-      summary: item['summary'],
-      affected_count: count === undefined ? null : (count as number | null),
-      expires_at: item['expires_at']
-    })
-  }
-  return out
+  const items = await listAllPages('/api/v1/confirmations', 'status=pending&limit=200')
+  return items
+    .filter(isConfirmationOut)
+    .filter((item) => item.status === 'pending')
+    .map((item) => ({
+      action_id: item.id,
+      tool: item.tool_name,
+      summary: item.summary,
+      affected_count: item.affected_count ?? null,
+      turn_id: item.turn_id ?? null,
+      expires_at: item.expires_at
+    }))
 }

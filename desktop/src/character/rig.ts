@@ -132,7 +132,7 @@ const STATES: Record<CharacterState, StateDef> = {
       headTilt: -4, headY: 5, finL: -18, finR: -18,
       ember: 0.7, emberHue: 1, crackle: 1, sparks: 0.4, blink: 0.7
     },
-    settle: { smoke: [1, 0.3, 1400] }
+    settle: { smoke: [1, 0.3, 1400], crackle: [1, 0.1, 2500] }
   },
   interrupted: {
     rate: 26,
@@ -341,17 +341,32 @@ function markup(id: string): string {
 
 /* ---------- Ticker compartido por todas las instancias ---------- */
 
-interface Stepper { step(now: number): void }
+interface Stepper {
+  /** Devuelve true si necesita otro fotograma. */
+  step(now: number): boolean
+  /** Olvida la marca de tiempo para no saltar tras una pausa. */
+  resume(): void
+}
 const rigs: Stepper[] = [];
 let frame = 0;
 
 function tick(now: number): void {
-  frame = rigs.length ? window.requestAnimationFrame(tick) : 0;
-  for (const r of rigs) r.step(now);
+  frame = 0;
+  if (document.hidden) return;
+  let more = false;
+  for (const r of rigs.slice()) if (r.step(now)) more = true;
+  if (more && rigs.length) frame = window.requestAnimationFrame(tick);
 }
 
 function startTicker() {
-  if (!frame) frame = window.requestAnimationFrame(tick);
+  if (frame || document.hidden || !rigs.length) return;
+  for (const r of rigs) r.resume();
+  frame = window.requestAnimationFrame(tick);
+}
+
+function stopTicker() {
+  if (frame) window.cancelAnimationFrame(frame);
+  frame = 0;
 }
 
 const motionQuery = window.matchMedia
@@ -359,6 +374,17 @@ const motionQuery = window.matchMedia
   : null;
 
 function reducedMotion() { return !!(motionQuery && motionQuery.matches); }
+
+/* Un unico juego de listeners para todas las instancias. */
+let listening = false;
+function wake() { startTicker(); }
+function listen(on: boolean) {
+  if (on === listening) return;
+  listening = on;
+  const op = on ? 'addEventListener' : 'removeEventListener';
+  document[op]('visibilitychange', wake);
+  if (motionQuery && motionQuery[op]) motionQuery[op]('change', wake);
+}
 
 /* ---------- Fabrica ---------- */
 
@@ -493,8 +519,9 @@ export function createCharacter(
   function stepCrackle(dt: number): number {
     crackleLeft -= dt;
     if (crackleLeft <= 0) {
-      crackleLeft = rand(0.04, 0.13);
-      crackleValue = Math.random() < 0.3 ? rand(0.1, 0.45) : rand(0.7, 1.1);
+      // <= 3 Hz y amplitud <= 0.3 (WCAG 2.3.1: sin destellos rapidos ni intensos).
+      crackleLeft = rand(0.35, 0.8);
+      crackleValue = rand(0.7, 1);
     }
     return lerp(1, crackleValue, cur.crackle);
   }
@@ -731,19 +758,27 @@ export function createCharacter(
     drawSparks(t, colors, sat, value);
   }
 
-  function advance(dt: number): void {
+  function advance(dt: number): boolean {
     time += dt;
     let k = 1 - Math.exp(-dt * STATES[state].rate);
-    for (const key of PARAM_NAMES) cur[key] += (target(key) - cur[key]) * k;
+    let moving = false;
+    for (const key of PARAM_NAMES) {
+      let goal = target(key);
+      cur[key] += (goal - cur[key]) * k;
+      if (Math.abs(goal - cur[key]) > 0.001) moving = true;
+      else if (reducedMotion()) cur[key] = goal;
+    }
     draw(dt);
+    return !reducedMotion() || moving;
   }
 
   const rig: Stepper = {
     step(now: number) {
       let dt = last ? Math.min((now - last) / 1000, 0.05) : 0;
       last = now;
-      advance(dt);
-    }
+      return advance(dt);
+    },
+    resume() { last = 0; }
   };
 
   function setState(name: string): boolean {
@@ -755,6 +790,7 @@ export function createCharacter(
     if (name !== state) {
       state = name;
       enteredAt = time;
+      startTicker();
     }
     return true;
   }
@@ -763,9 +799,9 @@ export function createCharacter(
     if (!alive) return;
     alive = false;
     rigs.splice(rigs.indexOf(rig), 1);
-    if (!rigs.length && frame) {
-      window.cancelAnimationFrame(frame);
-      frame = 0;
+    if (!rigs.length) {
+      stopTicker();
+      listen(false);
     }
     if (svg.parentNode === container) container.removeChild(svg);
   }
@@ -776,6 +812,7 @@ export function createCharacter(
   draw(0);
 
   rigs.push(rig);
+  listen(true);
   startTicker();
 
   return {

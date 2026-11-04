@@ -8,7 +8,7 @@ import {
   sendChatMessage
 } from '@/services/api'
 import { notify } from '@/services/notify'
-import type { ServerEvent } from '@/services/protocol'
+import type { MessageOut, ServerEvent } from '@/services/protocol'
 import { startBackendLink, subscribeLinkStatus, subscribeResync, subscribeServerEvents } from '@/services/ws'
 
 export type ChatMessageStatus = 'sending' | 'streaming' | 'complete' | 'failed' | 'interrupted'
@@ -34,6 +34,12 @@ export interface ChatMessage {
 export const MAX_MESSAGE_CHARS = 8000
 const MAX_KEPT = 500
 const MAX_ENDED_TURNS = 200
+const STORED_STATUS: Record<MessageOut['status'], ChatMessageStatus> = {
+  streaming: 'streaming',
+  complete: 'complete',
+  cancelled: 'interrupted',
+  failed: 'failed'
+}
 const TURN_FAILED = 'El agente no pudo completar esta respuesta.'
 
 /*
@@ -293,15 +299,17 @@ async function rehydrate(): Promise<void> {
   rehydrating = true
   try {
     const stored = await listSessionMessages(id)
-    const storedTurns = new Set(stored.map((m) => m.turn_id).filter((t): t is string => t !== null && t !== ''))
-    const fromServer: ChatMessage[] = stored.map((m) => ({
-      id: m.id,
-      role: m.role,
-      content: m.text,
-      status: 'complete',
-      turnId: m.turn_id,
-      tools: []
-    }))
+    const storedTurns = new Set(stored.flatMap((m) => (m.turn_id ? [m.turn_id] : [])))
+    const fromServer: ChatMessage[] = stored
+      .filter((m) => m.role !== 'system')
+      .map((m) => ({
+        id: m.id,
+        role: m.role === 'user' ? 'user' : 'agent',
+        content: m.text,
+        status: STORED_STATUS[m.status],
+        turnId: m.turn_id ?? null,
+        tools: []
+      }))
     // Lo local que el servidor aún no refleja (envíos en curso, fallos, respuesta en vuelo) se conserva.
     const local = messages.filter(
       (m) =>
