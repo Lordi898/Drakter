@@ -159,4 +159,4 @@ No hay herramienta de ubicaciones, de borrado de recursos ni de escaneo. Ninguna
 
 ## Interfaz
 
-Cliente único: `apiRequest`, `ApiError`, `describeError` de `desktop/src/services/api.ts` (drakter-17). Rutas con prefijo `/api/v1`. Sin cliente propio ni datos de ejemplo. `ApiError.code === 'no_session'` o `'network'` da el estado desconectado. El renderer nunca ve el token. La selección de carpeta nativa es un método del puente aún por añadir.
+Cliente único: `apiRequest`, `ApiError`, `describeError` de `desktop/src/services/api.ts`. Rutas con prefijo `/api/v1`. Sin cliente propio ni datos de ejemplo. El renderer nunca ve el token. Las ubicaciones usan `window.api.addStorageLocation`, `updateStorageLocation` y `deleteStorageLocation`: los diálogos nativos están en main y el renderer no envía rutas.

@@ -89,7 +89,7 @@ export function LocationsPanel({ locations, onChanged }: Props) {
         setRemoving(null)
         onChanged()
       } else {
-        setWaiting(OUTCOME_TEXT[outcome])
+        setWaiting(OUTCOME_TEXT[outcome] ?? 'No se ha podido quitar la ubicación.')
       }
     } catch (error) {
       notifyError('No se ha podido quitar la ubicación', error)
