@@ -1,36 +1,34 @@
-"""Interfaz fina con la infraestructura común que aún no existe.
+"""Interfaz fina con lo común para hábitos, calendario y asignaturas.
 
-Hábitos, calendario y asignaturas solo tocan lo común a través de este archivo.
-Cuando `contracts/` fije entidades, auditoría y confirmaciones, se adapta aquí y
-el resto no cambia. Usa las tablas `entities`, `audit_events` y
-`pending_confirmations` de schema_v1.
+Lo destructivo no pasa por aquí salvo `run_confirmable`, que entrega la operación a
+`ActionService`: es el único camino de escritura confirmable.
 """
 
 from __future__ import annotations
 
-import hashlib
+import base64
 import json
 import sqlite3
-from collections.abc import Callable, Iterator
+from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager
-from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from dataclasses import dataclass, replace
+from datetime import UTC, datetime
 from typing import Any, Final, Literal
 from uuid import uuid4
 from zoneinfo import ZoneInfo
 
+from drakter_contracts.common import Origin as OriginEnum
 from fastapi import Request
-from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from app.core.errors import AppError, ErrorDetail, error_body_bytes
+from app.core.errors import AppError, ErrorDetail
 from app.database.connection import connect
+from app.permissions.models import ActorContext, Principal
 
 ActorType = Literal["user", "agent", "automation", "system"]
 Origin = Literal["rest", "mcp", "scheduler", "internal"]
 AuditResult = Literal["success", "denied", "failed", "confirmation_required"]
 
-CONFIRMATION_TTL: Final = timedelta(minutes=15)
 MAX_LIMIT: Final = 200
 
 
@@ -41,16 +39,6 @@ class RequestContext:
     correlation_id: str
     tool_name: str | None = None
     turn_id: str | None = None
-
-
-class ConfirmationRef(BaseModel):
-    """`ConfirmationTicket` de contracts/python/drakter_contracts/errors.py. Lo destructivo no se ejecuta."""
-
-    id: str
-    summary: str
-    affected_count: int | None = None
-    expires_at: str
-    params_hash: str
 
 
 def format_instant(value: datetime) -> str:
@@ -179,84 +167,54 @@ def deletion_summary(kind: str, name: str, dependents: int = 0) -> str:
     return f"Vas a eliminar 1 {kind}: «{name}»{extra}. Esta acción no se puede deshacer."
 
 
-def request_confirmation(
-    conn: sqlite3.Connection,
-    ctx: RequestContext,
-    tool_name: str,
-    args: dict[str, Any],
-    summary: str,
-    *,
-    entity_type: str | None = None,
-    entity_id: str | None = None,
-    affected_count: int = 1,
-) -> ConfirmationRef:
-    """Crea la confirmación pendiente; nada se ejecuta hasta que el usuario la apruebe en la GUI.
+def run_confirmable(
+    request: Request, ctx: RequestContext, action: str, params: BaseModel, summary: str
+) -> Mapping[str, Any]:
+    """Entrega un borrado a `ActionService`. Riesgo `confirm`: sale 409 `confirmation_required`.
 
-    Solo para REST: en herramientas la impone `ToolGate`. Aprobar es del pipeline común, que
-    comprueba `targets_json` y llama al ejecutor de `CONFIRMED_ACTIONS` con estos `args`.
+    `summary` lo calcula el servicio con datos de la base, porque `ActionSpec.summarize`
+    solo ve los argumentos; nunca viene del cliente. Sin el pipeline montado no se borra.
     """
-    if tool_name not in CONFIRMED_ACTIONS:
-        raise AppError("confirmation_unavailable", "Esta acción no se puede confirmar ahora.", 503)
-    targets: list[dict[str, Any]] = []
-    if entity_id is not None:
-        row = conn.execute("SELECT revision FROM entities WHERE id=?", (entity_id,)).fetchone()
-        if row is None:
-            raise AppError("not_found", "No se encuentra ese elemento. Puede que se haya eliminado.", 404)
-        targets.append({"entity_id": entity_id, "revision": row[0]})
-    created = datetime.now(UTC)
-    expires_at = format_instant(created + CONFIRMATION_TTL)
-    encoded = json.dumps(args, ensure_ascii=False, sort_keys=True, default=str)
-    params_hash = hashlib.sha256(encoded.encode()).hexdigest()
-    confirmation_id = new_id()
-    conn.execute(
-        "INSERT INTO pending_confirmations(id,tool_name,actor_type,origin,turn_id,correlation_id,"
-        "args_json,args_hash,targets_json,summary,affected_count,risk,created_at,expires_at) "
-        "VALUES(?,?,?,?,?,?,?,?,?,?,?,'confirm',?,?)",
-        (
-            confirmation_id, tool_name, ctx.actor_type, ctx.origin, ctx.turn_id, ctx.correlation_id,
-            encoded, params_hash, json.dumps(targets), summary, affected_count,
-            format_instant(created), expires_at,
-        ),
-    )  # fmt: skip
-    record_audit(
-        conn, ctx, tool_name, result="confirmation_required", entity_type=entity_type,
-        entity_id=entity_id, affected_count=affected_count, confirmation_id=confirmation_id,
-    )  # fmt: skip
-    return ConfirmationRef(
-        id=confirmation_id, summary=summary, affected_count=affected_count,
-        expires_at=expires_at, params_hash=params_hash,
-    )  # fmt: skip
-
-
-def confirmation_response(ctx: RequestContext, ticket: ConfirmationRef) -> JSONResponse:
-    """Pedir confirmación por REST es siempre 409, con `confirmation` junto al sobre común."""
-    body = json.loads(
-        error_body_bytes(
-            "confirmation_required", "Esta operación necesita tu confirmación.", ctx.correlation_id
+    actions = getattr(request.app.state, "actions", None)
+    spec = actions.registry.get(action) if actions is not None else None
+    if spec is None:
+        raise AppError(
+            "confirmation_unavailable", "No se puede confirmar ahora mismo. No se ha borrado nada.", 503
         )
+    actor = ActorContext(
+        principal=Principal.UI, origin=OriginEnum.REST, correlation_id=ctx.correlation_id
     )
-    return JSONResponse(
-        status_code=409, content={**body, "confirmation": ticket.model_dump(mode="json")}
+    return actions.unwrap(
+        actions.execute_or_request(actor, replace(spec, summarize=lambda _: summary), params)
     )
-
-
-ConfirmedAction = Callable[[sqlite3.Connection, RequestContext, dict[str, Any]], dict[str, Any]]
-CONFIRMED_ACTIONS: dict[str, ConfirmedAction] = {}
-
-
-def confirmed_action(name: str) -> Callable[[ConfirmedAction], ConfirmedAction]:
-    """Registra quién ejecuta `name` una vez aprobada. Lo usa el pipeline común."""
-
-    def register(action: ConfirmedAction) -> ConfirmedAction:
-        CONFIRMED_ACTIONS[name] = action
-        return action
-
-    return register
 
 
 def bounded_limit(limit: int | None, default: int = 50) -> int:
     return max(1, min(limit if limit is not None else default, MAX_LIMIT))
 
 
-def bounded_offset(offset: int | None) -> int:
-    return max(0, offset or 0)
+def encode_cursor(key: Sequence[Any]) -> str:
+    """Cursor opaco sobre (campo de orden, id)."""
+    return base64.urlsafe_b64encode(json.dumps(list(key)).encode()).decode()
+
+
+def decode_cursor(cursor: str | None, size: int = 2) -> list[Any] | None:
+    if cursor is None:
+        return None
+    try:
+        key = json.loads(base64.urlsafe_b64decode(cursor.encode()))
+    except ValueError:
+        raise AppError("invalid_query", "La paginación no es válida. Vuelve a cargar la lista.", 400) from None
+    if not isinstance(key, list) or len(key) != size:
+        raise AppError("invalid_query", "La paginación no es válida. Vuelve a cargar la lista.", 400)
+    return key
+
+
+def split_page(
+    rows: list[dict[str, Any]], limit: int, key_fields: Sequence[str]
+) -> tuple[list[dict[str, Any]], str | None]:
+    """`rows` trae hasta `limit + 1` filas: la de más solo dice si hay otra página."""
+    if len(rows) <= limit:
+        return rows, None
+    page = rows[:limit]
+    return page, encode_cursor([page[-1][field] for field in key_fields])
