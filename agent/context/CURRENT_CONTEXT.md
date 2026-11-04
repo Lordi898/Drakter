@@ -1,6 +1,6 @@
 # CURRENT_CONTEXT.md — Contexto temporal activo
 
-Situación actual, y nada más. No es memoria histórica ni una copia del Workspace.
+Situación actual, y nada más. No es memoria histórica ni una copia del Workspace. Drakter lo lee, pero no lo escribe.
 
 Límites del archivo:
 

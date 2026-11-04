@@ -7,7 +7,7 @@ backend/app/integrations/hermes/CONTRACT.md §1. Aquí queda lo que comparten m�
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any, Final, Literal
 
 from pydantic import BaseModel, Field
 
@@ -21,6 +21,12 @@ class RiskClass(StrEnum):
 
 
 AuditPolicy = Literal["log", "hash", "omit"]
+
+# `permission` es `<dominio>.<accion>`: búsqueda transversal = dominio `search`, permiso `search.read`.
+TOOL_DOMAINS: Final = (
+    "tasks", "projects", "habits", "calendar", "subjects", "storage", "relationships",
+    "tags", "search", "memory", "system", "config",
+)
 
 
 class ToolErrorBody(BaseModel):

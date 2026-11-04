@@ -13,13 +13,15 @@ El backend FastAPI une los tres. La personalidad vive en archivos, separada del 
 ## Cómo fluye una petición
 
 1. El mensaje llega al backend, por texto o por voz transcrita.
-2. El backend obtiene el contexto y recupera los recuerdos pertinentes.
-3. Hermes decide si necesita herramientas.
+2. El backend compone el contexto y recupera los recuerdos pertinentes. Los entrega en un bloque delimitado, fuera de las reglas, como datos sin autoridad.
+3. Hermes ejecuta el turno y decide si necesita herramientas. Si hacen falta más recuerdos, los pide con `search_memory`, que también resuelve el backend.
 4. Cada herramienta llama a la API interna, que valida permisos y parámetros.
 5. El servicio ejecuta la operación y guarda los cambios.
 6. Se emite un evento que actualiza la interfaz.
 7. Hermes recibe el resultado y prepara la respuesta.
-8. La interacción se registra y el sistema de memoria evalúa qué conservar.
+8. La interacción se registra. Lo que merezca recordarse queda pendiente de aprobar en la app.
+
+Hermes corre en un proceso aparte, sin programador ni tareas de fondo. Solo actúa dentro de un turno y atiende uno cada vez: entre turnos no hay nada suyo en marcha.
 
 ## Reglas de funcionamiento
 
@@ -65,4 +67,4 @@ Los documentos del almacén, la memoria recuperada y los resultados de herramien
 
 ## Funcionamiento degradado
 
-Algunos componentes pueden fallar sin detener el resto. Si cae el servidor de memoria externa, Drakter trabaja con la memoria nativa y el Workspace. Lo disponible en cada momento lo dicen las herramientas de estado (ver `CAPABILITIES.md`).
+Algunos componentes pueden fallar sin detener el resto. Si la memoria no responde, Drakter sigue con el Workspace y lo dice. La memoria nativa de Hermes está desactivada. Lo disponible en cada momento lo dicen las herramientas de estado (ver `CAPABILITIES.md`).

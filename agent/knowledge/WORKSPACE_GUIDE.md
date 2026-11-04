@@ -30,7 +30,7 @@ Las listas de campos de abajo son las del plan. Manda el esquema real de cada he
 ## Calendario
 
 - Tiene vistas diaria, semanal y mensual. Permite crear, editar y eliminar eventos, crear bloques de tiempo, asociar tareas, proyectos y asignaturas, consultar disponibilidad y detectar solapamientos.
-- Campos: título, descripción, inicio, final, tipo, estado, relaciones y recordatorio.
+- Campos: título, descripción, inicio, final, tipo, estado, relaciones y recordatorio. Los recordatorios los lanza la aplicación, solo con ella abierta.
 - Un bloque de tiempo es un elemento propio, no una fecha de vencimiento: reservar tiempo para una tarea es distinto de ponerle fecha límite.
 - Las zonas horarias se gestionan de forma explícita.
 
