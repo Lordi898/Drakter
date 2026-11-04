@@ -68,8 +68,10 @@ class ConfirmationGate(Protocol):
     ) -> None:
         """Vuelve solo si hay una aprobación válida de la GUI para estos argumentos.
 
-        Si no, lanza `AppError` con `confirmation_required` (409). `summary` y
-        `affected_count` los calcula el backend, jamás el modelo.
+        Si no, lanza `confirmation_required` (409) con un objeto `confirmation`
+        {id, summary, affected_count, expires_at, params_hash} en el sobre, o
+        `confirmation_unavailable` (503). `summary` y `affected_count` los calcula
+        el backend, jamás el modelo.
         """
         ...
 
@@ -142,7 +144,9 @@ class DenyAllConfirmations:
         affected_count: int,
         confirmation_id: str | None,
     ) -> None:
-        raise AppError("confirmation_required", "This action needs confirmation", 409)
+        # Nunca `confirmation_required`: ese código exige un objeto `confirmation` con
+        # ticket, y aquí no existe ninguno que la GUI pueda aprobar.
+        raise AppError("confirmation_unavailable", "Confirmation service unavailable", 503)
 
 
 @dataclass(frozen=True)
