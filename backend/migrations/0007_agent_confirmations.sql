@@ -1,3 +1,4 @@
+-- conversations.id es el session_id de /chat/sessions; pending_confirmations.id es el action_id.
 -- Conversacion, turnos, mensajes, confirmaciones impuestas por el backend e idempotencia.
 CREATE TABLE conversations (
   id TEXT NOT NULL,
@@ -34,6 +35,7 @@ CREATE TABLE messages (
   turn_id TEXT,
   role TEXT NOT NULL,
   content TEXT NOT NULL,
+  client_message_id TEXT,
   status TEXT NOT NULL DEFAULT 'complete',
   created_at TEXT NOT NULL,
   CONSTRAINT pk_messages PRIMARY KEY (id),
@@ -43,6 +45,7 @@ CREATE TABLE messages (
   CONSTRAINT fk_messages_turn FOREIGN KEY (turn_id) REFERENCES agent_turns (id) ON DELETE RESTRICT
 );
 CREATE INDEX ix_messages_conversation ON messages (conversation_id, created_at);
+CREATE UNIQUE INDEX ux_messages_client_id ON messages (conversation_id, client_message_id) WHERE client_message_id IS NOT NULL;
 
 -- summary y affected_count los calcula el backend desde los argumentos, nunca el modelo.
 -- targets_json guarda ids y revision resueltos: si difieren al aprobar, se responde conflict.
@@ -73,7 +76,7 @@ CREATE TABLE pending_confirmations (
   CONSTRAINT ck_pc_args CHECK (json_valid(args_json)),
   CONSTRAINT ck_pc_targets CHECK (json_valid(targets_json)),
   CONSTRAINT ck_pc_result CHECK (result_json IS NULL OR json_valid(result_json)),
-  CONSTRAINT ck_pc_risk CHECK (risk IN ('write','sensitive')),
+  CONSTRAINT ck_pc_risk CHECK (risk IN ('write','confirm')),
   CONSTRAINT ck_pc_status CHECK (status IN ('pending','approved','rejected','expired','executed','failed')),
   CONSTRAINT ck_pc_decided CHECK (
     (status IN ('pending','expired') AND decided_at IS NULL AND decided_via IS NULL)
