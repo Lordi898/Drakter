@@ -16,7 +16,7 @@ Fuera de alcance: tablas de dominio, rutas de dominio, eventos WebSocket de nego
 Las credenciales no pasan nunca por argv, entorno, disco ni logs. Ya no existe `session.json`.
 
 - Uvicorn: `log_config=None`, `access_log=False`, `server_header=False`, `proxy_headers=False`, `ws="websockets-sansio"`, `ws_max_size=1048576`, `lifespan="on"`.
-- `create_app(settings, *, credentials, port, on_ready) -> FastAPI` en `app/main.py`. No existe un `app` a nivel de módulo. Monta por autodescubrimiento todo `app/api/*.py` salvo los que empiezan por `_`: cada módulo exporta `router` y nadie edita `main.py` para añadir rutas. Inicializa `app.state`: `settings`, `agent_runtime`, `agent_settings`, `event_hub`, `memory_service` y `reminders`. Un servicio de otro frente cuyo módulo no exista queda en `None`; un fallo al importarlo tumba el arranque. `docs_url`, `redoc_url` y `openapi_url` son `None`; `redirect_slashes=False`.
+- `create_app(settings, *, credentials, port, on_ready) -> FastAPI` en `app/main.py`. No existe un `app` a nivel de módulo. Monta por autodescubrimiento todo `app/api/*.py` que exporte `router`, y nadie edita `main.py` para añadir rutas. Un módulo sin `router` es auxiliar y no se monta. Inicializa `app.state`: `settings`, `agent_runtime`, `agent_settings`, `event_hub`, `memory_service` y `reminders`. Un servicio de otro frente cuyo módulo no exista queda en `None`; un fallo al importarlo tumba el arranque. `docs_url`, `redoc_url` y `openapi_url` son `None`; `redirect_slashes=False`.
 - Orden del `lifespan`: preparar directorios → `configure_logging` → `exclusive_instance` → `migrate` → `agent_runtime.start()` → `reminders.start()` → `on_ready()`. Al apagar, en orden inverso. Si `migrate` falla, el arranque falla.
 
 ## `app/core/config.py`

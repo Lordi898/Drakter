@@ -23,10 +23,14 @@ from app.events import EventHub
 
 
 def _discover_routers() -> Iterator[APIRouter]:
-    """Cada `app/api/<nombre>.py` exporta `router`: nadie edita este archivo para añadir rutas."""
+    """Cada `app/api/<nombre>.py` con `router` se monta: nadie edita este archivo para añadir rutas.
+
+    Un módulo sin `router` es un auxiliar de otros routers y no se monta.
+    """
     for module in pkgutil.iter_modules(api.__path__):
-        if not module.name.startswith("_"):
-            yield import_module(f"{api.__name__}.{module.name}").router
+        router = getattr(import_module(f"{api.__name__}.{module.name}"), "router", None)
+        if router is not None:
+            yield router
 
 
 def _optional_module(name: str) -> ModuleType | None:
