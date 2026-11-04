@@ -1,3 +1,28 @@
 {
-  "granted": ["system.read"]
+  "granted": [
+    "calendar.delete",
+    "calendar.read",
+    "calendar.write",
+    "habits.read",
+    "habits.write",
+    "memory.forget",
+    "memory.read",
+    "memory.write",
+    "projects.read",
+    "projects.write",
+    "relationships.delete",
+    "relationships.read",
+    "relationships.write",
+    "search.read",
+    "storage.read",
+    "subjects.delete",
+    "subjects.read",
+    "subjects.write",
+    "system.read",
+    "tags.read",
+    "tags.write",
+    "tasks.delete",
+    "tasks.read",
+    "tasks.write"
+  ]
 }

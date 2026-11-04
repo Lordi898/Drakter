@@ -4,20 +4,11 @@ from __future__ import annotations
 
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass, field
-from enum import StrEnum
 from typing import Any, Literal
 from uuid import UUID
 
+from drakter_contracts.tools import AuditPolicy, RiskClass
 from pydantic import BaseModel
-
-
-class RiskClass(StrEnum):
-    READ = "read"
-    WRITE = "write"
-    CONFIRM = "confirm"
-
-
-AuditPolicy = Literal["log", "hash", "omit"]
 
 
 @dataclass(frozen=True, slots=True)

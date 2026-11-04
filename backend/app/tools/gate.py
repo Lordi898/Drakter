@@ -14,6 +14,7 @@ from datetime import UTC, datetime
 from typing import Any, Literal, Protocol
 from uuid import UUID
 
+from drakter_contracts.errors import ErrorCode
 from pydantic import BaseModel
 
 from app.tools.spec import RiskClass, ToolContext, ToolSpec
@@ -97,10 +98,12 @@ class DefaultToolGate:
         if risk is RiskClass.CONFIRM:
             return GateDecision(
                 kind="deny",
-                code="confirmation_unavailable",
+                code=ErrorCode.CONFIRMATION_UNAVAILABLE,
                 message="This action needs user confirmation, which is not available yet.",
             )
-        return GateDecision(kind="deny", code="permission_denied", message="Action not allowed.")
+        return GateDecision(
+            kind="deny", code=ErrorCode.PERMISSION_DENIED, message="Action not allowed."
+        )
 
 
 class LogAuditSink:

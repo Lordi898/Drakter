@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any
 
+from drakter_contracts.common import Instant
 from pydantic import BaseModel, ConfigDict
 
 from app.tools.spec import RiskClass, ToolContext, ToolSpec
@@ -25,7 +26,7 @@ class AgentStatus(BaseModel):
 
 class SystemStatus(BaseModel):
     backend: str
-    now_utc: datetime
+    now_utc: Instant
     agent_state: str
     tools_registered: int | None = None
     turn_active: bool | None = None

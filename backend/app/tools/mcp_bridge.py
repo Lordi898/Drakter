@@ -17,6 +17,8 @@ from typing import Any, Final, Protocol
 from uuid import UUID, uuid4
 
 import uvicorn
+from drakter_contracts.errors import ErrorCode
+from drakter_contracts.tools import ToolOutcome
 from mcp import types
 from mcp.server.lowlevel import Server
 from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
@@ -25,15 +27,13 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 
 from app.core.config import BIND_HOST
 from app.core.errors import error_body_bytes
-from app.tools.envelope import ToolOutcome
-from app.tools.registry import ToolRegistry
+from app.tools.registry import ToolObserver, ToolRegistry
 from app.tools.spec import RiskClass, ToolContext, ToolSpec
 from app.tools.turns import TurnTracker
 
 AGENT_TOOLS_PATH: Final = "/mcp"
 MCP_SERVER_NAME: Final = "drakter"
 
-_ALLOWED_HOSTNAMES: Final = frozenset({"127.0.0.1", "localhost"})
 _NO_TURN: Final = UUID(int=0)
 _MAX_BODY_BYTES: Final = 1024 * 1024
 _START_TIMEOUT_S: Final = 10.0
@@ -78,7 +78,11 @@ def _call_result(outcome: ToolOutcome) -> types.CallToolResult:
     )
 
 
-def _build_server(registry: ToolRegistry, turns: TurnTracker, state: Any) -> Server[Any]:
+def _build_server(
+    registry: ToolRegistry, turns: TurnTracker, state: Any, observer: ToolObserver | None
+) -> Server[Any]:
+    options = {"observer": observer} if observer is not None else {}
+
     async def list_tools(ctx: Any, params: Any) -> types.ListToolsResult:
         return types.ListToolsResult(tools=[_mcp_tool(spec) for spec in registry.catalog()])
 
@@ -93,7 +97,9 @@ def _build_server(registry: ToolRegistry, turns: TurnTracker, state: Any) -> Ser
             principal="agent",
             state=state,
         )
-        outcome = await registry.dispatch(params.name, dict(params.arguments or {}), tool_ctx)
+        outcome = await registry.dispatch(
+            params.name, dict(params.arguments or {}), tool_ctx, **options
+        )
         return _call_result(outcome)
 
     return Server(MCP_SERVER_NAME, on_list_tools=list_tools, on_call_tool=call_tool)
@@ -104,11 +110,11 @@ def _header_values(scope: Scope, name: bytes) -> list[bytes]:
 
 
 def _host_allowed(scope: Scope) -> bool:
-    hosts = _header_values(scope, b"host")
-    if len(hosts) != 1:
+    """Exactly ``127.0.0.1:<real port>``. The port comes from the socket, not the request."""
+    server = scope.get("server")
+    if server is None:
         return False
-    hostname, separator, port = hosts[0].decode("latin-1").lower().partition(":")
-    return hostname in _ALLOWED_HOSTNAMES and (not separator or port.isdecimal())
+    return _header_values(scope, b"host") == [f"{BIND_HOST}:{server[1]}".encode("ascii")]
 
 
 def _bearer(scope: Scope) -> bytes | None:
@@ -145,7 +151,7 @@ class _AgentToolsApp:
             max_request_body_size=_MAX_BODY_BYTES,
             security_settings=TransportSecuritySettings(
                 enable_dns_rebinding_protection=True,
-                allowed_hosts=["127.0.0.1:*", "localhost:*"],
+                allowed_hosts=[f"{BIND_HOST}:*"],
                 allowed_origins=[],
             ),
         )
@@ -172,7 +178,9 @@ class _AgentToolsApp:
             await self._send_error(send, status, code, message, headers)
             return
         if self._manager is None:
-            await self._send_error(send, 503, "unavailable", "Tool bridge not ready.", [])
+            await self._send_error(
+                send, 503, ErrorCode.SERVICE_UNAVAILABLE, "Tool bridge not ready.", []
+            )
             return
         await self._manager.handle_request(scope, receive, send)
 
@@ -181,15 +189,15 @@ class _AgentToolsApp:
     ) -> tuple[int, str, str, list[tuple[bytes, bytes]]] | None:
         client = scope.get("client")
         if client is None or client[0] != BIND_HOST:
-            return 403, "forbidden_client", "Client not allowed.", []
+            return 403, ErrorCode.FORBIDDEN_CLIENT, "Client not allowed.", []
         if not _host_allowed(scope):
-            return 403, "forbidden_host", "Host not allowed.", []
+            return 403, ErrorCode.FORBIDDEN_HOST, "Host not allowed.", []
         if _header_values(scope, b"origin"):
-            return 403, "forbidden_origin", "Origin not allowed.", []
+            return 403, ErrorCode.FORBIDDEN_ORIGIN, "Origin not allowed.", []
         candidate = _bearer(scope)
         if candidate is None or not self._token.matches(candidate):
             challenge = [(b"www-authenticate", b"Bearer")]
-            return 401, "unauthorized", "Authentication required.", challenge
+            return 401, ErrorCode.UNAUTHORIZED, "Authentication required.", challenge
         if scope["path"] != AGENT_TOOLS_PATH:
             return 404, "http_404", "Not found.", []
         # Stateless: there is no stream to open with GET nor session to end with DELETE.
@@ -221,11 +229,16 @@ class _AgentToolsApp:
 
 
 def build_agent_tools_app(
-    registry: ToolRegistry, turns: TurnTracker, token: _TokenLike, state: Any
+    registry: ToolRegistry,
+    turns: TurnTracker,
+    token: _TokenLike,
+    state: Any,
+    *,
+    observer: ToolObserver | None = None,
 ) -> ASGIApp:
     if registry.turns is not turns:
         raise ValueError("registry and bridge must share the same TurnTracker")
-    return _AgentToolsApp(_build_server(registry, turns, state), token)
+    return _AgentToolsApp(_build_server(registry, turns, state, observer), token)
 
 
 class _EmbeddedServer(uvicorn.Server):
@@ -237,13 +250,22 @@ class _EmbeddedServer(uvicorn.Server):
 
 
 class AgentToolsServer:
-    """Own Uvicorn on a loopback socket. The address is a constant, not configuration."""
+    """Own Uvicorn on an ephemeral loopback port. Neither address nor port is configurable.
 
-    def __init__(self, app: ASGIApp, port: int) -> None:
+    ``port`` and ``url`` are valid after ``start()``; Hermes learns them from the backend.
+    """
+
+    def __init__(self, app: ASGIApp) -> None:
         self._app = app
-        self.port = port
+        self.port = 0
         self._server: _EmbeddedServer | None = None
         self._task: asyncio.Task[None] | None = None
+
+    @property
+    def url(self) -> str:
+        if not self.port:
+            raise RuntimeError("agent tools server not started")
+        return f"http://{BIND_HOST}:{self.port}{AGENT_TOOLS_PATH}"
 
     async def start(self) -> None:
         if self._task is not None:
@@ -251,7 +273,7 @@ class AgentToolsServer:
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         try:
             sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            sock.bind((BIND_HOST, self.port))
+            sock.bind((BIND_HOST, 0))
             sock.listen(128)
         except OSError:
             sock.close()

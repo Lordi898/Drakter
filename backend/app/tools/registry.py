@@ -9,15 +9,18 @@ import logging
 import pkgutil
 import re
 import time
-from collections.abc import Iterator
-from datetime import UTC, datetime
+from collections.abc import Awaitable, Callable, Iterator
+from pathlib import Path
 from types import ModuleType
 from typing import Any, Final, get_args
 
-from pydantic import BaseModel, ValidationError
+import drakter_contracts
+from drakter_contracts.errors import ErrorCode
+from drakter_contracts.tools import ToolManifest, ToolOutcome
+from pydantic import BaseModel, TypeAdapter, ValidationError
 from pydantic_core.core_schema import ErrorType
 
-from app.tools.envelope import ToolOutcome
+from app.tools.envelope import outcome_code, tool_confirmation, tool_failure, tool_ok
 from app.tools.gate import (
     AuditSink,
     DefaultToolGate,
@@ -44,6 +47,8 @@ _KNOWN_ERROR_TYPES: Final = frozenset(get_args(ErrorType))
 _OPAQUE_ERROR_TYPES: Final = frozenset({"value_error", "assertion_error"})
 
 logger = logging.getLogger("drakter.tools")
+
+ToolObserver = Callable[[str, ToolContext, ToolOutcome], "None | Awaitable[None]"]
 
 
 class ToolRegistrationError(ValueError):
@@ -124,18 +129,14 @@ def _validation_details(exc: ValidationError) -> list[dict[str, Any]]:
     return details
 
 
-def _iso_utc(value: datetime | str) -> str:
-    if isinstance(value, datetime):
-        return value.astimezone(UTC).isoformat()
-    return value
-
-
 def _confirmation_outcome(decision: GateDecision) -> ToolOutcome | None:
+    """None if the decision is incomplete or does not fit the contract."""
     if decision.action_id is None or not decision.summary or decision.expires_at is None:
         return None
-    return ToolOutcome.confirmation(
-        str(decision.action_id), decision.summary, _iso_utc(decision.expires_at)
-    )
+    try:
+        return tool_confirmation(decision.action_id, decision.summary, decision.expires_at)
+    except ValidationError:
+        return None
 
 
 async def _invoke(spec: ToolSpec, ctx: ToolContext, args: BaseModel) -> Any:
@@ -164,7 +165,7 @@ async def _run_with_timeout(spec: ToolSpec, ctx: ToolContext, args: BaseModel) -
     task.add_done_callback(_discard_late_result)
     # A worker thread cannot be stopped and the handler may have finished its work.
     raise ToolError(
-        "tool_timeout",
+        ErrorCode.TOOL_TIMEOUT,
         "The tool timed out and its outcome is unknown. Check the state before repeating it.",
         retryable=False,
     )
@@ -203,13 +204,32 @@ class ToolRegistry:
     def get(self, name: str) -> ToolSpec | None:
         return self._tools.get(name)
 
-    async def dispatch(self, name: str, raw_args: dict[str, Any], ctx: ToolContext) -> ToolOutcome:
-        """Never raises. Cancellation of the caller is the only thing that propagates."""
+    async def dispatch(
+        self,
+        name: str,
+        raw_args: dict[str, Any],
+        ctx: ToolContext,
+        *,
+        observer: ToolObserver | None = None,
+    ) -> ToolOutcome:
+        """Never raises. Cancellation of the caller is the only thing that propagates.
+
+        ``observer`` receives the tool name, the context and the final outcome, for instance
+        to publish ``confirmation.requested``. It cannot change the outcome.
+        """
         try:
-            return await self._dispatch(name, raw_args, ctx)
+            outcome = await self._dispatch(name, raw_args, ctx)
         except Exception:
             logger.exception("tool dispatch failed", extra={"event": "tool_dispatch_failed"})
-            return ToolOutcome.failure("tool_internal_error", "The tool failed unexpectedly.")
+            outcome = tool_failure(ErrorCode.INTERNAL_ERROR, "The tool failed unexpectedly.")
+        if observer is not None:
+            try:
+                result = observer(name, ctx, outcome)
+                if inspect.isawaitable(result):
+                    await result
+            except Exception:
+                logger.exception("tool observer failed", extra={"event": "tool_observer_failed"})
+        return outcome
 
     async def _dispatch(
         self, name: str, raw_args: dict[str, Any], ctx: ToolContext
@@ -219,19 +239,19 @@ class ToolRegistry:
             # The name comes from the model: it only reaches the audit trail if well formed.
             shown = name if TOOL_NAME_RE.fullmatch(str(name)) else "<invalid>"
             return await self._reject(
-                ToolOutcome.failure("unknown_tool", "That tool does not exist."), shown, ctx
+                tool_failure(ErrorCode.NOT_FOUND, "That tool does not exist."), shown, ctx
             )
 
         if not self.turns.is_active(ctx.session_id, ctx.turn_id):
             return await self._reject(
-                ToolOutcome.failure("no_active_turn", "There is no active turn."),
+                tool_failure(ErrorCode.NO_ACTIVE_TURN, "There is no active turn."),
                 spec.name,
                 ctx,
                 spec,
             )
         if not ctx.call_id:
             return await self._reject(
-                ToolOutcome.failure("invalid_call", "The call has no identifier."),
+                tool_failure(ErrorCode.VALIDATION_ERROR, "The call has no identifier."),
                 spec.name,
                 ctx,
                 spec,
@@ -240,13 +260,13 @@ class ToolRegistry:
         try:
             args = spec.args_model.model_validate(raw_args)
         except ValidationError as exc:
-            outcome = ToolOutcome.failure(
-                "validation_error", "Invalid arguments.", details=_validation_details(exc)
+            outcome = tool_failure(
+                ErrorCode.VALIDATION_ERROR, "Invalid arguments.", details=_validation_details(exc)
             )
             return await self._reject(outcome, spec.name, ctx, spec)
         except Exception:  # a validator that raises something pydantic does not wrap
             logger.exception("tool validator failed", extra={"event": "tool_validator_failed"})
-            outcome = ToolOutcome.failure("validation_error", "Invalid arguments.")
+            outcome = tool_failure(ErrorCode.VALIDATION_ERROR, "Invalid arguments.")
             return await self._reject(outcome, spec.name, ctx, spec)
 
         tainted = self.turns.is_tainted(ctx.session_id)
@@ -256,22 +276,24 @@ class ToolRegistry:
             return self._reject(outcome, spec.name, ctx, spec, tainted, event_args)
 
         if not self.permissions.allows(spec.permission):
-            return await reject(ToolOutcome.failure("permission_denied", "Permission denied."))
+            return await reject(tool_failure(ErrorCode.PERMISSION_DENIED, "Permission denied."))
 
         risk = effective_risk(spec, tainted=tainted)
+        unauthorized = tool_failure(
+            ErrorCode.SERVICE_UNAVAILABLE, "The action could not be authorized."
+        )
         try:
             decision = await self.gate.authorize(spec, args, ctx, tainted=tainted)
         except Exception:
             logger.exception("tool gate failed", extra={"event": "tool_gate_failed"})
-            return await reject(
-                ToolOutcome.failure("gate_unavailable", "The action could not be authorized.")
-            )
+            return await reject(unauthorized)
 
         kind = getattr(decision, "kind", None)
         if kind == "deny":
             return await reject(
-                ToolOutcome.failure(
-                    decision.code or "denied", decision.message or "The action was denied."
+                tool_failure(
+                    decision.code or ErrorCode.PERMISSION_DENIED,
+                    decision.message or "The action was denied.",
                 )
             )
         if kind == "confirm":
@@ -282,9 +304,7 @@ class ToolRegistry:
         elif kind == "allow" and risk is not RiskClass.CONFIRM:
             return await self._execute(spec, args, ctx, tainted, event_args)
         logger.error("invalid gate decision", extra={"event": "tool_gate_invalid"})
-        return await reject(
-            ToolOutcome.failure("gate_unavailable", "The action could not be authorized.")
-        )
+        return await reject(unauthorized)
 
     async def _execute(
         self,
@@ -294,14 +314,13 @@ class ToolRegistry:
         tainted: bool,
         event_args: dict[str, Any],
     ) -> ToolOutcome:
-        audit_failed = ToolOutcome.failure("audit_unavailable", "The action could not be audited.")
         try:
             await self.audit.record(
                 self._event("attempt", spec.name, ctx, spec, tainted, event_args, "pending")
             )
         except Exception:
             logger.exception("audit failed", extra={"event": "tool_audit_failed"})
-            return audit_failed
+            return tool_failure(ErrorCode.SERVICE_UNAVAILABLE, "The action could not be audited.")
 
         started = time.monotonic()
         outcome = await self._run_handler(spec, args, ctx)
@@ -317,15 +336,15 @@ class ToolRegistry:
             tainted,
             event_args,
             outcome.status,
-            outcome.error.code if outcome.error else None,
+            outcome_code(outcome),
             duration_ms,
         )
         try:
             await self.audit.record(event)
         except Exception:
             logger.exception("audit failed", extra={"event": "tool_audit_failed"})
-            return ToolOutcome.failure(
-                "audit_unavailable", "The action ran but could not be audited."
+            return tool_failure(
+                ErrorCode.SERVICE_UNAVAILABLE, "The action ran but could not be audited."
             )
         return outcome
 
@@ -335,14 +354,14 @@ class ToolRegistry:
         try:
             result = await _run_with_timeout(spec, ctx, args)
         except ToolError as exc:
-            return ToolOutcome.failure(
+            return tool_failure(
                 exc.code, exc.message, retryable=exc.retryable, details=exc.details
             )
         except Exception:
             logger.exception(
                 "tool handler failed", extra={"event": "tool_failed", "tool": spec.name}
             )
-            return ToolOutcome.failure("tool_internal_error", "The tool failed unexpectedly.")
+            return tool_failure(ErrorCode.INTERNAL_ERROR, "The tool failed unexpectedly.")
 
         try:
             # Dumping first forces validation of instances built without it.
@@ -353,10 +372,8 @@ class ToolRegistry:
                 "tool returned an invalid result",
                 extra={"event": "tool_invalid_result", "tool": spec.name},
             )
-            return ToolOutcome.failure(
-                "tool_invalid_result", "The tool returned an invalid result."
-            )
-        return ToolOutcome.ok(data)
+            return tool_failure(ErrorCode.INTERNAL_ERROR, "The tool returned an invalid result.")
+        return tool_ok(data)
 
     async def _reject(
         self,
@@ -369,9 +386,15 @@ class ToolRegistry:
     ) -> ToolOutcome:
         if tainted is None:
             tainted = self.turns.is_tainted(ctx.session_id)
-        code = outcome.error.code if outcome.error else None
         event = self._event(
-            "rejected", tool, ctx, spec, tainted, event_args or {}, outcome.status, code
+            "rejected",
+            tool,
+            ctx,
+            spec,
+            tainted,
+            event_args or {},
+            outcome.status,
+            outcome_code(outcome),
         )
         try:
             await self.audit.record(event)
@@ -421,6 +444,30 @@ def _tool_modules(package: ModuleType) -> Iterator[ModuleType]:
             raise ToolLoadError(f"cannot import tool module {qualified}: {exc!r}") from exc
 
 
+def _warn_catalog_drift(registry: ToolRegistry) -> None:
+    """Log what differs from the canonical catalog. A warning: it never stops the startup."""
+    path = Path(drakter_contracts.__file__).resolve().parents[2] / "tools" / "catalog.json"
+    try:
+        manifests = TypeAdapter(list[ToolManifest]).validate_json(path.read_bytes())
+    except (OSError, ValueError):
+        logger.warning("tool catalog unavailable", extra={"event": "tool_catalog_unavailable"})
+        return
+    catalog = {manifest.name: manifest for manifest in manifests}
+    for spec in registry.catalog():
+        manifest = catalog.get(spec.name)
+        differs = manifest is None or (
+            manifest.domain,
+            manifest.permission,
+            manifest.risk,
+            manifest.returns_untrusted,
+        ) != (spec.domain, spec.permission, spec.risk, spec.returns_untrusted)
+        if differs:
+            logger.warning(
+                "tool differs from the catalog",
+                extra={"event": "tool_catalog_drift", "tool": spec.name},
+            )
+
+
 def load_builtin_tools(registry: ToolRegistry) -> None:
     """Register ``TOOLS`` from every ``app.tools`` module. Any failure stops the startup."""
     import app.tools as package
@@ -433,3 +480,4 @@ def load_builtin_tools(registry: ToolRegistry) -> None:
             raise ToolLoadError(f"{module.__name__}.TOOLS must be a tuple of ToolSpec")
         for spec in tools:
             registry.register(spec)
+    _warn_catalog_drift(registry)

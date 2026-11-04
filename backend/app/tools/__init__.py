@@ -1,6 +1,14 @@
 """Tools of the agent: common registry and MCP bridge. Contract in integrations/hermes."""
 
-from app.tools.envelope import ToolFailure, ToolOutcome, untrusted_envelope
+from drakter_contracts.tools import (
+    ToolConfirmationRequired,
+    ToolFailed,
+    ToolOk,
+    ToolOutcome,
+    UntrustedEnvelope,
+)
+
+from app.tools.envelope import tool_confirmation, tool_failure, tool_ok, untrusted_envelope
 from app.tools.gate import (
     AuditSink,
     DefaultToolGate,
@@ -19,6 +27,7 @@ from app.tools.mcp_bridge import (
 from app.tools.permissions import DEFAULT_PERMISSIONS_PATH, PermissionPolicy
 from app.tools.registry import (
     ToolLoadError,
+    ToolObserver,
     ToolRegistrationError,
     ToolRegistry,
     load_builtin_tools,
@@ -42,18 +51,25 @@ __all__ = [
     "ToolAuditEvent",
     "ToolContext",
     "ToolError",
-    "ToolFailure",
+    "ToolConfirmationRequired",
+    "ToolFailed",
     "ToolGate",
     "ToolHandler",
     "ToolLoadError",
+    "ToolObserver",
+    "ToolOk",
     "ToolOutcome",
     "ToolRegistrationError",
     "ToolRegistry",
     "ToolSpec",
     "TurnBusyError",
     "TurnTracker",
+    "UntrustedEnvelope",
     "build_agent_tools_app",
     "effective_risk",
     "load_builtin_tools",
+    "tool_confirmation",
+    "tool_failure",
+    "tool_ok",
     "untrusted_envelope",
 ]
