@@ -125,13 +125,18 @@ def get_audit(request: Request) -> AuditSink:
 
 
 def get_principal(request: Request) -> Principal:
-    """Resolve the caller from ``scope['state']['principal']``, set by the guard.
+    """Resolve the caller of a GUI route.
 
-    An unresolved caller counts as the agent, the least privileged kind, so the
-    session token alone can never reach a user-only operation.
+    Hermes reaches tools only through its own port and credential, so the GUI
+    API serves the user. That fact is declared once, at wiring time, through
+    ``app.state.gui_principal``; a per-request principal set by the guard wins.
+    An unresolved caller counts as the agent, the least privileged kind.
     """
-    principal = request.scope.get("state", {}).get("principal")
-    return principal if isinstance(principal, Principal) else UNKNOWN_AGENT
+    scoped = request.scope.get("state", {}).get("principal")
+    if isinstance(scoped, Principal):
+        return scoped
+    declared = getattr(request.app.state, "gui_principal", None)
+    return declared if isinstance(declared, Principal) else UNKNOWN_AGENT
 
 
 def require_user(principal: Principal) -> None:
