@@ -62,7 +62,7 @@ Modelo por tarea: `haiku` para lo mecánico, `sonnet` para construir, `opus` par
 - Lanza con **nombre** a los agentes que deban hablar entre sí. Con `SendMessage` puedes continuar o redirigir a un agente sin perder su contexto, y ellos pueden escribirse si tienen esa herramienta.
 - Lo que deba compartir toda la flota va en archivos: contratos en el repo, nunca en mensajes sueltos.
 - Los equipos de agentes (`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS`) son experimentales, no permiten equipos anidados y sus miembros no pueden lanzar subagentes en segundo plano. Quedan fuera salvo que el usuario los pida.
-- El tool `Workflow` solo se usa cuando el usuario lo pide expresamente.
+- El tool `Workflow` está permitido y sin tope de tamaño (`workflowSizeGuideline: unrestricted`). Sus agentes sin `agentType` no pueden lanzar subagentes: para anidar, usa `drakter-lider`.
 
 ## Paralelismo sin pisarse
 
@@ -71,7 +71,7 @@ Modelo por tarea: `haiku` para lo mecánico, `sonnet` para construir, `opus` par
 3. Ya hay contrato antes de que nadie construya sobre él.
 4. Un único integrador por fase.
 
-**Aviso:** `.claude/commands/astraeus` y `.claude/skills/build-orchestrator` son gitlinks sin `.gitmodules` y llegan vacíos a los worktrees. No dependas de ellos dentro de un worktree.
+Los worktrees solo ven lo commiteado: haz commit antes de lanzar cada lote.
 
 ## Verifica lo que te devuelven
 

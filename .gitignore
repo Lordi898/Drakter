@@ -1,0 +1,15 @@
+# Secretos
+.env
+
+# Claude Code: configuración local y worktrees
+.claude/settings.local.json
+.claude/worktrees/
+
+# Dependencias y entornos
+node_modules/
+__pycache__/
+.venv/
+
+# Estado de Agent Orchestrator (AO)
+.ao/
+.claude/.gitignore

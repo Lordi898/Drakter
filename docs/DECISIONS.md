@@ -54,3 +54,24 @@ Decisiones técnicas, cambios de tecnología y motivos.
 - **Alternativas descartadas:** mantener los pasos de instalación, ya ejecutados y registrados en este archivo.
 - **Motivo:** que cualquier agente sepa qué hay y cómo combinarlo.
 - **Impacto:** `.claude/skills/drakter-toolkit/SKILL.md`.
+
+## [2026-11-04] Eliminación de los .docx de docs/
+- **Contexto:** `docs/` tenía copias `.docx` de `IMPLEMENTATION_STATUS`, `MASTER_PLAN` y `PLAN_DISEÑO_COMPLETO_DRAKTER`, y el usuario ya las había borrado en su checkout.
+- **Decisión:** eliminarlas de `drakter/build`. Los `.md` son la fuente de verdad.
+- **Alternativas descartadas:** conservarlas junto a los `.md` (dos versiones del mismo documento que se desincronizan).
+- **Motivo:** un único origen por documento.
+- **Impacto:** `docs/`. Siguen recuperables en el historial de Git.
+
+## [2026-11-04] build-orchestrator y astraeus pasan de gitlinks a archivos normales
+- **Contexto:** `.claude/skills/build-orchestrator` y `.claude/commands/astraeus` eran gitlinks sin `.gitmodules` y llegaban vacíos a clones y worktrees.
+- **Decisión:** versionar su contenido como archivos normales, sin `.git`. Origen: `indiekitai/claude-orchestrator@7a81c78` y `RchGrav/astraeus@1ff17b0`. El hash de cada árbol coincide con el de su commit de origen. Los `.git` anidados del checkout del usuario se mueven a `~/.drakter-backup/build-orchestrator.git` y `~/.drakter-backup/astraeus.git`.
+- **Alternativas descartadas:** submódulos (exigen inicializarlos en cada worktree, y los agentes volverían a encontrar carpetas vacías).
+- **Motivo:** que cualquier worktree tenga el tooling completo sin pasos extra.
+- **Impacto:** `.claude/skills/build-orchestrator/`, `.claude/commands/astraeus/`, `drakter-orquestator`, `drakter-toolkit`. Las actualizaciones desde esos repos pasan a ser manuales.
+
+## [2026-11-04] Preparación del repositorio: .gitignore, worktrees, Workflow y RUN_STATE
+- **Contexto:** faltaba `.gitignore` en la raíz, los worktrees salían de `origin/main`, el orquestador limitaba `Workflow` y no había un sitio para el estado operativo.
+- **Decisión:** añadir `.gitignore` con secretos, configuración local, dependencias y estado de AO (`.ao/`, `.claude/.gitignore`). Fijar `"worktree": {"baseRef": "head"}` y `"workflowSizeGuideline": "unrestricted"` en `.claude/settings.local.json`. Levantar la restricción de `Workflow` en `drakter-orquestator`. Crear `docs/RUN_STATE.md`.
+- **Alternativas descartadas:** `.claude/settings.json` (se versionaría una preferencia de esta máquina).
+- **Motivo:** decisión del usuario, para que el trabajo paralelo parta de la rama actual y sin tope de tamaño.
+- **Impacto:** `.gitignore`, `.claude/settings.local.json` (no versionado, hay que fijarlo en cada checkout nuevo), `.claude/agents/drakter-orquestator.md`, `docs/RUN_STATE.md`. `RUN_STATE.md` se suma a los tres documentos de control de `CLAUDE.md` §2 como foto operativa. `CLAUDE.md` no mencionaba gitlinks ni `Workflow`, así que no ha cambiado.

@@ -108,7 +108,6 @@ Reutiliza un rol del catálogo si existe. Un rol puntual va con `general-purpose
 ## Trampas conocidas
 
 - **Base de los worktrees:** salen de `origin/main` salvo con `"worktree": {"baseRef": "head"}`. Solo ven lo commiteado: haz commit antes de cada lote.
-- **Gitlinks:** `build-orchestrator` y `astraeus` son gitlinks sin `.gitmodules` y llegan vacíos a clones y worktrees mientras no se conviertan en archivos normales.
 - **Agentes de `Workflow`:** los que no llevan `agentType` no pueden lanzar subagentes. Para anidar, lanza `drakter-lider` desde el hilo principal con `Agent`.
 - **Dentro de un worktree** solo carga su propia `.claude/skills`. Lo sin commitear no existe allí.
 - **Máquina:** 8 CPU y 14 GB de RAM; limita instalaciones y compilaciones simultáneas.
