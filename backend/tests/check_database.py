@@ -281,7 +281,7 @@ def case_cascade(root: Path) -> None:
           and rows(db, "SELECT max(version) FROM schema_version") == [(2,)], repr(e))
 
     # The pragma must come back on both exits of the protected block.
-    conn = connect(db)
+    conn = connect(db, migrating=True)
     loaded = migrator_module.load_migrations(mig)
     e = _try(migrator_module._attempt, conn, db, backups, loaded)
     failed_on = conn.execute("PRAGMA foreign_keys").fetchone()
