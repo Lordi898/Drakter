@@ -10,7 +10,11 @@ dependencies = [
     "pydantic",
     "pydantic-settings",
     "platformdirs",
+    "drakter-contracts",
 ]
 
 [tool.uv]
 package = false
+
+[tool.uv.sources]
+drakter-contracts = { path = "../contracts/python", editable = true }
