@@ -1,4 +1,4 @@
-"""Public liveness endpoint."""
+"""Liveness endpoint for Electron main."""
 
 from __future__ import annotations
 

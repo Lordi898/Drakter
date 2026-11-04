@@ -31,7 +31,7 @@ def _check_owned_regular_file(path: Path, info: os.stat_result) -> None:
         raise ValueError(f"La base pertenece a otro usuario: {path}")
 
 
-def _prepare_database_file(path: Path) -> os.stat_result:
+def _prepare_database_file(path: Path, *, create: bool) -> os.stat_result:
     """Create or validate the file and return its identity.
 
     An existing database is inspected only through its path. Opening and closing
@@ -41,6 +41,8 @@ def _prepare_database_file(path: Path) -> os.stat_result:
     try:
         info = os.lstat(path)
     except FileNotFoundError:
+        if not create:
+            raise
         flags = os.O_CREAT | os.O_EXCL | os.O_RDWR | os.O_NOFOLLOW | os.O_CLOEXEC
         try:
             descriptor = os.open(path, flags, _PRIVATE_MODE)
@@ -106,9 +108,9 @@ def _configure(conn: sqlite3.Connection) -> None:
         raise sqlite3.OperationalError("No se pudo activar foreign_keys en la base")
 
 
-def connect(db_path: Path) -> sqlite3.Connection:
+def connect(db_path: Path, *, create: bool = False) -> sqlite3.Connection:
     path = Path(db_path)
-    identity = _prepare_database_file(path)
+    identity = _prepare_database_file(path, create=create)
     secure_sidecars(path)
     conn = sqlite3.connect(
         sqlite_uri(path),

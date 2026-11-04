@@ -11,6 +11,7 @@ from pathlib import Path
 from app.core.config import Settings, ensure_private_dir, load_settings
 from app.database.backup import BackupError, create_backup, restore_backup
 from app.database.connection import connect
+from app.database.lock import DatabaseInUse, exclusive_instance
 from app.database.migrator import (
     MIGRATIONS_DIR,
     MigrationError,
@@ -22,9 +23,11 @@ from app.database.migrator import (
 
 def _status(settings: Settings) -> None:
     latest = len(load_migrations(MIGRATIONS_DIR))
-    version = 0
-    if settings.db_path.exists():
+    try:
         conn = connect(settings.db_path)
+    except FileNotFoundError:
+        version = 0
+    else:
         try:
             version = current_version(conn)
         finally:
@@ -35,7 +38,9 @@ def _status(settings: Settings) -> None:
 
 
 def _migrate(settings: Settings) -> None:
-    result = migrate(settings.db_path, settings.backups_dir)
+    # Changing the schema under a running backend would break its only-writer rule.
+    with exclusive_instance(settings.db_path):
+        result = migrate(settings.db_path, settings.backups_dir)
     print(f"versión: {result.from_version} -> {result.to_version}")
     for name in result.applied:
         print(f"aplicada: {name}")
@@ -53,7 +58,7 @@ def _restore(settings: Settings, file: str) -> None:
     backup = settings.backups_dir / path if path.parent == Path() else path
     previous = restore_backup(settings.db_path, settings.backups_dir, backup)
     print("restaurada")
-    print(f"copia previa: {previous}")
+    print(f"{'cuarentena' if previous.is_dir() else 'copia previa'}: {previous}")
 
 
 def _parse(argv: list[str] | None) -> argparse.Namespace:
@@ -76,17 +81,18 @@ def main(argv: list[str] | None = None) -> int:
         print("error: configuración no válida", file=sys.stderr)
         return 1
     try:
+        if args.command == "status":
+            _status(settings)  # Read-only: must not create anything.
+            return 0
         ensure_private_dir(settings.data_dir)
         ensure_private_dir(settings.backups_dir)
-        if args.command == "status":
-            _status(settings)
-        elif args.command == "migrate":
+        if args.command == "migrate":
             _migrate(settings)
         elif args.command == "backup":
             _backup(settings)
         else:
             _restore(settings, args.archivo)
-    except (MigrationError, BackupError, OSError, ValueError, sqlite3.Error) as exc:
+    except (MigrationError, BackupError, DatabaseInUse, OSError, ValueError, sqlite3.Error) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
     return 0

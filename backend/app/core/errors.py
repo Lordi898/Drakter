@@ -3,13 +3,13 @@
 import logging
 from collections.abc import Mapping, Sequence
 from http import HTTPStatus
-from typing import Any, Final, get_args
+from typing import Any, get_args
 from uuid import uuid4
 
+from drakter_contracts.errors import ErrorBody, ErrorDetail, ErrorEnvelope
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError, WebSocketRequestValidationError
 from fastapi.utils import is_body_allowed_for_status_code
-from pydantic import BaseModel
 from pydantic_core.core_schema import ErrorType
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.requests import HTTPConnection, Request
@@ -23,27 +23,8 @@ _WS_POLICY_VIOLATION = 1008
 
 # `msg` de estos tipos sale de plantillas de Pydantic. Se excluyen los que
 # incrustan texto de un validador propio, que podría contener la entrada.
-_TRUSTED_VALIDATION_TYPES = frozenset(get_args(ErrorType)) - {"value_error", "assertion_error"}
-
-
-CORS_ORIGIN_STATE_KEY: Final = "cors_origin"
-
-
-class ErrorDetail(BaseModel):
-    field: str | None = None
-    code: str
-    message: str
-
-
-class ErrorBody(BaseModel):
-    code: str
-    message: str
-    request_id: str
-    details: list[ErrorDetail]
-
-
-class ErrorEnvelope(BaseModel):
-    error: ErrorBody
+_BUILTIN_VALIDATION_TYPES = frozenset(get_args(ErrorType))
+_TRUSTED_VALIDATION_TYPES = _BUILTIN_VALIDATION_TYPES - {"value_error", "assertion_error"}
 
 
 class AppError(Exception):
@@ -59,13 +40,6 @@ class AppError(Exception):
         self.message = message
         self.status_code = status_code
         self.details = details or []
-
-
-def cors_headers(origin: object) -> dict[str, str]:
-    """Cabeceras CORS para respuestas que no atraviesan `CORSMiddleware`."""
-    if not isinstance(origin, str):
-        return {}
-    return {"access-control-allow-origin": origin, "vary": "Origin"}
 
 
 def error_body_bytes(
@@ -127,7 +101,11 @@ def _field_name(location: Sequence[Any]) -> str | None:
 
 def _validation_detail(error: Mapping[str, Any]) -> ErrorDetail:
     error_type = error.get("type")
-    trusted = error_type in _TRUSTED_VALIDATION_TYPES
+    # Un tipo ajeno a Pydantic es un PydanticCustomError nuestro. Con `ctx` su texto
+    # puede interpolar lo recibido, así que solo se confía en el que no lo lleva.
+    trusted = error_type in _TRUSTED_VALIDATION_TYPES or (
+        error_type not in _BUILTIN_VALIDATION_TYPES and not error.get("ctx")
+    )
     return ErrorDetail(
         field=_field_name(error.get("loc", ())),
         code=str(error_type) if trusted else "invalid_value",
@@ -198,7 +176,6 @@ async def _handle_unexpected(request: Request, exc: Exception) -> Response:
         content=error_body_bytes("internal_error", "Internal server error", request_id),
         status_code=500,
         media_type="application/json",
-        headers=cors_headers(request.scope.get("state", {}).get(CORS_ORIGIN_STATE_KEY)),
     )
 
 
