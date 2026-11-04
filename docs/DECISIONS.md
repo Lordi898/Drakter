@@ -82,3 +82,154 @@ Decisiones técnicas, cambios de tecnología y motivos.
 - **Alternativas descartadas:** dar la anidación por buena solo por el frontmatter (no demuestra que funcione en ejecución).
 - **Motivo:** dos niveles bajo el hilo principal funcionan sin configuración adicional. El tercer nivel no se ha probado.
 - **Impacto:** `drakter-toolkit`, `docs/RUN_STATE.md`. Los agentes nuevos solo se pueden usar en sesiones arrancadas después de añadirlos.
+
+## [2026-11-04] Jerarquía de documentos y numeración única de fases
+- **Contexto:** los planes se contradecían y cada uno numeraba las fases a su manera. "Fase 15" significaba ampliaciones prohibidas en `MASTER_PLAN` y Skills obligatorias en `ROADMAP`. `CLAUDE.md` situaba los documentos en la raíz y hablaba de "exactamente tres". Hallazgos C-02, C-03, C-04, C-36 a C-39 y C-44 del dossier.
+- **Decisión:** prevalece, en este orden, la entrada más reciente de `DECISIONS.md`, `CLAUDE.md`, `MASTER_PLAN.md`, `ROADMAP.md` y `PLAN_DISEÑO_COMPLETO_DRAKTER.md`. Lo verificado en la realidad corrige a todos, y una inversión de ese orden exige entrada aquí. Los documentos viven en `docs/`. `IMPLEMENTATION_STATUS.md` es la única lista viva de casillas; las de `MASTER_PLAN` y `ROADMAP` son históricas; `RUN_STATE.md` es la foto operativa. Formato de esta bitácora: el de `CLAUDE.md` §2, con campos adicionales opcionales. La fase se identifica por el **paso** del orden real de 20 pasos:
+
+| Paso | Contenido | MASTER | ROADMAP | PLAN_DISEÑO | Checklist |
+|---|---|---|---|---|---|
+| 1 | Arquitectura y repositorio | 0 | 0-1 | 0 | 0 |
+| 2 | Electron + React | 1 | 2 | 1 | 1 |
+| 3 | FastAPI + SQLite | 1 | 3 | 1 | 2 |
+| 4 | Comunicación GUI-backend | 1 | 3 | 1 | 2 |
+| 5 | Hermes + Claude Haiku 5.5 | 2 | 4 | 1 | 3 |
+| 6 | Personalidad y contexto | 3 | 5 | 8 | 4 |
+| 7 | Personaje | 4 | 6 | 2 | 5 |
+| 8 | Modelo de datos | 5 | 7 | 3 | 6 |
+| 9 | Tareas y proyectos | 6 | 8-9 | 3 | 7 |
+| 10 | Hábitos | 7 | 10 | 4 | 8 |
+| 11 | Calendario y asignaturas | 7 | 11-12 | 4 | 9 |
+| 12 | Almacén e indexación | 8 | 13 | 5 | 10 |
+| 13 | Relaciones avanzadas | 9 | 14 | 3 y 5 | 11 |
+| 14 | Integración de herramientas y Skills | 11 | 15 | 3 y 6 | 13 |
+| 15 | Memoria avanzada | 10 | 16 | 6 | 12 |
+| 16 | Voz local | 12 | 17 | 7 | 14 |
+| 17 | Automejora controlada | 13 | 18 | 9 | 15 |
+| 18 | Seguridad | 14 | 19 | 10 | 16 |
+| 19-20 | Optimización, empaquetado y lanzamiento | 14 | 20 | 10 | 17 |
+| Fuera de alcance | Ampliaciones futuras | 15 | 21 | — | 18 |
+
+- **Pruebas y autonomía:** `CLAUDE.md` §3 y §4 sustituyen las suites, los tests de cierre de fase y las esperas de aprobación de `ROADMAP` y `MASTER_PLAN`. Lint, typecheck y build siguen como comprobación rápida. Se conservan las reglas de `ROADMAP` sobre seguridad, secretos, acciones destructivas, no marcar sin evidencia y no presentar mocks como integraciones.
+- **Alternativas descartadas:** fusionar los planes en uno (obliga a rehacer 6.000 líneas sin aportar nada); renumerar las fases de cada plan (rompe las citas existentes).
+- **Motivo:** un solo criterio para resolver conflictos y un solo identificador de fase.
+- **Impacto:** cabeceras de los tres planes, `CLAUDE.md` §2, §3 y §7, `IMPLEMENTATION_STATUS.md`.
+
+## [2026-11-04] Hardware real y paralelismo acotado
+- **Contexto:** `CLAUDE.md` y `MASTER_PLAN` daban por hechos 32 GB de RAM y 4 GB de VRAM (C-40), y el paralelismo sin límite chocaba con la máquina (C-46).
+- **Decisión:** la máquina de desarrollo y de comprobación es un i7-8665U de 8 hilos con 14 GB de RAM y gráfica integrada Intel UHD 620, sin VRAM dedicada. Voz y OpenViking se dimensionan para CPU; las cifras de rendimiento solo se publican medidas. Las casillas "Medir VRAM" pasan a medir uso de CPU y RAM. El reparto de agentes se mantiene máximo para lectura y edición, con dos frenos: como mucho 2 instalaciones o compilaciones pesadas a la vez y ningún lanzamiento nuevo con `MemAvailable` por debajo de 300 MB.
+- **Comprobado el 2026-11-04 en esta máquina:** `lspci` solo lista la Intel UHD 620, `nvidia-smi` no existe, `MemTotal` da 15.589.436 kB y `lscpu` da 8 CPU. La rama `drakter/verificacion` no tiene commits propios, así que no sirve de evidencia.
+- **Sin comprobar:** si el destino final es otra máquina con 32 GB y GPU. Esto solo puede confirmarlo el usuario; si lo es, se reabre esta entrada.
+- **Alternativas descartadas:** conservar 32 GB y 4 GB como objetivo (llevaría a elegir modelos que aquí no se pueden medir).
+- **Motivo:** la orden del usuario fija estos frenos, y dimensionar con datos que no se han medido produce decisiones falsas.
+- **Impacto:** `CLAUDE.md` §2 y §5, `MASTER_PLAN` Parte IX, `IMPLEMENTATION_STATUS.md` Checklist 17.
+
+## [2026-11-04] Python 3.12 para el backend, con Hermes y OpenViking en entornos propios
+- **Contexto:** ningún plan fijaba versión. El sistema trae Python 3.14.4 y 3.12.16. `drakter/backend-base` declara `requires-python = ">=3.12,<3.13"`. El dossier verificó en el código de Hermes v0.22.7 que Hermes se instala con Python 3.14 mediante su gestor (3.14.9) y que el servidor privado de OpenViking excluye 3.14.
+- **Decisión:** Python 3.12 es obligatorio para `backend/` y para todo el código propio que corra en su entorno. Hermes tiene un entorno propio con su versión fijada y OpenViking otro, en 3.12 o 3.13. Ningún entorno se comparte.
+- **Sin comprobar:** el instalador de Hermes no se ha ejecutado, y en esta máquina faltaba `curl`, que es requisito suyo.
+- **Alternativas descartadas:** forzar 3.12 en todo (Hermes solo tiene soporte en 3.14); un solo entorno para todo (mezcla dependencias de licencias y ritmos distintos).
+- **Motivo:** 3.12 es la versión que usa el código ya escrito, y la separación por proceso es la que exige la integración con Hermes.
+- **Impacto:** `CLAUDE.md` §1 y §9, `ROADMAP`, `backend/pyproject.toml` (ya alineado).
+
+## [2026-11-04] Los 14 archivos de identidad viven en agent/identity/
+- **Contexto:** `MASTER_PLAN` y `ROADMAP` los repartían en `identity/`, `context/` y `knowledge/`. `PLAN_DISEÑO` los ponía en `~/.hermes/` y `config/`, y `CLAUDE.md` §8 solo cita `agent/identity/`. El commit `c487985` de `drakter/identidad-personaje` los creó los 14 en `agent/identity/` (C-14).
+- **Decisión:** los 14 archivos están en `agent/identity/`: `SOUL`, `PERSONALITY`, `BEHAVIOR`, `COMMUNICATION`, `EMOTIONAL_STYLE`, `VALUES`, `USER`, `ENVIRONMENT`, `PREFERENCES`, `CURRENT_CONTEXT`, `CAPABILITIES`, `WORKSPACE_GUIDE`, `TOOL_GUIDE` y `SYSTEM_GUIDE`, todos `.md`. `agent/context/` y `agent/knowledge/` no existen. La fuente es el repositorio: un cargador compone esos archivos y los publica en el `HERMES_HOME` de un perfil propio, y comprueba el tope de 20.000 caracteres de los archivos de contexto de Hermes, porque un recorte podría eliminar reglas del centro.
+- **Sin comprobar:** la carga real en Hermes.
+- **Alternativas descartadas:** mantener tres carpetas (rompería lo ya escrito sin beneficio); `~/.hermes/` como fuente (dejaría la personalidad fuera del repositorio).
+- **Motivo:** `CLAUDE.md` §8 y el código ya existente.
+- **Impacto:** `MASTER_PLAN` §8.1 y Parte XII, `ROADMAP` Fase 5 y árboles, `PLAN_DISEÑO` §Personalidad, `drakter-orquestator`.
+
+## [2026-11-04] Estado `offline` en lugar de `sleeping`
+- **Contexto:** `CLAUDE.md`, `MASTER_PLAN` y `ROADMAP` usan `offline` como noveno estado; `PLAN_DISEÑO` §6.2 usa `sleeping` (C-33).
+- **Decisión:** los 9 estados son `idle`, `listening`, `thinking`, `speaking`, `executing`, `success`, `error`, `interrupted` y `offline`. `sleeping` desaparece.
+- **Alternativas descartadas:** tener ambos (un décimo estado que nadie emite).
+- **Motivo:** `CLAUDE.md` §2 prevalece, y el personaje de `drakter/identidad-personaje` ya usa estos nueve.
+- **Impacto:** `PLAN_DISEÑO` §6.2.
+
+## [2026-11-04] La memoria no se impone a la instrucción actual
+- **Contexto:** el orden de prioridad pone la memoria (6) antes de la instrucción actual (7). Leído literalmente, un recuerdo, incluso envenenado, vencería a lo que el usuario pide ahora, y eso contradice que la memoria sea dato no confiable (C-45).
+- **Decisión:** se mantiene el orden, y se aclara su lectura como hace `agent/identity/SYSTEM_GUIDE.md`: los niveles 1 a 5 enmarcan la instrucción actual; la memoria y los datos no confiables solo informan y nunca dan órdenes; el nivel 7 es lo que hay que hacer dentro de ese marco. Si la memoria contradice al usuario, vale lo que dice ahora y se señala la discrepancia. Para datos operativos, la fuente es el Workspace.
+- **Alternativas descartadas:** intercambiar los niveles 6 y 7 (cambiaría una regla de `CLAUDE.md` §8 que no está mal, solo mal explicada).
+- **Motivo:** cerrar la lectura peligrosa sin alterar la regla.
+- **Impacto:** `CLAUDE.md` §8, `MASTER_PLAN` §8.3. La barrera real la impone el backend, no este texto.
+
+## [2026-11-04] Huecos de MASTER_PLAN §19: borrar o mover archivos y listar hábitos
+- **Contexto:** `MASTER_PLAN` §19 no tiene herramienta para eliminar o mover recursos ni para listar hábitos, aunque §24 clasifica esas acciones. `agent/identity/TOOL_GUIDE.md` lo señala como hueco (C-09 y dossier de contratos C-05).
+- **Decisión:** §19 sigue siendo la base del catálogo. Se añade `list_habits`, de solo lectura. Eliminar o mover recursos queda sin herramienta de agente en la v1: se hace desde la GUI, con confirmación. Si el agente recibe esa petición, lo dice y no improvisa un sustituto. El catálogo definitivo lo congela `drakter/contratos`; si difiere, manda su entrada posterior aquí.
+- **Alternativas descartadas:** añadir `delete_resource` y `move_resource` al agente (amplía la superficie destructiva antes de que exista el flujo de confirmación).
+- **Motivo:** menor superficie destructiva para el agente, y coherencia con lo que dicen ya las guías de identidad.
+- **Impacto:** `MASTER_PLAN` §19, `ROADMAP` Fase 15, `PLAN_DISEÑO` §13.
+
+## [2026-11-04] Las expresiones no tienen campo propio
+- **Contexto:** `MASTER_PLAN` §6.3 lista 10 expresiones, `PLAN_DISEÑO` §5 otras 10 y `PLAN_DISEÑO` §6.2, 7. El objeto expresivo de `PLAN_DISEÑO` (`state`, `tone`, `intensity`, `speech_rate`, `voice_profile`, `animation`) no tiene campo `expression`, y `agent/identity/EMOTIONAL_STYLE.md` indica elegirla en `animation` (C-33).
+- **Decisión:** el catálogo cerrado son las 7 de `PLAN_DISEÑO` §6.2: `neutral`, `curious`, `focused`, `happy`, `concerned`, `confused`, `calm`. La expresión viaja en `animation`; no se añade un campo `expression` al objeto que genera el modelo. La app valida cada valor contra su catálogo. El nombre del campo que transporte la expresión en el evento `agent.expression_changed` lo fija `drakter/contratos`.
+- **Alternativas descartadas:** el catálogo de 10 de `MASTER_PLAN` (Sorpresa, Satisfacción, Frustración y Atención no tienen arte ni guía de uso); añadir un campo propio (duplica `animation`).
+- **Motivo:** es lo que ya definen las guías de identidad y el personaje provisional.
+- **Impacto:** `MASTER_PLAN` §6.3, `PLAN_DISEÑO` §5, contrato de eventos.
+
+## [2026-11-04] agent/identity/USER.md es plantilla; el USER.md vivo es el de Hermes
+- **Contexto:** los datos del usuario tenían varias fuentes: `agent/identity/USER.md` y `PREFERENCES.md` en el repositorio, `USER.md` nativo de Hermes y perfil y preferencias de OpenViking (C-15).
+- **Decisión:** en el repositorio solo se versionan plantillas sin datos reales. El `USER.md` nativo, en el `HERMES_HOME` del perfil de Drakter, guarda lo esencial, y OpenViking, lo demás. La plantilla rellenada por el usuario vive fuera del repositorio, en el directorio de datos de Drakter, y solo inicializa el `USER.md` nativo; a partir de ahí manda el nativo. `PREFERENCES.md` sigue el mismo criterio.
+- **Sin comprobar:** el cargador no existe todavía, y el ciclo de inicialización no se ha ejecutado.
+- **Alternativas descartadas:** rellenar el archivo versionado (metería datos personales en Git); eliminar la plantilla (se perdería la estructura que espera la identidad).
+- **Motivo:** un único origen vivo y ningún dato personal en el repositorio.
+- **Impacto:** `MASTER_PLAN` §8 y §10, `PLAN_DISEÑO`, cargador de identidad.
+
+## [2026-11-04] Eventos WebSocket distintos entre planes: pendiente de drakter/contratos
+- **Contexto:** `MASTER_PLAN` §6.5, `PLAN_DISEÑO` §6.4 y `ROADMAP` §5.4 dan listas distintas, y `MASTER_PLAN` no tiene evento para `idle` (C-32). `backend/CONTRACT.md` deja los eventos de negocio fuera de su alcance, y a fecha de esta entrada `drakter/contratos` no ha publicado el catálogo.
+- **Decisión:** no se decide aquí. Lo resuelve `drakter/contratos` con entrada propia. Hasta entonces, `ROADMAP` §5.4 es la base de trabajo por ser la única lista tipada y versionada, y las listas de `MASTER_PLAN` §6.5 y `PLAN_DISEÑO` §6.4 son orientativas.
+- **Estado:** PENDIENTE.
+- **Alternativas descartadas:** fijar aquí la lista final (es una decisión de contrato y otro frente la tiene asignada).
+- **Motivo:** evitar dos contratos.
+- **Impacto:** `MASTER_PLAN` §6.5, `PLAN_DISEÑO` §6.4 y `ROADMAP` §5.4 quedan remitidos a esa entrada.
+
+## [2026-11-04] Puente Hermes-backend y flujo de una petición
+- **Contexto:** `PLAN_DISEÑO` fijaba MCP, `MASTER_PLAN` describía Skills que llaman a la API, y `CLAUDE.md` lo dejaba por investigar (C-08, C-13, C-42, C-48). El flujo de `MASTER_PLAN` §28 recuperaba memoria antes de Hermes, pero las herramientas `viking_*` se usan dentro de su bucle.
+- **Decisión:** Hermes corre como proceso aparte, supervisado por FastAPI: `hermes gateway run` con API server en loopback, venv y `HERMES_HOME` propios, versión fijada (v0.22.7) y un `AgentProvider` por encima para que el proveedor siga siendo intercambiable. Las herramientas las sirve el backend por MCP en loopback, en un servidor delgado sin lógica de negocio que usa los mismos servicios que la API; Hermes es solo cliente. El perfil lleva lista de permitidos. El backend entrega mensaje y contexto de sesión, y la recuperación de memoria ocurre dentro de Hermes. Skills e identidad tienen su fuente en `agent/` y se publican al perfil. Sigue sin importarse `AIAgent` en FastAPI.
+- **Sin comprobar:** nada de esto se ha ejecutado; proviene de leer el código de v0.22.7. Quedan por probar la lista de permitidos real, el nombre visible de las herramientas MCP, si puede bloquearse del todo la escritura de Skills y la RAM consumida.
+- **Alternativas descartadas:** importar `AIAgent` en FastAPI (rompe la separación de procesos y mezcla dependencias); Skills que llaman a la API (no valen como frontera de herramientas).
+- **Motivo:** el modelo y Hermes se tratan como no confiables; la frontera real es el backend. Esto invierte `MASTER_PLAN` §28.
+- **Impacto:** `CLAUDE.md` §2, `MASTER_PLAN` §28 y Parte XII, `ROADMAP`. `agent/identity/SYSTEM_GUIDE.md` (paso 2 del flujo) dice aún que el backend recupera los recuerdos: lo corrige su propietario.
+
+## [2026-11-04] Memoria sin pipeline propio ni recuerdos en el repositorio
+- **Contexto:** `MASTER_PLAN` §11, `ROADMAP` y la Checklist 12 seguían pidiendo archivos de recuerdos en `memory/` y una extracción propia, en contra de la decisión de memoria nativa + OpenViking (C-05, C-11, C-12, C-16, C-17).
+- **Decisión:** `memory/` guarda configuración e integración, nunca recuerdos ni datos personales. Extraer, clasificar, deduplicar y resolver contradicciones se configura y se comprueba en OpenViking; lo que falte se anota con ⚠️. ByteRover sale de la memoria del producto y queda como utilidad opcional de desarrollo. La casilla "Skill de memoria" pasa al paso 15. La ingesta del almacén en OpenViking es opcional por recurso, viene apagada y pasa siempre por el backend. Esto último cambia el flujo de `MASTER_PLAN` §10.
+- **Alternativas descartadas:** pipeline propio (duplica lo que aporta OpenViking y anula la decisión anterior).
+- **Motivo:** aplicar la decisión de memoria ya tomada.
+- **Impacto:** `MASTER_PLAN` §10-§11, `ROADMAP` Fase 16, `IMPLEMENTATION_STATUS.md` Checklists 12 y 13, `CLAUDE.md` §5.
+
+## [2026-11-04] Herramientas con su módulo; confirmación y auditoría antes de la primera
+- **Contexto:** `MASTER_PLAN` y las checklists crean herramientas en cada módulo, `ROADMAP` las concentra en su Fase 15, y los tres dejan confirmación y auditoría para después de exponer herramientas destructivas. Ningún documento define el flujo de confirmación, y `ROADMAP` admitía "confirmación y/o undo" (C-06, C-07, C-35, C-49).
+- **Decisión:** cada herramienta se construye con su módulo y se comprueba por llamada directa; el paso 14 integra Skills y comprueba la selección con modelo. Permisos, confirmación pendiente y auditoría van en el backend base o en el modelo de datos, antes de la primera herramienta, y las casillas tardías de la Checklist 16 pasan a ser revisión y endurecimiento. La confirmación es obligatoria y el undo es adicional. Flujo: la herramienta destructiva crea una confirmación pendiente y devuelve su id sin ejecutar; solo la GUI la resuelve, por un endpoint que no es herramienta; la ejecución y la auditoría ocurren después. Los detalles los congela `drakter/contratos`.
+- **Alternativas descartadas:** dejar confirmaciones para el paso 18 (incumple `CLAUDE.md` §8); usar las aprobaciones nativas de Hermes (solo cubren comandos de shell).
+- **Motivo:** `CLAUDE.md` §8.
+- **Impacto:** `MASTER_PLAN` Partes VIII y XVI, `ROADMAP` §5.5 y Fases 15 y 19, `IMPLEMENTATION_STATUS.md` Checklist 16.
+
+## [2026-11-04] Datos fuera del repositorio y estructura de carpetas
+- **Contexto:** los árboles de `MASTER_PLAN` y `ROADMAP` ponen datos reales dentro del repositorio, y `PLAN_DISEÑO` propone otra estructura. `MASTER_PLAN` pide crear todas las carpetas al inicio y `ROADMAP` lo prohíbe (C-20 a C-22).
+- **Decisión:** los datos de ejecución viven en `DRAKTER_DATA_DIR`, que por defecto es el `user_data_dir("drakter")` ya fijado en `backend/CONTRACT.md`; `workspace/` no guarda datos. La estructura es la de `MASTER_PLAN` Parte XII con las desviaciones registradas aquí, y se descartan `apps/` y `docker-compose`. Las carpetas se crean cuando entra código. La configuración no sensible puede versionarse; la sensible, nunca.
+- **Alternativas descartadas:** datos en `workspace/` ignorados por Git (se pierden con un `git clean` y mezclan código con datos personales).
+- **Motivo:** el código ya escrito lo hace así, y es la opción más segura.
+- **Impacto:** `MASTER_PLAN` Parte XII, `ROADMAP` árbol y §2, `PLAN_DISEÑO` estructura, `CLAUDE.md` §9.
+
+## [2026-11-04] Trabajo sin clave y alcance de automejora, copias y v1
+- **Contexto:** las reglas del plan impiden cerrar el paso 5 sin clave de API (C-47), `PLAN_DISEÑO` permitía cambios sin aprobación en automejora (C-50), las copias de seguridad difieren (C-19), `PLAN_DISEÑO` metía en la v1 lo que `MASTER_PLAN` aplaza (C-41) y las casillas del `.riv` no pueden cumplirse con código (C-43).
+- **Decisión:**
+  - **Sin clave:** el paso 5 queda con ⚠️, el adaptador se construye con un doble identificado como mock, y ninguna casilla de conversación, personalidad, selección de herramientas o memoria se marca hasta probarla con clave.
+  - **Automejora:** lo publicado al agente en uso cuenta como producción. Todo cambio pasa por propuesta y autorización, también en Skills.
+  - **Copias:** incluyen SQLite, configuración, identidad, Skills, datos de OpenViking y home de Hermes, sin secretos.
+  - **Alcance v1:** paneles y automatizaciones avanzadas quedan fuera, con un mínimo local que dispara recordatorios. Sin Recharts ni Docker hasta necesitarlos. SQLAlchemy + Alembic para el modelo de datos.
+  - **Credenciales:** un único origen, `~/.config/drakter/.env`.
+  - **Rive:** el personaje provisional cubre el trabajo por código, y las casillas del `.riv` llevan ⚠️ hasta que el usuario lo diseñe.
+- **Alternativas descartadas:** marcar el paso 5 como hecho con el mock (`ROADMAP` lo prohíbe y `CLAUDE.md` §2 también).
+- **Motivo:** `CLAUDE.md` §2 pide anotar lo bloqueado y seguir, y §8 no admite excepciones en automejora.
+- **Impacto:** `IMPLEMENTATION_STATUS.md`, `MASTER_PLAN` Partes X y XI, `ROADMAP` Fases 18 y 19, `PLAN_DISEÑO`.
+
+## [2026-11-04] Contratos de datos que resuelve drakter/contratos
+- **Contexto:** quedan conflictos de esquema y de catálogo que son decisiones de contrato: catálogo de herramientas y Skills (C-09, C-10), entidades y campos (C-23, C-24), pertenencia (C-25), estados (C-26), tipos de relación (C-27), calendario (C-28), asignaturas (C-29), hábitos (C-30), auditoría (C-31), permisos (C-34) y FTS (C-18).
+- **Decisión:** los planes no los resuelven: remiten al contrato. Cuando `drakter/contratos` publique, su entrada en este archivo y su contrato prevalecen sobre las listas de los planes. Criterios fijos ya: fuente única de pertenencia, toda eliminación confirma, y el agente no modifica permisos.
+- **Estado:** PENDIENTE.
+- **Alternativas descartadas:** decidir el esquema desde documentación (un frente lo tiene asignado, y haría dos contratos).
+- **Motivo:** evitar dos fuentes.
+- **Impacto:** cabecera de los tres planes.
