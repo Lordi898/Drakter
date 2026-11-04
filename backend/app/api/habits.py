@@ -6,7 +6,7 @@ import sqlite3
 from datetime import date
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Header, Query
+from fastapi import APIRouter, Depends, Header, Query, Response
 
 from app.schemas.habits import (
     HabitCreate,
@@ -28,6 +28,7 @@ Conn = Annotated[sqlite3.Connection, Depends(get_db)]
 Ctx = Annotated[RequestContext, Depends(rest_context)]
 FromQ = Annotated[date | None, Query(alias="from")]
 ToQ = Annotated[date | None, Query(alias="to")]
+Limit = Annotated[int, Query(ge=1, le=200)]
 IfMatch = Annotated[str | None, Header(alias="If-Match")]
 
 
@@ -46,11 +47,11 @@ def list_habits(
     ctx: Ctx,
     include_archived: bool = False,
     status: HabitStatus | None = None,
-    limit: int | None = None,
-    offset: int | None = None,
+    limit: Limit = 50,
+    cursor: str | None = None,
 ) -> service.HabitPage:
     return service.list_habits(
-        conn, ctx, include_archived=include_archived, status=status, limit=limit, offset=offset
+        conn, ctx, include_archived=include_archived, status=status, limit=limit, cursor=cursor
     )
 
 
@@ -90,9 +91,21 @@ def upsert_record(
 
 @router.get("/habits/{habit_id}/records", response_model=service.RecordPage)
 def list_records(
-    habit_id: str, conn: Conn, ctx: Ctx, from_date: FromQ = None, to_date: ToQ = None
+    habit_id: str,
+    conn: Conn,
+    ctx: Ctx,
+    from_date: FromQ = None,
+    to_date: ToQ = None,
+    limit: Limit = 50,
+    cursor: str | None = None,
 ) -> service.RecordPage:
-    return service.list_records(conn, ctx, habit_id, from_date, to_date)
+    return service.list_records(conn, ctx, habit_id, from_date, to_date, limit, cursor)
+
+
+@router.delete("/habits/{habit_id}/records/{occurrence_date}", status_code=204)
+def delete_record(habit_id: str, occurrence_date: date, conn: Conn, ctx: Ctx) -> Response:
+    service.delete_record(conn, ctx, habit_id, occurrence_date)
+    return Response(status_code=204)
 
 
 @router.get("/habits/{habit_id}/history", response_model=HabitHistory)
