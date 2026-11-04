@@ -24,6 +24,7 @@ Tabla única de rutas. Manda `contracts/README.md`; después, lo ya construido e
 | GET | `/api/v1/system/backups` | `limit`, `cursor` | `{items,next_cursor}` copias (fecha, tamaño, esquema) | (sin construir) | read | seguridad (12) |
 | POST | `/api/v1/system/backups` | - | 201 copia creada | (sin construir) | write | seguridad (12) |
 | POST | `/api/v1/system/backups/{id}/restore` | - | 409 `confirmation_required`; tras aprobar, restaura | (sin construir) | confirm | seguridad (12) |
+| GET | `/api/v1/today` | `timezone` (obligatoria, IANA) | `TodayResponse`; 422 `invalid_timezone` | construida | read | hoy-ajustes |
 | GET | `/api/v1/settings` | - | `{persisted, items:[SettingOut]}` | construida | read | hoy-ajustes |
 | GET | `/api/v1/settings/status` | - | estado de agente y clave, solo presencia | construida | read | hoy-ajustes |
 | GET | `/api/v1/settings/backups` | - | copias | construida | read | hoy-ajustes |
@@ -183,7 +184,7 @@ Router escrito en `drakter-13/backend/app/api/projects.py`.
 
 ## Etiquetas, relaciones y búsqueda
 
-`relations.py` es de drakter-15. Etiquetas y búsqueda global no están construidas.
+`relations.py` es de drakter-15. La búsqueda global es de drakter-27 (`backend/app/api/search.py`).
 
 | Método | Ruta | Entrada | Respuesta | Estado | Riesgo | Dueño |
 |---|---|---|---|---|---|---|
@@ -198,7 +199,7 @@ Router escrito en `drakter-13/backend/app/api/projects.py`.
 | PATCH | `/api/v1/relationships/{id}` | `RelationshipUpdate` | `RelationshipOut` | construida | write | relaciones (15) |
 | DELETE | `/api/v1/relationships/{id}` | - | 409 `confirmation_required` | construida | confirm | relaciones (15) |
 | GET | `/api/v1/entities/{id}/related` | `direction=in\|out\|both`, `type` | `RelatedItems` (incluye aristas virtuales de columnas) | construida | read | relaciones (15) |
-| GET | `/api/v1/search` | `q`, `types`, `limit`, `cursor` (sin sintaxis FTS) | `{items,next_cursor}` con `snippet`, sin archivados | (sin construir) | read | almacén (15) |
+| GET | `/api/v1/search` | `q`, `types`, `limit`, `cursor` (sin sintaxis FTS) | `SearchPage` `{items,next_cursor}` con `snippet`, sin archivados | construida | read | búsqueda (27) |
 
 ## Notificaciones y recordatorios
 
