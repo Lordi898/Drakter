@@ -5,7 +5,7 @@ import { PageHeader } from '@/components/PageHeader'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
-import { errorText } from '../calendar/workspaceClient'
+import { errorText } from '@/modules/calendar/workspaceApi'
 import { listHabits, registerRecord } from './api'
 import { BackendState } from './BackendState'
 import { todayIn } from './dates'
@@ -119,7 +119,7 @@ export function HabitsPage() {
         <>
           <EmptyState
             title={showArchived ? 'No hay hábitos' : 'Aún no hay hábitos'}
-            description="Crea un hábito, define cada cuánto se repite, registra si lo cumpliste y consulta su historial. El historial se conserva aunque cambies un hábito."
+            description="Crea un hábito, define cada cuánto se repite, registra si lo cumpliste y consulta su historial. Los registros se conservan aunque cambies la frecuencia."
             drawing={<HabitsDrawing />}
           />
         </>

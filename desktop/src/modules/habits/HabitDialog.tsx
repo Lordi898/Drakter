@@ -5,7 +5,7 @@ import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
-import { errorText } from '../calendar/workspaceClient'
+import { ApiError, errorText } from '@/modules/calendar/workspaceApi'
 import { createHabit, updateHabit } from './api'
 import { dayOfMonth, systemTimezone, timeZoneOptions, todayIn } from './dates'
 import { fieldClass } from './formStyles'
@@ -105,7 +105,7 @@ export function HabitDialog({ habit, open, onClose, onSaved }: HabitDialogProps)
         onSaved(Object.keys(patch).length > 0 ? await updateHabit(habit, patch) : habit)
       }
     } catch (e) {
-      setError(errorText(e))
+      setError(formError(e))
     } finally {
       setSaving(false)
     }
@@ -166,7 +166,7 @@ export function HabitDialog({ habit, open, onClose, onSaved }: HabitDialogProps)
             {habit ? (
               <div className="flex flex-col gap-2 rounded-md bg-muted p-2.5 text-xs text-muted-foreground">
                 <p>
-                  Si cambias la frecuencia, el historial se conserva tal cual. La nueva frecuencia rige desde la fecha que indiques; los días anteriores siguen con la anterior.
+                  Si cambias la frecuencia, los registros ya guardados se conservan. La nueva frecuencia rige desde la fecha que indiques; los días anteriores siguen con la anterior.
                 </p>
                 {unreadable ? <p>La frecuencia actual ({habit.rrule}) no se puede editar aquí; si eliges otra, sustituirá a la actual.</p> : null}
                 {rruleChanged || (unreadable && kind !== 'daily') ? (
@@ -250,4 +250,31 @@ function Field({ id, label, children }: { readonly id: string; readonly label: s
       {children}
     </div>
   )
+}
+
+const FIELD_LABEL: Record<string, string> = {
+  name: 'Nombre',
+  description: 'Descripción',
+  timezone: 'Zona horaria',
+  rrule: 'Frecuencia',
+  start_date: 'Fecha de inicio',
+  end_date: 'Fecha final',
+  schedule_effective_from: 'Fecha desde la que rige la frecuencia',
+  goal_note: 'Objetivo',
+  preferred_local_time: 'Hora preferida',
+  reminder_enabled: 'Recordatorio'
+}
+
+/** Con 422 nombra los campos del formulario; la decisión va por `code`/`status`, nunca por el texto. */
+function formError(e: unknown): string {
+  if (e instanceof ApiError && e.status === 422) {
+    const labels = new Set<string>()
+    for (const d of e.details) {
+      const key = String((d as { field?: unknown }).field ?? '').split('.').pop() ?? ''
+      const label = FIELD_LABEL[key]
+      if (label) labels.add(label)
+    }
+    if (labels.size > 0) return `${errorText(e)} Revisa: ${[...labels].join(', ')}.`
+  }
+  return errorText(e)
 }

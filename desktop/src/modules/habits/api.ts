@@ -1,4 +1,4 @@
-import { api, type Page } from '../calendar/workspaceClient'
+import { api, type Page } from '@/modules/calendar/workspaceApi'
 import type {
   Habit,
   HabitCreate,
@@ -11,15 +11,14 @@ import type {
 
 export async function listHabits(includeArchived: boolean): Promise<readonly Habit[]> {
   const items: Habit[] = []
-  let cursor: string | null = null
-  do {
-    const page: Page<Habit> = await api<Page<Habit>>('GET', '/habits', {
-      query: { include_archived: includeArchived, limit: 100, cursor }
+  const limit = 100
+  for (;;) {
+    const page = await api<Page<Habit>>('GET', '/habits', {
+      query: { include_archived: includeArchived, limit, offset: items.length }
     })
     items.push(...page.items)
-    cursor = page.next_cursor
-  } while (cursor)
-  return items
+    if (page.items.length < limit || items.length >= page.total) return items
+  }
 }
 
 export const createHabit = (body: HabitCreate) => api<Habit>('POST', '/habits', { body })

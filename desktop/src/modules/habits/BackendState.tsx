@@ -1,8 +1,8 @@
 import { Button } from '@/components/ui/button'
-import { BackendUnavailableError, errorText } from '../calendar/workspaceClient'
+import { errorText, isBackendUnavailable } from '@/modules/calendar/workspaceApi'
 
 export function BackendState({ error, onRetry }: { readonly error: unknown; readonly onRetry: () => void }) {
-  const offline = error instanceof BackendUnavailableError
+  const offline = isBackendUnavailable(error)
   return (
     <section role="alert" className="flex max-w-xl flex-col items-start gap-3">
       <h2 className="text-xl font-semibold text-foreground">
