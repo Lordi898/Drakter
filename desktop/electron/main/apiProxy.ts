@@ -37,7 +37,7 @@ const METHODS: ReadonlySet<string> = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DE
 // Defensa en profundidad: decidir confirmaciones y escribir raíces de almacén exigen
 // el token approver y solo los usa main. Otras rutas `/approve` (memoria, mejora) son legítimas.
 for (const route of ALLOWED_ROUTES) {
-  const decides = route.path.startsWith(CONFIRMATIONS_PREFIX) && /\/(approve|reject)\/?$/.test(route.path)
+  const decides = route.path.startsWith(CONFIRMATIONS_PREFIX) && /\/(approve|reject|approval-token)\/?$/.test(route.path)
   const writesStorage = isStorageLocations(route.path) && route.method !== 'GET'
   if (decides || writesStorage) throw new Error(`Ruta prohibida en ALLOWED_ROUTES: ${route.method} ${route.path}`)
 }
@@ -118,7 +118,7 @@ function hasDecisionSegment(path: string): boolean {
       /* segmento no decodificable: se compara tal cual */
     }
     const lower = decoded.toLowerCase()
-    return lower === 'approve' || lower === 'reject'
+    return lower === 'approve' || lower === 'reject' || lower === 'approval-token'
   })
 }
 

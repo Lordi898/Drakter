@@ -9,7 +9,7 @@ import type { BackendHost } from './host-types'
 import { describeError, logError } from './log'
 import { getMainWindow } from './window'
 
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+export const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const READY_TIMEOUT_MS = 10_000
 const DETAIL_TIMEOUT_MS = 15_000
 const REJECT_TIMEOUT_MS = 15_000
@@ -19,7 +19,7 @@ const MAX_RISK_CHARS = 40
 
 interface ConfirmationDetail {
   readonly summary: string
-  readonly affectedCount: number
+  readonly affectedCount: number | null
   readonly paramsHash: string
   readonly risk?: string
 }
@@ -28,7 +28,7 @@ const inFlight = new Map<string, Promise<ApprovalOutcome>>()
 let queueTail: Promise<unknown> = Promise.resolve()
 
 /** El texto viene del backend (dato no confiable): sin control, una línea, recortado. */
-function sanitize(text: string, max: number): string {
+export function sanitize(text: string, max: number): string {
   return text
     .replace(/[\p{Cc}\p{Cf}\u2028\u2029]+/gu, ' ')
     .replace(/\s+/g, ' ')
@@ -47,9 +47,7 @@ function parseDetail(body: unknown): ParsedDetail {
   const { summary, affected_count, params_hash, status, expires_at, risk } = body
   if (
     typeof summary !== 'string' ||
-    typeof affected_count !== 'number' ||
-    !Number.isInteger(affected_count) ||
-    affected_count < 0 ||
+    !(affected_count === null || (Number.isSafeInteger(affected_count) && (affected_count as number) >= 0)) ||
     typeof params_hash !== 'string' ||
     params_hash === '' ||
     typeof status !== 'string' ||
@@ -63,7 +61,7 @@ function parseDetail(body: unknown): ParsedDetail {
   if (expiry <= Date.now()) return 'expired'
   return {
     summary,
-    affectedCount: affected_count,
+    affectedCount: affected_count as number | null,
     paramsHash: params_hash,
     risk: typeof risk === 'string' ? risk : undefined
   }
@@ -85,7 +83,7 @@ async function runApproval(host: BackendHost, id: string): Promise<ApprovalOutco
     const message = sanitize(detail.summary, MAX_SUMMARY_CHARS)
     if (message === '') return 'failed'
 
-    const lines = [`Elementos afectados: ${detail.affectedCount}`]
+    const lines = detail.affectedCount === null ? [] : [`Elementos afectados: ${detail.affectedCount}`]
     const risk = detail.risk === undefined ? '' : sanitize(detail.risk, MAX_RISK_CHARS)
     if (risk) lines.push(`Riesgo: ${risk}`)
     const options = {
