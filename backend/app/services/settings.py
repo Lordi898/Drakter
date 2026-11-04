@@ -70,7 +70,7 @@ def list_settings(db_path: Path) -> SettingsList:
 def update_setting(db_path: Path, key: str, value: str, correlation_id: str) -> SettingItem:
     if key not in SETTING_KEYS:
         raise AppError("unknown_setting", "Unknown setting", 404)
-    if key == "timezone" and value not in _timezones():
+    if key == "default_timezone" and value not in _timezones():
         raise AppError("invalid_timezone", "Invalid timezone", 422)
     conn = _open(db_path)
     with closing(conn):

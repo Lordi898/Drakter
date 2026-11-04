@@ -26,7 +26,7 @@ export function useToday(): UseToday {
     let timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone
     try {
       const settings = await fetchSettings()
-      const configured = settings.items.find((item) => item.key === 'timezone')?.value
+      const configured = settings.items.find((item) => item.key === 'default_timezone')?.value
       if (configured) timeZone = configured
     } catch {
       // Sin ajustes se usa la zona del sistema: no es un error de pantalla.

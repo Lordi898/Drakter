@@ -34,7 +34,7 @@ function TimezoneRow({ persisted, initial }: { readonly persisted: boolean; read
   const change = (value: string) => {
     if (value === SYSTEM_VALUE || value === saved || busy) return
     setBusy(true)
-    saveSetting('timezone', value)
+    saveSetting('default_timezone', value)
       .then(() => {
         setSaved(value)
         notify({
@@ -93,7 +93,7 @@ export function TimezoneSection() {
       {state.status === 'ready' ? (
         <TimezoneRow
           persisted={state.data.persisted}
-          initial={state.data.items.find((item) => item.key === 'timezone')?.value ?? null}
+          initial={state.data.items.find((item) => item.key === 'default_timezone')?.value ?? null}
         />
       ) : null}
     </Section>
