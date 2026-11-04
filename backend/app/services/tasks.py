@@ -20,6 +20,7 @@ from app.core.errors import AppError, ErrorDetail
 from app.repositories import tasks as repo
 from app.repositories.tasks_shared import (
     add_dependency,
+    audits_failure,
     dependencies_of,
     dependency_would_cycle,
     dependents_of,
@@ -77,6 +78,7 @@ _SCOPE_CHANGED: Final = (
 )
 _OWN_DESCENDANT: Final = "Una tarea no puede colgar de sí misma ni de un descendiente."
 _DEPENDENCY_CYCLE: Final = "Esa dependencia crearía un ciclo."
+_COMPLETED_PARENT: Final = "La tarea padre está completada: no admite subtareas abiertas."
 _MAX_LABEL: Final = 80
 
 Row = dict[str, Any]
@@ -194,9 +196,12 @@ def _request_confirmation(
     action: str,
     task_id: str,
     args: Mapping[str, Any],
+    audit_params: Mapping[str, Any],
     summary: str,
     rows: Sequence[Row],
 ) -> NoReturn:
+    """`args` se guarda para ejecutar; a auditoría solo va `audit_params`: ids, booleanos y
+    nombres de campos, nunca títulos, descripciones ni metadatos."""
     ticket = ctx.ports.confirmations.request(
         ctx.conn,
         actor=ctx.actor,
@@ -213,7 +218,7 @@ def _request_confirmation(
             action=action,
             entity_type="task",
             entity_id=task_id,
-            params=args,
+            params=audit_params,
             affected_count=len(rows),
             result="confirmation_required",
         )
@@ -284,6 +289,8 @@ def _create(ctx: ServiceContext, data: TaskCreate, parent_id: str | None) -> Tas
         project_id = _str(data.project_id)
         if parent_id is not None:
             parent = _check_parent(conn, parent_id)
+            if parent["status"] == "completed":
+                raise conflict(_COMPLETED_PARENT)
             if repo.depth_of(conn, parent_id) + 1 > MAX_TASK_DEPTH:
                 raise conflict(f"La profundidad máxima es {MAX_TASK_DEPTH}.")
             if project_id is not None and project_id != parent["project_id"]:
@@ -331,10 +338,12 @@ def _create(ctx: ServiceContext, data: TaskCreate, parent_id: str | None) -> Tas
     return out
 
 
+@audits_failure("task.create", "task")
 def create_task(ctx: ServiceContext, data: TaskCreate) -> TaskOut:
     return _create(ctx, data, _str(data.parent_task_id))
 
 
+@audits_failure("task.create", "task")
 def create_subtask(ctx: ServiceContext, parent_id: str, data: SubtaskCreate) -> TaskOut:
     return _create(ctx, data, str(parent_id))
 
@@ -457,6 +466,13 @@ def _plan_update(
     else:
         project_id = requested if "project_id" in given else row["project_id"]
 
+    status = fields.get("status", row["status"])
+    reopened = row["status"] in repo.CLOSED_STATUSES and status not in repo.CLOSED_STATUSES
+    if parent_id is not None and status not in repo.CLOSED_STATUSES and (moved or reopened):
+        holder = parent if parent is not None else _load(conn, parent_id)
+        if holder["status"] == "completed":
+            raise conflict(_COMPLETED_PARENT)
+
     cascade: list[Row] = []
     project_changed = project_id != row["project_id"]
     if project_changed:
@@ -505,6 +521,7 @@ def _update(
                     "task_id": task_id,
                     "data": data.model_dump(mode="json", exclude_unset=True),
                 },
+                audit_params={"task_id": task_id, "fields": sorted(data.model_fields_set)},
                 summary=_summary(
                     "actualizar", plan.row["title"], len(plan.cascade), undoable=True
                 ),
@@ -554,6 +571,7 @@ def _update(
     return out
 
 
+@audits_failure("task.update", "task")
 def update_task(
     ctx: ServiceContext,
     task_id: str,
@@ -608,6 +626,7 @@ def _complete(
                 action="task.complete",
                 task_id=task_id,
                 args={"task_id": task_id, "complete_subtasks": data.complete_subtasks},
+                audit_params={"task_id": task_id, "complete_subtasks": data.complete_subtasks},
                 summary=_summary("completar", root["title"], len(scope), undoable=True),
                 rows=scope,
             )
@@ -635,6 +654,7 @@ def _complete(
     return out
 
 
+@audits_failure("task.complete", "task")
 def complete_task(
     ctx: ServiceContext,
     task_id: str,
@@ -646,6 +666,7 @@ def complete_task(
     return _complete(ctx, task_id, data, expected_revision, pre_confirmed, None)
 
 
+@audits_failure("task.reopen", "task")
 def reopen_task(
     ctx: ServiceContext, task_id: str, *, expected_revision: int | None = None
 ) -> TaskOut:
@@ -698,12 +719,14 @@ def _set_archived(
     return out
 
 
+@audits_failure("task.archive", "task")
 def archive_task(
     ctx: ServiceContext, task_id: str, *, expected_revision: int | None = None
 ) -> TaskOut:
     return _set_archived(ctx, task_id, expected_revision, archive=True)
 
 
+@audits_failure("task.unarchive", "task")
 def unarchive_task(
     ctx: ServiceContext, task_id: str, *, expected_revision: int | None = None
 ) -> TaskOut:
@@ -715,16 +738,52 @@ def unarchive_task(
 
 def _plan_delete(
     conn: sqlite3.Connection, task_id: str, expected_revision: int | None
-) -> list[Row]:
+) -> tuple[list[Row], list[Row]]:
+    """Devuelve el subárbol, raíz primero, y las tareas de fuera que dependen de él."""
     root = _load(conn, task_id)
     check_revision(root["revision"], expected_revision)
     scope = repo.subtree(conn, task_id)
-    linked = repo.count_blocking_relationships(conn, [row["id"] for row in scope])
+    ids = {row["id"] for row in scope}
+    linked = repo.count_blocking_relationships(conn, sorted(ids))
     if linked:
         message = f"La tarea sigue vinculada a otros elementos ({linked})."
         detail = ErrorDetail(code="has_dependents", message=message)
         raise AppError("has_dependents", message, 409, [detail])
-    return scope
+    outside: dict[str, Row] = {}
+    for row in scope:
+        for source_id in dependents_of(conn, row["id"]):
+            if source_id not in ids and source_id not in outside:
+                outside[source_id] = _load(conn, source_id)
+    return scope, list(outside.values())
+
+
+def _remove_rows(ctx: ServiceContext, scope: Sequence[Row], dependents: Sequence[Row]) -> None:
+    """Dentro de la transacción. Quien dependía de lo borrado queda desbloqueado: es un cambio
+    suyo, así que sube su `revision` y queda en su historial."""
+    conn = ctx.conn
+    ids = [row["id"] for row in scope]
+    removed = [
+        pair
+        for pair in dependencies_of(conn, [row["id"] for row in dependents])
+        if pair[1] in set(ids)
+    ]
+    remove_all_dependencies(conn, ids)
+    repo.delete_rows(conn, list(reversed(ids)))
+    now = utc_now()
+    for row in dependents:
+        touch_entity(conn, row["id"], now)
+    for source_id, target_id in removed:
+        changes = {"depends_on": {"from": target_id, "to": None}}
+        _audit(ctx, "task.dependency_remove", source_id, changes=changes)
+    affected = len(scope) + len(dependents)
+    for index, row in enumerate(scope):
+        _audit(
+            ctx,
+            "task.delete",
+            row["id"],
+            changes={"title": {"from": row["title"], "to": None}},
+            affected=affected if index == 0 else 1,
+        )
 
 
 def _delete(
@@ -736,34 +795,28 @@ def _delete(
 ) -> None:
     conn = ctx.conn
     if not pre_confirmed:
-        scope = _plan_delete(conn, task_id, expected_revision)
+        scope, dependents = _plan_delete(conn, task_id, expected_revision)
+        rows = [*scope, *dependents]
         _request_confirmation(
             ctx,
             tool_name="delete_task",
             action="task.delete",
             task_id=task_id,
             args={"task_id": task_id},
-            summary=_summary("eliminar", scope[0]["title"], len(scope), undoable=False),
-            rows=scope,
+            audit_params={"task_id": task_id},
+            summary=_summary("eliminar", scope[0]["title"], len(rows), undoable=False),
+            rows=rows,
         )
 
     with _write(ctx):
-        scope = _plan_delete(conn, task_id, expected_revision)
-        _check_targets(scope, targets)
-        ids = [row["id"] for row in scope]
-        remove_all_dependencies(conn, ids)
-        repo.delete_rows(conn, list(reversed(ids)))
-        for row in scope:
-            _audit(
-                ctx,
-                "task.delete",
-                row["id"],
-                changes={"title": {"from": row["title"], "to": None}},
-                affected=len(scope) if row["id"] == task_id else 1,
-            )
+        scope, dependents = _plan_delete(conn, task_id, expected_revision)
+        _check_targets([*scope, *dependents], targets)
+        _remove_rows(ctx, scope, dependents)
+    _publish(ctx, "updated", _next_revisions(dependents))
     _publish(ctx, "deleted", [(row["id"], row["revision"]) for row in scope])
 
 
+@audits_failure("task.delete", "task")
 def delete_task(
     ctx: ServiceContext,
     task_id: str,
@@ -774,9 +827,25 @@ def delete_task(
     _delete(ctx, task_id, expected_revision, pre_confirmed, None)
 
 
+@audits_failure("task.delete", "task")
+def delete_leaf_task(ctx: ServiceContext, task_id: str, expected_revision: int) -> None:
+    """Solo para el handler CONFIRM: lo aprobado es exactamente una tarea, sin puerta aquí."""
+    conn = ctx.conn
+    with _write(ctx):
+        # Sin revisión no hay borrado: 0 nunca coincide, `revision` empieza en 1.
+        scope, dependents = _plan_delete(conn, task_id, expected_revision or 0)
+        if len(scope) > 1:
+            raise conflict("La tarea tiene subtareas.")
+        if dependents:
+            raise conflict("Otras tareas dependen de esta.")
+        _remove_rows(ctx, scope, [])
+    _publish(ctx, "deleted", [(scope[0]["id"], scope[0]["revision"])])
+
+
 # --- Etiquetas y dependencias -----------------------------------------------------------------
 
 
+@audits_failure("task.tags", "task")
 def replace_task_tags(ctx: ServiceContext, task_id: str, names: list[str]) -> TaskOut:
     conn = ctx.conn
     with _write(ctx):
@@ -798,6 +867,7 @@ def list_task_tags(ctx: ServiceContext) -> list[TagOut]:
     return [TagOut.model_validate(tag) for tag in list_tags(ctx.conn)]
 
 
+@audits_failure("task.dependency_add", "task")
 def add_task_dependency(ctx: ServiceContext, task_id: str, depends_on_id: str) -> TaskDetail:
     conn = ctx.conn
     added = False
@@ -819,6 +889,7 @@ def add_task_dependency(ctx: ServiceContext, task_id: str, depends_on_id: str) -
     return get_task(ctx, task_id)
 
 
+@audits_failure("task.dependency_remove", "task")
 def remove_task_dependency(ctx: ServiceContext, task_id: str, depends_on_id: str) -> TaskDetail:
     conn = ctx.conn
     with _write(ctx):
@@ -849,12 +920,14 @@ def task_history(
 # por REST: los llama la puerta de confirmaciones al aprobar.
 
 
+@audits_failure("task.delete", "task")
 def _confirmed_delete(
     ctx: ServiceContext, args: Mapping[str, Any], targets: Sequence[ConfirmationTarget]
 ) -> None:
     _delete(ctx, str(args["task_id"]), None, True, targets)
 
 
+@audits_failure("task.complete", "task")
 def _confirmed_complete(
     ctx: ServiceContext, args: Mapping[str, Any], targets: Sequence[ConfirmationTarget]
 ) -> TaskOut:
@@ -862,6 +935,7 @@ def _confirmed_complete(
     return _complete(ctx, str(args["task_id"]), data, None, True, targets)
 
 
+@audits_failure("task.update", "task")
 def _confirmed_update(
     ctx: ServiceContext, args: Mapping[str, Any], targets: Sequence[ConfirmationTarget]
 ) -> TaskOut:
