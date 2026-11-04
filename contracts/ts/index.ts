@@ -373,10 +373,9 @@ export interface ComponentHealth {
   detail: string | null;
 }
 
-/** Cuerpo de approve. `approval_token` es opcional y solo vive mientras dure el HMAC de seguridad. */
+/** Cuerpo de approve, con rol `approver`. */
 export interface ConfirmationApprove {
   params_hash: string;
-  approval_token?: string | null;
 }
 
 /** Uso interno del backend; ninguna ruta pública la acepta. Los textos los calcula el backend. */
@@ -1304,6 +1303,11 @@ export interface TaskRef {
   id: string;
   title: string;
   status: TaskStatus;
+}
+
+/** Cuerpo de PUT /tasks/{id}/tags: sustituye todas las etiquetas de la tarea. */
+export interface TaskTagsReplace {
+  names: string[];
 }
 
 export interface TaskUpdate {

@@ -51,10 +51,9 @@ ConfirmationUpdate = ConfirmationDecision
 
 
 class ConfirmationApprove(ContractModel):
-    """Cuerpo de approve. `approval_token` es opcional y solo vive mientras dure el HMAC de seguridad."""
+    """Cuerpo de approve, con rol `approver`."""
 
     params_hash: str
-    approval_token: str | None = None
 
 
 class ConfirmationOut(OutModel):

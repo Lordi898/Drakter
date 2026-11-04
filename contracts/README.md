@@ -67,7 +67,7 @@ Todo error HTTP: `{"error":{"code","message","request_id","details":[{"field","c
 Pipeline único en backend, para GUI y agente, independiente de Hermes:
 
 1. Una operación con riesgo efectivo `confirm` crea fila en `pending_confirmations` con argumentos, `targets_json` (ids y `revision` resueltos), `summary` y `affected_count`, calculados por el backend. Emite `confirmation.requested` y devuelve `confirmation_required`.
-2. Solo Electron main aprueba, con el token `approver`: `GET /api/v1/confirmations/{id}` da el detalle con `params_hash`, y `POST /api/v1/confirmations/{id}/approve` recibe `{params_hash}`, más `approval_token` opcional mientras dure el HMAC de seguridad. Un `params_hash` distinto de `args_hash` se rechaza. `reject` no lleva cuerpo obligatorio. El agente no tiene herramienta de aprobar y su token no es válido en ese listener.
+2. Solo Electron main aprueba, con el token `approver`: `GET /api/v1/confirmations/{id}` da el detalle con `params_hash`, y `POST /api/v1/confirmations/{id}/approve` recibe solo `{params_hash}`. Un `params_hash` distinto de `args_hash` se rechaza. `reject` no lleva cuerpo obligatorio. El agente no tiene herramienta de aprobar y su token no es válido en ese listener.
 3. Al aprobar se ejecutan exactamente los argumentos guardados, una vez: `pending → approved → executing → executed|failed`. Decidir es `UPDATE ... WHERE status='pending'`; reclamar la ejecución es `UPDATE ... SET status='executing' WHERE status='approved'`, y solo quien afecta una fila ejecuta. Al arrancar, lo que siga en `executing` pasa a `failed` sin reejecutar. Si `targets_json` ya no coincide: `conflict`.
 4. Expirar no ejecuta nunca. Voz en v1: confirmar solo en la GUI.
 

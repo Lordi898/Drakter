@@ -37,8 +37,7 @@ Tabla única de rutas. Manda `contracts/README.md`; después, lo ya construido e
 |---|---|---|---|---|---|---|
 | GET | `/api/v1/confirmations` | `status`, `limit`, `cursor` | `{items,next_cursor}` | construida | read | seguridad (12) |
 | GET | `/api/v1/confirmations/{id}` | - | acción, `summary`, `affected_count`, `targets`, `status`, `expires_at`, `params_hash` | construida | read | seguridad (12) |
-| POST | `/api/v1/confirmations/{id}/approval-token` | - (`approver`) | detalle con `approval_token` de un uso; temporal, mientras dure el HMAC | construida | read | seguridad (12) |
-| POST | `/api/v1/confirmations/{id}/approve` | `ConfirmationApprove`: `{params_hash, approval_token?}` (`approver`) | resultado de la operación ejecutada; 409 `conflict` si `targets_json` cambió; 410/`expired` si caducó | construida | write (ejecuta lo guardado) | seguridad (12) |
+| POST | `/api/v1/confirmations/{id}/approve` | `ConfirmationApprove`: `{params_hash}` (`approver`) | resultado de la operación ejecutada; 409 `conflict` si `targets_json` cambió; 410/`expired` si caducó | construida | write (ejecuta lo guardado) | seguridad (12) |
 | POST | `/api/v1/confirmations/{id}/reject` | - (`approver`) | confirmación en `rejected` | construida | write | seguridad (12) |
 
 ## Agente y chat
@@ -188,6 +187,8 @@ Router escrito en `drakter-13/backend/app/api/projects.py`.
 
 | Método | Ruta | Entrada | Respuesta | Estado | Riesgo | Dueño |
 |---|---|---|---|---|---|---|
+| GET | `/api/v1/tasks/tags` | - | `TagOut[]`, lista completa sin paginar (excepción a `{items,next_cursor}`) | construida | read | tareas (13) |
+| PUT | `/api/v1/tasks/{id}/tags` | `TaskTagsReplace` `{names:[...]}` (sustituye) | `TaskOut` | construida | write | tareas (13) |
 | GET | `/api/v1/tags` | `q`, `limit`, `cursor` | `{items,next_cursor}` `TagOut` | (sin construir) | read | relaciones (15) |
 | GET | `/api/v1/entities/{id}/tags` | - | `{items,next_cursor}` `TagOut` | (sin construir) | read | relaciones (15) |
 | PUT | `/api/v1/entities/{id}/tags` | `{names:[...]}` (sustituye) | `{items,next_cursor}` `TagOut` | (sin construir) | write | relaciones (15) |
@@ -259,7 +260,6 @@ El frente 20 solo tiene puertos (`services/improvement_ports.py`, `get_principal
 
 | Frente | archivo:línea | Qué hace | Qué debe hacer |
 |---|---|---|---|
-| seguridad (12) | `backend/app/api/confirmations.py:30-31` | `approval_token` obligatorio; Electron envía solo `{params_hash}` y cada aprobación daría 422 | Hacerlo opcional, o que `drakter-24` lo pida antes en `/approval-token` y lo envíe |
 | seguridad (12) | `backend/app/permissions/README.md` | `runtime_dir/approver.json` y cabecera `X-Drakter-Approver` | Token `approver` por stdin; nada en disco |
 | Electron (24) | `desktop/electron/main/approvals.ts:47` | Exige `affected_count` numérico | Aceptar `null`: la columna y `ConfirmationTicket` lo admiten |
 
@@ -310,7 +310,6 @@ Sin divergencia en el JSON: todos usan `core/errors.py` (`AppError` y `_handle_h
 | Frente | archivo:línea | Qué hace | Qué debe hacer |
 |---|---|---|---|
 | relaciones (15) | `backend/app/api/relations.py:19` | `APIRouter(tags=...)` sin prefijo: `/relationships`, `/entities/{id}/related` quedan fuera de `/api/v1` | `prefix="/api/v1"` |
-| tareas (13) | `desktop/src/modules/tasks/api.ts:61,65`; `tasks_contract.md:96,104` | `GET /tasks/tags`, `PUT /tasks/{id}/tags` | `/tags` y `/entities/{id}/tags` (compartidas con proyectos y recursos) |
 | tareas (13) | `backend/app/api/tasks_http.py` (sin rutas) | La GUI consume `/tasks...` pero no hay router de tareas | Escribir `api/tasks.py` según `tasks_contract.md` |
 | voz (19) | `voice/CONTRACT.md:144` | Describe `router.py` que no existe | Escribirlo con las rutas de la sección Voz |
 | agente/chat (16) | `CONTRACT.md:138-151` | `api/chat.py` documentado, sin código | Escribirlo; listados `{items,total}` ya cumplen |
