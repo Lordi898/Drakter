@@ -382,21 +382,23 @@ def fts_match(query: str) -> str | None:
 def search_rows(
     conn: sqlite3.Connection, match: str, types: Sequence[str] | None, agent_visible_only: bool, limit: int, offset: int
 ) -> list[sqlite3.Row]:
-    where, params = ["search_fts MATCH ?", "e.archived_at IS NULL"], [match]
+    where, params = ["search_fts MATCH ?", "e.archived_at IS NULL"], []
     if types:
         where.append(f"r.resource_type IN ({_marks(len(types))})")
         params.extend(types)
     if agent_visible_only:
         where.append("(r.location_id IS NULL OR (l.agent_read = 1 AND l.enabled = 1))")
+    where = [w for w in where if w != "search_fts MATCH ?"]
     sql = (
-        "SELECT d.entity_id AS id, snippet(search_fts, -1, '[', ']', '...', 16) AS snip,"
-        " MIN(bm25(search_fts, 5.0, 1.0, 2.0)) AS score"
-        " FROM search_fts JOIN search_documents d ON d.doc_id = search_fts.rowid"
+        "WITH hits AS MATERIALIZED (SELECT rowid AS doc_id, snippet(search_fts, -1, '[', ']', '...', 16) AS snip,"
+        " bm25(search_fts, 5.0, 1.0, 2.0) AS score FROM search_fts WHERE search_fts MATCH ?)"
+        " SELECT d.entity_id AS id, h.snip AS snip, MIN(h.score) AS score"
+        " FROM hits h JOIN search_documents d ON d.doc_id = h.doc_id"
         " JOIN entities e ON e.id = d.entity_id JOIN resources r ON r.id = d.entity_id"
         " LEFT JOIN storage_locations l ON l.id = r.location_id"
         f" WHERE {' AND '.join(where)} GROUP BY d.entity_id ORDER BY score, d.entity_id LIMIT ? OFFSET ?"
     )
     try:
-        return rows(conn, sql, [*params, limit, offset])
+        return rows(conn, sql, [match, *params, limit, offset])
     except sqlite3.OperationalError:
         return []  # consulta sin términos indexables (p. ej. solo signos)
