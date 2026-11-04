@@ -19,8 +19,8 @@ def open_database(directory: Path) -> sqlite3.Connection:
     conn.row_factory = sqlite3.Row
     columns = {row["name"] for row in conn.execute("PRAGMA table_info(storage_locations)")}
     if "agent_read" not in columns:
-        for statement in DELTA.read_text(encoding="utf-8").split(";"):
-            body = "\n".join(l for l in statement.splitlines() if not l.startswith("--")).strip()
-            if body:
-                conn.execute(body)
+        lines = DELTA.read_text(encoding="utf-8").splitlines()
+        sql = "\n".join(line for line in lines if not line.startswith("--"))
+        for statement in filter(str.strip, sql.split(";")):
+            conn.execute(statement)
     return conn
