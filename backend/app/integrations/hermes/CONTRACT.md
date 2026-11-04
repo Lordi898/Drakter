@@ -1,8 +1,8 @@
 # Contrato del frente Hermes (agente, herramientas y chat)
 
-Rama `drakter/agente-hermes`. Interfaz fina y adaptable: cuando `contracts/` publique el `ToolSpec` y los eventos, se adapta `app/tools/spec.py` y `app/integrations/hermes/events.py`; el resto no cambia.
+Rama `drakter/agente-hermes`. `contracts/` (paquete `drakter_contracts`) manda sobre este archivo en formatos, errores, `ToolOutcome`, `UntrustedEnvelope`, eventos y tablas. Lo que aquí repita un nombre de allí debe importarse, no redefinirse.
 
-Base verificada: Hermes **v0.22.7** (`b200f5bc`), subproceso `hermes gateway run` con `/v1/runs`, herramientas por MCP desde el backend. Hermes y el modelo **no son confiables**: un control que dependa de que obedezcan no cuenta.
+Base verificada: Hermes **v0.22.7**, commit `b200f5bc60e31588ba2cb60e288029c4a54ba5fa`, instalado desde git (`hermes --version` lo confirma; `pyproject.toml` del tag dice `0.0.0`). La 0.19.0 es la de PyPI, desfasada, y no se usa. Mecanismo: subproceso `hermes gateway run` con `/v1/runs`, herramientas por MCP desde el backend. Hermes y el modelo **no son confiables**: un control que dependa de que obedezcan no cuenta.
 
 ## 1. Herramientas: `backend/app/tools/`
 
@@ -70,12 +70,12 @@ Orden de `dispatch`, sin excepciones: herramienta registrada → turno activo y 
 
 ### Puente MCP: `app/tools/mcp_bridge.py`
 
-Servidor ASGI **propio**, en otro puerto de loopback (`DRAKTER_AGENT_TOOLS_PORT`, 8766), con SDK `mcp` 2.x de bajo nivel, HTTP transmisible, sin estado. Autenticación `Authorization: Bearer <agent_tool_token>`, un token aleatorio por arranque distinto del de la GUI. Así Hermes no alcanza **ninguna** ruta de la GUI ni de confirmaciones: la separación es de red y credencial, no de buena conducta. Sin recursos, prompts, sampling ni elicitation. `readOnlyHint` solo en READ. El nombre visto por Hermes es `mcp__drakter__<tool>`.
+Servidor ASGI **propio**, en un listener de loopback con **puerto efímero** (`bind 127.0.0.1:0`, ni fijo ni configurable), con SDK `mcp` 2.x de bajo nivel, HTTP transmisible, sin estado. Autenticación `Authorization: Bearer <agent_tool_token>`, un token aleatorio por arranque distinto del de la GUI; ningún token `ui` ni `approver` vale aquí. `Host` debe ser exactamente `127.0.0.1:<puerto real>`. Así Hermes no alcanza **ninguna** ruta de la GUI ni de confirmaciones: la separación es de red y credencial, no de buena conducta. Sin recursos, prompts, sampling ni elicitation. `readOnlyHint` solo en READ. El nombre visto por Hermes es `mcp__drakter__<tool>`.
 
 ```python
 def build_agent_tools_app(registry, turns, token: SessionToken-like, state) -> ASGIApp
 class AgentToolsServer:  # uvicorn propio sobre socket de loopback
-    def __init__(self, app, port: int); async def start(self); async def stop(self)
+    def __init__(self, app); async def start(self); async def stop(self); port: int; url: str  # tras start()
 ```
 
 ## 2. Hermes: `backend/app/integrations/hermes/`
@@ -90,7 +90,6 @@ class AgentSettings:
     dev_stub_url: str = "http://127.0.0.1:28517"     # solo con model_provider=dev_stub; solo loopback
     hermes_command: str = "hermes"                   # sin shell
     hermes_port: int = 8767
-    agent_tools_port: int = 8766
     agent_max_turns: int = 12
     turn_timeout_s: float = 300; idle_timeout_s: float = 120
     anthropic_api_key: SecretStr | None   # alias ANTHROPIC_API_KEY, sin prefijo
@@ -105,13 +104,13 @@ def render_config(s: AgentSettings, tool_names: Sequence[str]) -> dict     # pur
 def materialize_home(s, data_dir, tool_names, repo_root) -> HomeManifest   # escribe y devuelve hashes
 # supervisor.py
 class HermesSupervisor:
-    def __init__(self, settings, data_dir, tool_names, agent_tool_token, repo_root, on_state)
+    def __init__(self, settings, data_dir, tool_names, agent_tool_token, agent_tools_url, repo_root, on_state)
     async def start(self) -> None; async def stop(self) -> None
     state: Literal["stopped","starting","ready","restarting","failed"]; api_base: str; api_key(): str
 # preflight.py: python -m app.integrations.hermes.preflight  (salida 0 solo si todo pasa)
 ```
 
-`render_config` (JSON válido como YAML, sin dependencia nueva) fija siempre: `platform_toolsets: {api_server: [drakter], cron: [no_mcp]}`; `agent.disabled_toolsets` con terminal, file, web, browser, code_execution, delegation, skills, cronjob, memory y demás; `agent.max_turns`; `approvals.mode: manual`; `tools.tool_search.enabled: off`; `auth.adopt_external_logins: false`; `auxiliary.background_review.enabled: false`; `curator.enabled: false`; `kanban.dispatch_in_gateway: false`; `updates.check: false`; `plugins.auto_update_check_hours: 0`; `plugins.load_timeout_seconds: 0`; `terminal.cwd` absoluto y vacío; `gateway.api_server.max_concurrent_runs: 1`; `memory.memory_enabled: false`, `memory.user_profile_enabled: false`, sin `memory.provider` (decisión F18 pendiente); `model.context_length: 1000000`; `compression.threshold_tokens: 80000`; `auxiliary.*` en el mismo modelo; `mcp_servers.drakter` con `tools.include` nativo, `resources: false`, `prompts: false`, `sampling.enabled: false`. Toda clave se contrasta con el código del tag.
+`render_config` (JSON válido como YAML, sin dependencia nueva) fija siempre: `platform_toolsets: {api_server: [drakter], cron: [no_mcp]}`; `agent.disabled_toolsets` con terminal, file, web, browser, code_execution, delegation, skills, cronjob, memory y demás; `agent.max_turns`; `approvals.mode: manual`; `tools.tool_search.enabled: off`; `auth.adopt_external_logins: false`; `auxiliary.background_review.enabled: false`; `curator.enabled: false`; `kanban.dispatch_in_gateway: false`; `updates.check: false`; `plugins.auto_update_check_hours: 0`; `plugins.load_timeout_seconds: 0`; `terminal.cwd` absoluto y vacío; `gateway.api_server.max_concurrent_runs: 1`; `memory.memory_enabled: false`, `memory.user_profile_enabled: false`, sin `memory.provider` (decisión F18 pendiente); `model.context_length: 1000000`; `compression.threshold_tokens: 80000`; `auxiliary.*` en el mismo modelo; `mcp_servers.drakter` con `url` y token por `${DRAKTER_MCP_URL}` y `${DRAKTER_MCP_TOKEN}` (el puerto es efímero: nunca entra en la config ni en su hash), `tools.include` nativo, `resources: false`, `prompts: false`, `sampling.enabled: false`. Toda clave se contrasta con el código del tag.
 
 El subproceso arranca con entorno limpio (lista blanca), `HERMES_HOME` dedicado, `API_SERVER_ENABLED=true`, `API_SERVER_HOST=127.0.0.1`, `API_SERVER_KEY` aleatoria por arranque. Clave del modelo solo en el entorno del hijo. El guardián `drakter_guard` es defensa en profundidad y demuestra que está cargado con un nonce por arranque; sin esa señal no se aceptan runs.
 
@@ -148,11 +147,21 @@ Todo tras `SecurityGuardMiddleware`, prefijo `/api/v1`, errores con el sobre com
 | POST | `/chat/sessions/{id}/messages` `{text, client_message_id}` | 202 `{turn_id, message_id}`; 409 `agent_busy` |
 | POST | `/chat/turns/{turn_id}/cancel` | 202 |
 | GET | `/agent/status` | `{state, provider, model, detail}` |
-| WS | `/api/v1/chat/events?after_seq=N` | eventos, subprotocolo `drakter.v1` |
 
-Sobre de evento: `{event_id, seq, timestamp, type, version:1, payload}`. Tipos: `agent.status_changed` (`state`: idle/thinking/executing/speaking/error/offline), `agent.message_delta` `{session_id,turn_id,delta}`, `agent.message_completed` `{session_id,turn_id,message_id,text}`, `agent.tool_started`/`agent.tool_completed` `{session_id,turn_id,tool,call_id,error?}`, `agent.confirmation_required` `{session_id,turn_id,action_id,summary,expires_at}`, `agent.error` `{session_id,turn_id,code,message,retryable}`. Búfer circular de 500 eventos para reconectar con `after_seq`; si el hueco no cabe, llega `agent.replay_truncated` y la GUI relee `/messages`.
+Eventos: **no hay WS de chat**. Todo sale por el flujo único `WS /api/v1/events?after_seq=N&boot_id=<id>` (`contracts/README.md` §7), con `EventEnvelope` y los modelos de `drakter_contracts.events`. El turno emite `agent.turn_started`, `agent.message_started`, `agent.message_delta`, `agent.message_completed`, `agent.tool_started`, `agent.tool_completed`, `agent.turn_finished`, `agent.status_changed`, `agent.error`. Una herramienta con `confirmation_required` emite `confirmation.requested`. Si el búfer no cubre `after_seq` o cambia `boot_id`: `system.resync_required`.
 
-Persistencia: `ChatStore` (Protocol) con `SqliteChatStore` sobre `app/database/connection.py` y `MemoryChatStore` si las tablas de `app/schemas/ddl_chat.sql` aún no están migradas. El historial mostrado vive en Drakter; el contexto del modelo, en Hermes.
+### Bus: `backend/app/events/`
+
+```python
+class EventHub:
+    boot_id: UUID
+    def publish(self, type: str, payload: BaseModel, *, correlation_id: str | None = None) -> EventEnvelope  # valida contra EVENTS; único punto que asigna seq
+    def subscribe(self, after_seq: int | None, boot_id: UUID | None) -> Subscription
+```
+
+Vive en `app.state.event_hub`. Los módulos publican con `event_hub.publish`, solo tras COMMIT. La ruta está en `app/api/events.py`.
+
+Persistencia: `SqliteChatStore` sobre `conversations`, `agent_turns` y `messages` (migración 0007) y `app/database/connection.py`. Al arrancar, los turnos que sigan en `running` pasan a `interrupted`. El historial mostrado vive en Drakter; el contexto del modelo, en Hermes (`conversations.hermes_session_id`).
 
 ## 5. Arranque: `app/integrations/hermes/runtime.py`
 
@@ -164,4 +173,4 @@ class AgentRuntime:
     async def stop(self) -> None
 ```
 
-Conexión en `app/main.py` (lo hace el integrador, tres líneas): crear `AgentRuntime(settings)`, guardarlo en `app.state.agent_runtime`, `await start()` tras `migrate` y `await stop()` al apagar, e `include_router(chat.router)`.
+Conexión en `app/main.py` (lo hace el integrador, tres líneas): crear `AgentRuntime(settings)`, guardarlo en `app.state.agent_runtime` y su `hub` en `app.state.event_hub`, `await start()` tras `migrate` y `await stop()` al apagar, `include_router(chat.router)` e `include_router(events.router)`, y retirar `/ws`.
