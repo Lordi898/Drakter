@@ -8,14 +8,23 @@ abre transacción: lo hace el servicio.
 from __future__ import annotations
 
 import json
+import logging
 import sqlite3
 import unicodedata
-from collections.abc import Iterable, Mapping, Sequence
-from typing import Any, Literal
+from collections.abc import Callable, Iterable, Mapping, Sequence
+from functools import wraps
+from typing import Any, Literal, ParamSpec, TypeVar
 
-from app.services.tasks_ports import Actor, new_id, utc_now
+from app.core.errors import AppError
+from app.services.tasks_ports import Actor, ServiceContext, new_id, transaction, utc_now
 
-_SENSITIVE_KEYS = ("token", "secret", "password", "api_key", "apikey", "authorization", "credential")
+P = ParamSpec("P")
+R = TypeVar("R")
+logger = logging.getLogger("drakter.workspace")
+
+_SENSITIVE_KEYS = (
+    "token", "secret", "password", "api_key", "apikey", "authorization", "credential", "cookie",
+)
 _MAX_AUDIT_VALUE = 500
 
 
@@ -230,6 +239,43 @@ def write_audit(
             duration_ms,
         ),
     )
+
+
+def audits_failure(action: str, entity_type: str) -> Callable[[Callable[P, R]], Callable[P, R]]:
+    """Audita en su propia transacción una escritura rechazada (`contracts/README.md` §4).
+
+    Para funciones `(ctx, entity_id, ...)` o `(ctx, data)`. Se aplica fuera de la
+    transacción de la operación: cuando llega el error, esta ya hizo `ROLLBACK`.
+    Un fallo al auditar se registra en el log y no oculta el error original.
+    """
+
+    def decorate(function: Callable[P, R]) -> Callable[P, R]:
+        @wraps(function)
+        def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
+            try:
+                return function(*args, **kwargs)
+            except AppError as exc:
+                ctx = args[0]
+                assert isinstance(ctx, ServiceContext)
+                entity_id = args[1] if len(args) > 1 and isinstance(args[1], str) else None
+                try:
+                    with transaction(ctx.conn):
+                        write_audit(
+                            ctx.conn,
+                            ctx.actor,
+                            action=action,
+                            entity_type=entity_type,
+                            entity_id=entity_id,
+                            result="failed",
+                            error_code=exc.code,
+                        )
+                except sqlite3.Error:
+                    logger.exception("audit_failure_not_written", extra={"action": action})
+                raise
+
+        return wrapper
+
+    return decorate
 
 
 def history_for(

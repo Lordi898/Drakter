@@ -30,12 +30,17 @@ Las respuestas `*Out` se construyen con `model_validate` de dicts; `id` y fechas
 - Borrar: siempre `confirmation`. Borra el subárbol de abajo arriba y antes llama a `remove_all_dependencies`.
 - Masivo: si una cascada (complete, cambio de proyecto) afecta a más de `BULK_THRESHOLD` filas, pasa por la puerta de confirmación.
 
+- Una tarea `completed` no admite subtareas abiertas: crear bajo ella, o pasar a un estado abierto una subtarea suya por `update_task`, da `conflict`.
+- Borrar una tarea de la que dependen otras fuera del subárbol: cada una sube `revision` y audita `task.dependency_remove`; entran en `targets` y el `summary` indica `y {m} dependientes`.
+- `params` de auditoría: solo ids, booleanos y nombres de campos, nunca títulos, descripciones ni metadatos (lista blanca).
+- Toda escritura pública lleva `@audits_failure(action, entity_type)` de `tasks_shared`.
+
 ## Reglas de proyectos
 
 - `status=completed` fija `completed_at`; salir de él lo pone a NULL.
 - `objective` se guarda en `metadata_json` bajo `objective`; `metadata` de salida no incluye esa clave.
 - Archivar un proyecto no toca sus tareas. Actualizar un proyecto archivado da `conflict`, salvo para desarchivar.
-- Borrar: siempre `confirmation`; las tareas se quedan, con `project_id` a NULL; `summary` indica cuántas.
+- Borrar: siempre `confirmation`. Con relaciones entrantes o salientes, o filas que lo referencien con RESTRICT, da `has_dependents` antes de pedir confirmación; un `IntegrityError` al ejecutar da lo mismo. Las tareas se quedan, con `project_id` a NULL: entran en `targets`, cada una sube `revision` y audita `task.update` con `changes`. `summary`: `Vas a eliminar 1 proyecto: «{nombre}». Esta acción no se puede deshacer.` y, si hay m>0 tareas, `Sus {m} tareas se conservan sin proyecto.`; `affected_count` = 1 + m.
 - Listados: `{items, total}` con `limit` y `offset`; se excluyen archivados salvo `include_archived=true`.
 - Progreso según `ProjectProgress`: hojas = tareas del proyecto sin hijos no archivados; `overdue` = hojas abiertas con `due_at` o `due_date` anterior a ahora.
 - Actividad: `history_for` sobre el proyecto y todas sus tareas.
@@ -65,6 +70,7 @@ reopen_task(ctx, task_id, *, expected_revision=None) -> TaskOut
 archive_task(ctx, task_id, *, expected_revision=None) -> TaskOut
 unarchive_task(ctx, task_id, *, expected_revision=None) -> TaskOut
 delete_task(ctx, task_id, *, expected_revision=None, pre_confirmed=False) -> None
+delete_leaf_task(ctx, task_id, expected_revision: int) -> None
 replace_task_tags(ctx, task_id, names: list[str]) -> TaskOut
 list_task_tags(ctx) -> list[TagOut]
 add_task_dependency(ctx, task_id, depends_on_id) -> TaskDetail
@@ -115,6 +121,7 @@ Los `id` de ruta son `UUID`, así una ruta como `/tasks/tags` no choca. El error
 
 `app/tools/tasks.py` y `app/tools/projects.py`, cada uno con `TOOLS: tuple[ToolSpec, ...]`.
 
+- `delete_task` por herramienta: `ToolSpec` no resuelve el alcance, así que llama a `delete_leaf_task(ctx, task_id, expected_revision)`: exige revisión y da `conflict` si tiene subtareas o dependientes. Lo aprobado es lo ejecutado.
 - Tasks: `create_task`, `get_task`, `update_task`, `complete_task`, `reopen_task`, `archive_task`, `unarchive_task`, `create_subtask`, `list_tasks`, `search_tasks`, `set_task_tags`, `add_task_dependency`, `remove_task_dependency`, `delete_task` (CONFIRM).
 - Projects: `create_project`, `get_project`, `update_project`, `archive_project`, `unarchive_project`, `list_projects`, `get_project_progress`. El borrado de proyectos queda solo en GUI (C-05).
 - `get_*`, `list_*` y `search_*` son READ; el resto, WRITE, salvo `delete_task`. Permisos `tasks.read`, `tasks.write`, `tasks.delete`, `projects.read`, `projects.write`.
