@@ -24,11 +24,6 @@ function query(params: Record<string, string | number | boolean | null | undefin
 
 export const listLocations = () =>
   backendRequest<{ items: StorageLocation[] }>('GET', '/storage-locations').then((page) => page.items)
-export const createLocation = (path: string, label: string) =>
-  backendRequest<StorageLocation>('POST', '/storage-locations', { path, label, read_only: true, agent_read: false })
-export const updateLocation = (id: string, patch: { agent_read?: boolean; enabled?: boolean }) =>
-  backendRequest<StorageLocation>('PATCH', `/storage-locations/${id}`, patch)
-export const deleteLocation = (id: string) => backendRequest<void>('DELETE', `/storage-locations/${id}`)
 export const scanLocation = (locationId: string) =>
   backendRequest<ScanResult>('POST', '/resources/scan', { location_id: locationId })
 export const refreshIndex = () => backendRequest<RefreshResult>('POST', '/resources/refresh-index', {})
