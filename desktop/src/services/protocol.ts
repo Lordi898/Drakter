@@ -5,7 +5,7 @@
  * `contracts/python/drakter_contracts/events.py` y
  * `backend/app/integrations/hermes/CONTRACT.md`. SUPUESTO marca lo no contratado.
  *
- * El renderer no tiene token ni red (D-14): todo va por `window.drakter.api`.
+ * El renderer no tiene token ni red (D-14): todo va por `window.api`.
  * Aprobar o rechazar no existe aquí: lo hace main con un diálogo nativo.
  *
  * Todo lo que llega por red es dato no confiable: se valida aquí y se muestra
@@ -60,6 +60,15 @@ export interface StoredChatMessage {
   readonly turn_id: string | null
 }
 
+/** Cuerpo `confirmation` de un 409 `confirmation_required` (contracts/errors.py). */
+export interface ConfirmationTicket {
+  readonly id: string
+  readonly summary: string
+  readonly affected_count: number | null
+  readonly expires_at: string
+  readonly params_hash?: string
+}
+
 export interface ApiErrorDetail {
   readonly field: string | null
   readonly code: string
@@ -73,7 +82,7 @@ export interface PendingConfirmation {
   readonly action_id: string
   readonly session_id?: string | null
   readonly turn_id?: string | null
-  readonly tool: string
+  readonly tool?: string
   readonly summary: string
   readonly affected_count?: number | null
   readonly expires_at: string
@@ -180,7 +189,7 @@ const CONFIRMATION = {
   action_id: isString,
   session_id: isOptionalString,
   turn_id: isOptionalString,
-  tool: isString,
+  tool: isOptionalString,
   summary: isString,
   affected_count: isOptionalCount,
   expires_at: isDate
@@ -190,6 +199,19 @@ const TURN_OUTCOMES = new Set(['completed', 'failed', 'cancelled', 'interrupted'
 
 export function isPendingConfirmation(value: unknown): value is PendingConfirmation {
   return isRecord(value) && has(value, CONFIRMATION)
+}
+
+export function isConfirmationTicket(value: unknown): value is ConfirmationTicket {
+  return (
+    isRecord(value) &&
+    has(value, {
+      id: isString,
+      summary: isString,
+      affected_count: (v) => v === null || v === undefined || isCount(v),
+      expires_at: isDate,
+      params_hash: (v) => v === undefined || isString(v)
+    })
+  )
 }
 
 export function isStoredChatMessage(value: unknown): value is StoredChatMessage {
