@@ -19,6 +19,7 @@ from app.core.security import (
     remove_session_file,
     write_session_file,
 )
+from app.database.lock import exclusive_instance
 from app.database.migrator import migrate
 
 
@@ -35,12 +36,13 @@ def create_app(settings: Settings) -> FastAPI:
         ):
             ensure_private_dir(directory)
         configure_logging(settings.log_level, settings.logs_dir)
-        await asyncio.to_thread(migrate, settings.db_path, settings.backups_dir)
-        write_session_file(settings.session_file, token, settings.port)
-        try:
-            yield
-        finally:
-            remove_session_file(settings.session_file)
+        with exclusive_instance(settings.db_path):
+            await asyncio.to_thread(migrate, settings.db_path, settings.backups_dir)
+            write_session_file(settings.session_file, token, settings.port)
+            try:
+                yield
+            finally:
+                remove_session_file(settings.session_file)
 
     app = FastAPI(
         title="Drakter",

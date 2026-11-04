@@ -206,7 +206,7 @@ class SecurityGuardMiddleware:
             extra={
                 "event": rejection.code,
                 "method": "WEBSOCKET" if is_websocket else scope.get("method"),
-                "path": scope.get("path"),
+                "path": str(scope.get("path", ""))[:256],
                 "status": rejection.status,
                 "request_id": request_id,
             },

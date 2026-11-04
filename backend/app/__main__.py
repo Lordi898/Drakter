@@ -15,7 +15,15 @@ def main() -> int:
     from app.core.config import BIND_HOST, load_settings
     from app.main import create_app
 
-    settings = load_settings()
+    from pydantic import ValidationError
+
+    try:
+        settings = load_settings()
+    except ValidationError as exc:
+        # Only field names: the error text would echo the offending (possibly secret) values.
+        fields = sorted({".".join(str(part) for part in err["loc"]) or "?" for err in exc.errors()})
+        print(f"invalid configuration: {', '.join(fields)}", file=sys.stderr)
+        return 1
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
