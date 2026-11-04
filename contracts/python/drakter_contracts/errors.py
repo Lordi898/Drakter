@@ -28,6 +28,22 @@ class ErrorEnvelope(BaseModel):
     error: ErrorBody
 
 
+class ConfirmationTicket(BaseModel):
+    """`summary` y `affected_count` los calcula el backend. `params_hash` es `args_hash` de la fila."""
+
+    id: str
+    summary: str
+    affected_count: int | None = None
+    expires_at: str
+    params_hash: str
+
+
+class ConfirmationRequiredEnvelope(ErrorEnvelope):
+    """HTTP 409 con `error.code == "confirmation_required"`. Nunca 2xx."""
+
+    confirmation: ConfirmationTicket
+
+
 class ErrorCode(StrEnum):
     # Ya emitidos por la base del backend
     VALIDATION_ERROR = "validation_error"

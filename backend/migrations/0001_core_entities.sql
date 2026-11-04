@@ -75,8 +75,11 @@ CREATE TABLE notifications (
   entity_id TEXT,
   created_at TEXT NOT NULL,
   read_at TEXT,
+  dedupe_key TEXT,
   CONSTRAINT pk_notifications PRIMARY KEY (id),
   CONSTRAINT ck_notifications_severity CHECK (severity IN ('info','success','warning','error')),
   CONSTRAINT fk_notifications_entity FOREIGN KEY (entity_id) REFERENCES entities (id) ON DELETE SET NULL
 );
 CREATE INDEX ix_notifications_unread ON notifications (read_at, created_at);
+-- dedupe_key NULL = sin deduplicar. Los recordatorios siempre la ponen: sin este indice el tick falla cerrado.
+CREATE UNIQUE INDEX ux_notifications_dedupe ON notifications (dedupe_key) WHERE dedupe_key IS NOT NULL;

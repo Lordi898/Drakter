@@ -13,17 +13,22 @@ CREATE TABLE audit_events (
   entity_id TEXT,
   affected_count INTEGER,
   params_redacted_json TEXT,
+  params_hash TEXT,
   changes_json TEXT,
   result TEXT NOT NULL,
   error_code TEXT,
   confirmation_id TEXT,
   duration_ms INTEGER,
+  turn_id TEXT,
+  tainted INTEGER NOT NULL DEFAULT 0,
+  agent_provider TEXT,
   CONSTRAINT uq_audit_events_id UNIQUE (id),
   CONSTRAINT ck_audit_actor CHECK (actor_type IN ('user','agent','automation','system')),
   CONSTRAINT ck_audit_origin CHECK (origin IN ('rest','mcp','scheduler','internal')),
   CONSTRAINT ck_audit_result CHECK (result IN ('success','denied','failed','confirmation_required')),
   CONSTRAINT ck_audit_params CHECK (params_redacted_json IS NULL OR json_valid(params_redacted_json)),
   CONSTRAINT ck_audit_changes CHECK (changes_json IS NULL OR json_valid(changes_json)),
+  CONSTRAINT ck_audit_tainted CHECK (tainted IN (0, 1)),
   CONSTRAINT ck_audit_occurred CHECK (length(occurred_at) = 24 AND occurred_at GLOB '*Z')
 );
 CREATE INDEX ix_audit_entity ON audit_events (entity_id, seq);

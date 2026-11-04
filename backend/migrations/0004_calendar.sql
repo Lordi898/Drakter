@@ -1,5 +1,5 @@
 -- Calendario. Verdad: hora de pared + zona IANA. *_utc son derivados para consultar rangos.
--- local_* = YYYY-MM-DDTHH:MM. Dia completo: start_date y end_date_exclusive, sin UTC.
+-- local_* = YYYY-MM-DDTHH:MM:SS. *_utc = instante de 24 caracteres con milisegundos: el orden de texto depende de ello. Dia completo: start_date y end_date_exclusive, sin UTC.
 CREATE TABLE calendar_events (
   id TEXT NOT NULL,
   entity_type TEXT NOT NULL DEFAULT 'calendar_event',
@@ -22,10 +22,14 @@ CREATE TABLE calendar_events (
   CONSTRAINT pk_calendar_events PRIMARY KEY (id),
   CONSTRAINT ck_calendar_events_type CHECK (entity_type = 'calendar_event'),
   CONSTRAINT ck_calendar_events_title CHECK (length(trim(title)) > 0),
-  CONSTRAINT ck_calendar_events_kind CHECK (kind IN ('event','work_session','deadline','personal')),
+  CONSTRAINT ck_calendar_events_kind CHECK (kind IN ('event','reminder','work_session')),
   CONSTRAINT ck_calendar_events_status CHECK (status IN ('tentative','confirmed','cancelled')),
   CONSTRAINT ck_calendar_events_all_day CHECK (all_day IN (0, 1)),
   CONSTRAINT ck_calendar_events_reminder CHECK (reminder_minutes_before IS NULL OR reminder_minutes_before >= 0),
+  CONSTRAINT ck_calendar_events_utc CHECK (
+    (starts_at_utc IS NULL OR (length(starts_at_utc) = 24 AND starts_at_utc GLOB '*Z'))
+    AND (ends_at_utc IS NULL OR (length(ends_at_utc) = 24 AND ends_at_utc GLOB '*Z'))
+  ),
   CONSTRAINT ck_calendar_events_shape CHECK (
     (all_day = 1 AND start_date IS NOT NULL AND end_date_exclusive IS NOT NULL AND end_date_exclusive > start_date
       AND local_start IS NULL AND local_end IS NULL AND starts_at_utc IS NULL AND ends_at_utc IS NULL)
@@ -52,13 +56,17 @@ CREATE TABLE time_blocks (
   starts_at_utc TEXT NOT NULL,
   ends_at_utc TEXT NOT NULL,
   status TEXT NOT NULL DEFAULT 'planned',
+  task_id TEXT,
   CONSTRAINT pk_time_blocks PRIMARY KEY (id),
   CONSTRAINT ck_time_blocks_type CHECK (entity_type = 'time_block'),
   CONSTRAINT ck_time_blocks_title CHECK (length(trim(title)) > 0),
   CONSTRAINT ck_time_blocks_status CHECK (status IN ('planned','in_progress','done','skipped','cancelled')),
   CONSTRAINT ck_time_blocks_range CHECK (ends_at_utc > starts_at_utc),
-  CONSTRAINT fk_time_blocks_entity FOREIGN KEY (id, entity_type) REFERENCES entities (id, entity_type) ON DELETE RESTRICT
+  CONSTRAINT ck_time_blocks_utc CHECK (length(starts_at_utc) = 24 AND starts_at_utc GLOB '*Z' AND length(ends_at_utc) = 24 AND ends_at_utc GLOB '*Z'),
+  CONSTRAINT fk_time_blocks_entity FOREIGN KEY (id, entity_type) REFERENCES entities (id, entity_type) ON DELETE RESTRICT,
+  CONSTRAINT fk_time_blocks_task FOREIGN KEY (task_id) REFERENCES tasks (id) ON DELETE SET NULL
 );
+CREATE INDEX ix_time_blocks_task ON time_blocks (task_id);
 CREATE INDEX ix_time_blocks_range ON time_blocks (starts_at_utc, ends_at_utc);
 CREATE TRIGGER trg_time_blocks_delete_entity AFTER DELETE ON time_blocks BEGIN
   DELETE FROM entities WHERE id = old.id;
@@ -90,7 +98,7 @@ CREATE TABLE class_sessions (
   CONSTRAINT fk_class_sessions_entity FOREIGN KEY (id, entity_type) REFERENCES entities (id, entity_type) ON DELETE RESTRICT,
   CONSTRAINT fk_class_sessions_subject FOREIGN KEY (subject_id) REFERENCES subjects (id) ON DELETE RESTRICT
 );
-CREATE INDEX ix_class_sessions_subject ON class_sessions (subject_id);
+CREATE INDEX ix_class_sessions_subject ON class_sessions (subject_id, weekday);
 CREATE TRIGGER trg_class_sessions_delete_entity AFTER DELETE ON class_sessions BEGIN
   DELETE FROM entities WHERE id = old.id;
 END;

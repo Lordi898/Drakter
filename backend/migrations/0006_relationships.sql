@@ -13,6 +13,7 @@ CREATE TABLE relationship_rules (
   source_type TEXT NOT NULL,
   target_type TEXT NOT NULL,
   acyclic INTEGER NOT NULL DEFAULT 0,
+  max_outgoing INTEGER,
   CONSTRAINT pk_relationship_rules PRIMARY KEY (relationship_type, source_type, target_type),
   CONSTRAINT ck_relationship_rules_acyclic CHECK (acyclic IN (0, 1)),
   CONSTRAINT fk_relationship_rules_type FOREIGN KEY (relationship_type) REFERENCES relationship_types (relationship_type) ON DELETE RESTRICT

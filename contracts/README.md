@@ -31,7 +31,7 @@ Hermes no toca la BD ni el sistema de archivos: solo `app/tools/`, que llama a l
 
 - **UUID:** TEXT(36), minúsculas con guiones, lo genera solo el backend (v4). Opaco para el cliente.
 - **Instante:** `YYYY-MM-DDTHH:MM:SS.sssZ`, ancho fijo, en BD y JSON. Usa `format_instant`. Nunca `isoformat()`. Se rechaza lo que no tenga zona.
-- **Fecha:** `YYYY-MM-DD`. **Hora local:** `HH:MM`. **Fecha-hora local:** `YYYY-MM-DDTHH:MM`. **Zona:** nombre IANA.
+- **Fecha:** `YYYY-MM-DD`. **Hora local:** `HH:MM`. **Fecha-hora local:** `YYYY-MM-DDTHH:MM:SS`. **Zona:** nombre IANA.
 - **Enumerados:** inglés `snake_case`; el texto en español es cosa de la GUI.
 - **Listados:** `{items, total}` con `limit` y `offset`, acotados por el servidor. `sort=campo,-campo` con lista blanca por ruta.
 - **PATCH:** parcial; distingue ausente de `null`. `If-Match: <revision>` opcional → 412 `revision_mismatch`. Las entradas usan `extra="forbid"`.
@@ -53,7 +53,8 @@ Todo error HTTP: `{"error":{"code","message","request_id","details":[{"field","c
 - **Búsqueda:** el servicio escribe `search_documents` en la misma transacción. Escapa cada término como frase con `*` final; la API expone `q`, `types`, `limit`, `offset`, sin sintaxis FTS. Une con `entities` para excluir archivados.
 - **Auditoría:** mutación y auditoría en la misma transacción; denegados y fallidos, en la suya. Toda llamada del agente se audita, también lecturas, sin contenido de documentos. Parámetros por lista blanca (`ToolSpec.audit`). `INSERT OR REPLACE` queda prohibido en repositorios.
 - **Secretos:** nunca en `settings` ni en ninguna tabla. Zona por defecto: ajuste `default_timezone`, `Europe/Madrid`, nunca implícita en datos.
-- **Memoria:** `memory_items` guarda metadatos y procedencia, no el recuerdo. `review_text` solo vive mientras el candidato espera.
+- **Memoria:** `memory_records` guarda el texto y `memory_fts` su copia indexada; borrar un registro borra ambos, sin FK fuera de `memory_*`. Es dato no confiable y entra en copias.
+- **Recordatorios:** `notifications.dedupe_key` obligatoria para el tick; `habits.reminder_enabled`, `calendar_events.reminder_minutes_before`.
 
 ## 5. Confirmaciones
 
@@ -61,8 +62,19 @@ Pipeline único en backend, para GUI y agente, independiente de Hermes:
 
 1. Una operación con riesgo efectivo `confirm` crea fila en `pending_confirmations` con argumentos, `targets_json` (ids y `revision` resueltos), `summary` y `affected_count`, calculados por el backend. Emite `confirmation.requested` y devuelve `confirmation_required`.
 2. Solo la GUI aprueba: `POST /api/v1/confirmations/{id}/approve|reject`. El agente no tiene herramienta de aprobar y su token no llega a ese puerto.
-3. Al aprobar se ejecutan exactamente los argumentos guardados, una vez (`pending → approved → executed|failed`, transición atómica con `WHERE status='pending'`). Si `targets_json` ya no coincide: `conflict`.
+3. Al aprobar se ejecutan exactamente los argumentos guardados, una vez: `pending → approved → executing → executed|failed`. Decidir es `UPDATE ... WHERE status='pending'`; reclamar la ejecución es `UPDATE ... SET status='executing' WHERE status='approved'`, y solo quien afecta una fila ejecuta. Al arrancar, lo que siga en `executing` pasa a `failed` sin reejecutar. Si `targets_json` ya no coincide: `conflict`.
 4. Expirar no ejecuta nunca. Voz en v1: confirmar solo en la GUI.
+
+**Forma REST:** pedir confirmación es siempre HTTP 409, nunca 2xx, con el sobre común y `confirmation` a su lado:
+
+```json
+{"error":{"code":"confirmation_required","message":"Esta operación necesita tu confirmación.","request_id":"...","details":[]},
+ "confirmation":{"id":"<uuid>","summary":"...","affected_count":1,"expires_at":"...","params_hash":"..."}}
+```
+
+`confirmation.id` es `pending_confirmations.id` (`action_id` en herramientas y eventos) y `params_hash` es su `args_hash`. Modelo: `ConfirmationRequiredEnvelope`.
+
+**Plantilla de `summary`,** calculada por el backend: `Vas a eliminar {n} {tipo}: «{nombre}»[ y {m} dependientes]. Esta acción {no se puede deshacer|se puede deshacer}.` Verbo único para borrar: eliminar. `{nombre}` es dato del usuario: la GUI lo muestra como texto, nunca como marcado.
 
 Exige confirmación: borrado definitivo, operaciones por encima de `bulk_threshold` (ajuste), cambios de configuración sensible y escrituras de un turno contaminado por contenido no confiable. Prohibido siempre, sin herramienta: ampliar permisos, alterar auditoría, gestionar ubicaciones permitidas, comandos arbitrarios.
 
@@ -82,4 +94,4 @@ Si el búfer no cubre `after_seq`, o cambia `boot_id`, llega `system.resync_requ
 
 - Todo CHECK, FK y UNIQUE con nombre; FK a nivel de tabla; sin índices por expresión.
 - Reconstruir una tabla (crear, copiar, borrar, renombrar) con `foreign_keys=ON` borra hijos en cascada, y el migrador no admite `PRAGMA`. Queda prohibido en v1: usar `ADD COLUMN` o tabla nueva.
-- Toda migración recrea los triggers de lo que toque. Objetos obligatorios al arrancar: `trg_audit_no_update`, `trg_audit_no_delete`, `trg_audit_no_replace`, `trg_pc_transition`, `trg_pc_immutable`, `trg_pc_no_delete`, `trg_*_delete_entity` (9), `trg_*_no_cycle` (3) y `trg_search_*` (3).
+- Toda migración recrea los triggers de lo que toque. Objetos obligatorios al arrancar: `trg_audit_no_update`, `trg_audit_no_delete`, `trg_audit_no_replace`, `trg_pc_transition`, `trg_pc_immutable`, `trg_pc_no_delete`, `trg_pc_no_replace`, `trg_*_delete_entity` (9), `trg_*_no_cycle` (3) `trg_search_*` (3) y `trg_memory_records_*` (3).

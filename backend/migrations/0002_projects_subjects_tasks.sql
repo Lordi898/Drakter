@@ -16,6 +16,7 @@ CREATE TABLE projects (
   CONSTRAINT ck_projects_status CHECK (status IN ('planned','active','paused','completed','cancelled')),
   CONSTRAINT ck_projects_priority CHECK (priority IN ('low','medium','high','urgent')),
   CONSTRAINT ck_projects_completed CHECK ((status = 'completed') = (completed_at IS NOT NULL)),
+  CONSTRAINT ck_projects_dates CHECK (start_date IS NULL OR target_date IS NULL OR start_date <= target_date),
   CONSTRAINT ck_projects_progress CHECK (manual_progress IS NULL OR manual_progress BETWEEN 0 AND 100),
   CONSTRAINT fk_projects_entity FOREIGN KEY (id, entity_type) REFERENCES entities (id, entity_type) ON DELETE RESTRICT
 );
