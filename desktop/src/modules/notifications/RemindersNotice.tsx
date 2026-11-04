@@ -1,23 +1,23 @@
 import { useEffect, useState } from 'react'
 import { BellRing, TriangleAlert } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { apiRequest } from '@/services/api'
 import { parseStatus } from './parse'
-import type { NotificationCall, NotificationsStatus } from './types'
+import type { NotificationsStatus } from './types'
 
 const FIXED_TEXT = 'Los recordatorios solo funcionan con Drakter abierto. Con la app cerrada no recibirás avisos.'
 
 export interface RemindersNoticeProps {
-  readonly call: NotificationCall
   readonly compact?: boolean
 }
 
-export function RemindersNotice({ call, compact = false }: RemindersNoticeProps): React.JSX.Element {
+export function RemindersNotice({ compact = false }: RemindersNoticeProps): React.JSX.Element {
   const [status, setStatus] = useState<NotificationsStatus | null>(null)
   const [failed, setFailed] = useState(false)
 
   useEffect(() => {
     let cancelled = false
-    call('notifications.status')
+    apiRequest<unknown>('/api/v1/notifications/status')
       .then((raw) => {
         if (cancelled) return
         const parsed = parseStatus(raw)
@@ -30,7 +30,7 @@ export function RemindersNotice({ call, compact = false }: RemindersNoticeProps)
     return () => {
       cancelled = true
     }
-  }, [call])
+  }, [])
 
   const stopped = failed || (status !== null && (!status.running || status.last_error !== null))
   const Icon = stopped ? TriangleAlert : BellRing

@@ -1,7 +1,8 @@
 import { addNotification } from '@/stores/notifications'
+import { apiRequest } from '@/services/api'
 import { notify } from '@/services/notify'
+import { subscribeResync, subscribeServerEvents } from '@/services/ws'
 import { parseNotificationList } from './parse'
-import type { NotificationFeedOptions } from './types'
 
 const POLL_MS = 60_000
 const MAX_SEEN = 1000
@@ -9,7 +10,7 @@ const MAX_INDIVIDUAL = 3
 const READ_BATCH = 200
 
 /** Arranca la entrega de recordatorios locales. Devuelve la función de parada. */
-export function startNotificationFeed({ call, subscribe }: NotificationFeedOptions): () => void {
+export function startNotificationFeed(): () => void {
   const seen = new Set<string>()
   let stopped = false
   let inFlight = false
@@ -26,7 +27,7 @@ export function startNotificationFeed({ call, subscribe }: NotificationFeedOptio
   async function cycle(): Promise<void> {
     let raw: unknown
     try {
-      raw = await call('notifications.list', { query: { unread: true, limit: 50 } })
+      raw = await apiRequest<unknown>('/api/v1/notifications?unread=true&limit=50')
     } catch {
       return // Sin red o backend caído: el siguiente ciclo reintenta.
     }
@@ -49,7 +50,7 @@ export function startNotificationFeed({ call, subscribe }: NotificationFeedOptio
     const ids = fresh.map((n) => n.id)
     for (let i = 0; i < ids.length; i += READ_BATCH) {
       try {
-        await call('notifications.read', { body: { ids: ids.slice(i, i + READ_BATCH) } })
+        await apiRequest<unknown>('/api/v1/notifications/read', { method: 'POST', body: { ids: ids.slice(i, i + READ_BATCH) } })
       } catch {
         console.warn('No se pudieron marcar los recordatorios como entregados.')
         return
@@ -77,16 +78,16 @@ export function startNotificationFeed({ call, subscribe }: NotificationFeedOptio
 
   void run()
   const timer = setInterval(() => void run(), POLL_MS)
-  const unsubscribe = subscribe?.((event) => {
-    // Solo es un aviso de releer: de este evento sin validar no se muestra nada.
-    if (typeof event === 'object' && event !== null && 'type' in event && event.type === 'notification.created') {
-      void run()
-    }
+  // Solo son avisos de releer: del evento no se muestra nada.
+  const stopEvents = subscribeServerEvents((event: { readonly type: string }) => {
+    if (event.type === 'notification.created') void run()
   })
+  const stopResync = subscribeResync(() => void run())
 
   return () => {
     stopped = true
     clearInterval(timer)
-    unsubscribe?.()
+    stopEvents()
+    stopResync()
   }
 }

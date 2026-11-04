@@ -1,5 +1,3 @@
 export { startNotificationFeed } from './feed'
-export { NOTIFICATION_OPERATIONS } from './operations'
 export { RemindersNotice } from './RemindersNotice'
 export type { RemindersNoticeProps } from './RemindersNotice'
-export type { NotificationCall, NotificationFeedOptions, NotificationOp, SubscribeFn } from './types'
