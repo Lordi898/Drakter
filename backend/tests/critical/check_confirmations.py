@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import secrets
 import shutil
 import sqlite3
 import sys
@@ -23,13 +24,13 @@ from uuid import UUID, uuid4
 from drakter_contracts.common import ContractModel, Origin
 from drakter_contracts.tools import RiskClass
 
-from app.api.confirmations import APPROVER_HEADER
 from app.audit.writer import list_events
+from app.core.bootstrap import Credentials
 from app.core.config import Settings
 from app.core.errors import AppError
+from app.core.security import SessionToken
 from app.database.migrator import migrate
 from app.main import create_app
-from app.permissions.credentials import APPROVER_FILE_NAME, ApprovalSigner
 from app.permissions.engine import PermissionEngine
 from app.permissions.models import ActionSpec, ActorContext, Principal
 from app.permissions.setup import install_security, start_security, stop_security
@@ -110,11 +111,12 @@ def agent(turn: str | None = None, tainted: bool = False) -> ActorContext:
 
 async def asgi(app, method: str, path: str, headers: dict[str, str], body: object = None):
     raw = b"" if body is None else json.dumps(body).encode()
+    path, _, query = path.partition("?")
     pairs = [(b"host", f"127.0.0.1:{PORT}".encode()), (b"content-type", b"application/json")]
     pairs += [(k.encode(), v.encode()) for k, v in headers.items()]
     scope = {
         "type": "http", "asgi": {"version": "3.0"}, "http_version": "1.1", "method": method,
-        "path": path, "raw_path": path.encode(), "query_string": b"", "headers": pairs,
+        "path": path, "raw_path": path.encode(), "query_string": query.encode(), "headers": pairs,
         "client": ("127.0.0.1", 50000), "server": ("127.0.0.1", PORT), "scheme": "http",
     }
     sent = False
@@ -149,31 +151,24 @@ def status_of(conn: sqlite3.Connection, action_id: str) -> str:
 
 
 async def main(root: Path) -> None:
-    settings = Settings(data_dir=root / "data", runtime_dir=root / "run", port=PORT,
-                        _env_file=None)
+    settings = Settings(data_dir=root / "data", _env_file=None)
     (root / "data" / "backups").mkdir(parents=True, mode=0o700)
-    (root / "run").mkdir(mode=0o700)
     grants = root / "permissions.json"
     grants.write_text(json.dumps({"granted": ["demo.*", "audit.*", "permissions.*"]}))
     migrate(settings.db_path, settings.backups_dir)
 
-    app = create_app(settings)
+    session, approver = secrets.token_urlsafe(32), secrets.token_urlsafe(32)
+    credentials = Credentials(ui=SessionToken(session), approver=SessionToken(approver))
+    app = create_app(settings, credentials=credentials, port=PORT, on_ready=lambda: None)
     actions = install_security(app, settings, agent_grants_path=grants)
     for spec in SPECS:
         actions.registry.register(spec)
-    await start_security(app, settings)
+    await start_security(app)
 
-    session = app.state.token.reveal()
-    approver = app.state.approver_token.reveal()
-    agent_token = "agent-" + uuid4().hex
+    agent_token = secrets.token_urlsafe(32)
     ui = {"authorization": f"Bearer {session}"}
-    main_process = {**ui, APPROVER_HEADER: approver}
+    main_process = {"authorization": f"Bearer {approver}"}
     conn = actions.open()
-
-    print("-- entrega del token de approver")
-    handoff = settings.runtime_dir / APPROVER_FILE_NAME
-    check("archivo de approver 0600", handoff.stat().st_mode & 0o777 == 0o600)
-    check("archivo de approver contiene el token", json.loads(handoff.read_text())["approver_token"] == approver)
 
     print("-- el agente no ejecuta ni recibe nada con que aprobar")
     args = {"key": "a"}
@@ -189,70 +184,70 @@ async def main(root: Path) -> None:
     hash_ = detail["params_hash"]
 
     print("-- solo Electron main decide")
-    code, _ = await asgi(app, "POST", f"{base}/approve", {"authorization": f"Bearer {agent_token}"},
-                         {"params_hash": hash_, "approval_token": "x"})
+    body_ok = {"params_hash": hash_}
+    code, _ = await asgi(app, "POST", f"{base}/approve", {"authorization": f"Bearer {agent_token}"}, body_ok)
     check("token de agente: 401", code == 401, code)
-    code, _ = await asgi(app, "POST", f"{base}/approval-token", {"authorization": f"Bearer {agent_token}"})
-    check("token de agente no obtiene token de aprobación", code == 401, code)
-    code, body = await asgi(app, "POST", f"{base}/approval-token", ui)
-    check("GUI sin approver no obtiene token", code == 403, (code, body))
-    code, _ = await asgi(app, "POST", f"{base}/approve", ui, {"params_hash": hash_, "approval_token": "x"})
-    check("GUI sin approver: 403", code == 403, code)
-    code, _ = await asgi(app, "POST", f"{base}/approve", {**ui, APPROVER_HEADER: "falso"},
-                         {"params_hash": hash_, "approval_token": "x"})
-    check("approver falso: 403", code == 403, code)
+    code, _ = await asgi(app, "POST", f"{base}/reject", {"authorization": f"Bearer {agent_token}"})
+    check("token de agente no rechaza: 401", code == 401, code)
+    code, _ = await asgi(app, "POST", f"{base}/approve", {}, body_ok)
+    check("sin token: 401", code == 401, code)
+    code, _ = await asgi(app, "POST", f"{base}/approve", ui, body_ok)
+    check("token ui no aprueba: 403", code == 403, code)
+    code, _ = await asgi(app, "POST", f"{base}/approve/", ui, body_ok)
+    check("variante con barra final tampoco: 403", code == 403, code)
+    code, _ = await asgi(app, "POST", f"/api/v1//confirmations/{action}//approve", ui, body_ok)
+    check("variante con barras dobles tampoco", code in (403, 404), code)
     code, _ = await asgi(app, "POST", f"{base}/reject", ui)
-    check("rechazar también exige approver", code == 403, code)
-    code, _ = await asgi(app, "POST", f"{base}/approve", {**main_process, "origin": "app://drakter"},
-                         {"params_hash": hash_, "approval_token": "x"})
-    check("con Origin (renderer): 403 aunque tenga approver", code == 403, code)
+    check("token ui no rechaza: 403", code == 403, code)
+    code, _ = await asgi(app, "POST", f"{base}/approve", {**main_process, "origin": "app://drakter"}, body_ok)
+    check("con Origin: 403 aunque traiga approver", code == 403, code)
+    code, _ = await asgi(app, "POST", f"{base}/approve", main_process, {"params_hash": "zz"})
+    check("hash mal formado: 422", code == 422, code)
+    code, _ = await asgi(app, "POST", f"{base}/approve", main_process, {**body_ok, "pre_confirmed": True})
+    check("campo extra: 422", code == 422, code)
     code, body = await asgi(app, "GET", base, ui)
-    check("la GUI ve la pendiente", code == 200 and "approval_token" not in body, (code, body))
-    try:
-        actions.approve(conn, UUID(action), hash_, Principal.AGENT, approval_token="x", correlation_id="c")
-        check("el servicio rechaza a agente", False)
-    except AppError as exc:
-        check("el servicio rechaza a agente", exc.status_code == 403)
-    try:
-        actions.approve(conn, UUID(action), hash_, Principal.UI, approval_token="x", correlation_id="c")
-        check("el servicio rechaza a ui", False)
-    except AppError as exc:
-        check("el servicio rechaza a ui", exc.status_code == 403)
+    check("la GUI ve la pendiente, sin args_hash", code == 200 and body["params_hash"] == hash_ and "args_hash" not in body, (code, body))
+    check("la GUI no ve argumentos fuera de la lista blanca", "password" not in json.dumps(body), body)
+    code, _ = await asgi(app, "GET", base, main_process)
+    check("approver no lee: la matriz es exacta", code == 403, code)
+    for principal in (Principal.AGENT, Principal.UI):
+        try:
+            actions.approve(conn, UUID(action), hash_, principal, correlation_id="c")
+            check(f"el servicio rechaza a {principal}", False)
+        except AppError as exc:
+            check(f"el servicio rechaza a {principal}", exc.status_code == 403)
     check("sigue pendiente y sin ejecutar", status_of(conn, action) == "pending" and calls["demo_delete"] == 0)
     denied = [e for e in list_events(conn, confirmation_id=action) if e["result"] == "denied"]
-    check("los intentos quedan auditados", len(denied) >= 5, len(denied))
+    check("los intentos que llegan al servicio quedan auditados", len(denied) == 2, len(denied))
 
-    print("-- token ligado a acción, parámetros y hash; un solo uso")
-    code, ticket = await asgi(app, "POST", f"{base}/approval-token", main_process)
-    check("main obtiene el token", code == 200 and ticket.get("approval_token"), (code, ticket))
-    token = ticket["approval_token"]
+    print("-- ligada a parámetros; un solo uso")
     other = dispatch("demo_delete", {"key": "b"}, agent(), actions=actions)["action_id"]
-    code, _ = await asgi(app, "POST", f"/api/v1/confirmations/{other}/approve", main_process,
-                         {"params_hash": actions.detail(conn, UUID(other))["params_hash"], "approval_token": token})
-    check("token de otra acción: 403", code == 403, code)
-    code, _ = await asgi(app, "POST", f"{base}/approve", main_process,
-                         {"params_hash": "0" * 64, "approval_token": token})
+    code, _ = await asgi(app, "POST", f"/api/v1/confirmations/{other}/approve", main_process, body_ok)
+    check("hash de otra acción: 409", code == 409, code)
+    check("hash ajeno no consume la fila", status_of(conn, other) == "pending")
+    code, _ = await asgi(app, "POST", f"{base}/approve", main_process, {"params_hash": "0" * 64})
     check("hash distinto: 409", code == 409, code)
     check("hash distinto no consume la fila", status_of(conn, action) == "pending" and calls["demo_delete"] == 0)
-    code, body = await asgi(app, "POST", f"{base}/approve", main_process,
-                            {"params_hash": hash_, "approval_token": token})
+    code, body = await asgi(app, "POST", f"{base}/approve", main_process, body_ok)
     check("aprobar ejecuta", code == 200 and body["status"] == "executed", (code, body))
-    code, _ = await asgi(app, "POST", f"{base}/approve", main_process,
-                         {"params_hash": hash_, "approval_token": token})
-    check("reutilizar el token: 409", code == 409, code)
+    code, _ = await asgi(app, "POST", f"{base}/approve", main_process, body_ok)
+    check("repetir la aprobación: 409", code == 409, code)
     check("ejecutó exactamente una vez", calls["demo_delete"] == 1, calls)
+    code, body = await asgi(app, "POST", f"/api/v1/confirmations/{other}/reject", main_process)
+    check("approver rechaza", code == 200 and status_of(conn, other) == "rejected", (code, body))
+    code, _ = await asgi(app, "POST", f"/api/v1/confirmations/{other}/approve", main_process,
+                         {"params_hash": actions.detail(conn, UUID(other))["params_hash"]})
+    check("rechazada no se aprueba: 409", code == 409, code)
 
     print("-- concurrencia")
     race = dispatch("demo_delete", {"key": "c"}, agent(), actions=actions)["action_id"]
     hash_race = actions.detail(conn, UUID(race))["params_hash"]
-    token_race = actions.approval_token(conn, UUID(race), Principal.APPROVER)
     before = calls["demo_delete"]
 
     def attempt(_: int) -> str:
         local = actions.open()
         try:
-            actions.approve(local, UUID(race), hash_race, Principal.APPROVER,
-                            approval_token=token_race, correlation_id="race")
+            actions.approve(local, UUID(race), hash_race, Principal.APPROVER, correlation_id="race")
             return "ok"
         except AppError as exc:
             return exc.code
@@ -268,11 +263,10 @@ async def main(root: Path) -> None:
     print("-- objetivos cambiados y caducidad")
     stale = dispatch("demo_delete", {"key": "d"}, agent(), actions=actions)["action_id"]
     hash_stale = actions.detail(conn, UUID(stale))["params_hash"]
-    token_stale = actions.approval_token(conn, UUID(stale), Principal.APPROVER)
     revision["value"] = 2
     before = calls["demo_delete"]
     try:
-        actions.approve(conn, UUID(stale), hash_stale, Principal.APPROVER, approval_token=token_stale, correlation_id="c")
+        actions.approve(conn, UUID(stale), hash_stale, Principal.APPROVER, correlation_id="c")
         check("revisión cambiada da conflict", False)
     except AppError as exc:
         check("revisión cambiada da conflict", exc.code == "conflict", exc.code)
@@ -280,13 +274,12 @@ async def main(root: Path) -> None:
     revision["value"] = 1
 
     late = ActionService(db_path=settings.db_path, registry=actions.registry,
-                         engine=PermissionEngine(("demo.*",)), signer=ApprovalSigner(), ttl_seconds=-1)
+                         engine=PermissionEngine(("demo.*",)), ttl_seconds=-1)
     gone = dispatch("demo_delete", {"key": "e"}, agent(), actions=late)["action_id"]
     hash_gone = late.detail(conn, UUID(gone))["params_hash"]
-    token_gone = late.approval_token(conn, UUID(gone), Principal.APPROVER)
     before = calls["demo_delete"]
     try:
-        late.approve(conn, UUID(gone), hash_gone, Principal.APPROVER, approval_token=token_gone, correlation_id="c")
+        late.approve(conn, UUID(gone), hash_gone, Principal.APPROVER, correlation_id="c")
         check("caducada no se aprueba", False)
     except AppError as exc:
         check("caducada: 410", exc.status_code == 410, exc.status_code)
@@ -375,21 +368,35 @@ async def main(root: Path) -> None:
     before = calls["demo_external"]
     report = actions.reconcile_on_boot(conn)
     check("executing pasa a failed sin repetir", status_of(conn, crash) == "failed" and calls["demo_external"] == before and report.failed == 1, report)
-    check("pending caduca al arrancar", status_of(conn, left) == "expired")
+    check("pending vigente sobrevive al arranque", status_of(conn, left) == "pending")
+    actions.expire_all_pending(conn)
+    check("restaurar caduca todas las pendientes", status_of(conn, left) == "expired")
     code = conn.execute("SELECT error_code FROM pending_confirmations WHERE id=?", (crash,)).fetchone()[0]
     check("marcado outcome_uncertain", code == "outcome_uncertain", code)
 
     print("-- secretos fuera de auditoría y de la tabla de eventos")
     dump = json.dumps(conn.execute("SELECT * FROM audit_events").fetchall())
     check("sin contraseña", "s3cret-value" not in dump)
-    check("sin token de aprobación", token not in dump)
     check("sin tokens de sesión", session not in dump and approver not in dump)
     check("params_hash, turno y taint registrados",
           conn.execute("SELECT count(*) FROM audit_events WHERE params_hash IS NOT NULL AND turn_id IS NOT NULL").fetchone()[0] > 0)
 
+    print("-- actividad")
+    code, body = await asgi(app, "GET", "/api/v1/activity?limit=3", ui)
+    check("activity pagina", code == 200 and len(body["items"]) == 3 and body["next_cursor"], (code, str(body)[:200]))
+    code, second = await asgi(app, "GET", f"/api/v1/activity?limit=3&cursor={body['next_cursor']}", ui)
+    check("el cursor avanza sin repetir", code == 200 and second["items"][0]["seq"] < body["items"][-1]["seq"], code)
+    code, _ = await asgi(app, "GET", "/api/v1/activity?cursor=basura", ui)
+    check("cursor inválido: 400", code == 400, code)
+    code, body = await asgi(app, "GET", "/api/v1/activity?limit=200", ui)
+    check("activity sin secretos", "s3cret-value" not in json.dumps(body))
+    code, page = await asgi(app, "GET", "/api/v1/confirmations?status=executed&limit=1", ui)
+    check("confirmaciones por cursor", code == 200 and len(page["items"]) == 1 and page["next_cursor"], (code, str(page)[:200]))
+    code, more = await asgi(app, "GET", f"/api/v1/confirmations?status=executed&limit=1&cursor={page['next_cursor']}", ui)
+    check("segunda página distinta", code == 200 and more["items"] and more["items"][0]["id"] != page["items"][0]["id"], code)
+
     conn.close()
-    await stop_security(app, settings)
-    check("el archivo de approver desaparece al parar", not handoff.exists())
+    await stop_security(app)
 
 
 if __name__ == "__main__":

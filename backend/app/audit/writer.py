@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import sqlite3
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -13,7 +14,7 @@ from drakter_contracts.common import format_instant
 from drakter_contracts.tools import AuditPolicy
 
 from app.core.logging import redact
-from app.permissions.canonical import canonical_json, utc_now
+from app.permissions.canonical import canonical_json, decode_cursor, encode_cursor, utc_now
 from app.permissions.models import ACTOR_TYPES, ActorContext
 
 MAX_LOGGED_VALUE: Final = 500
@@ -96,16 +97,63 @@ def write(conn: sqlite3.Connection, ctx: ActorContext, event: AuditEvent) -> Non
     )
 
 
+def _read(conn: sqlite3.Connection, where: list[str], arguments: list[Any], limit: int) -> list[dict[str, Any]]:
+    condition = f" WHERE {' AND '.join(where)}" if where else ""
+    cursor = conn.execute(
+        f"SELECT seq, {_COLUMNS} FROM audit_events{condition} ORDER BY seq DESC LIMIT ?",
+        (*arguments, limit),
+    )
+    names = [description[0] for description in cursor.description]
+    return [dict(zip(names, row, strict=True)) for row in cursor.fetchall()]
+
+
 def list_events(
     conn: sqlite3.Connection, *, limit: int = 50, confirmation_id: str | None = None
 ) -> list[dict[str, Any]]:
     """Newest first. Content is untrusted data: it can quote what the agent sent."""
+    where = [] if confirmation_id is None else ["confirmation_id = ?"]
+    arguments = [] if confirmation_id is None else [confirmation_id]
+    return _read(conn, where, arguments, max(1, min(limit, MAX_LISTED_EVENTS)))
+
+
+def list_activity(
+    conn: sqlite3.Connection,
+    *,
+    actor: str | None = None,
+    entity_id: str | None = None,
+    result: str | None = None,
+    occurred_from: str | None = None,
+    occurred_to: str | None = None,
+    limit: int = 50,
+    cursor: str | None = None,
+) -> dict[str, Any]:
+    """`{items, next_cursor}` in the form of `AuditEventOut`."""
+    where: list[str] = []
+    arguments: list[Any] = []
+    for clause, value in (
+        ("actor_type = ?", actor),
+        ("entity_id = ?", entity_id),
+        ("result = ?", result),
+        ("occurred_at >= ?", occurred_from),
+        ("occurred_at <= ?", occurred_to),
+    ):
+        if value is not None:
+            where.append(clause)
+            arguments.append(value)
+    if cursor is not None:
+        position = decode_cursor(cursor)
+        if len(position) != 1 or not isinstance(position[0], int):
+            raise ValueError("invalid cursor")
+        where.append("seq < ?")
+        arguments.append(position[0])
     bounded = max(1, min(limit, MAX_LISTED_EVENTS))
-    query = f"SELECT seq, {_COLUMNS} FROM audit_events"
-    arguments: tuple[Any, ...] = (bounded,)
-    if confirmation_id is not None:
-        query += " WHERE confirmation_id = ?"
-        arguments = (confirmation_id, bounded)
-    cursor = conn.execute(f"{query} ORDER BY seq DESC LIMIT ?", arguments)
-    names = [description[0] for description in cursor.description]
-    return [dict(zip(names, row, strict=True)) for row in cursor.fetchall()]
+    rows = _read(conn, where, arguments, bounded + 1)
+    page = rows[:bounded]
+    items = []
+    for row in page:
+        raw = row.pop("params_redacted_json")
+        items.append({**row, "params": json.loads(raw) if raw else None, "tainted": bool(row["tainted"])})
+    return {
+        "items": items,
+        "next_cursor": encode_cursor(page[-1]["seq"]) if len(rows) > bounded else None,
+    }

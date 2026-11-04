@@ -40,8 +40,14 @@ from pydantic import BaseModel, ValidationError
 from app.audit.writer import AuditEvent, filter_params, write
 from app.core.errors import AppError
 from app.database.connection import connect
-from app.permissions.canonical import after, canonical_json, compute_params_hash, utc_now
-from app.permissions.credentials import ApprovalSigner
+from app.permissions.canonical import (
+    after,
+    canonical_json,
+    compute_params_hash,
+    decode_cursor,
+    encode_cursor,
+    utc_now,
+)
 from app.permissions.engine import DEFAULT_BULK_THRESHOLD, PermissionEngine
 from app.permissions.models import (
     ACTOR_TYPES,
@@ -55,7 +61,8 @@ from app.permissions.models import (
 
 CONFIRMATION_TTL_SECONDS: Final = 300
 MAX_SUMMARY_LENGTH: Final = 500
-MAX_LISTED: Final = 100
+DEFAULT_LISTED: Final = 50
+MAX_LISTED: Final = 200
 _DECIDED_VIA: Final = "desktop"
 _SYSTEM_CORRELATION: Final = "system"
 _COLUMNS: Final = (
@@ -117,7 +124,6 @@ class ActionService:
         db_path: Path,
         registry: ActionRegistry,
         engine: PermissionEngine,
-        signer: ApprovalSigner,
         events: EventSink | None = None,
         ttl_seconds: float = CONFIRMATION_TTL_SECONDS,
         clock: Callable[[], datetime] = utc_now,
@@ -125,7 +131,6 @@ class ActionService:
         self.registry = registry
         self._db_path = db_path
         self._engine = engine
-        self._signer = signer
         self._events = events
         self._ttl = ttl_seconds
         self._clock = clock
@@ -345,20 +350,6 @@ class ActionService:
 
     # ---------------------------------------------------------------- decide
 
-    def approval_token(
-        self, conn: sqlite3.Connection, action_id: UUID, principal: Principal
-    ) -> str:
-        if principal is not Principal.APPROVER:
-            raise _error(ErrorCode.PERMISSION_DENIED, "Approver required")
-        row = self._row(conn, action_id)
-        if row is None:
-            raise _error(ErrorCode.NOT_FOUND, "Confirmation not found")
-        if row["status"] != "pending":
-            raise _error(ErrorCode.CONFIRMATION_ALREADY_RESOLVED, "Confirmation already resolved")
-        return self._signer.issue(
-            row["id"], row["tool_name"], row["args_hash"], row["expires_at"]
-        )
-
     def approve(
         self,
         conn: sqlite3.Connection,
@@ -366,7 +357,6 @@ class ActionService:
         params_hash: str,
         principal: Principal,
         *,
-        approval_token: str,
         correlation_id: str,
     ) -> ActionResult:
         ctx = ActorContext(principal, Origin.REST, correlation_id)
@@ -380,7 +370,7 @@ class ActionService:
         conn.execute("BEGIN IMMEDIATE")
         try:
             row = self._row(conn, action_id)
-            refusal = self._refusal_for(row, str(action_id), params_hash, approval_token)
+            refusal = self._refusal_for(row, params_hash)
             if refusal is not None:
                 code, expired = refusal
                 if expired and row is not None:
@@ -504,13 +494,22 @@ class ActionService:
     def reconcile_on_boot(self, conn: sqlite3.Connection) -> ReconcileReport:
         """Close what a previous process left open. Never re-runs anything.
 
-        Every pending row expires: the signing key died with that process. A row
-        left mid-way has an unknown outcome and must not be retried.
+        A row left mid-way has an unknown outcome and must not be retried.
         """
+        now = format_instant(self._clock())
+        return self._reconcile(conn, "status = 'pending' AND expires_at <= ?", (now,))
+
+    def expire_all_pending(self, conn: sqlite3.Connection) -> ReconcileReport:
+        """After restoring a copy: nothing requested against other data stays approvable."""
+        return self._reconcile(conn, "status = 'pending'", ())
+
+    def _reconcile(
+        self, conn: sqlite3.Connection, pending_where: str, arguments: tuple[Any, ...]
+    ) -> ReconcileReport:
         ctx = self._system_ctx(_SYSTEM_CORRELATION)
         conn.execute("BEGIN IMMEDIATE")
         try:
-            pending = self._select(conn, "status = 'pending'", ())
+            pending = self._select(conn, pending_where, arguments)
             self._expire_rows(conn, pending)
             unfinished = self._select(conn, "status IN ('approved', 'executing')", ())
             for row in unfinished:
@@ -531,15 +530,30 @@ class ActionService:
     # ---------------------------------------------------------------- read
 
     def list_confirmations(
-        self, conn: sqlite3.Connection, status: str | None = "pending"
-    ) -> list[dict[str, Any]]:
-        where = "1 = 1" if status is None else "status = ?"
+        self,
+        conn: sqlite3.Connection,
+        status: str = "pending",
+        *,
+        limit: int = DEFAULT_LISTED,
+        cursor: str | None = None,
+    ) -> dict[str, Any]:
+        bounded = max(1, min(limit, MAX_LISTED))
+        where, arguments = "status = ?", [status]
+        if cursor is not None:
+            created_at, last_id = decode_cursor(cursor)
+            where += " AND (created_at, id) < (?, ?)"
+            arguments += [created_at, last_id]
         rows = self._select(
             conn,
-            f"{where} ORDER BY created_at DESC LIMIT {MAX_LISTED}",
-            () if status is None else (status,),
+            f"{where} ORDER BY created_at DESC, id DESC LIMIT ?",
+            (*arguments, bounded + 1),
         )
-        return [self._view(row) for row in rows]
+        page = rows[:bounded]
+        more = len(rows) > bounded
+        return {
+            "items": [self._view(row) for row in page],
+            "next_cursor": encode_cursor(page[-1]["created_at"], page[-1]["id"]) if more else None,
+        }
 
     def detail(self, conn: sqlite3.Connection, action_id: UUID) -> dict[str, Any]:
         row = self._row(conn, action_id)
@@ -589,18 +603,10 @@ class ActionService:
     # ---------------------------------------------------------------- internals
 
     def _refusal_for(
-        self,
-        row: Mapping[str, Any] | None,
-        action_id: str,
-        params_hash: str,
-        approval_token: str,
+        self, row: Mapping[str, Any] | None, params_hash: str
     ) -> tuple[ErrorCode, bool] | None:
         if row is None:
             return ErrorCode.NOT_FOUND, False
-        if not self._signer.verify(
-            approval_token, row["id"], row["tool_name"], row["args_hash"], row["expires_at"]
-        ):
-            return ErrorCode.PERMISSION_DENIED, False
         if row["status"] != "pending":
             return ErrorCode.CONFIRMATION_ALREADY_RESOLVED, False
         if row["expires_at"] <= format_instant(self._clock()):
@@ -800,25 +806,33 @@ class ActionService:
         names = [description[0] for description in cursor.description]
         return [dict(zip(names, row, strict=True)) for row in cursor.fetchall()]
 
-    @staticmethod
-    def _view(row: Mapping[str, Any]) -> dict[str, Any]:
-        """What the GUI shows. The arguments are data, never instructions."""
+    def _view(self, row: Mapping[str, Any]) -> dict[str, Any]:
+        """`ConfirmationOut`, with `params_hash` as the only public name of the hash.
+
+        `args` goes through the audit allow-list: a secret argument never reaches the GUI.
+        """
+        spec = self.registry.get(row["tool_name"])
+        args = filter_params(json.loads(row["args_json"]), spec.audit) if spec else {}
         return {
             "id": row["id"],
-            "tool": row["tool_name"],
+            "tool_name": row["tool_name"],
             "actor_type": row["actor_type"],
             "origin": row["origin"],
-            "risk": row["risk"],
-            "status": row["status"],
+            "turn_id": row["turn_id"],
+            "correlation_id": row["correlation_id"],
+            "args": args,
+            "params_hash": row["args_hash"],
+            "targets": json.loads(row["targets_json"]),
             "summary": row["summary"],
             "affected_count": row["affected_count"],
-            "args": json.loads(row["args_json"]),
-            "targets": json.loads(row["targets_json"]),
-            "params_hash": row["args_hash"],
+            "risk": row["risk"],
+            "status": row["status"],
             "created_at": row["created_at"],
             "expires_at": row["expires_at"],
             "decided_at": row["decided_at"],
+            "decided_via": row["decided_via"],
             "executed_at": row["executed_at"],
+            "result": json.loads(row["result_json"]) if row["result_json"] else None,
             "error_code": row["error_code"],
         }
 

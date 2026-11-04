@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import base64
+import binascii
 import hashlib
 import json
 from datetime import UTC, datetime, timedelta
@@ -27,3 +29,18 @@ def utc_now() -> datetime:
 
 def after(moment: datetime, seconds: float) -> datetime:
     return moment + timedelta(seconds=seconds)
+
+
+def encode_cursor(*values: str | int) -> str:
+    """Opaque position on (sort field, id)."""
+    return base64.urlsafe_b64encode(canonical_json(values).encode("utf-8")).decode("ascii")
+
+
+def decode_cursor(cursor: str) -> list[Any]:
+    try:
+        values = json.loads(base64.urlsafe_b64decode(cursor.encode("ascii")))
+    except (binascii.Error, ValueError) as exc:
+        raise ValueError("invalid cursor") from exc
+    if not isinstance(values, list):
+        raise ValueError("invalid cursor")
+    return values

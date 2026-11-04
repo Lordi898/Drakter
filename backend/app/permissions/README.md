@@ -8,41 +8,45 @@ Modelo de amenaza: el modelo y Hermes no son confiables. La frontera es este có
 |---|---|
 | `permissions/engine.py` | `PermissionEngine.evaluate` → allow, confirm o deny. Gana la regla más exigente |
 | `permissions/models.py` | `ActionSpec`, `ActionRegistry`, `ActorContext`, `Principal` |
-| `permissions/credentials.py` | `ApprovalSigner` (token HMAC) y entrega del token de approver |
 | `permissions/tool_gate.py` | Adaptadores `BackendToolGate`, `BackendAuditSink` y `tool_action_spec` |
 | `permissions/setup.py` | `install_security`, `start_security`, `stop_security` |
 | `services/actions.py` | `ActionService`: único camino de escritura confirmable |
 | `audit/writer.py` | `write` (falla cerrado), `filter_params`, `list_events` |
 | `tools/dispatcher.py` | `dispatch(tool, raw_args, ctx, actions=...)` para MCP, REST y DevProvider |
 | `api/confirmations.py` | Rutas de la GUI y de Electron main |
+| `api/activity.py` | `GET /api/v1/activity`, lectura de auditoría con cursor |
 
 ## Conexión en `app/main.py`
 
+Los routers entran por autodescubrimiento. Falta enlazar el servicio en `_install_services` y en `lifespan`:
+
 ```python
-# tras crear la app e incluir routers
+# _install_services
 actions = install_security(app, settings, agent_grants_path=REPO / "agent/configuration/permissions.json", events=<EventSink>)
-# registrar acciones aquí: actions.registry.register(...), o tool_action_spec(...) por cada ToolSpec
-# en lifespan, después de migrate
-await start_security(app, settings)
+# registrar aquí: actions.registry.register(...), o tool_action_spec(...) por cada ToolSpec
+# lifespan, después de migrate y antes de on_ready()
+await start_security(app)
 # al apagar
-await stop_security(app, settings)
+await stop_security(app)
 ```
 
-Requiere `drakter-contracts` en `pyproject.toml`. `start_security` aborta el arranque si falta el esquema.
+Sin esto, las rutas responden 503 `confirmation_unavailable`. `start_security` aborta el arranque si falta el esquema.
 
 ## Rutas
 
-| Método y ruta | Credencial |
+| Método y ruta | Rol |
 |---|---|
-| `GET /api/v1/confirmations?status=` | GUI |
-| `GET /api/v1/confirmations/{id}` | GUI |
-| `POST /api/v1/confirmations/{id}/approval-token` | approver |
-| `POST /api/v1/confirmations/{id}/approve` `{params_hash, approval_token}` | approver |
-| `POST /api/v1/confirmations/{id}/reject` | approver |
+| `GET /api/v1/confirmations?status=&limit=&cursor=` | `ui` |
+| `GET /api/v1/confirmations/{id}` | `ui` |
+| `POST /api/v1/confirmations/{id}/approve` `{params_hash}` | `approver` |
+| `POST /api/v1/confirmations/{id}/reject` | `approver` |
+| `GET /api/v1/activity` | `ui` |
 
-Approver significa: bearer de sesión, cabecera `X-Drakter-Approver` y **ninguna** cabecera `Origin`. La cabecera no está en la lista CORS, así que el renderer no puede enviarla. Electron main lee `runtime_dir/approver.json` (0600) una vez y lo borra.
+La matriz la aplica `SecurityGuardMiddleware`. El token `approver` solo vive en Electron main y llega por stdin.
 
-Flujo de main: `approval-token` devuelve detalle y token → `dialog.showMessageBox` con el foco en Cancelar → `approve`.
+Flujo de main: `GET` del detalle con `ui` → `dialog.showMessageBox` con el foco en Cancelar → `approve` con `approver`.
+
+Un solo uso: la transición atómica a `approved` y `executing` con estado, `args_hash` y caducidad en el `WHERE`. `pending_confirmations.args_hash` es el nombre de la columna; en la API solo existe `params_hash`.
 
 ## Reglas
 
