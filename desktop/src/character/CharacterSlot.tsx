@@ -1,11 +1,23 @@
 import { ErrorBoundary } from '@/components/errors/ErrorBoundary'
 import { cn } from '@/lib/utils'
 import { characterRenderer as Renderer } from './plug'
-import type { CharacterRendererProps, CharacterSize } from './types'
+import type { CharacterRendererProps, CharacterSize, CharacterState } from './types'
 
 const SIZE_CLASSES: Record<CharacterSize, string> = {
   compact: 'size-[120px] shrink-0',
   expanded: 'aspect-square w-full max-w-[360px]'
+}
+
+const STATE_LABELS: Record<CharacterState, string> = {
+  idle: 'en reposo',
+  listening: 'escuchando',
+  thinking: 'pensando',
+  speaking: 'hablando',
+  executing: 'ejecutando',
+  success: 'éxito',
+  error: 'error',
+  interrupted: 'interrumpido',
+  offline: 'sin conexión'
 }
 
 // Extensiones y marcas oblicuas de las dos cotas del contorno.
@@ -44,7 +56,7 @@ export function CharacterSlot({ state, size }: CharacterRendererProps) {
   return (
     <div
       role="img"
-      aria-label="Personaje de Drakter"
+      aria-label={`Personaje de Drakter: ${STATE_LABELS[state]}`}
       data-character-state={state}
       data-character-size={size}
       className={cn('text-plan-line', SIZE_CLASSES[size])}
