@@ -1,0 +1,16 @@
+[project]
+name = "drakter-voice"
+version = "0.1.0"
+description = "Pipeline de voz local de Drakter (proceso y venv separados del backend)"
+requires-python = ">=3.12,<3.14"
+dependencies = ["numpy>=2,<3", "onnxruntime>=1.20,<2"]
+
+[project.optional-dependencies]
+stt = ["faster-whisper==1.2.1"]
+kokoro = ["kokoro-onnx==0.6.1"]
+wakeword = ["openwakeword==0.6.0"]
+# Piper (GPL-3.0-or-later) no es un extra a propósito: va en su propio entorno
+# y solo se invoca como proceso externo. Ver voice/tts/piper.py.
+
+[tool.uv]
+package = false
