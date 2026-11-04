@@ -278,7 +278,7 @@ Decisiones técnicas, cambios de tecnología y motivos.
 - **Decisión:** migraciones `NNNN_*.sql` en `backend/migrations/`, aplicadas por `backend/app/database/migrator.py`, con las reglas de `contracts/README.md` §8. Acceso con `sqlite3` y SQL propio. Sin Alembic ni SQLAlchemy.
 - **Alternativas descartadas:** Alembic (por lo anterior) y ORM (el esquema depende de triggers y CHECK con nombre).
 - **Motivo:** control total sobre triggers, auditoría y migraciones.
-- **Impacto:** sustituye a lo dicho en la entrada "Trabajo sin clave y alcance de automejora, copias y v1". `ROADMAP` §2, `PLAN_DISEÑO` §1 y §11.
+- **Impacto:** sustituye a lo dicho en la entrada "Trabajo sin clave y alcance de automejora, copias y v1". `ROADMAP` §2, `PLAN_DISEÑO` §2 y §11.
 
 ## [2026-11-04] Búsqueda con reconcile_structured
 - **Contexto:** el índice `search_documents` es un dato derivado y puede quedarse atrás respecto a los módulos.
