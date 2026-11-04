@@ -41,17 +41,14 @@ class ConfirmationCreate(ContractModel):
     risk: ConfirmationRisk
 
 
-class ConfirmationDecision(ContractModel):
-    """Cuerpo (vacío salvo nota) de approve|reject; la decisión es la ruta."""
+class ConfirmationApprove(ContractModel):
+    """Cuerpo de approve, con rol `approver`."""
 
-    reason: str | None = None
-
-
-ConfirmationUpdate = ConfirmationDecision
+    params_hash: str
 
 
 class ConfirmationOut(OutModel):
-    """`args` ya sin secretos (lista blanca de auditoría). `decided_via` solo vale `desktop`."""
+    """`args` ya sin secretos (lista blanca de auditoría). `params_hash` es la columna `args_hash`."""
 
     id: Id
     tool_name: str
@@ -60,7 +57,7 @@ class ConfirmationOut(OutModel):
     turn_id: Id | None = None
     correlation_id: str
     args: dict[str, Any] = {}
-    args_hash: str
+    params_hash: str
     targets: list[ConfirmationTarget] = []
     summary: str
     affected_count: int | None = None

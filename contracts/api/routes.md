@@ -1,6 +1,6 @@
 # Rutas REST v1 de Drakter
 
-Tabla única de rutas. Manda `contracts/README.md`; después, lo ya construido en los frentes. Prefijo `/api/v1` en todo salvo `GET /health`. Credencial: token de sesión de la GUI (puerto 8765). **Ninguna de estas rutas existe para el agente**: el agente solo entra por el puerto MCP (8766) y llama a los mismos servicios (`README` §1).
+Tabla única de rutas. Manda `contracts/README.md`; después, lo ya construido en los frentes. Prefijo `/api/v1` en todo salvo `GET /health`. Credencial: `Authorization: Bearer` en toda ruta, `ui` salvo lo marcado `approver` (README §1). El puerto es efímero. **Ninguna de estas rutas existe para el agente**: el agente solo entra por el listener MCP, con su propio puerto efímero y llama a los mismos servicios (`README` §1).
 
 ## Convenciones
 
@@ -9,7 +9,7 @@ Tabla única de rutas. Manda `contracts/README.md`; después, lo ya construido e
 - **Errores:** `{"error":{"code","message","request_id","details":[{"field","code","message"}]}}`. Sin otra forma de error.
 - **Confirmación:** una ruta con riesgo `confirm` responde **409** `confirmation_required` con el sobre más `confirmation:{id,summary,affected_count,expires_at,params_hash}`; nunca 2xx. El cliente no manda `confirmation_id` ni `pre_confirmed`: la GUI aprueba con `POST /confirmations/{id}/approve` y el backend ejecuta los argumentos guardados. Los `DELETE` definitivos tienen riesgo `confirm`; archivar es `write`.
 - **Borrado definitivo:** el `DELETE` directo de la GUI siempre responde 409 y crea la confirmación; la ejecución real (que termina en 204 de la operación guardada) ocurre en `approve`. Borrar un recurso nunca borra el archivo original.
-- **Tiempo real:** un único `WS /api/v1/events?after_seq=N&boot_id=<id>` (subprotocolos `drakter.v1`, `drakter.auth.<token>`). Sustituye a `/ws` y a `/api/v1/chat/events`.
+- **Tiempo real:** un único `WS /api/v1/events?after_seq=N&boot_id=<id>` (subprotocolo `drakter.v1`, token en `Authorization: Bearer`). Sustituye a `/ws` y a `/api/v1/chat/events`.
 - **Estado:** `construida` = hay router escrito en el frente (no está montado en `main.py` de ninguna rama: todos montan solo `health`, `auth`, `ws`); `especificada` = documentada por el frente, sin código; `(sin construir)` = ruta inventada aquí para cubrir un hueco.
 - **Riesgo:** `read`, `write`, `confirm` (efectivo; puede subir a `confirm` por `bulk_threshold` o turno contaminado).
 
@@ -17,25 +17,28 @@ Tabla única de rutas. Manda `contracts/README.md`; después, lo ya construido e
 
 | Método | Ruta | Entrada | Respuesta | Estado | Riesgo | Dueño |
 |---|---|---|---|---|---|---|
-| GET | `/health` (sin prefijo, sin token) | - | `{status:"ok"}` | construida | read | seguridad (12) |
+| GET | `/health` (sin prefijo, con token `ui`) | - | `{status:"ok"}` | construida | read | seguridad (12) |
 | GET | `/api/v1/auth/check` | - | `{authenticated:true}` | construida | read | seguridad (12) |
 | WS | `/api/v1/events` | `after_seq`, `boot_id` | eventos `{event_id,seq,boot_id,timestamp,type,version,correlation_id,payload}` | especificada (`events.py`); servidor sin construir | read | contratos / chat (17) |
 | GET | `/api/v1/system/status` | - | versión, `boot_id`, BD y migración, salud de módulos, hora y zona | (sin construir) | read | seguridad (12) |
 | GET | `/api/v1/system/backups` | `limit`, `cursor` | `{items,next_cursor}` copias (fecha, tamaño, esquema) | (sin construir) | read | seguridad (12) |
 | POST | `/api/v1/system/backups` | - | 201 copia creada | (sin construir) | write | seguridad (12) |
 | POST | `/api/v1/system/backups/{id}/restore` | - | 409 `confirmation_required`; tras aprobar, restaura | (sin construir) | confirm | seguridad (12) |
-| GET | `/api/v1/settings` | - | ajustes no secretos (`key`, `value`) | (sin construir) | read | seguridad (12) |
-| PATCH | `/api/v1/settings` | `{clave: valor}` | ajustes | (sin construir) | write; `confirm` en claves sensibles | seguridad (12) |
+| GET | `/api/v1/settings` | - | `{persisted, items:[SettingOut]}` | construida | read | hoy-ajustes |
+| GET | `/api/v1/settings/status` | - | estado de agente y clave, solo presencia | construida | read | hoy-ajustes |
+| GET | `/api/v1/settings/backups` | - | copias | construida | read | hoy-ajustes |
+| POST | `/api/v1/settings/backups` | - | 201 copia | construida | write | hoy-ajustes |
+| POST | `/api/v1/settings/{key}` | `SettingUpdate` `{value}` | `SettingOut`; 404 `unknown_setting` si la clave no está permitida | construida | write | hoy-ajustes |
 | GET | `/api/v1/activity` | `actor`, `entity_id`, `result`, `from`, `to`, `limit`, `cursor` | `{items,next_cursor}` de auditoría (sin contenido de documentos) | (sin construir) | read | seguridad (12) |
 
 ## Confirmaciones
 
 | Método | Ruta | Entrada | Respuesta | Estado | Riesgo | Dueño |
 |---|---|---|---|---|---|---|
-| GET | `/api/v1/confirmations` | `status`, `limit`, `cursor` | `{items,next_cursor}` | (sin construir) | read | seguridad (12) |
-| GET | `/api/v1/confirmations/{id}` | - | acción, `summary`, `affected_count`, `targets`, `status`, `expires_at` | (sin construir) | read | seguridad (12) |
-| POST | `/api/v1/confirmations/{id}/approve` | - | resultado de la operación ejecutada; 409 `conflict` si `targets_json` cambió; 410/`expired` si caducó | (sin construir) | write (ejecuta lo guardado) | seguridad (12) |
-| POST | `/api/v1/confirmations/{id}/reject` | - | confirmación en `rejected` | (sin construir) | write | seguridad (12) |
+| GET | `/api/v1/confirmations` | `status`, `limit`, `cursor` | `{items,next_cursor}` | construida | read | seguridad (12) |
+| GET | `/api/v1/confirmations/{id}` | - (`ui`; `approver` no lee: 403) | acción, `summary`, `affected_count`, `targets`, `status`, `expires_at`, `params_hash` | construida | read | seguridad (12) |
+| POST | `/api/v1/confirmations/{id}/approve` | `ConfirmationApprove`: `{params_hash}` (`approver`) | resultado de la operación ejecutada; 409 `conflict` si `targets_json` cambió o `confirmation_already_resolved`; 410 `confirmation_expired`; 404; 422 | construida | write (ejecuta lo guardado) | seguridad (12) |
+| POST | `/api/v1/confirmations/{id}/reject` | sin cuerpo (`approver`) | confirmación en `rejected` | construida | write | seguridad (12) |
 
 ## Agente y chat
 
@@ -46,10 +49,10 @@ Especificadas en `backend/app/integrations/hermes/CONTRACT.md` §4 (drakter-16, 
 | POST | `/api/v1/chat/sessions` | - | 201 `ChatSession` | especificada | write | agente/chat (16) |
 | GET | `/api/v1/chat/sessions` | `limit`, `cursor` | `{items,next_cursor}` | especificada | read | agente/chat (16) |
 | POST | `/api/v1/chat/sessions/{id}/close` | - | `ChatSession` | especificada | write | agente/chat (16) |
-| GET | `/api/v1/chat/sessions/{id}/messages` | `limit`, `cursor` | `{items,next_cursor}` | especificada | read | agente/chat (16) |
-| POST | `/api/v1/chat/sessions/{id}/messages` | `{text, client_message_id}` | 202 `{turn_id,message_id}`; 409 `agent_busy` | especificada | write | agente/chat (16) |
+| GET | `/api/v1/chat/sessions/{id}/messages` | `limit`, `cursor` | `{items,next_cursor}` `MessageOut` (`session_id`, `text`) | especificada | read | agente/chat (16) |
+| POST | `/api/v1/chat/sessions/{id}/messages` | `MessageCreate`: `{text, client_message_id, input_source?}` | 202 `MessageAccepted` `{turn_id,message_id}`; 409 `agent_busy` | especificada | write | agente/chat (16) |
 | POST | `/api/v1/chat/turns/{turn_id}/cancel` | - | 202 | especificada | write | agente/chat (16) |
-| GET | `/api/v1/agent/status` | - | `{state,provider,model,detail}`; `state` entre los 9 del personaje | especificada | read | agente/chat (16) |
+| GET | `/api/v1/agent/status` | - | `AgentStatusOut` `{state,provider,model,detail}`; `state` entre los 9 del personaje | especificada | read | agente/chat (16) |
 
 ## Tareas
 
@@ -158,9 +161,9 @@ Router escrito en `drakter-13/backend/app/api/projects.py`.
 | Método | Ruta | Entrada | Respuesta | Estado | Riesgo | Dueño |
 |---|---|---|---|---|---|---|
 | GET | `/api/v1/storage-locations` | - | `{items,next_cursor}` `StorageLocationOut` | construida | read | almacén (15) |
-| POST | `/api/v1/storage-locations` | `StorageLocationCreate` | 201 `StorageLocationOut` | construida | write | almacén (15) |
-| PATCH | `/api/v1/storage-locations/{id}` | `StorageLocationUpdate` | `StorageLocationOut` | construida | write | almacén (15) |
-| DELETE | `/api/v1/storage-locations/{id}` | - | 409 `confirmation_required` | construida | confirm | almacén (15) |
+| POST | `/api/v1/storage-locations` | `StorageLocationCreate` (`approver`) | 201 `StorageLocationOut` | construida | write | almacén (15) |
+| PATCH | `/api/v1/storage-locations/{id}` | `StorageLocationUpdate` (`approver`) | `StorageLocationOut` | construida | write | almacén (15) |
+| DELETE | `/api/v1/storage-locations/{id}` | - (`approver`) | 409 `confirmation_required` | construida | confirm | almacén (15) |
 | GET | `/api/v1/folders` | `parent_id`, `include_archived` | `{items,next_cursor}` `FolderOut` | construida | read | almacén (15) |
 | POST | `/api/v1/folders` | `FolderCreate` | 201 `FolderOut` | construida | write | almacén (15) |
 | PATCH | `/api/v1/folders/{id}` | `FolderUpdate` | `FolderOut` | construida | write | almacén (15) |
@@ -184,6 +187,8 @@ Router escrito en `drakter-13/backend/app/api/projects.py`.
 
 | Método | Ruta | Entrada | Respuesta | Estado | Riesgo | Dueño |
 |---|---|---|---|---|---|---|
+| GET | `/api/v1/tasks/tags` | - | `TagOut[]`, lista completa sin paginar (excepción a `{items,next_cursor}`) | construida | read | tareas (13) |
+| PUT | `/api/v1/tasks/{id}/tags` | `TaskTagsReplace` `{names:[...]}` (sustituye) | `TaskOut` | construida | write | tareas (13) |
 | GET | `/api/v1/tags` | `q`, `limit`, `cursor` | `{items,next_cursor}` `TagOut` | (sin construir) | read | relaciones (15) |
 | GET | `/api/v1/entities/{id}/tags` | - | `{items,next_cursor}` `TagOut` | (sin construir) | read | relaciones (15) |
 | PUT | `/api/v1/entities/{id}/tags` | `{names:[...]}` (sustituye) | `{items,next_cursor}` `TagOut` | (sin construir) | write | relaciones (15) |
@@ -251,6 +256,12 @@ El frente 20 solo tiene puertos (`services/improvement_ports.py`, `get_principal
 
 ## Desviaciones que deben corregirse
 
+### Ajustes
+
+| Frente | archivo:línea | Qué hace | Qué debe hacer |
+|---|---|---|---|
+| hoy-ajustes | `services/settings_models.py:18`, `services/settings.py:73`, `desktop/src/settings/TimezoneSection.tsx:37,96` | Clave `timezone`, que nadie más lee | Clave `default_timezone`: los recordatorios leen esa y hoy ignorarían la zona elegida |
+
 Rutas de `drakter-NN` = `/home/imagana/.ao/data/worktrees/drakter/drakter-NN/`.
 
 **Transversal (todos los frentes).** `backend/app/main.py:56-58`: solo montan `health`, `auth` y `ws`; ningún router de módulo está incluido. Cada dueño debe añadir `include_router` en la integración, no en un archivo común editado a la vez.
@@ -292,7 +303,6 @@ Sin divergencia en el JSON: todos usan `core/errors.py` (`AppError` y `_handle_h
 | Frente | archivo:línea | Qué hace | Qué debe hacer |
 |---|---|---|---|
 | relaciones (15) | `backend/app/api/relations.py:19` | `APIRouter(tags=...)` sin prefijo: `/relationships`, `/entities/{id}/related` quedan fuera de `/api/v1` | `prefix="/api/v1"` |
-| tareas (13) | `desktop/src/modules/tasks/api.ts:61,65`; `tasks_contract.md:96,104` | `GET /tasks/tags`, `PUT /tasks/{id}/tags` | `/tags` y `/entities/{id}/tags` (compartidas con proyectos y recursos) |
 | tareas (13) | `backend/app/api/tasks_http.py` (sin rutas) | La GUI consume `/tasks...` pero no hay router de tareas | Escribir `api/tasks.py` según `tasks_contract.md` |
 | voz (19) | `voice/CONTRACT.md:144` | Describe `router.py` que no existe | Escribirlo con las rutas de la sección Voz |
 | agente/chat (16) | `CONTRACT.md:138-151` | `api/chat.py` documentado, sin código | Escribirlo; listados `{items,total}` ya cumplen |

@@ -1,6 +1,6 @@
 // Generado: no editar. Fuente: contracts/python/drakter_contracts (scripts/gen_ts.py).
 export const CONTRACT_VERSION = "1.0.0";
-export const SCHEMA_VERSION = 10;
+export const SCHEMA_VERSION = 11;
 
 /** Listado con cursor opaco: `limit` lo acota el servidor. */
 export interface Page<T> {
@@ -161,6 +161,14 @@ export interface AgentStatusChanged {
   reason: string | null;
 }
 
+/** GET /agent/status. `detail` es texto seguro, sin secretos. */
+export interface AgentStatusOut {
+  state: AgentState;
+  provider: string | null;
+  model: string | null;
+  detail: string | null;
+}
+
 export interface AgentToolCompleted {
   session_id: string;
   turn_id: string;
@@ -308,6 +316,15 @@ export interface CalendarEventWriteResult {
   conflicts: AgendaItem[];
 }
 
+/** Sesión de chat en la API. `session_id` en rutas y eventos es `conversations.id`. */
+export interface ChatSession {
+  id: string;
+  title: string | null;
+  created_at: string;
+  updated_at: string;
+  ended_at: string | null;
+}
+
 export interface ClassSessionCreate {
   weekday: number;
   starts_local_time: string;
@@ -356,6 +373,11 @@ export interface ComponentHealth {
   detail: string | null;
 }
 
+/** Cuerpo de approve, con rol `approver`. */
+export interface ConfirmationApprove {
+  params_hash: string;
+}
+
 /** Uso interno del backend; ninguna ruta pública la acepta. Los textos los calcula el backend. */
 export interface ConfirmationCreate {
   tool_name: string;
@@ -370,12 +392,7 @@ export interface ConfirmationCreate {
   risk: ConfirmationRisk;
 }
 
-/** Cuerpo (vacío salvo nota) de approve|reject; la decisión es la ruta. */
-export interface ConfirmationDecision {
-  reason?: string | null;
-}
-
-/** `args` ya sin secretos (lista blanca de auditoría). `decided_via` solo vale `desktop`. */
+/** `args` ya sin secretos (lista blanca de auditoría). `params_hash` es la columna `args_hash`. */
 export interface ConfirmationOut {
   id: string;
   tool_name: string;
@@ -384,7 +401,7 @@ export interface ConfirmationOut {
   turn_id: string | null;
   correlation_id: string;
   args: Record<string, unknown>;
-  args_hash: string;
+  params_hash: string;
   targets: ConfirmationTarget[];
   summary: string;
   affected_count: number | null;
@@ -434,11 +451,6 @@ export interface ConfirmationTicket {
   affected_count: number | null;
   expires_at: string;
   params_hash: string;
-}
-
-/** Cuerpo (vacío salvo nota) de approve|reject; la decisión es la ruta. */
-export interface ConfirmationUpdate {
-  reason?: string | null;
 }
 
 export interface ConversationCreate {
@@ -793,19 +805,26 @@ export interface MemorySearchHit {
   content_trust: "untrusted";
 }
 
+/** Respuesta 202 de POST /chat/sessions/{id}/messages. */
+export interface MessageAccepted {
+  turn_id: string;
+  message_id: string;
+}
+
 /** Mensaje del usuario; arranca un turno. `client_message_id` evita duplicados al reintentar. */
 export interface MessageCreate {
-  content: string;
-  client_message_id?: string | null;
+  text: string;
+  client_message_id: string;
   input_source?: InputSource;
 }
 
+/** En la API se llaman `session_id` y `text`; en la BD, `conversation_id` y `content`. */
 export interface MessageOut {
   id: string;
-  conversation_id: string;
+  session_id: string;
   turn_id: string | null;
   role: MessageRole;
-  content: string;
+  text: string;
   client_message_id: string | null;
   status: MessageStatus;
   created_at: string;
@@ -1083,18 +1102,17 @@ export interface SearchHitOut {
 /** Los secretos no van en ajustes (README §4). Los ajustes sensibles exigen confirmación. */
 export interface SettingCreate {
   key: string;
-  value: unknown;
+  value: string;
 }
 
 export interface SettingOut {
   key: string;
-  value: unknown;
+  value: string;
   updated_at: string;
-  updated_by: ActorType;
 }
 
 export interface SettingUpdate {
-  value: unknown;
+  value: string;
 }
 
 export interface StorageIndexProgress {
@@ -1275,6 +1293,11 @@ export interface TaskRef {
   id: string;
   title: string;
   status: TaskStatus;
+}
+
+/** Cuerpo de PUT /tasks/{id}/tags: sustituye todas las etiquetas de la tarea. */
+export interface TaskTagsReplace {
+  names: string[];
 }
 
 export interface TaskUpdate {
