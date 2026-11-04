@@ -19,6 +19,7 @@ from app.core.logging import configure_logging
 from app.core.security import SecurityGuardMiddleware
 from app.database.lock import exclusive_instance
 from app.database.migrator import migrate
+from app.events import EventHub
 
 
 def _discover_routers() -> Iterator[APIRouter]:
@@ -44,7 +45,7 @@ def _install_services(app: FastAPI, settings: Settings) -> None:
     reminders = _optional_module("app.services.reminders")
 
     runtime = hermes.AgentRuntime(settings) if hermes else None
-    hub = runtime.hub if runtime else None
+    hub = runtime.hub if runtime else EventHub()
     app.state.agent_runtime = runtime
     app.state.agent_settings = runtime.agent_settings if runtime else None
     app.state.event_hub = hub
@@ -56,9 +57,7 @@ def _install_services(app: FastAPI, settings: Settings) -> None:
             runtime.tool_state.memory_service = app.state.memory_service
 
     app.state.reminders = (
-        reminders.ReminderTicker(settings.db_path, publish=hub.publish if hub else None)
-        if reminders
-        else None
+        reminders.ReminderTicker(settings.db_path, publish=hub.publish) if reminders else None
     )
 
 
