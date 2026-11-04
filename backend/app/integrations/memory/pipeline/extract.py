@@ -46,6 +46,10 @@ _AM = re.compile(r"^(?:yo\s+)?(?:soy|i\s+am\s+(?:a|an|the)|i'm\s+(?:a|an|the))\s
 _MY = re.compile(r"^(?:mi|my)\s+(\w{2,30}(?:\s\w{2,30})?)\s+(?:es|son|is|are)\s+(.{1,300})$", re.IGNORECASE)
 
 
+def contains_secret(text: str) -> bool:
+    return _SECRET.search(text) is not None
+
+
 def _object(raw: str) -> str:
     obj = raw.strip(_TRAIL)
     obj = _OBJ_END.split(obj, maxsplit=1)[0]

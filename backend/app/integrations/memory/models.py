@@ -235,4 +235,4 @@ class ContextBundle(BaseModel):
     turn_prompt: str  # levels 5-7, data blocks delimited
     memory_ids: tuple[UUID, ...]  # memories actually included, for retrieval.log and taint
     dropped_memory_ids: tuple[UUID, ...]  # left out by the budget
-    tainted: bool  # True when any untrusted data was included
+    tainted: bool  # True when memory was included; conversation is delimited but does not taint here

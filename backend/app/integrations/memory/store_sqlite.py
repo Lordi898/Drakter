@@ -306,7 +306,7 @@ class SqliteMemoryAdapter:
             rows = conn.execute(sql, [*params, limit]).fetchall()
             return [self._record(conn, row) for row in rows]
 
-    def update(self, memory_id: UUID, patch: MemoryPatch) -> MemoryRecord | None:
+    def update(self, memory_id: UUID, patch: MemoryPatch, trust: TrustLevel | None = None) -> MemoryRecord | None:
         fields = patch.model_fields_set
         with self._open() as conn, _transaction(conn):
             current = self._fetch(conn, memory_id)
@@ -332,6 +332,8 @@ class SqliteMemoryAdapter:
                 sets["abstract"] = patch.abstract.strip() or (patch.content or current.content).strip()[:L0_MAX_CHARS]
             if patch.overview is not None:
                 sets["overview"] = patch.overview.strip() or (patch.content or current.content).strip()[:L1_MAX_CHARS]
+            if trust is not None:
+                sets["trust"] = trust.value
             if sets:
                 sets["updated_at"] = _to_text(_now())
                 assignments = ", ".join(f"{column} = ?" for column in sets)  # column names are literals above

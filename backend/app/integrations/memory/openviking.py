@@ -23,6 +23,7 @@ from app.integrations.memory.models import (
     MemoryQuery,
     MemoryRecord,
     MemoryStatus,
+    TrustLevel,
 )
 
 
@@ -58,7 +59,7 @@ class OpenVikingAdapter:
     def related(self, draft: MemoryDraft, limit: int = 20) -> list[MemoryRecord]:
         self._unavailable()
 
-    def update(self, memory_id: UUID, patch: MemoryPatch) -> MemoryRecord | None:
+    def update(self, memory_id: UUID, patch: MemoryPatch, trust: TrustLevel | None = None) -> MemoryRecord | None:
         self._unavailable()
 
     def set_status(self, memory_id: UUID, status: MemoryStatus) -> MemoryRecord | None:

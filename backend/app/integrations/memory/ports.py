@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Protocol, runtime_checkable
 from uuid import UUID
 
@@ -19,6 +19,7 @@ from app.integrations.memory.models import (
     MemoryQuery,
     MemoryRecord,
     MemoryStatus,
+    TrustLevel,
 )
 
 
@@ -48,7 +49,9 @@ class MemoryAdapter(Protocol):
         """PENDING or APPROVED records with the same subject or near text, for dedup and conflicts."""
         ...
 
-    def update(self, memory_id: UUID, patch: MemoryPatch) -> MemoryRecord | None: ...
+    def update(self, memory_id: UUID, patch: MemoryPatch, trust: TrustLevel | None = None) -> MemoryRecord | None:
+        """`trust` is set by the service only; it is not part of the client-facing patch."""
+        ...
 
     def set_status(self, memory_id: UUID, status: MemoryStatus) -> MemoryRecord | None: ...
 
@@ -99,18 +102,4 @@ class AuditSink(Protocol):
     def record(self, *, action: str, actor: str, target: str, outcome: str,
                detail: dict[str, Any] | None = None) -> None: ...
 
-
-@dataclass(frozen=True)
-class ToolSpec:
-    """Thin local shape until contracts/ defines the shared one (ROADMAP §5.6)."""
-
-    name: str
-    description: str
-    parameters: dict[str, Any]  # JSON Schema
-    permissions: tuple[str, ...]
-    risk: str  # "low" | "medium" | "high"
-    confirmation: str  # "never" | "required"
-    errors: tuple[str, ...] = field(default=())
-
-
-Hits = Sequence[MemoryHit]
+    def record_retrieval(self, query_hash: str, ids: Sequence[UUID], tainted: bool) -> None: ...
