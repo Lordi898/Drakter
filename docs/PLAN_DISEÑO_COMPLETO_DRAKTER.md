@@ -379,9 +379,9 @@ La personalidad tendrá una estructura separada del razonamiento y de la memoria
 
 ### 5.1. Archivos de personalidad
 
-La personalidad vive en archivos, separada del modelo. Fuente única: `agent/identity/` en el repositorio, con 14 archivos `.md` (`SOUL`, `PERSONALITY`, `BEHAVIOR`, `COMMUNICATION`, `EMOTIONAL_STYLE`, `VALUES`, `USER`, `ENVIRONMENT`, `PREFERENCES`, `CURRENT_CONTEXT`, `CAPABILITIES`, `WORKSPACE_GUIDE`, `TOOL_GUIDE` y `SYSTEM_GUIDE`). Un cargador los compone y los publica en el `HERMES_HOME` de un perfil propio de Drakter, y comprueba el tope de 20.000 caracteres de los archivos de contexto de Hermes. `~/.hermes/SOUL.md` no es la fuente, y la personalidad no se configura con archivos YAML en `config/` (decisión "Los 14 archivos de identidad viven en agent/identity/").
+La personalidad vive en archivos, separada del modelo. Fuente única: el repositorio, con 14 archivos `.md`: 6 en `agent/identity/` (`SOUL`, `PERSONALITY`, `BEHAVIOR`, `COMMUNICATION`, `EMOTIONAL_STYLE`, `VALUES`), 4 en `agent/context/` (`USER`, `ENVIRONMENT`, `PREFERENCES`, `CURRENT_CONTEXT`) y 4 en `agent/knowledge/` (`CAPABILITIES`, `WORKSPACE_GUIDE`, `TOOL_GUIDE`, `SYSTEM_GUIDE`). Un cargador los compone y los publica en el `HERMES_HOME` de un perfil propio de Drakter, y comprueba el tope de 20.000 caracteres de los archivos de contexto de Hermes. `~/.hermes/SOUL.md` no es la fuente, y la personalidad no se configura con archivos YAML en `config/` (decisión "Los 14 archivos de identidad viven en agent/identity/").
 
-`USER.md` y `PREFERENCES.md` del repositorio son plantillas sin datos reales; la plantilla rellenada vive fuera del repositorio y solo inicializa el `USER.md` nativo de Hermes, que a partir de ahí es el vivo (decisión "agent/identity/USER.md es plantilla; el USER.md vivo es el de Hermes").
+`USER.md` y `PREFERENCES.md` del repositorio son plantillas sin datos reales; la plantilla rellenada vive fuera del repositorio y solo inicializa el `USER.md` nativo de Hermes, que a partir de ahí es el vivo (decisión "agent/context/USER.md es plantilla; el USER.md vivo es el de Hermes").
 
 Los parámetros de estilo (humor, formalidad, concisión, expresividad, proactividad, intensidad y velocidad de voz) se expresan en esos archivos de identidad.
 
@@ -1329,7 +1329,7 @@ Se realizarán copias de seguridad de:
 
 - Base de datos.
 - Configuración.
-- Archivos de identidad (`agent/identity/`).
+- Archivos de identidad y contexto (`agent/identity/`, `agent/context/`, `agent/knowledge/`).
 - Skills.
 - Índices y metadatos.
 - Configuración de memoria.
@@ -1417,7 +1417,7 @@ Se conservarán versiones recientes y un procedimiento de restauración probado.
 
 ### Fase 8. Personalidad
 
-- Archivos de `agent/identity/` y su cargador.
+- Archivos de `agent/identity/`, `agent/context/` y `agent/knowledge/`, y su cargador.
 - Perfiles vocales.
 - Estados expresivos.
 - Contexto.

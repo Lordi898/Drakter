@@ -23,7 +23,8 @@ Historial Git de los repos que estaban anidados en el checkout del usuario:
 ## Bloqueos y desajustes abiertos
 
 - **Sin clave de API:** nada se ha probado con el modelo real.
-- **Identidad:** `drakter/build` tiene 22 archivos en `agent/` en lugar de 14, y `rules.py` lee `context/` y `knowledge/`.
+- **Identidad:** el reparto vigente es 6 + 4 + 4 archivos. `drakter/build` sigue con 22 en `agent/` hasta fusionar `f13204a`, de `drakter/identidad-personaje`.
+- **Recuperación de memoria:** `SYSTEM_GUIDE.md` y `builder.py` la hacen en el backend, y `DECISIONS.md` la sitúa dentro de Hermes. Falta decidir.
 - **Hermes:** la decisión es runner propio sin gateway, y el código commiteado aún lanza el gateway.
 - **Electron:** falta `options` en `call`.
 

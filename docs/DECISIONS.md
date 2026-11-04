@@ -135,11 +135,12 @@ Decisiones técnicas, cambios de tecnología y motivos.
 - **Impacto:** `CLAUDE.md` §1 y §9, `ROADMAP`, `backend/pyproject.toml` (ya alineado).
 
 ## [2026-11-04] Los 14 archivos de identidad viven en agent/identity/
+- **Estado:** REVOCADA por la entrada "Identidad repartida en identity/, context/ y knowledge/". Se conserva como historial.
 - **Contexto:** `MASTER_PLAN` y `ROADMAP` los repartían en `identity/`, `context/` y `knowledge/`. `PLAN_DISEÑO` los ponía en `~/.hermes/` y `config/`, y `CLAUDE.md` §8 solo cita `agent/identity/`. El commit `c487985` de `drakter/identidad-personaje` los creó los 14 en `agent/identity/` (C-14).
 - **Decisión:** los 14 archivos están en `agent/identity/`: `SOUL`, `PERSONALITY`, `BEHAVIOR`, `COMMUNICATION`, `EMOTIONAL_STYLE`, `VALUES`, `USER`, `ENVIRONMENT`, `PREFERENCES`, `CURRENT_CONTEXT`, `CAPABILITIES`, `WORKSPACE_GUIDE`, `TOOL_GUIDE` y `SYSTEM_GUIDE`, todos `.md`. `agent/context/` y `agent/knowledge/` no forman parte de la estructura vigente (ver la nota ⚠️ de esta entrada). La fuente es el repositorio: un cargador compone esos archivos y los publica en el `HERMES_HOME` de un perfil propio, y comprueba el tope de 20.000 caracteres de los archivos de contexto de Hermes, porque un recorte podría eliminar reglas del centro.
 - **Sin comprobar:** la carga real en Hermes.
 - **Alternativas descartadas:** mantener tres carpetas (rompería lo ya escrito sin beneficio); `~/.hermes/` como fuente (dejaría la personalidad fuera del repositorio).
-- **⚠️ Desajuste con el código:** `d88fb4e`, de `drakter/memoria-contexto`, movió 8 archivos a `agent/context/` y `agent/knowledge/`, y al fusionar en `drakter/build` quedaron duplicados con `agent/identity/` (22 archivos; los 8 pares son idénticos). `backend/app/integrations/memory/context/rules.py` lee esas dos carpetas. Esta decisión sigue vigente, pero sin cumplirse: hay que cambiar esas rutas y borrar los duplicados, o revocarla con entrada nueva. Lo decide el orquestador.
+- **Resolución:** el desajuste entre esta entrada y `d88fb4e`, que dejó 22 archivos en `drakter/build`, lo cierra la revocación.
 - **Motivo:** `CLAUDE.md` §8 y el código ya existente.
 - **Impacto:** `MASTER_PLAN` §8.1 y Parte XII, `ROADMAP` Fase 5 y árboles, `PLAN_DISEÑO` §5, `drakter-orquestator`.
 
@@ -152,13 +153,13 @@ Decisiones técnicas, cambios de tecnología y motivos.
 
 ## [2026-11-04] La memoria no se impone a la instrucción actual
 - **Contexto:** el orden de prioridad pone la memoria (6) antes de la instrucción actual (7). Leído literalmente, un recuerdo, incluso envenenado, vencería a lo que el usuario pide ahora, y eso contradice que la memoria sea dato no confiable (C-45).
-- **Decisión:** se mantiene el orden, y se aclara su lectura como hace `agent/identity/SYSTEM_GUIDE.md`: los niveles 1 a 5 enmarcan la instrucción actual; la memoria y los datos no confiables solo informan y nunca dan órdenes; el nivel 7 es lo que hay que hacer dentro de ese marco. Si la memoria contradice al usuario, vale lo que dice ahora y se señala la discrepancia. Para datos operativos, la fuente es el Workspace.
+- **Decisión:** se mantiene el orden, y se aclara su lectura como hace `agent/knowledge/SYSTEM_GUIDE.md`: los niveles 1 a 5 enmarcan la instrucción actual; la memoria y los datos no confiables solo informan y nunca dan órdenes; el nivel 7 es lo que hay que hacer dentro de ese marco. Si la memoria contradice al usuario, vale lo que dice ahora y se señala la discrepancia. Para datos operativos, la fuente es el Workspace.
 - **Alternativas descartadas:** intercambiar los niveles 6 y 7 (cambiaría una regla de `CLAUDE.md` §8 que no está mal, solo mal explicada).
 - **Motivo:** cerrar la lectura peligrosa sin alterar la regla.
 - **Impacto:** `CLAUDE.md` §8, `MASTER_PLAN` §8.3. La barrera real la impone el backend, no este texto.
 
 ## [2026-11-04] Huecos de MASTER_PLAN §19: borrar o mover archivos y listar hábitos
-- **Contexto:** `MASTER_PLAN` §19 no tiene herramienta para eliminar o mover recursos ni para listar hábitos, aunque §24 clasifica esas acciones. `agent/identity/TOOL_GUIDE.md` lo señala como hueco (C-09 y dossier de contratos C-05).
+- **Contexto:** `MASTER_PLAN` §19 no tiene herramienta para eliminar o mover recursos ni para listar hábitos, aunque §24 clasifica esas acciones. `agent/knowledge/TOOL_GUIDE.md` lo señala como hueco (C-09 y dossier de contratos C-05).
 - **Decisión:** §19 sigue siendo la base del catálogo. Se añade `list_habits`, de solo lectura. Eliminar o mover recursos queda sin herramienta de agente en la v1: se hace desde la GUI, con confirmación. Si el agente recibe esa petición, lo dice y no improvisa un sustituto. El catálogo definitivo lo congela `drakter/contratos`; si difiere, manda su entrada posterior aquí.
 - **Alternativas descartadas:** añadir `delete_resource` y `move_resource` al agente (amplía la superficie destructiva antes de que exista el flujo de confirmación).
 - **Motivo:** menor superficie destructiva para el agente, y coherencia con lo que dicen ya las guías de identidad.
@@ -171,8 +172,8 @@ Decisiones técnicas, cambios de tecnología y motivos.
 - **Motivo:** es lo que ya definen las guías de identidad y el personaje provisional.
 - **Impacto:** `MASTER_PLAN` §6.3, `PLAN_DISEÑO` §5, contrato de eventos.
 
-## [2026-11-04] agent/identity/USER.md es plantilla; el USER.md vivo es el de Hermes
-- **Contexto:** los datos del usuario tenían varias fuentes: `agent/identity/USER.md` y `PREFERENCES.md` en el repositorio, `USER.md` nativo de Hermes y perfil y preferencias de OpenViking (C-15).
+## [2026-11-04] agent/context/USER.md es plantilla; el USER.md vivo es el de Hermes
+- **Contexto:** los datos del usuario tenían varias fuentes: `agent/context/USER.md` y `PREFERENCES.md` en el repositorio, `USER.md` nativo de Hermes y perfil y preferencias de OpenViking (C-15).
 - **Decisión:** en el repositorio solo se versionan plantillas sin datos reales. El `USER.md` nativo, en el `HERMES_HOME` del perfil de Drakter, guarda lo esencial, y OpenViking, lo demás. La plantilla rellenada por el usuario vive fuera del repositorio, en el directorio de datos de Drakter, y solo inicializa el `USER.md` nativo; a partir de ahí manda el nativo. `PREFERENCES.md` sigue el mismo criterio.
 - **Sin comprobar:** el cargador no existe todavía, y el ciclo de inicialización no se ha ejecutado.
 - **Alternativas descartadas:** rellenar el archivo versionado (metería datos personales en Git); eliminar la plantilla (se perdería la estructura que espera la identidad).
@@ -194,7 +195,7 @@ Decisiones técnicas, cambios de tecnología y motivos.
 - **Sin comprobar:** nada de esto se ha ejecutado; proviene de leer el código de v0.22.7. Quedan por probar la lista de permitidos real, el nombre visible de las herramientas MCP, si puede bloquearse del todo la escritura de Skills y la RAM consumida.
 - **Alternativas descartadas:** importar `AIAgent` en FastAPI (rompe la separación de procesos y mezcla dependencias); Skills que llaman a la API (no valen como frontera de herramientas).
 - **Motivo:** el modelo y Hermes se tratan como no confiables; la frontera real es el backend. Esto invierte `MASTER_PLAN` §28.
-- **Impacto:** `CLAUDE.md` §2, `MASTER_PLAN` §28 y Parte XII, `ROADMAP`. `agent/identity/SYSTEM_GUIDE.md` (paso 2 del flujo) dice aún que el backend recupera los recuerdos: lo corrige su propietario.
+- **Impacto:** `CLAUDE.md` §2, `MASTER_PLAN` §28 y Parte XII, `ROADMAP`. ⚠️ `agent/knowledge/SYSTEM_GUIDE.md` (paso 2, en `552cb28`) y `backend/app/integrations/memory/context/builder.py`, con presupuesto de memoria, hacen que el backend componga el contexto y recupere recuerdos, y Hermes pida más con `search_memory`. Eso contradice esta entrada: falta que el orquestador decida cuál vale.
 
 ## [2026-11-04] Memoria sin pipeline propio ni recuerdos en el repositorio
 - **Contexto:** `MASTER_PLAN` §11, `ROADMAP` y la Checklist 12 seguían pidiendo archivos de recuerdos en `memory/` y una extracción propia, en contra de la decisión de memoria nativa + OpenViking (C-05, C-11, C-12, C-16, C-17).
@@ -343,6 +344,16 @@ Decisiones técnicas, cambios de tecnología y motivos.
 - **Contexto:** faltaba fijar tres nombres que comparten backend y GUI.
 - **Decisión:** la clave de zona horaria es `default_timezone`. La tabla `settings` se ajusta en la migración `0011_settings_value.sql`. El cuerpo de `POST /api/v1/chat/sessions/{id}/messages` lleva el texto en `text`, junto a `client_message_id`.
 - **Comprobado por lectura:** `0011_settings_value.sql` está en `drakter/contratos` y `drakter/chat-personaje`, y aún no en `drakter/build`. `text` consta en `contracts/api/routes.md`.
+- **Alcance de la prueba de `0011`:** se probó con datos sintéticos, no reales: `backend/migrations/check_migrations.py` inserta `default_timezone` y `bulk_threshold` y comprueba que se conservan. Los triggers obligatorios son 25 (7 de auditoría y confirmaciones, 9 `*_delete_entity`, 3 `*_no_cycle`, 3 `trg_search_*` y 3 `trg_memory_records_*`), recuento hecho sobre `contracts/README.md`. El script no se ha ejecutado desde esta rama.
 - **Alternativas descartadas:** ninguna comunicada.
 - **Motivo:** un solo nombre en todo el sistema.
 - **Impacto:** `backend/migrations/`, `contracts/`, `desktop/src/stores/chat.ts`.
+
+## [2026-11-04] Identidad repartida en identity/, context/ y knowledge/
+- **Contexto:** la entrada "Los 14 archivos de identidad viven en agent/identity/" salió de una contradicción en las instrucciones del orquestador, no de un fallo de los planes: `MASTER_PLAN` §8.1 ya los repartía en tres carpetas y el cargador lee esas rutas.
+- **Decisión:** se revoca esa entrada. Los 14 archivos quedan así: 6 en `agent/identity/` (`SOUL`, `PERSONALITY`, `BEHAVIOR`, `COMMUNICATION`, `EMOTIONAL_STYLE`, `VALUES`), 4 en `agent/context/` (`USER`, `ENVIRONMENT`, `PREFERENCES`, `CURRENT_CONTEXT`) y 4 en `agent/knowledge/` (`CAPABILITIES`, `WORKSPACE_GUIDE`, `TOOL_GUIDE`, `SYSTEM_GUIDE`). Se mantiene el resto de lo dicho allí: la fuente es el repositorio, y el cargador compone los archivos, los publica en el `HERMES_HOME` del perfil propio y comprueba el tope de 20.000 caracteres. `USER.md` y `PREFERENCES.md` son plantillas.
+- **Comprobado por lectura:** `f13204a`, de `drakter/identidad-personaje`, quita los 8 duplicados y deja 14 archivos; `backend/app/integrations/memory/context/rules.py` lee `knowledge/`, `identity/` y `context/`.
+- **Pendiente:** `f13204a` no está fusionado en `drakter/build`, que sigue con 22 archivos.
+- **Alternativas descartadas:** los 14 en `agent/identity/` (obliga a cambiar el cargador y se aparta de `MASTER_PLAN`, sin beneficio).
+- **Motivo:** es lo que dice `MASTER_PLAN`, lo que lee el cargador, y deja la personalidad en `identity/`, como pide `CLAUDE.md` §8.
+- **Impacto:** `MASTER_PLAN` §8.1 y Parte XII, `ROADMAP` árbol y Fase 5, `PLAN_DISEÑO` §5, `CLAUDE.md` §8, `RUN_STATE.md`.

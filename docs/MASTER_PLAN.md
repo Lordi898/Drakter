@@ -423,27 +423,35 @@ drakter/
 
 └── agent/
 
-└── identity/
+├── identity/
 
-├── SOUL.md
+│   ├── SOUL.md
 
-├── PERSONALITY.md
+│   ├── PERSONALITY.md
 
-├── BEHAVIOR.md
+│   ├── BEHAVIOR.md
 
-├── COMMUNICATION.md
+│   ├── COMMUNICATION.md
 
-├── EMOTIONAL_STYLE.md
+│   ├── EMOTIONAL_STYLE.md
 
-├── VALUES.md
+│   └── VALUES.md
 
-├── USER.md
+│
 
-├── ENVIRONMENT.md
+├── context/
 
-├── PREFERENCES.md
+│   ├── USER.md
 
-├── CURRENT_CONTEXT.md
+│   ├── ENVIRONMENT.md
+
+│   ├── PREFERENCES.md
+
+│   └── CURRENT_CONTEXT.md
+
+│
+
+└── knowledge/
 
 ├── CAPABILITIES.md
 
@@ -453,7 +461,7 @@ drakter/
 
 └── SYSTEM_GUIDE.md
 
-Los 14 archivos viven en `agent/identity/`; `agent/context/` y `agent/knowledge/` no forman parte de la estructura vigente (decisión "Los 14 archivos de identidad viven en agent/identity/"). La fuente es el repositorio: un cargador los compone y los publica en el `HERMES_HOME` del perfil de Drakter. `USER.md` y `PREFERENCES.md` son plantillas sin datos reales; el `USER.md` vivo es el nativo de Hermes (véase §10).
+Los 14 archivos se reparten así: 6 en `agent/identity/` (`SOUL`, `PERSONALITY`, `BEHAVIOR`, `COMMUNICATION`, `EMOTIONAL_STYLE`, `VALUES`), 4 en `agent/context/` (`USER`, `ENVIRONMENT`, `PREFERENCES`, `CURRENT_CONTEXT`) y 4 en `agent/knowledge/` (`CAPABILITIES`, `WORKSPACE_GUIDE`, `TOOL_GUIDE`, `SYSTEM_GUIDE`) (decisión "Identidad repartida en identity/, context/ y knowledge/"). La fuente es el repositorio: un cargador los compone y los publica en el `HERMES_HOME` del perfil de Drakter. `USER.md` y `PREFERENCES.md` son plantillas sin datos reales; el `USER.md` vivo es el nativo de Hermes (véase §10).
 
 ### 8.2. Responsabilidad de cada archivo
 
@@ -611,7 +619,7 @@ La memoria nunca es la fuente de verdad de un dato operativo: guarda la referenc
 
 Hermes solo admite un proveedor de memoria externo activo. Ese lugar lo ocupa OpenViking (`memory.provider: openviking`), y la memoria nativa sigue activa a su lado.
 
-**`USER.md`:** en el repositorio (`agent/identity/USER.md`) solo hay una plantilla sin datos reales. El `USER.md` nativo, en el `HERMES_HOME` del perfil de Drakter, guarda lo esencial y OpenViking guarda lo demás. La plantilla rellenada por el usuario vive fuera del repositorio, en el directorio de datos de Drakter, y solo inicializa el `USER.md` nativo; a partir de ahí manda el nativo (decisión "agent/identity/USER.md es plantilla; el USER.md vivo es el de Hermes").
+**`USER.md`:** en el repositorio (`agent/context/USER.md`) solo hay una plantilla sin datos reales. El `USER.md` nativo, en el `HERMES_HOME` del perfil de Drakter, guarda lo esencial y OpenViking guarda lo demás. La plantilla rellenada por el usuario vive fuera del repositorio, en el directorio de datos de Drakter, y solo inicializa el `USER.md` nativo; a partir de ahí manda el nativo (decisión "agent/identity/USER.md es plantilla; el USER.md vivo es el de Hermes").
 
 ### 10.2. Las tres capas de OpenViking
 
@@ -1444,7 +1452,11 @@ Drakter/
 
 ├── agent/
 
-│   ├── identity/      (los 14 archivos .md)
+│   ├── identity/      (6 archivos de personalidad)
+
+│   ├── context/       (4 archivos, USER y PREFERENCES como plantillas)
+
+│   ├── knowledge/     (4 guías)
 
 │   ├── skills/
 

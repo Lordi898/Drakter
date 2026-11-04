@@ -157,7 +157,7 @@ Ir rápido no significa romper la arquitectura. Estas reglas del plan se mantien
 - Rutas de archivos limitadas a ubicaciones permitidas; límites de tamaño, número y profundidad para comprimidos.
 - La automejora nunca modifica producción, permisos, confirmaciones ni auditoría sin autorización.
 - Secretos y configuración sensible **fuera del repositorio** (`.env` ignorado; solo `.env.example`).
-- La personalidad vive en los 14 archivos de `agent/identity/`, separada del modelo; la voz, separada del razonamiento; el proveedor del modelo, intercambiable.
+- La personalidad vive en `agent/identity/`, separada del modelo; la voz, separada del razonamiento; el proveedor del modelo, intercambiable.
 
 ---
 
