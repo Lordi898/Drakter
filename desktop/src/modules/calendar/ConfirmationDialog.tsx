@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { reviewConfirmation, type ConfirmationTicket } from './workspaceApi'
+import { reviewConfirmation, type ConfirmationTicket, type TrustedGesture } from './workspaceApi'
 
 export interface ConfirmationDialogProps {
   readonly confirmation: ConfirmationTicket | null
@@ -14,12 +14,12 @@ export function ConfirmationDialog({ confirmation, onResolved }: ConfirmationDia
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
 
-  async function review(): Promise<void> {
+  async function review(proof: TrustedGesture): Promise<void> {
     if (!confirmation) return
     setBusy(true)
     setMessage(null)
     try {
-      const outcome = await reviewConfirmation(confirmation.id)
+      const outcome = await reviewConfirmation(confirmation.id, proof)
       if (outcome === 'approved') onResolved(true)
       else if (outcome === 'rejected') onResolved(false)
       else if (outcome === 'expired') setMessage('La confirmación ha caducado. Inténtalo de nuevo.')
@@ -60,7 +60,7 @@ export function ConfirmationDialog({ confirmation, onResolved }: ConfirmationDia
           <Button variant="outline" disabled={busy} onClick={() => onResolved(false)}>
             Cerrar
           </Button>
-          <Button disabled={busy} onClick={() => void review()}>
+          <Button disabled={busy} onClick={(event) => void review(event)}>
             {busy ? 'Revisando…' : 'Revisar'}
           </Button>
         </DialogFooter>

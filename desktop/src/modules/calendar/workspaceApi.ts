@@ -4,10 +4,9 @@
  * diálogo nativo de main. El renderer solo pide la revisión.
  */
 import { ApiError, apiRequest, describeError, type ConfirmationTicket } from '@/services/api'
+import { reviewConfirmation as reviewInMain, type ReviewOutcome, type TrustedGesture } from '@/stores/confirmations'
 
-export { ApiError, type ConfirmationTicket }
-
-export type ReviewOutcome = 'approved' | 'rejected' | 'expired' | 'conflict' | 'failed' | 'unavailable'
+export { ApiError, type ConfirmationTicket, type ReviewOutcome, type TrustedGesture }
 
 export interface Page<T> {
   readonly items: readonly T[]
@@ -30,12 +29,13 @@ function withQuery(path: string, query?: Query): string {
 export function api<T>(
   method: Method,
   path: string,
-  // `revision` (If-Match) se ignora: `window.api.call` no admite cabeceras todavía.
+  // `revision` va en If-Match; main aún no la reenvía, así que el control no está activo.
   options: { readonly query?: Query; readonly body?: unknown; readonly revision?: number } = {}
 ): Promise<T> {
   return apiRequest<T>(`/api/v1${withQuery(path, options.query)}`, {
     method,
-    ...(options.body === undefined ? {} : { body: options.body })
+    ...(options.body === undefined ? {} : { body: options.body }),
+    ...(options.revision === undefined ? {} : { headers: { 'If-Match': `"${options.revision}"` } })
   })
 }
 
@@ -44,13 +44,9 @@ export function confirmationOf(error: unknown): ConfirmationTicket | null {
   return error instanceof ApiError && error.code === 'confirmation_required' ? error.confirmation : null
 }
 
-export async function reviewConfirmation(id: string): Promise<ReviewOutcome> {
-  if (typeof window === 'undefined' || typeof window.api === 'undefined') return 'unavailable'
-  try {
-    return await window.api.requestApproval(id)
-  } catch {
-    return 'unavailable'
-  }
+/** `proof` es el evento del clic del usuario: sin gesto real no se abre el diálogo nativo. */
+export function reviewConfirmation(id: string, proof: TrustedGesture): Promise<ReviewOutcome> {
+  return reviewInMain(id, proof)
 }
 
 /** Sin sesión o sin respuesta del servicio local: se muestra ese estado, nunca datos falsos. */
