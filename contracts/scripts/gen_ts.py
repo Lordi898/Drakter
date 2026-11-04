@@ -166,8 +166,8 @@ def main() -> None:
         "// Generado: no editar. Fuente: contracts/python/drakter_contracts (scripts/gen_ts.py).\n"
         f"export const CONTRACT_VERSION = {lit(__import__('drakter_contracts').CONTRACT_VERSION)};\n"
         f"export const SCHEMA_VERSION = {__import__('drakter_contracts').SCHEMA_VERSION};\n\n"
-        "/** Listado: `limit` y `offset` los acota el servidor. */\n"
-        "export interface Page<T> {\n  items: T[];\n  total: number;\n}\n\n"
+        "/** Listado con cursor opaco: `limit` lo acota el servidor. */\n"
+        "export interface Page<T> {\n  items: T[];\n  next_cursor: string | null;\n  total?: number | null;\n}\n\n"
     )
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(header + "\n".join(chunks), encoding="utf-8")

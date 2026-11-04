@@ -4,7 +4,7 @@ Tabla única de rutas. Manda `contracts/README.md`; después, lo ya construido e
 
 ## Convenciones
 
-- **Listados:** `GET` devuelve `{items, total}` y acepta `limit`, `offset`, `sort=campo,-campo` (lista blanca por ruta); `limit` por defecto 50, máximo 200 (100 en recursos y búsqueda). Sin cursores. Salvo marca expresa, los listados excluyen archivados y aceptan `include_archived=true`.
+- **Listados:** `GET` devuelve `{items, next_cursor, total?}` y acepta `limit`, `cursor`, `sort=campo,-campo` (lista blanca por ruta); `limit` por defecto 50, máximo 200 (100 en recursos y búsqueda). El cursor es opaco; `total` es opcional. Salvo marca expresa, los listados excluyen archivados y aceptan `include_archived=true`.
 - **PATCH:** parcial, `extra="forbid"`; `If-Match: <revision>` opcional, 412 `revision_mismatch`. Las mutaciones sobre una entidad aceptan `If-Match`. `POST` acepta `Idempotency-Key`.
 - **Errores:** `{"error":{"code","message","request_id","details":[{"field","code","message"}]}}`. Sin otra forma de error.
 - **Confirmación:** una ruta con riesgo `confirm` responde **409** `confirmation_required` con el sobre más `confirmation:{id,summary,affected_count,expires_at,params_hash}`; nunca 2xx. El cliente no manda `confirmation_id` ni `pre_confirmed`: la GUI aprueba con `POST /confirmations/{id}/approve` y el backend ejecuta los argumentos guardados. Los `DELETE` definitivos tienen riesgo `confirm`; archivar es `write`.
@@ -21,18 +21,18 @@ Tabla única de rutas. Manda `contracts/README.md`; después, lo ya construido e
 | GET | `/api/v1/auth/check` | - | `{authenticated:true}` | construida | read | seguridad (12) |
 | WS | `/api/v1/events` | `after_seq`, `boot_id` | eventos `{event_id,seq,boot_id,timestamp,type,version,correlation_id,payload}` | especificada (`events.py`); servidor sin construir | read | contratos / chat (17) |
 | GET | `/api/v1/system/status` | - | versión, `boot_id`, BD y migración, salud de módulos, hora y zona | (sin construir) | read | seguridad (12) |
-| GET | `/api/v1/system/backups` | `limit`, `offset` | `{items,total}` copias (fecha, tamaño, esquema) | (sin construir) | read | seguridad (12) |
+| GET | `/api/v1/system/backups` | `limit`, `cursor` | `{items,next_cursor}` copias (fecha, tamaño, esquema) | (sin construir) | read | seguridad (12) |
 | POST | `/api/v1/system/backups` | - | 201 copia creada | (sin construir) | write | seguridad (12) |
 | POST | `/api/v1/system/backups/{id}/restore` | - | 409 `confirmation_required`; tras aprobar, restaura | (sin construir) | confirm | seguridad (12) |
 | GET | `/api/v1/settings` | - | ajustes no secretos (`key`, `value`) | (sin construir) | read | seguridad (12) |
 | PATCH | `/api/v1/settings` | `{clave: valor}` | ajustes | (sin construir) | write; `confirm` en claves sensibles | seguridad (12) |
-| GET | `/api/v1/activity` | `actor`, `entity_id`, `result`, `from`, `to`, `limit`, `offset` | `{items,total}` de auditoría (sin contenido de documentos) | (sin construir) | read | seguridad (12) |
+| GET | `/api/v1/activity` | `actor`, `entity_id`, `result`, `from`, `to`, `limit`, `cursor` | `{items,next_cursor}` de auditoría (sin contenido de documentos) | (sin construir) | read | seguridad (12) |
 
 ## Confirmaciones
 
 | Método | Ruta | Entrada | Respuesta | Estado | Riesgo | Dueño |
 |---|---|---|---|---|---|---|
-| GET | `/api/v1/confirmations` | `status`, `limit`, `offset` | `{items,total}` | (sin construir) | read | seguridad (12) |
+| GET | `/api/v1/confirmations` | `status`, `limit`, `cursor` | `{items,next_cursor}` | (sin construir) | read | seguridad (12) |
 | GET | `/api/v1/confirmations/{id}` | - | acción, `summary`, `affected_count`, `targets`, `status`, `expires_at` | (sin construir) | read | seguridad (12) |
 | POST | `/api/v1/confirmations/{id}/approve` | - | resultado de la operación ejecutada; 409 `conflict` si `targets_json` cambió; 410/`expired` si caducó | (sin construir) | write (ejecuta lo guardado) | seguridad (12) |
 | POST | `/api/v1/confirmations/{id}/reject` | - | confirmación en `rejected` | (sin construir) | write | seguridad (12) |
@@ -44,9 +44,9 @@ Especificadas en `backend/app/integrations/hermes/CONTRACT.md` §4 (drakter-16, 
 | Método | Ruta | Entrada | Respuesta | Estado | Riesgo | Dueño |
 |---|---|---|---|---|---|---|
 | POST | `/api/v1/chat/sessions` | - | 201 `ChatSession` | especificada | write | agente/chat (16) |
-| GET | `/api/v1/chat/sessions` | `limit`, `offset` | `{items,total}` | especificada | read | agente/chat (16) |
+| GET | `/api/v1/chat/sessions` | `limit`, `cursor` | `{items,next_cursor}` | especificada | read | agente/chat (16) |
 | POST | `/api/v1/chat/sessions/{id}/close` | - | `ChatSession` | especificada | write | agente/chat (16) |
-| GET | `/api/v1/chat/sessions/{id}/messages` | `limit`, `offset` | `{items,total}` | especificada | read | agente/chat (16) |
+| GET | `/api/v1/chat/sessions/{id}/messages` | `limit`, `cursor` | `{items,next_cursor}` | especificada | read | agente/chat (16) |
 | POST | `/api/v1/chat/sessions/{id}/messages` | `{text, client_message_id}` | 202 `{turn_id,message_id}`; 409 `agent_busy` | especificada | write | agente/chat (16) |
 | POST | `/api/v1/chat/turns/{turn_id}/cancel` | - | 202 | especificada | write | agente/chat (16) |
 | GET | `/api/v1/agent/status` | - | `{state,provider,model,detail}`; `state` entre los 9 del personaje | especificada | read | agente/chat (16) |
@@ -57,7 +57,7 @@ Especificadas en `drakter-13/backend/app/schemas/tasks_contract.md`; `api/tasks_
 
 | Método | Ruta | Entrada | Respuesta | Estado | Riesgo | Dueño |
 |---|---|---|---|---|---|---|
-| GET | `/api/v1/tasks` | `status`, `priority` (repetibles), `project_id`, `subject_id`, `parent_task_id`, `due_from`, `due_to`, `q`, `include_archived`, `sort`, `limit`, `offset` | `{items,total}` `TaskOut` | especificada | read | tareas (13) |
+| GET | `/api/v1/tasks` | `status`, `priority` (repetibles), `project_id`, `subject_id`, `parent_task_id`, `due_from`, `due_to`, `q`, `include_archived`, `sort`, `limit`, `cursor` | `{items,next_cursor}` `TaskOut` | especificada | read | tareas (13) |
 | POST | `/api/v1/tasks` | `TaskCreate` | 201 `TaskOut` | especificada | write | tareas (13) |
 | GET | `/api/v1/tasks/{id}` | - | `TaskDetail` | especificada | read | tareas (13) |
 | PATCH | `/api/v1/tasks/{id}` | `TaskUpdate` | `TaskOut` | especificada | write | tareas (13) |
@@ -66,11 +66,11 @@ Especificadas en `drakter-13/backend/app/schemas/tasks_contract.md`; `api/tasks_
 | POST | `/api/v1/tasks/{id}/reopen` | - | `TaskOut` | especificada | write | tareas (13) |
 | POST | `/api/v1/tasks/{id}/archive` | - | `TaskOut` | especificada | write | tareas (13) |
 | POST | `/api/v1/tasks/{id}/unarchive` | - | `TaskOut` | especificada | write | tareas (13) |
-| GET | `/api/v1/tasks/{id}/subtasks` | `limit`, `offset` | `{items,total}` `TaskOut` | (sin construir) | read | tareas (13) |
+| GET | `/api/v1/tasks/{id}/subtasks` | `limit`, `cursor` | `{items,next_cursor}` `TaskOut` | (sin construir) | read | tareas (13) |
 | POST | `/api/v1/tasks/{id}/subtasks` | `SubtaskCreate` | 201 `TaskOut` | especificada | write | tareas (13) |
 | POST | `/api/v1/tasks/{id}/dependencies` | `{depends_on_task_id}` | `TaskDetail` | especificada | write | tareas (13) |
 | DELETE | `/api/v1/tasks/{id}/dependencies/{dep_id}` | - | `TaskDetail` | especificada | write | tareas (13) |
-| GET | `/api/v1/tasks/{id}/history` | `limit`, `offset` | `{items,total}` `HistoryEntry` | especificada | read | tareas (13) |
+| GET | `/api/v1/tasks/{id}/history` | `limit`, `cursor` | `{items,next_cursor}` `HistoryEntry` | especificada | read | tareas (13) |
 
 ## Proyectos
 
@@ -78,7 +78,7 @@ Router escrito en `drakter-13/backend/app/api/projects.py`.
 
 | Método | Ruta | Entrada | Respuesta | Estado | Riesgo | Dueño |
 |---|---|---|---|---|---|---|
-| GET | `/api/v1/projects` | `ProjectListQuery`, `limit`, `offset` | `{items,total}` `ProjectOut` | construida | read | tareas (13) |
+| GET | `/api/v1/projects` | `ProjectListQuery`, `limit`, `cursor` | `{items,next_cursor}` `ProjectOut` | construida | read | tareas (13) |
 | POST | `/api/v1/projects` | `ProjectCreate` | 201 `ProjectOut` | construida | write | tareas (13) |
 | GET | `/api/v1/projects/{id}` | - | `ProjectOut` | construida | read | tareas (13) |
 | PATCH | `/api/v1/projects/{id}` | `ProjectUpdate` | `ProjectOut` | construida | write | tareas (13) |
@@ -86,7 +86,7 @@ Router escrito en `drakter-13/backend/app/api/projects.py`.
 | POST | `/api/v1/projects/{id}/archive` | - | `ProjectOut` | construida | write | tareas (13) |
 | POST | `/api/v1/projects/{id}/unarchive` | - | `ProjectOut` | construida | write | tareas (13) |
 | GET | `/api/v1/projects/{id}/progress` | - | `ProjectProgress` | construida | read | tareas (13) |
-| GET | `/api/v1/projects/{id}/activity` | `limit`, `offset` | `{items,total}` `HistoryEntry` | construida | read | tareas (13) |
+| GET | `/api/v1/projects/{id}/activity` | `limit`, `cursor` | `{items,next_cursor}` `HistoryEntry` | construida | read | tareas (13) |
 
 ## Hábitos
 
@@ -94,13 +94,13 @@ Router escrito en `drakter-13/backend/app/api/projects.py`.
 
 | Método | Ruta | Entrada | Respuesta | Estado | Riesgo | Dueño |
 |---|---|---|---|---|---|---|
-| GET | `/api/v1/habits` | `status`, `include_archived`, `limit`, `offset` | `{items,total}` `HabitOut` | construida | read | hábitos/calendario (14) |
+| GET | `/api/v1/habits` | `status`, `include_archived`, `limit`, `cursor` | `{items,next_cursor}` `HabitOut` | construida | read | hábitos/calendario (14) |
 | POST | `/api/v1/habits` | `HabitCreate` | 201 `HabitOut` | construida | write | hábitos/calendario (14) |
 | GET | `/api/v1/habits/{id}` | - | `HabitOut` | construida | read | hábitos/calendario (14) |
 | PATCH | `/api/v1/habits/{id}` | `HabitUpdate` (frecuencia nueva = `habit_schedule_versions`) | `HabitOut` | construida | write | hábitos/calendario (14) |
 | POST | `/api/v1/habits/{id}/archive` | - | `HabitOut` | construida | write | hábitos/calendario (14) |
 | POST | `/api/v1/habits/{id}/unarchive` | - | `HabitOut` | construida | write | hábitos/calendario (14) |
-| GET | `/api/v1/habits/{id}/records` | `from`, `to`, `limit`, `offset` | `{items,total}` `HabitRecordOut` | construida | read | hábitos/calendario (14) |
+| GET | `/api/v1/habits/{id}/records` | `from`, `to`, `limit`, `cursor` | `{items,next_cursor}` `HabitRecordOut` | construida | read | hábitos/calendario (14) |
 | PUT | `/api/v1/habits/{id}/records/{date}` | `HabitRecordWrite` (`date` = `occurrence_date`) | `HabitRecordOut` | construida | write | hábitos/calendario (14) |
 | DELETE | `/api/v1/habits/{id}/records/{date}` | - | 204 | (sin construir) | write | hábitos/calendario (14) |
 | GET | `/api/v1/habits/{id}/history` | - | `HabitHistory` (versiones de frecuencia) | construida | read | hábitos/calendario (14) |
@@ -116,14 +116,14 @@ Router escrito en `drakter-13/backend/app/api/projects.py`.
 | GET | `/api/v1/calendar/availability` | `local_start`, `local_end`, `timezone` | `AvailabilityResponse` | construida | read | hábitos/calendario (14) |
 | GET | `/api/v1/calendar/free-slots` | `from`, `to`, `timezone`, `min_minutes` | `FreeSlotsResponse` | construida | read | hábitos/calendario (14) |
 | GET | `/api/v1/calendar/overlaps` | `from`, `to`, `timezone` | `OverlapsResponse` | construida | read | hábitos/calendario (14) |
-| GET | `/api/v1/calendar/events` | `status`, `include_archived`, `limit`, `offset` | `{items,total}` `EventOut` | construida | read | hábitos/calendario (14) |
+| GET | `/api/v1/calendar/events` | `status`, `include_archived`, `limit`, `cursor` | `{items,next_cursor}` `EventOut` | construida | read | hábitos/calendario (14) |
 | POST | `/api/v1/calendar/events` | `EventCreate` | 201 `EventWriteResult` | construida | write | hábitos/calendario (14) |
 | GET | `/api/v1/calendar/events/{id}` | - | `EventOut` | construida | read | hábitos/calendario (14) |
 | PATCH | `/api/v1/calendar/events/{id}` | `EventUpdate` | `EventWriteResult` | construida | write | hábitos/calendario (14) |
 | DELETE | `/api/v1/calendar/events/{id}` | - | 409 `confirmation_required` | construida | confirm | hábitos/calendario (14) |
-| GET | `/api/v1/calendar/events/{id}/exceptions` | - | `{items,total}` `RecurrenceExceptionOut` | construida | read | hábitos/calendario (14) |
+| GET | `/api/v1/calendar/events/{id}/exceptions` | - | `{items,next_cursor}` `RecurrenceExceptionOut` | construida | read | hábitos/calendario (14) |
 | POST | `/api/v1/calendar/events/{id}/exceptions` | `RecurrenceExceptionCreate` | 201 `RecurrenceExceptionOut` | construida | write | hábitos/calendario (14) |
-| GET | `/api/v1/calendar/time-blocks` | `include_archived`, `limit`, `offset` | `{items,total}` `TimeBlockOut` | construida | read | hábitos/calendario (14) |
+| GET | `/api/v1/calendar/time-blocks` | `include_archived`, `limit`, `cursor` | `{items,next_cursor}` `TimeBlockOut` | construida | read | hábitos/calendario (14) |
 | POST | `/api/v1/calendar/time-blocks` | `TimeBlockCreate` | 201 `TimeBlockWriteResult` | construida | write | hábitos/calendario (14) |
 | GET | `/api/v1/calendar/time-blocks/{id}` | - | `TimeBlockOut` | construida | read | hábitos/calendario (14) |
 | PATCH | `/api/v1/calendar/time-blocks/{id}` | `TimeBlockUpdate` | `TimeBlockWriteResult` | construida | write | hábitos/calendario (14) |
@@ -135,14 +135,14 @@ Router escrito en `drakter-13/backend/app/api/projects.py`.
 
 | Método | Ruta | Entrada | Respuesta | Estado | Riesgo | Dueño |
 |---|---|---|---|---|---|---|
-| GET | `/api/v1/subjects` | `include_archived`, `limit`, `offset` | `{items,total}` `SubjectOut` | construida | read | hábitos/calendario (14) |
+| GET | `/api/v1/subjects` | `include_archived`, `limit`, `cursor` | `{items,next_cursor}` `SubjectOut` | construida | read | hábitos/calendario (14) |
 | POST | `/api/v1/subjects` | `SubjectCreate` | 201 `SubjectOut` | construida | write | hábitos/calendario (14) |
 | GET | `/api/v1/subjects/{id}` | - | `SubjectOut` | construida | read | hábitos/calendario (14) |
 | PATCH | `/api/v1/subjects/{id}` | `SubjectUpdate` | `SubjectOut` | construida | write | hábitos/calendario (14) |
 | DELETE | `/api/v1/subjects/{id}` | - | 409 `confirmation_required` | construida | confirm | hábitos/calendario (14) |
 | POST | `/api/v1/subjects/{id}/archive` | - | `SubjectOut` | construida | write | hábitos/calendario (14) |
 | POST | `/api/v1/subjects/{id}/unarchive` | - | `SubjectOut` | construida | write | hábitos/calendario (14) |
-| GET | `/api/v1/subjects/{id}/sessions` | `include_archived` | `{items,total}` `ClassSessionOut` | construida | read | hábitos/calendario (14) |
+| GET | `/api/v1/subjects/{id}/sessions` | `include_archived` | `{items,next_cursor}` `ClassSessionOut` | construida | read | hábitos/calendario (14) |
 | POST | `/api/v1/subjects/{id}/sessions` | `ClassSessionCreate` | 201 `ClassSessionWriteResult` | construida | write | hábitos/calendario (14) |
 | GET | `/api/v1/subjects/{id}/resources` | - | `SubjectResources` | construida | read | hábitos/calendario (14) |
 | GET | `/api/v1/class-sessions/{id}` | - | `ClassSessionOut` | construida | read | hábitos/calendario (14) |
@@ -157,17 +157,17 @@ Router escrito en `drakter-13/backend/app/api/projects.py`.
 
 | Método | Ruta | Entrada | Respuesta | Estado | Riesgo | Dueño |
 |---|---|---|---|---|---|---|
-| GET | `/api/v1/storage-locations` | - | `{items,total}` `StorageLocationOut` | construida | read | almacén (15) |
+| GET | `/api/v1/storage-locations` | - | `{items,next_cursor}` `StorageLocationOut` | construida | read | almacén (15) |
 | POST | `/api/v1/storage-locations` | `StorageLocationCreate` | 201 `StorageLocationOut` | construida | write | almacén (15) |
 | PATCH | `/api/v1/storage-locations/{id}` | `StorageLocationUpdate` | `StorageLocationOut` | construida | write | almacén (15) |
 | DELETE | `/api/v1/storage-locations/{id}` | - | 409 `confirmation_required` | construida | confirm | almacén (15) |
-| GET | `/api/v1/folders` | `parent_id`, `include_archived` | `{items,total}` `FolderOut` | construida | read | almacén (15) |
+| GET | `/api/v1/folders` | `parent_id`, `include_archived` | `{items,next_cursor}` `FolderOut` | construida | read | almacén (15) |
 | POST | `/api/v1/folders` | `FolderCreate` | 201 `FolderOut` | construida | write | almacén (15) |
 | PATCH | `/api/v1/folders/{id}` | `FolderUpdate` | `FolderOut` | construida | write | almacén (15) |
 | DELETE | `/api/v1/folders/{id}` | - | 409 `confirmation_required` | construida | confirm | almacén (15) |
-| GET | `/api/v1/resources` | `folder_id`, `type`, `availability`, `tag`, `include_archived`, `limit`, `offset` | `{items,total}` `ResourceSummary` | construida | read | almacén (15) |
+| GET | `/api/v1/resources` | `folder_id`, `type`, `availability`, `tag`, `include_archived`, `limit`, `cursor` | `{items,next_cursor}` `ResourceSummary` | construida | read | almacén (15) |
 | POST | `/api/v1/resources` | `ResourceCreate` (`location_id`+`relative_path`) | 201 `ResourceOut` | construida | write | almacén (15) |
-| GET | `/api/v1/resources/search` | `q`, `type`, `limit`, `offset` | `{items,total}` `SearchHit` (metadatos + `snippet`) | construida | read | almacén (15) |
+| GET | `/api/v1/resources/search` | `q`, `type`, `limit`, `cursor` | `{items,next_cursor}` `SearchHit` (metadatos + `snippet`) | construida | read | almacén (15) |
 | POST | `/api/v1/resources/refresh-index` | - | `RefreshResult` | construida | confirm (masiva) | almacén (15) |
 | POST | `/api/v1/resources/scan` | `{location_id}` | resultado del escaneo | construida | confirm (masiva) | almacén (15) |
 | GET | `/api/v1/resources/{id}` | - | `ResourceOut` | construida | read | almacén (15) |
@@ -184,16 +184,16 @@ Router escrito en `drakter-13/backend/app/api/projects.py`.
 
 | Método | Ruta | Entrada | Respuesta | Estado | Riesgo | Dueño |
 |---|---|---|---|---|---|---|
-| GET | `/api/v1/tags` | `q`, `limit`, `offset` | `{items,total}` `TagOut` | (sin construir) | read | relaciones (15) |
-| GET | `/api/v1/entities/{id}/tags` | - | `{items,total}` `TagOut` | (sin construir) | read | relaciones (15) |
-| PUT | `/api/v1/entities/{id}/tags` | `{names:[...]}` (sustituye) | `{items,total}` `TagOut` | (sin construir) | write | relaciones (15) |
+| GET | `/api/v1/tags` | `q`, `limit`, `cursor` | `{items,next_cursor}` `TagOut` | (sin construir) | read | relaciones (15) |
+| GET | `/api/v1/entities/{id}/tags` | - | `{items,next_cursor}` `TagOut` | (sin construir) | read | relaciones (15) |
+| PUT | `/api/v1/entities/{id}/tags` | `{names:[...]}` (sustituye) | `{items,next_cursor}` `TagOut` | (sin construir) | write | relaciones (15) |
 | GET | `/api/v1/relationships/types` | - | lista de reglas `RelationshipTypeOut` | construida | read | relaciones (15) |
-| GET | `/api/v1/relationships` | `source_id`, `target_id`, `entity_type`, `type`, `limit`, `offset` | `{items,total}` `RelationshipOut` | construida | read | relaciones (15) |
+| GET | `/api/v1/relationships` | `source_id`, `target_id`, `entity_type`, `type`, `limit`, `cursor` | `{items,next_cursor}` `RelationshipOut` | construida | read | relaciones (15) |
 | POST | `/api/v1/relationships` | `RelationshipCreate` | 201 `RelationshipOut` | construida | write | relaciones (15) |
 | PATCH | `/api/v1/relationships/{id}` | `RelationshipUpdate` | `RelationshipOut` | construida | write | relaciones (15) |
 | DELETE | `/api/v1/relationships/{id}` | - | 409 `confirmation_required` | construida | confirm | relaciones (15) |
 | GET | `/api/v1/entities/{id}/related` | `direction=in\|out\|both`, `type` | `RelatedItems` (incluye aristas virtuales de columnas) | construida | read | relaciones (15) |
-| GET | `/api/v1/search` | `q`, `types`, `limit`, `offset` (sin sintaxis FTS) | `{items,total}` con `snippet`, sin archivados | (sin construir) | read | almacén (15) |
+| GET | `/api/v1/search` | `q`, `types`, `limit`, `cursor` (sin sintaxis FTS) | `{items,next_cursor}` con `snippet`, sin archivados | (sin construir) | read | almacén (15) |
 
 ## Notificaciones y recordatorios
 
@@ -201,7 +201,7 @@ Router escrito en `drakter-13/backend/app/api/projects.py`.
 
 | Método | Ruta | Entrada | Respuesta | Estado | Riesgo | Dueño |
 |---|---|---|---|---|---|---|
-| GET | `/api/v1/notifications` | `unread`, `limit`, `offset` | `{items,total}` `NotificationOut` | construida | read | recordatorios (26) |
+| GET | `/api/v1/notifications` | `unread`, `limit`, `cursor` | `{items,next_cursor}` `NotificationOut` | construida | read | recordatorios (26) |
 | POST | `/api/v1/notifications/read` | `{ids:[uuid]}` (1..200) | `{updated}` | construida | write | recordatorios (26) |
 | GET | `/api/v1/notifications/status` | - | `ReminderStatus` (`requires_app_open: true`) | construida | read | recordatorios (26) |
 
@@ -211,12 +211,12 @@ Router escrito en `drakter-13/backend/app/api/projects.py`.
 
 | Método | Ruta | Entrada | Respuesta | Estado | Riesgo | Dueño |
 |---|---|---|---|---|---|---|
-| GET | `/api/v1/memory` | `statuses`, `kinds`, `categories`, `limit`, `offset` | `{items,total}` `MemoryRecord` | construida | read | memoria (18) |
+| GET | `/api/v1/memory` | `statuses`, `kinds`, `categories`, `limit`, `cursor` | `{items,next_cursor}` `MemoryRecord` | construida | read | memoria (18) |
 | POST | `/api/v1/memory` | `MemoryCreate` | 201 `MemoryCreated` | construida | write | memoria (18) |
 | GET | `/api/v1/memory/status` | - | `BackendStatus` | construida | read | memoria (18) |
-| GET | `/api/v1/memory/conflicts` | `open_only` | `{items,total}` `MemoryConflict` | construida | read | memoria (18) |
+| GET | `/api/v1/memory/conflicts` | `open_only` | `{items,next_cursor}` `MemoryConflict` | construida | read | memoria (18) |
 | POST | `/api/v1/memory/conflicts/{id}/resolve` | `{kept}` | `MemoryConflict` | construida | write | memoria (18) |
-| POST | `/api/v1/memory/search` | `SearchBody` | `{items,total}` `MemoryHit` | construida | read | memoria (18) |
+| POST | `/api/v1/memory/search` | `SearchBody` | `{items,next_cursor}` `MemoryHit` | construida | read | memoria (18) |
 | GET | `/api/v1/memory/{id}` | - | `MemoryRecord` | construida | read | memoria (18) |
 | PATCH | `/api/v1/memory/{id}` | `MemoryPatch` | `MemoryRecord` | construida | write | memoria (18) |
 | POST | `/api/v1/memory/{id}/approve` | - | `MemoryRecord` | construida | write | memoria (18) |
@@ -243,7 +243,7 @@ El frente 20 solo tiene puertos (`services/improvement_ports.py`, `get_principal
 
 | Método | Ruta | Entrada | Respuesta | Estado | Riesgo | Dueño |
 |---|---|---|---|---|---|---|
-| GET | `/api/v1/improvement/proposals` | `status`, `limit`, `offset` | `{items,total}` | (sin construir) | read | automejora (20) |
+| GET | `/api/v1/improvement/proposals` | `status`, `limit`, `cursor` | `{items,next_cursor}` | (sin construir) | read | automejora (20) |
 | GET | `/api/v1/improvement/proposals/{id}` | - | propuesta y evaluaciones | (sin construir) | read | automejora (20) |
 | POST | `/api/v1/improvement/proposals/{id}/approve` | - | 409 `confirmation_required` | (sin construir) | confirm | automejora (20) |
 | POST | `/api/v1/improvement/proposals/{id}/reject` | - | propuesta | (sin construir) | write | automejora (20) |
@@ -255,17 +255,16 @@ Rutas de `drakter-NN` = `/home/imagana/.ao/data/worktrees/drakter/drakter-NN/`.
 
 **Transversal (todos los frentes).** `backend/app/main.py:56-58`: solo montan `health`, `auth` y `ws`; ningún router de módulo está incluido. Cada dueño debe añadir `include_router` en la integración, no en un archivo común editado a la vez.
 
-### Paginación (debe ser `{items,total}` + `limit`/`offset`)
+### Paginación (debe ser `{items,next_cursor,total?}` + `limit`/`cursor`)
 
-| Frente | archivo:línea | Qué hace | Qué debe hacer |
+Decisión: se adopta el cursor, que ya usan tareas, hábitos/calendario, almacén, relaciones y recordatorios.
+
+| Frente | Dónde | Qué hace | Qué debe hacer |
 |---|---|---|---|
-| tareas (13) | `backend/app/schemas/tasks.py:76-78`, `api/projects.py:27-31,85-92` | `Page` = `items`+`next_cursor`; `activity` con `cursor` | `total`, `offset`; quitar `cursor`. `tasks_contract.md:69,80` dice `cursor` y `:83+` dice `offset`: dejar `offset` |
-| hábitos/calendario (14) | `backend/app/services/habits.py:55-62`, `services/calendar.py:73-80`, `services/subjects.py:53-55`; `api/habits.py:43-50`, `api/calendar.py:50-56`, `api/subjects.py:55-62` | `next_cursor`, parámetro `cursor`, `limit` sin tope en la ruta | `{items,total}`, `offset`, `limit` acotado en `Query` |
-| almacén (15) | `backend/app/schemas/storage.py:136-149`, `api/storage.py:156-175` y `131-143` | `ResourcePage`/`SearchPage` con `next_cursor`, `cursor` | `total`, `offset` |
-| relaciones (15) | `backend/app/schemas/relations.py:62-65`, `api/relations.py:34-44` | `RelationshipPage` con `next_cursor`, `cursor` | `total`, `offset` |
-| recordatorios (26) | `backend/app/api/notifications.py:50-52,100-115` | `NotificationPage` con `next_cursor`, `cursor` | `total`, `offset` |
-| almacén (15) | `backend/app/api/storage.py:73-75,100-109` | `storage-locations` y `folders` devuelven lista desnuda | `{items,total}` |
-| memoria (18) | `backend/app/integrations/memory/router.py:133-135` | `conflicts` devuelve lista desnuda; `search` también (`:162`) | `{items,total}` |
+| memoria (18) | `backend/app/memory/router.py` | `limit`, `offset`, `{items,total}` | `cursor` y `next_cursor`; puede conservar `total` |
+| agente/chat (16) | `backend/app/integrations/hermes/CONTRACT.md` §4 | especifica `limit`, `offset` | Construir `api/chat.py` con cursor |
+| tareas (13) | `tasks_contract.md:83+` | el documento mezcla `cursor` y `offset` | Dejar solo `cursor` |
+| hábitos/calendario (14) | `api/habits.py:43-50`, `api/calendar.py:50-56`, `api/subjects.py:55-62` | `limit` sin tope en la ruta | Acotar `limit` en `Query` |
 
 ### Confirmación 2xx o con flujo propio (debe ser 409 y aprobar en `/confirmations/{id}/approve`)
 
