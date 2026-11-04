@@ -64,6 +64,7 @@ class FallbackTTS:
     def synthesize(self, text: str, params: VoiceParams, cancel: CancelToken) -> Iterator[PcmChunk]:
         engine = self._active
         emitted = False
+        demote = True
         try:
             for chunk in engine.synthesize(text, params, cancel):
                 emitted = True
@@ -78,8 +79,9 @@ class FallbackTTS:
                 fb = None
             if fb is None:
                 raise err from None
+            demote = err.code != "invalid_request"
         # Failed before any audio: retry once on the backup with its own default voice.
-        if err.code != "invalid_request":  # a bad voice must not demote the primary for good
+        if demote:  # a bad voice must not demote the primary for good
             self._active = fb
         yield from fb.synthesize(text, replace(params, voice=None, extra={}), cancel)
 
