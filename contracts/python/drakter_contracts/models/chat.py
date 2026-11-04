@@ -4,6 +4,7 @@ from typing import Annotated
 from pydantic import Field
 
 from ..common import ContractModel, Id, Instant
+from ..events import AgentState
 from ._base import OutModel
 
 
@@ -52,11 +53,15 @@ class ConversationOut(OutModel):
     ended_at: Instant | None = None
 
 
+class ChatSession(ConversationOut):
+    """Sesión de chat en la API. `session_id` en rutas y eventos es `conversations.id`."""
+
+
 class MessageCreate(ContractModel):
     """Mensaje del usuario; arranca un turno. `client_message_id` evita duplicados al reintentar."""
 
-    content: Annotated[str, Field(min_length=1, max_length=20_000)]
-    client_message_id: Annotated[str, Field(min_length=1, max_length=64)] | None = None
+    text: Annotated[str, Field(min_length=1, max_length=20_000)]
+    client_message_id: Annotated[str, Field(min_length=1, max_length=64)]
     input_source: InputSource = InputSource.TEXT
 
 
@@ -66,12 +71,30 @@ class MessageUpdate(ContractModel):
     status: MessageStatus | None = None
 
 
+class MessageAccepted(OutModel):
+    """Respuesta 202 de POST /chat/sessions/{id}/messages."""
+
+    turn_id: Id
+    message_id: Id
+
+
+class AgentStatusOut(OutModel):
+    """GET /agent/status. `detail` es texto seguro, sin secretos."""
+
+    state: AgentState
+    provider: str | None = None
+    model: str | None = None
+    detail: str | None = None
+
+
 class MessageOut(OutModel):
+    """En la API se llaman `session_id` y `text`; en la BD, `conversation_id` y `content`."""
+
     id: Id
-    conversation_id: Id
+    session_id: Id
     turn_id: Id | None = None
     role: MessageRole
-    content: str
+    text: str
     client_message_id: str | None = None
     status: MessageStatus
     created_at: Instant

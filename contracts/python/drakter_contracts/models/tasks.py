@@ -35,6 +35,12 @@ class TaskCreate(ContractModel):
     metadata: Metadata = {}
 
 
+class TaskTagsReplace(ContractModel):
+    """Cuerpo de PUT /tasks/{id}/tags: sustituye todas las etiquetas de la tarea."""
+
+    names: Annotated[list[Annotated[str, Field(min_length=1, max_length=64)]], Field(max_length=32)]
+
+
 class TaskUpdate(ContractModel):
     title: Title | None = None
     description: LongText | None = None
