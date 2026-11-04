@@ -11,6 +11,12 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from app.core.config import Settings
 
+# The only Hermes this code was checked against. Compare by commit: the same commit has been
+# seen as "v0.22.7" and as "v0.21.5+20302.gb200f5b". Build: `uv sync --frozen --extra anthropic
+# --extra mcp --extra sms` on Python 3.14, own venv; `sms` is the extra that adds only aiohttp.
+HERMES_VERSION: Final = "v0.22.7"
+HERMES_COMMIT: Final = "b200f5bc60e31588ba2cb60e288029c4a54ba5fa"
+
 _LOOPBACK_HOSTS: Final = frozenset({"127.0.0.1", "localhost"})
 _MODEL_NAME_RE: Final = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:\-]{0,127}$")
 
@@ -32,7 +38,6 @@ class AgentSettings(BaseSettings):
     dev_stub_url: str = "http://127.0.0.1:28517"
     hermes_command: str = "hermes"
     hermes_port: int = Field(default=8767, ge=1024, le=65535)
-    agent_tools_port: int = Field(default=8766, ge=1024, le=65535)
     agent_max_turns: int = Field(default=12, ge=1, le=200)
     turn_timeout_s: float = Field(default=300, gt=0)
     idle_timeout_s: float = Field(default=120, gt=0)
@@ -66,6 +71,4 @@ class AgentSettings(BaseSettings):
     def _coherent(self) -> Self:
         if self.model_provider == "dev_stub" and self.env == "production":
             raise ValueError("model_provider=dev_stub is not allowed with env=production")
-        if self.hermes_port == self.agent_tools_port:
-            raise ValueError("hermes_port and agent_tools_port must differ")
         return self

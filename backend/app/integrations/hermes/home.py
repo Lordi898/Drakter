@@ -23,7 +23,7 @@ from app.core.config import ensure_private_dir
 from app.integrations.hermes.settings import AgentSettings
 
 MCP_SERVER_NAME: Final = "drakter"
-MCP_PATH: Final = "/mcp"
+MCP_URL_ENV: Final = "DRAKTER_MCP_URL"  # ephemeral port: never in config.yaml nor its hash
 MCP_TOKEN_ENV: Final = "DRAKTER_MCP_TOKEN"
 MCP_TOOL_TIMEOUT_S: Final = 130  # above the 120 s ceiling of ToolSpec.timeout_s
 GUARD_NAME: Final = "drakter_guard"
@@ -217,7 +217,7 @@ def render_config(s: AgentSettings, tool_names: Sequence[str], *, cwd: Path) -> 
         "lsp": {"enabled": False},
         "mcp_servers": {
             MCP_SERVER_NAME: {
-                "url": f"http://127.0.0.1:{s.agent_tools_port}{MCP_PATH}",
+                "url": f"${{{MCP_URL_ENV}}}",
                 "headers": {"Authorization": f"Bearer ${{{MCP_TOKEN_ENV}}}"},
                 "enabled": True,
                 "timeout": MCP_TOOL_TIMEOUT_S,
