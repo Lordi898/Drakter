@@ -4,7 +4,7 @@ Foto operativa de la construcción. El detalle por tareas está en `IMPLEMENTATI
 
 ## Estado actual (2026-11-04)
 
-- **Rama de trabajo:** `drakter/build` (en `3b1e691` al escribir esto). `main` no se ha tocado. Cada frente trabaja en su rama `drakter/*`.
+- **Rama de trabajo:** `drakter/build` (en `488b83d` al escribir esto). `main` no se ha tocado. Cada frente trabaja en su rama `drakter/*`.
 - **Fase:** construcción en paralelo e integración en curso. `drakter/build` ya contiene contratos, shell de escritorio, identidad, memoria y `dev-stub`, entre otros; `drakter/agente-hermes` y `drakter/electron-host` no estaban fusionadas. Sin pasada integrada, no se ha marcado ninguna casilla.
 - **Documentos:** los `.md` de `docs/` son la fuente de verdad; los `.docx` se han eliminado.
 - **Tooling versionado:** agentes, skills, `build-orchestrator` y `astraeus` llegan completos a clones y worktrees.
@@ -24,7 +24,8 @@ Historial Git de los repos que estaban anidados en el checkout del usuario:
 
 - **Sin clave de API:** nada se ha probado con el modelo real.
 - **Identidad:** el reparto vigente es 6 + 4 + 4 archivos. `drakter/build` sigue con 22 en `agent/` hasta fusionar `f13204a`, de `drakter/identidad-personaje`.
-- **Recuperación de memoria:** `SYSTEM_GUIDE.md` y `builder.py` la hacen en el backend, y `DECISIONS.md` la sitúa dentro de Hermes. Falta decidir.
+- **OpenViking:** el backend recupera los recuerdos y, sin plugin en Hermes, el `memory.provider` de `MASTER_PLAN` §10 ya no aplica tal cual. Falta decidir cómo entra OpenViking.
+- **Confirmaciones:** caducidad de 15 minutos en `habits_calendar_support.py` frente a 300 s decididos.
 - **Hermes:** la decisión es runner propio sin gateway, y el código commiteado aún lanza el gateway.
 - **Electron:** falta `options` en `call`.
 

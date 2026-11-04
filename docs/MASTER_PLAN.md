@@ -619,6 +619,8 @@ La memoria nunca es la fuente de verdad de un dato operativo: guarda la referenc
 
 Hermes solo admite un proveedor de memoria externo activo. Ese lugar lo ocupa OpenViking (`memory.provider: openviking`), y la memoria nativa sigue activa a su lado.
 
+> ⚠️ Con el runner propio no hay plugin de memoria en Hermes: lo que este §10 describe con `memory.provider` y `viking_*` queda pendiente de revisar (decisión "El backend recupera los recuerdos").
+
 **`USER.md`:** en el repositorio (`agent/context/USER.md`) solo hay una plantilla sin datos reales. El `USER.md` nativo, en el `HERMES_HOME` del perfil de Drakter, guarda lo esencial y OpenViking guarda lo demás. La plantilla rellenada por el usuario vive fuera del repositorio, en el directorio de datos de Drakter, y solo inicializa el `USER.md` nativo; a partir de ahí manda el nativo (decisión "agent/identity/USER.md es plantilla; el USER.md vivo es el de Hermes").
 
 ### 10.2. Las tres capas de OpenViking
@@ -1969,9 +1971,9 @@ No son requisitos para la primera versión:
 1. El usuario escribe en la GUI.
 2. React envía el mensaje al backend.
 3. FastAPI identifica la sesión.
-4. El backend entrega a Hermes el mensaje y el contexto de sesión.
+4. El backend compone el contexto y entrega a Hermes el mensaje y ese contexto (ver paso 6).
 5. Hermes corre como proceso aparte, supervisado por FastAPI: un runner propio sobre `AIAgent`, sin gateway.
-6. La recuperación de memoria ocurre **dentro de Hermes** (memoria nativa y herramientas `viking_*` de OpenViking), no antes de él.
+6. El **backend** recupera los recuerdos pertinentes (`builder.py`) y los entrega cercados como dato no confiable, nunca en el prompt de sistema. Es una desviación del flujo original (decisión "El backend recupera los recuerdos"). Si hacen falta más, el agente los pide con una herramienta del backend.
 7. Claude Haiku 5.5 procesa la solicitud.
 8. Hermes decide si necesita herramientas.
 9. Si no necesita herramientas, genera respuesta.
@@ -2014,8 +2016,8 @@ Ejemplo: crear una tarea relacionada con un proyecto, una asignatura y un docume
 3. Se captura audio.
 4. Faster-Whisper transcribe.
 5. El texto se entrega al backend.
-6. Se entrega el contexto de sesión a Hermes.
-7. Hermes procesa la petición y recupera la memoria pertinente.
+6. El backend compone el contexto, recupera los recuerdos pertinentes y los entrega cercados a Hermes.
+7. Hermes procesa la petición.
 8. Se ejecutan herramientas si son necesarias.
 9. Se genera una respuesta.
 10. Voice Personality Engine selecciona parámetros.
@@ -2038,7 +2040,7 @@ Ejemplo: crear una tarea relacionada con un proyecto, una asignatura y un docume
 9. Se actualiza la organización contextual.
 10. Se registra el cambio.
 
-En la siguiente conversación, Hermes recuperará, con las herramientas de OpenViking, únicamente los recuerdos pertinentes.
+En la siguiente conversación, el backend recuperará únicamente los recuerdos pertinentes y los entregará cercados como dato no confiable.
 
 # PARTE XV. PRUEBAS Y CRITERIOS DE CALIDAD
 

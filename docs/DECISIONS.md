@@ -32,6 +32,7 @@ Decisiones técnicas, cambios de tecnología y motivos.
 
 ## [2026-11-04] Memoria: nativa de Hermes + OpenViking con capas L0/L1/L2
 - **Contexto:** los documentos se contradecían (`PLAN_DISEÑO` usaba Hermes + OpenViking; `MASTER_PLAN`, `ROADMAP` e `IMPLEMENTATION_STATUS`, OpenViking + Hindsight + Mem0). El usuario decide usar la memoria nativa de Hermes y OpenViking, con sus capas L0, L1 y L2 y su indexación.
+- **⚠️ Actualización:** con el runner propio no hay plugin de memoria en Hermes (entrada "El backend recupera los recuerdos"). Lo que sigue sobre el plugin queda pendiente de revisar.
 - **Decisión:** OpenViking ocupa el único lugar de proveedor externo de Hermes mediante su plugin (`memory.provider: openviking`), junto a `MEMORY.md` y `USER.md`. Hindsight y Mem0 salen del plan. El Memory Adapter queda como servicio del backend para la interfaz y la ingesta. Diseño en `MASTER_PLAN.md` §10.
 - **Parte relacional:** verificado en su documentación que OpenViking no ofrece una base relacional de memorias: tiene AGFS, índice vectorial y SQLite/MySQL interno para colas y tareas. La parte relacional de Drakter la cubre SQLite del Workspace.
 - **Alternativas descartadas:** memoria triple (solapa extracción, coste y fuentes de verdad; Hindsight y Mem0 chocan en dependencias); llamar a OpenViking solo desde el adapter (se perdería la integración nativa de herramientas y extracción).
@@ -190,12 +191,12 @@ Decisiones técnicas, cambios de tecnología y motivos.
 
 ## [2026-11-04] Puente Hermes-backend y flujo de una petición
 - **Contexto:** `PLAN_DISEÑO` fijaba MCP, `MASTER_PLAN` describía Skills que llaman a la API, y `CLAUDE.md` lo dejaba por investigar (C-08, C-13, C-42, C-48). El flujo de `MASTER_PLAN` §28 recuperaba memoria antes de Hermes, pero las herramientas `viking_*` se usan dentro de su bucle.
-- **Decisión:** Hermes corre como proceso aparte, supervisado por FastAPI: `hermes gateway run` con API server en loopback, venv y `HERMES_HOME` propios, versión fijada (tag v0.22.7, `b200f5bc`, desde git, nunca PyPI) y un `AgentProvider` por encima para que el proveedor siga siendo intercambiable. Las herramientas las sirve el backend por MCP en loopback, en un servidor delgado sin lógica de negocio que usa los mismos servicios que la API; Hermes es solo cliente. El perfil lleva lista de permitidos. El backend entrega mensaje y contexto de sesión, y la recuperación de memoria ocurre dentro de Hermes. Skills e identidad tienen su fuente en `agent/` y se publican al perfil. Sigue sin importarse `AIAgent` en FastAPI.
+- **Decisión:** Hermes corre como proceso aparte, supervisado por FastAPI: `hermes gateway run` con API server en loopback, venv y `HERMES_HOME` propios, versión fijada (tag v0.22.7, `b200f5bc`, desde git, nunca PyPI) y un `AgentProvider` por encima para que el proveedor siga siendo intercambiable. Las herramientas las sirve el backend por MCP en loopback, en un servidor delgado sin lógica de negocio que usa los mismos servicios que la API; Hermes es solo cliente. El perfil lleva lista de permitidos. El backend entrega mensaje y contexto de sesión, y la recuperación de memoria ocurre dentro de Hermes. (Revocado: ver "El backend recupera los recuerdos".) Skills e identidad tienen su fuente en `agent/` y se publican al perfil. Sigue sin importarse `AIAgent` en FastAPI.
 - **Actualización:** el mecanismo `hermes gateway run` queda sustituido por la entrada "Hermes sin gateway: runner propio sobre AIAgent". El resto de esta entrada sigue vigente.
 - **Sin comprobar:** nada de esto se ha ejecutado; proviene de leer el código de v0.22.7. Quedan por probar la lista de permitidos real, el nombre visible de las herramientas MCP, si puede bloquearse del todo la escritura de Skills y la RAM consumida.
 - **Alternativas descartadas:** importar `AIAgent` en FastAPI (rompe la separación de procesos y mezcla dependencias); Skills que llaman a la API (no valen como frontera de herramientas).
 - **Motivo:** el modelo y Hermes se tratan como no confiables; la frontera real es el backend. Esto invierte `MASTER_PLAN` §28.
-- **Impacto:** `CLAUDE.md` §2, `MASTER_PLAN` §28 y Parte XII, `ROADMAP`. ⚠️ `agent/knowledge/SYSTEM_GUIDE.md` (paso 2, en `552cb28`) y `backend/app/integrations/memory/context/builder.py`, con presupuesto de memoria, hacen que el backend componga el contexto y recupere recuerdos, y Hermes pida más con `search_memory`. Eso contradice esta entrada: falta que el orquestador decida cuál vale.
+- **Impacto:** `CLAUDE.md` §2, `MASTER_PLAN` §28 y Parte XII, `ROADMAP`. El conflicto con `agent/knowledge/SYSTEM_GUIDE.md` (paso 2) y `builder.py` lo cierra la entrada "El backend recupera los recuerdos".
 
 ## [2026-11-04] Memoria sin pipeline propio ni recuerdos en el repositorio
 - **Contexto:** `MASTER_PLAN` §11, `ROADMAP` y la Checklist 12 seguían pidiendo archivos de recuerdos en `memory/` y una extracción propia, en contra de la decisión de memoria nativa + OpenViking (C-05, C-11, C-12, C-16, C-17).
@@ -357,3 +358,36 @@ Decisiones técnicas, cambios de tecnología y motivos.
 - **Alternativas descartadas:** los 14 en `agent/identity/` (obliga a cambiar el cargador y se aparta de `MASTER_PLAN`, sin beneficio).
 - **Motivo:** es lo que dice `MASTER_PLAN`, lo que lee el cargador, y deja la personalidad en `identity/`, como pide `CLAUDE.md` §8.
 - **Impacto:** `MASTER_PLAN` §8.1 y Parte XII, `ROADMAP` árbol y Fase 5, `PLAN_DISEÑO` §5, `CLAUDE.md` §8, `RUN_STATE.md`.
+
+## [2026-11-04] El backend recupera los recuerdos
+- **Contexto:** la entrada "Puente Hermes-backend y flujo de una petición" situaba la recuperación dentro de Hermes, mientras `backend/app/integrations/memory/context/builder.py` y `agent/knowledge/SYSTEM_GUIDE.md` (paso 2) la hacen en el backend.
+- **Decisión:** el backend recupera los recuerdos, y `builder.py` y `SYSTEM_GUIDE.md` son correctos. Lo recuperado se entrega siempre cercado como dato no confiable, nunca en el prompt de sistema. Es una desviación de `MASTER_PLAN` §28, ya recogida allí, y revoca esa parte de la entrada del puente.
+- **Motivo:** con runner propio no hay plugin de memoria en Hermes, y el backend controla la delimitación y la procedencia.
+- **Alternativas descartadas:** recuperación dentro de Hermes con `viking_*` (exige el plugin que el runner no carga).
+- **⚠️ Pendiente de decidir:** cómo entra OpenViking. La entrada de memoria y `MASTER_PLAN` §10 lo describen como `memory.provider` con herramientas `viking_*`; en `drakter/build`, `openviking.py` es un hueco cerrado por defecto y el almacén activo es SQLite. `agent/knowledge/TOOL_GUIDE.md` también citaba `viking_*`.
+- **Sin comprobar:** el cercado no se ha ejecutado con Hermes ni con modelo; procede de leer `builder.py`.
+- **Impacto:** `MASTER_PLAN` §10, §28, §30 y §31, `PLAN_DISEÑO`, `CLAUDE.md` §2.
+
+## [2026-11-04] Raíces del almacén y roles de ruta
+- **Contexto:** gestionar ubicaciones permitidas amplía lo que el sistema puede leer, así que no puede quedar al alcance del renderer ni del agente.
+- **Decisión:** las raíces se gestionan desde el proceso principal con `window.api.addStorageLocation`, `update` y `delete`, selector nativo y token `approver`. Nacen con `read_only` y sin `agent_read`. En `storage-locations` y `permissions`, GET y HEAD usan `ui`; las escrituras, `approver`.
+- **Comprobado por lectura:** `desktop/electron/main/storageRoots.ts` con `showOpenDialog` en `drakter/build`; `0005_storage.sql` tiene `read_only` con `DEFAULT 1`; `generate-routes.mjs` exige `approver` en esas rutas. No se ha ejecutado.
+- **Alternativas descartadas:** un campo de ruta en el renderer (daría al renderer rutas absolutas).
+- **Motivo:** las ubicaciones permitidas son una frontera de seguridad.
+- **Impacto:** `desktop/electron/`, `contracts/api/routes.md`.
+
+## [2026-11-04] Almacén en v1
+- **Contexto:** `drakter-15` comunica por el orquestador el alcance del almacén.
+- **Decisión:** en v1 las ubicaciones son `read_only=1`. Borrar un recurso no toca el archivo. El agente solo crea notas con `create_resource`. Las imágenes se leen sin Pillow (solo metadatos con parser propio). `.docx` no tiene lector. La caducidad de la confirmación se queda en 300 s.
+- **⚠️ Desajuste con el código:** `CONFIRMATION_TTL_SECONDS = 300` está en `backend/app/services/actions.py` de `drakter/seguridad`, pero `drakter/build` (`488b83d`) tiene en `backend/app/services/habits_calendar_support.py` una caducidad propia de 15 minutos. Son dos caminos de confirmación con plazos distintos, y `contracts/README.md` §5 pide uno solo.
+- **Alternativas descartadas:** añadir Pillow y un lector de `.docx` (más dependencias y más superficie para archivos no confiables).
+- **Motivo:** menor superficie en v1.
+- **Impacto:** `backend/app/services/`, `backend/app/tools/storage.py`.
+
+## [2026-11-04] Rama verificacion integrada por squash
+- **Contexto:** el historial de `drakter/verificacion` contenía una clave falsa de prueba.
+- **Decisión:** se integra por squash para no publicarla.
+- **Estado:** a fecha de `488b83d`, `drakter/verificacion` no es ancestro de `drakter/build` y `docs/research/` aún no aparece allí, así que el squash no se ha visto.
+- **Alternativas descartadas:** fusión normal (publicaría ese historial).
+- **Motivo:** no publicar nada con forma de credencial, aunque sea falsa.
+- **Impacto:** historial de `drakter/build`.

@@ -705,7 +705,7 @@ Durante una conversación:
 
 1. El agente recibe el mensaje.
 2. Identifica qué contexto necesita.
-3. Consulta memoria relevante (la recuperación ocurre dentro de Hermes, con las herramientas del proveedor; el backend solo entrega mensaje y contexto de sesión).
+3. Recibe del backend los recuerdos relevantes, cercados como dato no confiable y fuera del prompt de sistema; puede pedir más con una herramienta del backend.
 4. Consulta recursos si hace falta.
 5. Recibe resultados resumidos y referencias.
 6. Responde o ejecuta acciones.
@@ -1472,9 +1472,9 @@ Si algún servicio falla, Drakter seguirá funcionando en modo degradado cuando 
 5. Se envía el mensaje a Hermes.
 6. Hermes recibe el contexto base.
 7. Hermes evalúa si necesita memoria.
-8. Hermes recupera los recuerdos relevantes con las herramientas de OpenViking (la recuperación ocurre dentro de Hermes).
+8. El backend recupera los recuerdos relevantes y los entrega cercados como dato no confiable.
 9. Se buscan recursos si la petición lo requiere.
-10. El backend entrega el mensaje y el contexto de sesión a Hermes, que recupera la memoria.
+10. El backend entrega a Hermes el mensaje, el contexto de sesión y los recuerdos cercados.
 11. El modelo analiza la instrucción.
 12. Decide si necesita herramientas.
 13. Ejecuta las herramientas necesarias.
