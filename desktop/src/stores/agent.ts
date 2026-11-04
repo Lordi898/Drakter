@@ -2,7 +2,7 @@ import { useSyncExternalStore } from 'react'
 import type { CharacterState } from '@/character/types'
 import { getAgentStatus } from '@/services/api'
 import type { AgentState } from '@/services/protocol'
-import { getLinkStatus, startBackendLink, subscribeLinkStatus, subscribeServerEvents } from '@/services/ws'
+import { getLinkStatus, startBackendLink, subscribeLinkStatus, subscribeResync, subscribeServerEvents } from '@/services/ws'
 
 /**
  * Estado de Drakter visto por la interfaz. `offline` si el enlace no está
@@ -23,7 +23,7 @@ export function getDrakterState(): CharacterState {
   return getLinkStatus() === 'open' ? reported : 'offline'
 }
 
-/** Al abrir el enlace se lee el estado real del agente; si falla, se queda en `idle` sin inventar nada. */
+/** Al abrir el enlace se lee el estado real del agente; si falla, se conserva lo último sabido sin inventar nada. */
 async function seed(): Promise<void> {
   const mine = version
   try {
@@ -45,13 +45,12 @@ function wire(): void {
     reported = event.payload.state
     emit()
   })
-  // Al cambiar el enlace (perdido o recién abierto) se parte de un estado neutro.
-  subscribeLinkStatus((status) => {
+  // Al cambiar el enlace se avisa a la interfaz; no se fuerza `idle` (un turno puede seguir activo).
+  subscribeLinkStatus(() => {
     version += 1
-    reported = 'idle'
     emit()
-    if (status === 'open') void seed()
   })
+  subscribeResync(() => void seed())
 }
 
 wire()
