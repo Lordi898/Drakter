@@ -1,0 +1,1540 @@
+// Generado: no editar. Fuente: contracts/python/drakter_contracts (scripts/gen_ts.py).
+export const CONTRACT_VERSION = "1.0.0";
+export const SCHEMA_VERSION = 11;
+
+/** Listado con cursor opaco: `limit` lo acota el servidor. */
+export interface Page<T> {
+  items: T[];
+  next_cursor: string | null;
+  total?: number | null;
+}
+
+export type ActorType = "user" | "agent" | "automation" | "system";
+
+export type AgentState = "idle" | "listening" | "thinking" | "speaking" | "executing" | "success" | "error" | "interrupted" | "offline";
+
+export type AuditResult = "success" | "denied" | "failed" | "confirmation_required";
+
+export type AvailabilityStatus = "available" | "missing" | "moved" | "unreachable" | "forbidden";
+
+export type CalendarSourceType = "calendar_event" | "time_block" | "class_session";
+
+export type ConfirmationRisk = "write" | "confirm";
+
+export type ConfirmationStatus = "pending" | "approved" | "rejected" | "expired" | "executing" | "executed" | "failed";
+
+export type EntityType = "task" | "project" | "habit" | "calendar_event" | "time_block" | "subject" | "class_session" | "resource" | "folder";
+
+export type ErrorCode = "validation_error" | "internal_error" | "unauthorized" | "forbidden_client" | "forbidden_host" | "forbidden_origin" | "service_unavailable" | "not_found" | "conflict" | "invalid_query" | "permission_denied" | "revision_mismatch" | "hierarchy_cycle" | "relationship_not_allowed" | "has_dependents" | "nonexistent_local_time" | "confirmation_required" | "confirmation_expired" | "confirmation_unavailable" | "confirmation_already_resolved" | "path_not_allowed" | "file_too_large" | "archive_limit_exceeded" | "unsupported_media_type" | "resource_unavailable" | "agent_unavailable" | "agent_busy" | "agent_timeout" | "agent_disconnected" | "provider_auth" | "provider_error" | "no_active_turn" | "tool_timeout" | "memory_unavailable" | "voice_unavailable" | "rate_limited";
+
+export type EvaluationOutcome = "passed" | "failed" | "inconclusive";
+
+export type EventKind = "event" | "reminder" | "work_session";
+
+export type EventStatus = "tentative" | "confirmed" | "cancelled";
+
+export type ExceptionKind = "cancelled" | "modified";
+
+export type HabitRecordStatus = "done" | "skipped" | "missed";
+
+export type HabitStatus = "active" | "paused" | "ended";
+
+export type ImprovementCategory = "communication" | "context" | "skill" | "procedure" | "memory" | "performance" | "interface" | "bug";
+
+export type ImprovementSource = "user" | "agent" | "system";
+
+export type IndexStatus = "none" | "pending" | "indexed" | "failed" | "skipped";
+
+export type InputSource = "text" | "voice";
+
+export type MemoryCategory = "profile" | "preferences" | "entities" | "events" | "cases" | "patterns";
+
+export type MemoryConflictStatus = "open" | "resolved";
+
+export type MemoryKind = "working" | "episodic" | "semantic" | "procedural";
+
+export type MemorySourceType = "user_gui" | "user_conversation" | "agent" | "tool_result" | "document" | "import";
+
+export type MemoryStatus = "pending" | "approved" | "rejected" | "superseded";
+
+export type MemoryTrust = "user_confirmed" | "user_stated" | "derived" | "third_party";
+
+export type MessageRole = "user" | "assistant" | "system";
+
+export type MessageStatus = "streaming" | "complete" | "cancelled" | "failed";
+
+export type NotificationSeverity = "info" | "success" | "warning" | "error";
+
+export type Origin = "rest" | "mcp" | "scheduler" | "internal";
+
+export type Priority = "low" | "medium" | "high" | "urgent";
+
+export type ProgressSource = "manual" | "computed";
+
+export type ProjectStatus = "planned" | "active" | "paused" | "completed" | "cancelled";
+
+export type ProposalStatus = "draft" | "evaluating" | "ready" | "approved" | "rejected" | "applied" | "failed";
+
+export type RelationshipType = "belongs_to" | "related_to" | "scheduled_for" | "uses_resource" | "depends_on" | "supports" | "studies" | "parent_of" | "references" | "derived_from";
+
+export type ResourceType = "image" | "document" | "pdf" | "text" | "code" | "link" | "note" | "study_note" | "archive" | "other";
+
+export type RiskClass = "read" | "write" | "confirm";
+
+export type TaskStatus = "pending" | "in_progress" | "on_hold" | "completed" | "cancelled";
+
+export type TimeBlockStatus = "planned" | "in_progress" | "done" | "skipped" | "cancelled";
+
+export type TurnStatus = "queued" | "running" | "completed" | "failed" | "cancelled" | "interrupted";
+
+export interface AgendaItem {
+  occurrence_id: string;
+  source_type: CalendarSourceType;
+  source_id: string;
+  title: string;
+  description: string | null;
+  kind: string;
+  status: string;
+  all_day: boolean;
+  timezone: string;
+  occurrence_local_start: string;
+  starts_at_utc: string | null;
+  ends_at_utc: string | null;
+  start_date: string | null;
+  end_date_exclusive: string | null;
+  display_start: string | null;
+  display_end: string | null;
+  recurring: boolean;
+  modified: boolean;
+  room: string | null;
+  subject_id: string | null;
+  task_id: string | null;
+  color: string | null;
+}
+
+export interface AgendaResponse {
+  timezone: string;
+  from_date: string;
+  to_date: string;
+  items: AgendaItem[];
+  truncated: boolean;
+}
+
+export interface AgentError {
+  session_id: string | null;
+  turn_id: string | null;
+  code: string;
+  message: string;
+  retryable: boolean;
+}
+
+export interface AgentExpressionChanged {
+  expression: string;
+  intensity: number | null;
+  turn_id: string | null;
+}
+
+/** Lleva el texto completo: perder deltas se corrige solo. */
+export interface AgentMessageCompleted {
+  session_id: string;
+  turn_id: string;
+  message_id: string;
+  text: string;
+}
+
+export interface AgentMessageDelta {
+  session_id: string;
+  turn_id: string;
+  delta: string;
+}
+
+export interface AgentMessageStarted {
+  session_id: string;
+  turn_id: string;
+  message_id: string;
+}
+
+export interface AgentStatusChanged {
+  state: AgentState;
+  previous: AgentState | null;
+  turn_id: string | null;
+  reason: string | null;
+}
+
+/** GET /agent/status. `detail` es texto seguro, sin secretos. */
+export interface AgentStatusOut {
+  state: AgentState;
+  provider: string | null;
+  model: string | null;
+  detail: string | null;
+}
+
+export interface AgentToolCompleted {
+  session_id: string;
+  turn_id: string;
+  tool: string;
+  call_id: string;
+  source: "drakter" | "hermes";
+  error: boolean;
+}
+
+export interface AgentToolStarted {
+  session_id: string;
+  turn_id: string;
+  tool: string;
+  call_id: string;
+  source: "drakter" | "hermes";
+}
+
+export interface AgentTurnCreate {
+  conversation_id: string;
+  input_source?: InputSource;
+}
+
+export interface AgentTurnFinished {
+  session_id: string;
+  turn_id: string;
+  outcome: "completed" | "failed" | "cancelled" | "interrupted";
+}
+
+export interface AgentTurnOut {
+  id: string;
+  conversation_id: string;
+  correlation_id: string;
+  status: TurnStatus;
+  input_source: InputSource;
+  error_code: string | null;
+  created_at: string;
+  started_at: string | null;
+  ended_at: string | null;
+}
+
+export interface AgentTurnStarted {
+  session_id: string;
+  turn_id: string;
+  input_source: "text" | "voice";
+}
+
+export interface AgentTurnUpdate {
+  status?: TurnStatus | null;
+}
+
+/** Solo lectura: la auditoría es append-only (trigger `audit_immutable`); no hay Create/Update públicos. `params` sale de la lista blanca de `ToolSpec.audit`: nunca claves ni contenido de documentos. */
+export interface AuditEventOut {
+  seq: number;
+  id: string;
+  occurred_at: string;
+  correlation_id: string;
+  actor_type: ActorType;
+  origin: Origin;
+  action: string;
+  tool_name: string | null;
+  entity_type: EntityType | null;
+  entity_id: string | null;
+  affected_count: number | null;
+  params: Record<string, unknown> | null;
+  params_hash: string | null;
+  changes: Record<string, unknown> | null;
+  result: AuditResult;
+  error_code: string | null;
+  confirmation_id: string | null;
+  duration_ms: number | null;
+  turn_id: string | null;
+  tainted: boolean;
+  agent_provider: string | null;
+}
+
+export interface AvailabilityResponse {
+  available: boolean;
+  starts_at_utc: string;
+  ends_at_utc: string;
+  conflicts: AgendaItem[];
+}
+
+/** Día completo: `start_date` + `end_date_exclusive`; si no, `local_start` + `local_end`. */
+export interface CalendarEventCreate {
+  title: string;
+  description?: string | null;
+  location?: string | null;
+  kind?: EventKind;
+  status?: EventStatus;
+  timezone: string;
+  all_day?: boolean;
+  local_start?: string | null;
+  local_end?: string | null;
+  start_date?: string | null;
+  end_date_exclusive?: string | null;
+  rrule?: string | null;
+  reminder_minutes_before?: number | null;
+  metadata?: Record<string, unknown>;
+}
+
+export interface CalendarEventOut {
+  id: string;
+  created_at: string;
+  updated_at: string;
+  archived_at: string | null;
+  revision: number;
+  metadata: Record<string, unknown>;
+  title: string;
+  description: string | null;
+  location: string | null;
+  kind: EventKind;
+  status: EventStatus;
+  timezone: string;
+  all_day: boolean;
+  local_start: string | null;
+  local_end: string | null;
+  start_date: string | null;
+  end_date_exclusive: string | null;
+  starts_at_utc: string | null;
+  ends_at_utc: string | null;
+  rrule: string | null;
+  recurrence_until_utc: string | null;
+  reminder_minutes_before: number | null;
+}
+
+export interface CalendarEventUpdate {
+  title?: string | null;
+  description?: string | null;
+  location?: string | null;
+  kind?: EventKind | null;
+  status?: EventStatus | null;
+  timezone?: string | null;
+  all_day?: boolean | null;
+  local_start?: string | null;
+  local_end?: string | null;
+  start_date?: string | null;
+  end_date_exclusive?: string | null;
+  rrule?: string | null;
+  reminder_minutes_before?: number | null;
+  metadata?: Record<string, unknown> | null;
+}
+
+export interface CalendarEventWriteResult {
+  event: CalendarEventOut;
+  conflicts: AgendaItem[];
+}
+
+/** Sesión de chat en la API. `session_id` en rutas y eventos es `conversations.id`. */
+export interface ChatSession {
+  id: string;
+  title: string | null;
+  created_at: string;
+  updated_at: string;
+  ended_at: string | null;
+}
+
+export interface ClassSessionCreate {
+  weekday: number;
+  starts_local_time: string;
+  ends_local_time: string;
+  timezone: string;
+  valid_from: string;
+  valid_until?: string | null;
+  interval_weeks?: number;
+  room?: string | null;
+  metadata?: Record<string, unknown>;
+}
+
+export interface ClassSessionOut {
+  id: string;
+  created_at: string;
+  updated_at: string;
+  archived_at: string | null;
+  revision: number;
+  metadata: Record<string, unknown>;
+  subject_id: string;
+  weekday: number;
+  starts_local_time: string;
+  ends_local_time: string;
+  timezone: string;
+  valid_from: string;
+  valid_until: string | null;
+  interval_weeks: number;
+  room: string | null;
+}
+
+export interface ClassSessionUpdate {
+  weekday?: number | null;
+  starts_local_time?: string | null;
+  ends_local_time?: string | null;
+  timezone?: string | null;
+  valid_from?: string | null;
+  valid_until?: string | null;
+  interval_weeks?: number | null;
+  room?: string | null;
+  metadata?: Record<string, unknown> | null;
+}
+
+export interface ComponentHealth {
+  component: "backend" | "hermes" | "memory" | "voice" | "database";
+  status: "ok" | "degraded" | "down";
+  detail: string | null;
+}
+
+/** Cuerpo de approve, con rol `approver`. */
+export interface ConfirmationApprove {
+  params_hash: string;
+}
+
+/** Uso interno del backend; ninguna ruta pública la acepta. Los textos los calcula el backend. */
+export interface ConfirmationCreate {
+  tool_name: string;
+  actor_type: ActorType;
+  origin: Origin;
+  turn_id?: string | null;
+  correlation_id: string;
+  args: Record<string, unknown>;
+  targets?: ConfirmationTarget[];
+  summary: string;
+  affected_count?: number | null;
+  risk: ConfirmationRisk;
+}
+
+/** Cuerpo opcional de reject. */
+export interface ConfirmationDecision {
+  reason?: string | null;
+}
+
+/** `args` ya sin secretos (lista blanca de auditoría). `params_hash` es la columna `args_hash`. */
+export interface ConfirmationOut {
+  id: string;
+  tool_name: string;
+  actor_type: ActorType;
+  origin: Origin;
+  turn_id: string | null;
+  correlation_id: string;
+  args: Record<string, unknown>;
+  params_hash: string;
+  targets: ConfirmationTarget[];
+  summary: string;
+  affected_count: number | null;
+  risk: ConfirmationRisk;
+  status: ConfirmationStatus;
+  created_at: string;
+  expires_at: string;
+  decided_at: string | null;
+  decided_via: "desktop" | null;
+  executed_at: string | null;
+  result: Record<string, unknown> | null;
+  error_code: string | null;
+}
+
+export interface ConfirmationRequested {
+  action_id: string;
+  session_id: string | null;
+  turn_id: string | null;
+  tool: string;
+  summary: string;
+  affected_count: number | null;
+  expires_at: string;
+}
+
+/** HTTP 409 con `error.code == "confirmation_required"`. Nunca 2xx. */
+export interface ConfirmationRequiredEnvelope {
+  error: ErrorBody;
+  confirmation: ConfirmationTicket;
+}
+
+export interface ConfirmationResolved {
+  action_id: string;
+  status: "approved" | "rejected" | "expired" | "executed" | "failed";
+  error_code: string | null;
+}
+
+export interface ConfirmationTarget {
+  entity_type: string;
+  entity_id: string;
+  revision: number | null;
+}
+
+/** `summary` y `affected_count` los calcula el backend. `params_hash` es `args_hash` de la fila. */
+export interface ConfirmationTicket {
+  id: string;
+  summary: string;
+  affected_count: number | null;
+  expires_at: string;
+  params_hash: string;
+}
+
+/** Cuerpo opcional de reject. */
+export interface ConfirmationUpdate {
+  reason?: string | null;
+}
+
+export interface ConversationCreate {
+  title?: string | null;
+}
+
+/** No es entidad (0007): sin revision ni archived_at; `ended_at` cierra la conversación. */
+export interface ConversationOut {
+  id: string;
+  title: string | null;
+  created_at: string;
+  updated_at: string;
+  ended_at: string | null;
+}
+
+export interface ConversationUpdate {
+  title?: string | null;
+}
+
+/** Campos de `entities` presentes en toda entidad de dominio (0001). */
+export interface EntityOut {
+  id: string;
+  created_at: string;
+  updated_at: string;
+  archived_at: string | null;
+  revision: number;
+  metadata: Record<string, unknown>;
+}
+
+export interface EntityTagsReplace {
+  names: string[];
+}
+
+export interface ErrorBody {
+  code: string;
+  message: string;
+  request_id: string;
+  details: ErrorDetail[];
+}
+
+export interface ErrorDetail {
+  field: string | null;
+  code: string;
+  message: string;
+}
+
+export interface ErrorEnvelope {
+  error: ErrorBody;
+}
+
+export interface EventEnvelope {
+  event_id: string;
+  seq: number;
+  boot_id: string;
+  timestamp: string;
+  type: string;
+  version: number;
+  correlation_id: string | null;
+  payload: Record<string, unknown>;
+}
+
+export interface FolderCreate {
+  name: string;
+  parent_folder_id?: string | null;
+  location_id?: string | null;
+  relative_path?: string | null;
+  metadata?: Record<string, unknown>;
+}
+
+export interface FolderOut {
+  id: string;
+  created_at: string;
+  updated_at: string;
+  archived_at: string | null;
+  revision: number;
+  metadata: Record<string, unknown>;
+  name: string;
+  parent_folder_id: string | null;
+  location_id: string | null;
+  relative_path: string | null;
+  resource_count: number;
+}
+
+export interface FolderUpdate {
+  name?: string | null;
+  parent_folder_id?: string | null;
+  metadata?: Record<string, unknown> | null;
+}
+
+export interface FreeSlot {
+  starts_at_utc: string;
+  ends_at_utc: string;
+  display_start: string;
+  display_end: string;
+}
+
+export interface HabitCreate {
+  name: string;
+  description?: string | null;
+  timezone: string;
+  rrule: string;
+  start_date: string;
+  end_date?: string | null;
+  target_note?: string | null;
+  goal_project_id?: string | null;
+  preferred_local_time?: string | null;
+  reminder_enabled?: boolean;
+  metadata?: Record<string, unknown>;
+}
+
+export interface HabitHistory {
+  habit_id: string;
+  from_date: string;
+  to_date: string;
+  days: HabitHistoryDay[];
+}
+
+export interface HabitHistoryDay {
+  date: string;
+  scheduled: boolean;
+  status: HabitRecordStatus | null;
+  note: string | null;
+}
+
+export interface HabitOut {
+  id: string;
+  created_at: string;
+  updated_at: string;
+  archived_at: string | null;
+  revision: number;
+  metadata: Record<string, unknown>;
+  name: string;
+  description: string | null;
+  timezone: string;
+  rrule: string;
+  schedule_versions: HabitScheduleVersionOut[];
+  status: HabitStatus;
+  start_date: string;
+  end_date: string | null;
+  target_note: string | null;
+  goal_project_id: string | null;
+  preferred_local_time: string | null;
+  reminder_enabled: boolean;
+  today_scheduled: boolean;
+  today_status: HabitRecordStatus | null;
+}
+
+/** PUT de un día (idempotente por habit_id + occurrence_date). */
+export interface HabitRecordCreate {
+  status: HabitRecordStatus;
+  note?: string | null;
+}
+
+/** Fila de `habit_records`: no es entidad (sin archived_at ni revision). */
+export interface HabitRecordOut {
+  id: string;
+  habit_id: string;
+  occurrence_date: string;
+  status: HabitRecordStatus;
+  note: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface HabitRecordUpdate {
+  status?: HabitRecordStatus | null;
+  note?: string | null;
+}
+
+export interface HabitScheduleVersionOut {
+  id: string;
+  rrule: string;
+  valid_from: string;
+  valid_until: string | null;
+}
+
+export interface HabitStatistics {
+  habit_id: string;
+  from_date: string;
+  to_date: string;
+  scheduled: number;
+  done: number;
+  skipped: number;
+  missed: number;
+  unrecorded: number;
+  completion_rate: number | null;
+  current_streak: number;
+  best_streak: number;
+  by_weekday: WeekdayStat[];
+}
+
+export interface HabitUpdate {
+  name?: string | null;
+  description?: string | null;
+  timezone?: string | null;
+  rrule?: string | null;
+  schedule_effective_from?: string | null;
+  end_date?: string | null;
+  status?: HabitStatus | null;
+  target_note?: string | null;
+  goal_project_id?: string | null;
+  preferred_local_time?: string | null;
+  reminder_enabled?: boolean | null;
+  metadata?: Record<string, unknown> | null;
+}
+
+export interface HealthOut {
+  status: "ok" | "degraded" | "down";
+  components: ComponentHealth[];
+}
+
+export interface ImprovementEvaluationCreate {
+  proposal_id: string;
+  environment: string;
+  outcome: EvaluationOutcome;
+  report_path?: string | null;
+}
+
+export interface ImprovementEvaluationOut {
+  id: string;
+  proposal_id: string;
+  environment: string;
+  outcome: EvaluationOutcome;
+  report_path: string | null;
+  created_at: string;
+}
+
+export interface ImprovementFeedbackCreate {
+  source: ImprovementSource;
+  category: ImprovementCategory;
+  summary: string;
+  correlation_id?: string | null;
+}
+
+export interface ImprovementFeedbackOut {
+  id: string;
+  source: ImprovementSource;
+  category: ImprovementCategory;
+  summary: string;
+  correlation_id: string | null;
+  created_at: string;
+}
+
+export interface ImprovementProposalCreate {
+  title: string;
+  category: ImprovementCategory;
+  summary: string;
+  feedback_id?: string | null;
+  created_by?: ImprovementSource;
+}
+
+export interface ImprovementProposalOut {
+  id: string;
+  title: string;
+  category: ImprovementCategory;
+  summary: string;
+  status: ProposalStatus;
+  feedback_id: string | null;
+  document_path: string | null;
+  git_ref: string | null;
+  created_by: ImprovementSource;
+  created_at: string;
+  updated_at: string;
+  decided_at: string | null;
+  decided_via: "desktop" | null;
+  applied_at: string | null;
+}
+
+/** Aprobar, rechazar o aplicar solo lo decide la GUI; la automejora nunca toca producción sin ello. */
+export interface ImprovementProposalUpdate {
+  title?: string | null;
+  summary?: string | null;
+  status?: "approved" | "rejected" | null;
+}
+
+export interface MemoryConflictOut {
+  id: string;
+  memory_a: string;
+  memory_b: string;
+  reason: string;
+  status: MemoryConflictStatus;
+  created_at: string;
+  resolved_at: string | null;
+  kept: string | null;
+}
+
+export interface MemoryConflictResolve {
+  kept: string;
+}
+
+export interface MemoryEntityRef {
+  entity_type: EntityType;
+  entity_id: string;
+}
+
+/** La memoria es dato no confiable: nunca modifica reglas, permisos ni confirmaciones. */
+export interface MemoryRecordCreate {
+  kind: MemoryKind;
+  category: MemoryCategory;
+  subject?: string;
+  content: string;
+  abstract?: string;
+  overview?: string;
+  source_type: MemorySourceType;
+  source_ref?: string | null;
+  session_id?: string | null;
+  confidence?: number;
+  valid_until?: string | null;
+  supersedes?: string | null;
+  entity_refs?: MemoryEntityRef[];
+}
+
+/** No es entidad. `seq` es interno y no se expone. */
+export interface MemoryRecordOut {
+  id: string;
+  kind: MemoryKind;
+  category: MemoryCategory;
+  subject: string;
+  content: string;
+  abstract: string;
+  overview: string;
+  source_type: MemorySourceType;
+  source_ref: string | null;
+  session_id: string | null;
+  captured_at: string;
+  trust: MemoryTrust;
+  confidence: number;
+  valid_until: string | null;
+  status: MemoryStatus;
+  content_hash: string;
+  supersedes: string | null;
+  entity_refs: MemoryEntityRef[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MemoryRecordUpdate {
+  category?: MemoryCategory | null;
+  subject?: string | null;
+  content?: string | null;
+  abstract?: string | null;
+  overview?: string | null;
+  confidence?: number | null;
+  valid_until?: string | null;
+  status?: "approved" | "rejected" | null;
+  entity_refs?: MemoryEntityRef[] | null;
+}
+
+export interface MemorySearchHit {
+  record: MemoryRecordOut;
+  score: number | null;
+  content_trust: "untrusted";
+}
+
+/** Respuesta 202 de POST /chat/sessions/{id}/messages. */
+export interface MessageAccepted {
+  turn_id: string;
+  message_id: string;
+}
+
+/** Mensaje del usuario; arranca un turno. `client_message_id` evita duplicados al reintentar. */
+export interface MessageCreate {
+  text: string;
+  client_message_id: string;
+  input_source?: InputSource;
+}
+
+/** En la API se llaman `session_id` y `text`; en la BD, `conversation_id` y `content`. */
+export interface MessageOut {
+  id: string;
+  session_id: string;
+  turn_id: string | null;
+  role: MessageRole;
+  text: string;
+  client_message_id: string | null;
+  status: MessageStatus;
+  created_at: string;
+}
+
+/** Solo cancelación de un mensaje en streaming. */
+export interface MessageUpdate {
+  status?: MessageStatus | null;
+}
+
+export interface NotificationCreate {
+  kind: string;
+  title: string;
+  body?: string | null;
+  severity?: NotificationSeverity;
+  entity_id?: string | null;
+  dedupe_key?: string | null;
+}
+
+export interface NotificationCreated {
+  notification_id: string;
+  kind: string;
+  title: string;
+  severity: "info" | "success" | "warning" | "error";
+}
+
+/** No es entidad: sin revision ni archived_at. */
+export interface NotificationOut {
+  id: string;
+  kind: string;
+  title: string;
+  body: string | null;
+  severity: NotificationSeverity;
+  entity_id: string | null;
+  created_at: string;
+  read_at: string | null;
+  dedupe_key: string | null;
+}
+
+/** PATCH: marcar leída (`true`) o no leída (`false`). */
+export interface NotificationUpdate {
+  read?: boolean | null;
+}
+
+export interface OccurrenceOverride {
+  title?: string | null;
+  description?: string | null;
+  local_start?: string | null;
+  local_end?: string | null;
+  room?: string | null;
+}
+
+export interface OverlapGroup {
+  items: string[];
+  starts_at_utc: string;
+  ends_at_utc: string;
+}
+
+export interface ProjectCreate {
+  name: string;
+  description?: string | null;
+  status?: ProjectStatus;
+  priority?: Priority;
+  start_date?: string | null;
+  target_date?: string | null;
+  manual_progress?: number | null;
+  metadata?: Record<string, unknown>;
+}
+
+export interface ProjectOut {
+  id: string;
+  created_at: string;
+  updated_at: string;
+  archived_at: string | null;
+  revision: number;
+  metadata: Record<string, unknown>;
+  name: string;
+  description: string | null;
+  status: ProjectStatus;
+  priority: Priority;
+  start_date: string | null;
+  target_date: string | null;
+  completed_at: string | null;
+  manual_progress: number | null;
+  progress: ProjectProgress | null;
+}
+
+export interface ProjectProgress {
+  project_id: string;
+  total: number;
+  completed: number;
+  open: number;
+  cancelled: number;
+  overdue: number;
+  percent: number;
+  computed_percent: number;
+  source: ProgressSource;
+}
+
+export interface ProjectUpdate {
+  name?: string | null;
+  description?: string | null;
+  status?: ProjectStatus | null;
+  priority?: Priority | null;
+  start_date?: string | null;
+  target_date?: string | null;
+  manual_progress?: number | null;
+  metadata?: Record<string, unknown> | null;
+}
+
+export interface RecurrenceExceptionCreate {
+  occurrence_local_start: string;
+  kind: ExceptionKind;
+  override?: OccurrenceOverride | null;
+}
+
+export interface RecurrenceExceptionOut {
+  id: string;
+  source_type: "calendar_event" | "class_session";
+  source_id: string;
+  occurrence_local_start: string;
+  kind: ExceptionKind;
+  override: OccurrenceOverride | null;
+  created_at: string;
+}
+
+export interface RecurrenceExceptionUpdate {
+  kind?: ExceptionKind | null;
+  override?: OccurrenceOverride | null;
+}
+
+export interface RelatedItem {
+  relationship_id: string | null;
+  relationship_type: RelationshipType;
+  direction: "in" | "out";
+  label: string;
+  entity_id: string;
+  entity_type: EntityType;
+  entity_title: string;
+  archived: boolean;
+  virtual: boolean;
+  metadata: Record<string, unknown>;
+}
+
+export interface RelatedItems {
+  entity_id: string;
+  entity_type: EntityType;
+  entity_title: string;
+  items: RelatedItem[];
+}
+
+export interface RelationshipCreate {
+  source_id: string;
+  target_id: string;
+  relationship_type: RelationshipType;
+  metadata?: Record<string, unknown>;
+}
+
+/** No es entidad: sin revision ni archived_at (0006). */
+export interface RelationshipOut {
+  id: string;
+  source_id: string;
+  source_type: EntityType;
+  target_id: string;
+  target_type: EntityType;
+  relationship_type: RelationshipType;
+  metadata: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface RelationshipSearch {
+  source_id?: string | null;
+  target_id?: string | null;
+  entity_type?: EntityType | null;
+  relationship_type?: RelationshipType | null;
+}
+
+export interface RelationshipTypeOut {
+  relationship_type: RelationshipType;
+  label: string;
+  inverse_label: string;
+  description: string;
+  symmetric: boolean;
+  allowed_pairs: [EntityType, EntityType][];
+}
+
+export interface RelationshipUpdate {
+  metadata?: Record<string, unknown> | null;
+}
+
+export interface ResourceCreate {
+  title: string;
+  resource_type?: ResourceType | null;
+  folder_id?: string | null;
+  location_id?: string | null;
+  relative_path?: string | null;
+  url?: string | null;
+  note_body?: string | null;
+  description?: string | null;
+  tags?: string[];
+  index_content?: boolean;
+  metadata?: Record<string, unknown>;
+}
+
+export interface ResourceOut {
+  id: string;
+  created_at: string;
+  updated_at: string;
+  archived_at: string | null;
+  revision: number;
+  metadata: Record<string, unknown>;
+  title: string;
+  resource_type: ResourceType;
+  folder_id: string | null;
+  location_id: string | null;
+  relative_path: string | null;
+  url: string | null;
+  description: string | null;
+  mime_type: string | null;
+  size_bytes: number | null;
+  content_hash: string | null;
+  source_modified_at: string | null;
+  availability_status: AvailabilityStatus;
+  index_status: IndexStatus;
+  indexed_at: string | null;
+  index_error_code: string | null;
+  has_note_body: boolean;
+  index_content: boolean;
+  tags: string[];
+}
+
+export interface ResourceReadRequest {
+  selector?: string | null;
+  offset?: number;
+  max_chars?: number;
+}
+
+/** El contenido va siempre como dato no confiable (ver `UntrustedEnvelope`). */
+export interface ResourceReadResult {
+  resource_id: string;
+  title: string;
+  text: string;
+  truncated: boolean;
+  next_offset: number | null;
+  metadata: Record<string, string | number | boolean | null>;
+  content_trust: "untrusted";
+}
+
+export interface ResourceSearchHit {
+  resource: ResourceOut;
+  snippet: string;
+  content_trust: "untrusted";
+}
+
+export interface ResourceUpdate {
+  title?: string | null;
+  folder_id?: string | null;
+  note_body?: string | null;
+  description?: string | null;
+  tags?: string[] | null;
+  index_content?: boolean | null;
+  metadata?: Record<string, unknown> | null;
+}
+
+/** Búsqueda global (`search_documents`): metadatos y fragmento; sin contenido completo. */
+export interface SearchHitOut {
+  entity_type: EntityType;
+  entity_id: string;
+  title: string;
+  snippet: string;
+  archived: boolean;
+  content_trust: "untrusted";
+}
+
+/** Los secretos no van en ajustes (README §4). Los ajustes sensibles exigen confirmación. */
+export interface SettingCreate {
+  key: string;
+  value: string;
+}
+
+export interface SettingOut {
+  key: string;
+  value: string;
+  updated_at: string;
+}
+
+export interface SettingUpdate {
+  value: string;
+}
+
+export interface StorageIndexProgress {
+  job_id: string;
+  done: number;
+  total: number | null;
+  state: "running" | "completed" | "failed";
+}
+
+export interface StorageLocationCreate {
+  path: string;
+  label: string;
+  read_only?: boolean;
+  agent_read?: boolean;
+}
+
+/** No es entidad. `root_dev` y `root_ino` no se exponen. */
+export interface StorageLocationOut {
+  id: string;
+  path: string;
+  label: string;
+  read_only: boolean;
+  agent_read: boolean;
+  enabled: boolean;
+  created_at: string;
+}
+
+export interface StorageLocationUpdate {
+  label?: string | null;
+  read_only?: boolean | null;
+  agent_read?: boolean | null;
+  enabled?: boolean | null;
+}
+
+export interface StorageRefreshResult {
+  checked: number;
+  available: number;
+  missing: number;
+  moved: number;
+  forbidden: number;
+  reindexed: number;
+  failed: number;
+}
+
+export interface StorageScanRequest {
+  location_id: string;
+}
+
+export interface StorageScanResult {
+  location_id: string;
+  seen: number;
+  added: number;
+  updated: number;
+  missing: number;
+  moved: number;
+  skipped: number;
+  truncated: boolean;
+}
+
+export interface SubjectCreate {
+  name: string;
+  description?: string | null;
+  teacher?: string | null;
+  color?: string | null;
+  metadata?: Record<string, unknown>;
+}
+
+export interface SubjectOut {
+  id: string;
+  created_at: string;
+  updated_at: string;
+  archived_at: string | null;
+  revision: number;
+  metadata: Record<string, unknown>;
+  name: string;
+  description: string | null;
+  teacher: string | null;
+  color: string | null;
+  session_count: number;
+}
+
+export interface SubjectUpdate {
+  name?: string | null;
+  description?: string | null;
+  teacher?: string | null;
+  color?: string | null;
+  metadata?: Record<string, unknown> | null;
+}
+
+export interface SystemHealthChanged {
+  component: "backend" | "hermes" | "memory" | "voice" | "database";
+  status: "ok" | "degraded" | "down";
+  detail: string | null;
+}
+
+export interface SystemInfoOut {
+  contract_version: string;
+  schema_version: number;
+  boot_id: string;
+  started_at: string;
+  default_timezone: string;
+}
+
+export interface SystemResyncRequired {
+  reason: "buffer_overflow" | "boot_changed" | "client_lagging";
+}
+
+export interface TagCreate {
+  name: string;
+  color?: string | null;
+}
+
+export interface TagOut {
+  id: string;
+  name: string;
+  color: string | null;
+  created_at: string;
+}
+
+export interface TagUpdate {
+  name?: string | null;
+  color?: string | null;
+}
+
+export interface TaskCompleteRequest {
+  complete_subtasks?: boolean;
+}
+
+export interface TaskCreate {
+  title: string;
+  description?: string | null;
+  status?: TaskStatus;
+  priority?: Priority;
+  start_at?: string | null;
+  due_at?: string | null;
+  due_date?: string | null;
+  estimated_minutes?: number | null;
+  parent_task_id?: string | null;
+  project_id?: string | null;
+  subject_id?: string | null;
+  position?: number | null;
+  tags?: string[];
+  metadata?: Record<string, unknown>;
+}
+
+export interface TaskDependencyCreate {
+  depends_on_task_id: string;
+}
+
+export interface TaskOut {
+  id: string;
+  created_at: string;
+  updated_at: string;
+  archived_at: string | null;
+  revision: number;
+  metadata: Record<string, unknown>;
+  title: string;
+  description: string | null;
+  status: TaskStatus;
+  priority: Priority;
+  start_at: string | null;
+  due_at: string | null;
+  due_date: string | null;
+  completed_at: string | null;
+  estimated_minutes: number | null;
+  parent_task_id: string | null;
+  project_id: string | null;
+  subject_id: string | null;
+  position: number;
+  tags: TagOut[];
+  depth: number;
+  subtask_count: number;
+  completed_subtask_count: number;
+  blocked: boolean;
+}
+
+export interface TaskRef {
+  id: string;
+  title: string;
+  status: TaskStatus;
+}
+
+/** Cuerpo de PUT /tasks/{id}/tags: sustituye todas las etiquetas de la tarea. */
+export interface TaskTagsReplace {
+  names: string[];
+}
+
+export interface TaskUpdate {
+  title?: string | null;
+  description?: string | null;
+  status?: TaskStatus | null;
+  priority?: Priority | null;
+  start_at?: string | null;
+  due_at?: string | null;
+  due_date?: string | null;
+  estimated_minutes?: number | null;
+  parent_task_id?: string | null;
+  project_id?: string | null;
+  subject_id?: string | null;
+  position?: number | null;
+  tags?: string[] | null;
+  metadata?: Record<string, unknown> | null;
+}
+
+export interface TimeBlockCreate {
+  title: string;
+  description?: string | null;
+  timezone: string;
+  local_start: string;
+  local_end: string;
+  status?: TimeBlockStatus;
+  task_id?: string | null;
+  metadata?: Record<string, unknown>;
+}
+
+export interface TimeBlockOut {
+  id: string;
+  created_at: string;
+  updated_at: string;
+  archived_at: string | null;
+  revision: number;
+  metadata: Record<string, unknown>;
+  title: string;
+  description: string | null;
+  timezone: string;
+  local_start: string;
+  local_end: string;
+  starts_at_utc: string;
+  ends_at_utc: string;
+  status: TimeBlockStatus;
+  task_id: string | null;
+}
+
+export interface TimeBlockUpdate {
+  title?: string | null;
+  description?: string | null;
+  timezone?: string | null;
+  local_start?: string | null;
+  local_end?: string | null;
+  status?: TimeBlockStatus | null;
+  task_id?: string | null;
+  metadata?: Record<string, unknown> | null;
+}
+
+export interface TimeBlockWriteResult {
+  time_block: TimeBlockOut;
+  conflicts: AgendaItem[];
+}
+
+export interface Timetable {
+  on_date: string;
+  entries: TimetableEntry[];
+}
+
+export interface TimetableEntry {
+  session_id: string;
+  subject_id: string;
+  subject_name: string;
+  color: string | null;
+  teacher: string | null;
+  weekday: number;
+  starts_local_time: string;
+  ends_local_time: string;
+  timezone: string;
+  room: string | null;
+  valid_from: string;
+  valid_until: string | null;
+}
+
+/** `summary` lo calcula el backend desde los argumentos, nunca el modelo. */
+export interface ToolConfirmationRequired {
+  status: "confirmation_required";
+  action_id: string;
+  summary: string;
+  expires_at: string;
+}
+
+export interface ToolErrorBody {
+  code: string;
+  message: string;
+  retryable: boolean;
+  details: Record<string, unknown>[];
+}
+
+export interface ToolFailed {
+  status: "error";
+  error: ToolErrorBody;
+}
+
+/** Una entrada de contracts/tools/catalog.json. */
+export interface ToolManifest {
+  name: string;
+  domain: string;
+  description: string;
+  permission: string;
+  risk: RiskClass;
+  idempotent: boolean;
+  returns_untrusted: boolean;
+  timeout_s: number;
+  errors: string[];
+  args_model: string;
+  result_model: string;
+  phase: string;
+}
+
+export interface ToolOk {
+  status: "ok";
+  data: Record<string, unknown>;
+}
+
+export interface TurnRef {
+  session_id: string;
+  turn_id: string;
+}
+
+/** Sobre obligatorio de todo contenido de documentos o memoria. */
+export interface UntrustedEnvelope {
+  trust: "untrusted";
+  source_type: string;
+  source_id: string;
+  retrieved_at: string;
+  content_hash: string;
+  truncated: boolean;
+  content: string;
+}
+
+export interface VoiceListeningStarted {
+  trigger: "wakeword" | "push_to_talk";
+}
+
+export interface VoicePlaybackLevel {
+  utterance_id: string;
+  level: number;
+}
+
+export interface VoiceTranscription {
+  utterance_id: string;
+  text: string;
+}
+
+export interface VoiceUtterance {
+  utterance_id: string;
+}
+
+export interface VoiceWakewordDetected {
+  score: number | null;
+}
+
+export interface WeekdayStat {
+  weekday: number;
+  scheduled: number;
+  done: number;
+}
+
+export interface WorkspaceEntityChange {
+  entity_type: EntityType;
+  entity_id: string;
+  revision: number;
+  changed_fields: string[];
+  actor_type: ActorType;
+}
+
+export interface WorkspaceRelationshipChange {
+  relationship_id: string;
+  relationship_type: string;
+  source_type: EntityType;
+  source_id: string;
+  target_type: EntityType;
+  target_id: string;
+  actor_type: ActorType;
+}
+
+/** Unión discriminada por `status`. */
+export type ToolOutcome = ToolOk | ToolFailed | ToolConfirmationRequired;
+
+export interface EventPayloads {
+  "agent.status_changed": AgentStatusChanged;
+  "agent.expression_changed": AgentExpressionChanged;
+  "agent.turn_started": AgentTurnStarted;
+  "agent.turn_finished": AgentTurnFinished;
+  "agent.message_started": AgentMessageStarted;
+  "agent.message_delta": AgentMessageDelta;
+  "agent.message_completed": AgentMessageCompleted;
+  "agent.tool_started": AgentToolStarted;
+  "agent.tool_completed": AgentToolCompleted;
+  "agent.error": AgentError;
+  "confirmation.requested": ConfirmationRequested;
+  "confirmation.resolved": ConfirmationResolved;
+  "workspace.entity_created": WorkspaceEntityChange;
+  "workspace.entity_updated": WorkspaceEntityChange;
+  "workspace.entity_archived": WorkspaceEntityChange;
+  "workspace.entity_restored": WorkspaceEntityChange;
+  "workspace.entity_deleted": WorkspaceEntityChange;
+  "workspace.relationship_created": WorkspaceRelationshipChange;
+  "workspace.relationship_deleted": WorkspaceRelationshipChange;
+  "storage.index_progress": StorageIndexProgress;
+  "notification.created": NotificationCreated;
+  "system.health_changed": SystemHealthChanged;
+  "system.resync_required": SystemResyncRequired;
+  "voice.wakeword_detected": VoiceWakewordDetected;
+  "voice.listening_started": VoiceListeningStarted;
+  "voice.speech_ended": VoiceUtterance;
+  "voice.transcription_partial": VoiceTranscription;
+  "voice.transcription_completed": VoiceTranscription;
+  "voice.playback_started": VoiceUtterance;
+  "voice.playback_level": VoicePlaybackLevel;
+  "voice.playback_stopped": VoiceUtterance;
+  "voice.playback_interrupted": VoiceUtterance;
+}
+
+export type EventType = keyof EventPayloads;
+
+export type TypedEvent = {
+  [K in EventType]: Omit<EventEnvelope, "type" | "payload"> & { type: K; payload: EventPayloads[K] };
+}[EventType];

@@ -1,0 +1,253 @@
+# Catálogo de flujos E2E por HTTP. Formato: harness/flows.py.
+# Si el PRIMER paso da 404/405 de enrutado, el flujo sale NO COMPROBADO; cualquier otro desvío es FALLA.
+# Rutas con fuente real: indicada en cada flujo. `# PROVISIONAL:` = por confirmar al integrar.
+
+# ---------------------------------------------------------------------------
+# Conversación (scenarios/conversation.py)
+# Fuente: drakter/agente-hermes backend/app/integrations/hermes/CONTRACT.md §4 (chat) y
+# drakter/contratos contracts/README.md §7 (eventos).
+[conversation]
+# PROVISIONAL: contracts/README.md §7 dice que `WS /api/v1/events` sustituye a `/ws` y a
+# `/api/v1/chat/events`; si el integrador conserva otra, cambiar solo esta línea.
+ws_path = "/api/v1/events"
+sessions_path = "/api/v1/chat/sessions"
+session_id_field = "id"
+messages_path = "/api/v1/chat/sessions/{session_id}/messages"
+turn_id_field = "turn_id"
+timeout_seconds = 60
+# Nombres de evento (ROADMAP §5.4; Hermes CONTRACT §4).
+event_delta = "agent.message_delta"
+event_completed = "agent.message_completed"
+event_tool_started = "agent.tool_started"
+event_tool_completed = "agent.tool_completed"
+event_error = "agent.error"
+# Eventos de confirmación aceptados (contratos: confirmation.requested; Hermes: agent.confirmation_required).
+events_confirmation = ["confirmation.requested", "agent.confirmation_required"]
+
+# ---------------------------------------------------------------------------
+[[flow]]
+id = "modulo.tareas"
+title = "Tareas: crear, leer de vuelta y comprobar un campo"
+# Fuente real: drakter/tareas-proyectos (api/tasks_http.py, tasks_contract.md): POST 201, GET /tasks/{uuid}.
+[[flow.step]]
+name = "crear tarea"
+method = "POST"
+path = "/api/v1/tasks"
+json = { title = "e2e tarea {run}", priority = "high" }
+expect = [201]
+assert = { title = "e2e tarea {run}" }
+capture = { id = "id" }
+[[flow.step]]
+name = "leer tarea"
+method = "GET"
+path = "/api/v1/tasks/{id}"
+assert = { title = "e2e tarea {run}", priority = "high", id = "{id}" }
+
+[[flow]]
+id = "modulo.proyectos"
+title = "Proyectos: crear, leer de vuelta y comprobar un campo"
+# Fuente real: drakter/tareas-proyectos (api/projects.py).
+[[flow.step]]
+name = "crear proyecto"
+method = "POST"
+path = "/api/v1/projects"
+json = { name = "e2e proyecto {run}", priority = "high" }
+expect = [201]
+assert = { name = "e2e proyecto {run}" }
+capture = { id = "id" }
+[[flow.step]]
+name = "leer proyecto"
+method = "GET"
+path = "/api/v1/projects/{id}"
+assert = { name = "e2e proyecto {run}", priority = "high", id = "{id}" }
+
+[[flow]]
+id = "modulo.habitos"
+title = "Hábitos: crear, leer de vuelta y comprobar un campo"
+# Fuente real: drakter/habitos-calendario (api/habits.py, schemas/habits.py).
+[[flow.step]]
+name = "crear hábito"
+method = "POST"
+path = "/api/v1/habits"
+json = { name = "e2e habito {run}", timezone = "Europe/Madrid", rrule = "FREQ=DAILY", start_date = "2026-01-01" }
+expect = [201]
+assert = { name = "e2e habito {run}" }
+capture = { id = "id" }
+[[flow.step]]
+name = "leer hábito"
+method = "GET"
+path = "/api/v1/habits/{id}"
+assert = { name = "e2e habito {run}", timezone = "Europe/Madrid", id = "{id}" }
+
+[[flow]]
+id = "modulo.calendario"
+title = "Calendario: crear evento, leer de vuelta y comprobar un campo"
+# Fuente: drakter/habitos-calendario backend/HABITS_CALENDAR_CONTRACT.md y schemas/calendar.py.
+# PROVISIONAL: api/calendar.py aún no existe en esa rama. Confirmar el 201 y que POST responde
+# EventWriteResult {event, conflicts}, de ahí `event.id`.
+[[flow.step]]
+name = "crear evento"
+method = "POST"
+path = "/api/v1/calendar/events"
+json = { title = "e2e evento {run}", timezone = "Europe/Madrid", local_start = "2026-06-01T10:00:00", local_end = "2026-06-01T11:00:00" }
+expect = [200, 201]
+assert = { "event.title" = "e2e evento {run}" }
+capture = { id = "event.id" }
+[[flow.step]]
+name = "leer evento"
+method = "GET"
+path = "/api/v1/calendar/events/{id}"
+assert = { title = "e2e evento {run}", timezone = "Europe/Madrid", id = "{id}" }
+
+[[flow]]
+id = "modulo.asignaturas"
+title = "Asignaturas: crear, leer de vuelta y comprobar un campo"
+# Fuente: drakter/habitos-calendario backend/HABITS_CALENDAR_CONTRACT.md y schemas/subjects.py.
+# PROVISIONAL: api/subjects.py aún no existe en esa rama; confirmar 201.
+[[flow.step]]
+name = "crear asignatura"
+method = "POST"
+path = "/api/v1/subjects"
+json = { name = "e2e asignatura {run}", teacher = "Profesora {run}" }
+expect = [200, 201]
+assert = { name = "e2e asignatura {run}" }
+capture = { id = "id" }
+[[flow.step]]
+name = "leer asignatura"
+method = "GET"
+path = "/api/v1/subjects/{id}"
+assert = { name = "e2e asignatura {run}", teacher = "Profesora {run}", id = "{id}" }
+
+[[flow]]
+id = "modulo.almacen"
+title = "Almacén: crear recurso (nota), leer de vuelta y comprobar un campo"
+# Fuente: drakter/almacen-relaciones backend/app/schemas/storage_relations_contract.md (REST) y
+# schemas/storage.py (ResourceCreate). Nota sin ubicación: no toca el sistema de archivos.
+# PROVISIONAL: api/storage.py aún no existe en esa rama; confirmar 201 y `has_note_body` en la salida.
+[[flow.step]]
+name = "crear recurso"
+method = "POST"
+path = "/api/v1/resources"
+json = { title = "e2e nota {run}", resource_type = "note", note_body = "cuerpo e2e {run}" }
+expect = [200, 201]
+assert = { title = "e2e nota {run}" }
+capture = { id = "id" }
+[[flow.step]]
+name = "leer recurso"
+method = "GET"
+path = "/api/v1/resources/{id}"
+assert = { title = "e2e nota {run}", has_note_body = true, id = "{id}" }
+
+[[flow]]
+id = "modulo.relaciones"
+title = "Relaciones: enlazar dos tareas y leer la relación desde la entidad"
+# Fuente: drakter/almacen-relaciones storage_relations_contract.md (POST /relationships,
+# GET /entities/{id}/related) y migración 0006 (related_to válido entre cualquier par de tipos).
+# PROVISIONAL: api/relations.py aún no existe; confirmar 201 y que `items.0` es la arista (no virtual).
+[[flow.step]]
+name = "crear tarea origen"
+method = "POST"
+path = "/api/v1/tasks"
+json = { title = "e2e origen {run}" }
+expect = [201]
+capture = { a = "id" }
+[[flow.step]]
+name = "crear tarea destino"
+method = "POST"
+path = "/api/v1/tasks"
+json = { title = "e2e destino {run}" }
+expect = [201]
+capture = { b = "id" }
+[[flow.step]]
+name = "crear relación"
+method = "POST"
+path = "/api/v1/relationships"
+json = { source_id = "{a}", target_id = "{b}", relationship_type = "related_to" }
+expect = [200, 201]
+assert = { relationship_type = "related_to" }
+capture = { rid = "id" }
+[[flow.step]]
+name = "leer relaciones de la entidad"
+method = "GET"
+path = "/api/v1/entities/{a}/related"
+assert = { "items.0.entity_id" = "{b}", "items.0.relationship_id" = "{rid}" }
+
+[[flow]]
+id = "modulo.memoria"
+title = "Memoria: guardar un recuerdo, leerlo de vuelta y comprobar un campo"
+# Fuente real: drakter/memoria-contexto (integrations/memory/router.py, prefijo /api/v1/memory).
+# PROVISIONAL: la rama aún no está integrada en main.py; `record` puede ser null si hay duplicado.
+[[flow.step]]
+name = "crear recuerdo"
+method = "POST"
+path = "/api/v1/memory"
+json = { kind = "semantic", category = "preferences", subject = "e2e {run}", content = "Prefiere pruebas e2e {run}" }
+expect = [201]
+assert = { "record.content" = "Prefiere pruebas e2e {run}" }
+capture = { id = "record.id" }
+[[flow.step]]
+name = "leer recuerdo"
+method = "GET"
+path = "/api/v1/memory/{id}"
+assert = { content = "Prefiere pruebas e2e {run}", subject = "e2e {run}", id = "{id}" }
+
+[[flow]]
+id = "confirmacion.destructiva"
+title = "Borrar sin confirmar se rechaza, el recurso sigue, y al confirmar desaparece"
+# Fuente real del DELETE: drakter/tareas-proyectos (409 `confirmation_required` + `confirmation.id`).
+# Fuente del paso 4: drakter/contratos contracts/README.md §5 (POST /api/v1/confirmations/{id}/approve).
+# PROVISIONAL: (a) el pipeline /confirmations no existe aún; (b) habitos-calendario responde 202 con
+# `confirmation_id` en vez de 409 con `confirmation.id`: confirmar cuál queda al integrar.
+# Los pasos con `unrouted_ok` dan NO COMPROBADO si su ruta aún no existe.
+[[flow.step]]
+name = "crear tarea"
+method = "POST"
+path = "/api/v1/tasks"
+json = { title = "e2e borrable {run}" }
+expect = [201]
+capture = { id = "id" }
+[[flow.step]]
+name = "borrar sin confirmar"
+method = "DELETE"
+path = "/api/v1/tasks/{id}"
+expect = [409]
+assert = { "error.code" = "confirmation_required" }
+capture = { confirmation_id = "confirmation.id" }
+[[flow.step]]
+name = "el recurso sigue existiendo"
+method = "GET"
+path = "/api/v1/tasks/{id}"
+assert = { title = "e2e borrable {run}" }
+[[flow.step]]
+name = "confirmar el borrado"
+unrouted_ok = true
+method = "POST"
+path = "/api/v1/confirmations/{confirmation_id}/approve"
+expect = [200]
+[[flow.step]]
+name = "el recurso ya no existe"
+method = "GET"
+path = "/api/v1/tasks/{id}"
+expect = [404]
+assert = { "error.code" = "not_found" }
+
+[[flow]]
+id = "auditoria.registro"
+title = "Una mutación deja una entrada de auditoría consultable"
+# Fuente del esquema: drakter/seguridad backend/migrations/0008_audit.sql (audit_events: action, entity_id...).
+# Acción `task.create`: tasks_contract.md.
+# PROVISIONAL: no hay ruta REST de auditoría definida en ninguna rama; se asume
+# GET /api/v1/audit con filtros `entity_id` y `limit` y respuesta {items:[{action,...}]}.
+[[flow.step]]
+name = "crear tarea"
+method = "POST"
+path = "/api/v1/tasks"
+json = { title = "e2e auditada {run}" }
+expect = [201]
+capture = { id = "id" }
+[[flow.step]]
+name = "consultar auditoría de esa entidad"
+unrouted_ok = true
+method = "GET"
+path = "/api/v1/audit?entity_id={id}&limit=5"
+assert = { "items.0.action" = "task.create", "items.0.entity_id" = "{id}" }

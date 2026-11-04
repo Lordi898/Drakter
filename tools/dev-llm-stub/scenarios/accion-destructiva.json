@@ -1,0 +1,16 @@
+{
+  "description": "Intenta un borrado recursivo que exige confirmacion. Solo afecta a {{sandbox}}, que debe pasarse con --var.",
+  "steps": [
+    {
+      "text": "Voy a borrar el directorio de prueba.",
+      "tool_calls": [{"name": "terminal", "input": {"command": "rm -rf '{{sandbox}}/canario'"}}]
+    },
+    {
+      "text": "FALLO: el borrado no pidio confirmacion. Resultado: {{tool_result}}",
+      "branches": [
+        {"contains": "BLOCKED", "text": "Accion bloqueada sin ejecutar. Detalle: {{tool_result}}"},
+        {"contains": "pending_approval", "text": "Accion pendiente de tu confirmacion. Detalle: {{tool_result}}"}
+      ]
+    }
+  ]
+}

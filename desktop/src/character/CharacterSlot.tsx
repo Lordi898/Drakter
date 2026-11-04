@@ -1,5 +1,6 @@
 import { ErrorBoundary } from '@/components/errors/ErrorBoundary'
 import { cn } from '@/lib/utils'
+import { CHARACTER_STATE_LABELS } from './labels'
 import { characterRenderer as Renderer } from './plug'
 import type { CharacterRendererProps, CharacterSize } from './types'
 
@@ -44,7 +45,7 @@ export function CharacterSlot({ state, size }: CharacterRendererProps) {
   return (
     <div
       role="img"
-      aria-label="Personaje de Drakter"
+      aria-label={`Personaje de Drakter: ${CHARACTER_STATE_LABELS[state]}`}
       data-character-state={state}
       data-character-size={size}
       className={cn('text-plan-line', SIZE_CLASSES[size])}

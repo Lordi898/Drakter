@@ -1,0 +1,26 @@
+[project]
+name = "drakter-backend"
+version = "0.1.0"
+description = "Backend local de Drakter"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "fastapi",
+    "uvicorn",
+    "websockets",
+    "pydantic",
+    "pydantic-settings",
+    "platformdirs",
+    "drakter-contracts",
+    "pypdf",
+]
+
+[dependency-groups]
+dev = [
+    "httpx2",
+]
+
+[tool.uv]
+package = false
+
+[tool.uv.sources]
+drakter-contracts = { path = "../contracts/python", editable = true }

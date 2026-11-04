@@ -1,4 +1,4 @@
-import { app, ipcMain, Notification, type IpcMainInvokeEvent } from 'electron'
+import { app, ipcMain, Notification, type IpcMainInvokeEvent, type WebContents } from 'electron'
 import {
   DESKTOP_NOTIFICATION_LIMITS,
   ERROR_REPORT_LIMITS,
@@ -7,8 +7,13 @@ import {
   type DesktopNotificationRequest,
   type RendererErrorReport
 } from '../shared/bridge'
+import { callOperation } from './apiProxy'
+import { requestApproval } from './approvals'
+import type { BackendHost, EventsBridge } from './host-types'
 import { logError } from './log'
 import { isTrustedRendererUrl } from './renderer-url'
+import { isSandboxDisabled } from './sandbox'
+import { addStorageLocation, deleteStorageLocation, updateStorageLocation } from './storageRoots'
 import { getMainWindow } from './window'
 
 function assertTrustedSender(event: IpcMainInvokeEvent): void {
@@ -70,7 +75,8 @@ function getAppInfo(): AppInfo {
     chromeVersion: process.versions.chrome,
     nodeVersion: process.versions.node,
     platform: process.platform,
-    packaged: app.isPackaged
+    packaged: app.isPackaged,
+    sandboxDisabled: isSandboxDisabled()
   }
 }
 
@@ -84,15 +90,25 @@ function reportRendererError(payload: unknown): void {
   logError(`renderer:${report.source}`, report.message, report.stack)
 }
 
-function handle<T>(channel: string, listener: (payload: unknown) => T): void {
+function handle<T>(channel: string, listener: (payload: unknown, sender: WebContents) => T): void {
   ipcMain.handle(channel, (event, payload: unknown) => {
     assertTrustedSender(event)
-    return listener(payload)
+    return listener(payload, event.sender)
   })
 }
 
-export function registerIpcHandlers(): void {
+export function registerIpcHandlers(backend: BackendHost, events: EventsBridge): void {
   handle(IPC_CHANNELS.getAppInfo, getAppInfo)
   handle(IPC_CHANNELS.showDesktopNotification, showDesktopNotification)
   handle(IPC_CHANNELS.reportRendererError, reportRendererError)
+  handle(IPC_CHANNELS.apiCall, (payload) => callOperation(backend, payload))
+  handle(IPC_CHANNELS.requestApproval, (payload) => requestApproval(backend, payload))
+  handle(IPC_CHANNELS.getConnection, () => backend.getConnection())
+  handle(IPC_CHANNELS.addStorageLocation, (payload) => addStorageLocation(backend, payload))
+  handle(IPC_CHANNELS.updateStorageLocation, (payload) => updateStorageLocation(backend, payload))
+  handle(IPC_CHANNELS.deleteStorageLocation, (payload) => deleteStorageLocation(backend, payload))
+  handle(IPC_CHANNELS.openEvents, (_payload, sender) => events.attach(sender))
+  backend.onConnection((connection) => {
+    getMainWindow()?.webContents.send(IPC_CHANNELS.connectionChanged, connection)
+  })
 }

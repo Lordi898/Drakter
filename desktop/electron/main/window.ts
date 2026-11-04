@@ -1,7 +1,8 @@
 import { join } from 'node:path'
-import { BrowserWindow, dialog } from 'electron'
+import { app, BrowserWindow, dialog } from 'electron'
 import { describeError, logError } from './log'
 import { RENDERER_URL } from './renderer-url'
+import { isSandboxDisabled } from './sandbox'
 
 const CHASSIS_COLOR = '#0c2747'
 const CRASH_LOOP_WINDOW_MS = 30_000
@@ -68,6 +69,7 @@ export function createMainWindow(): BrowserWindow {
       preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true,
       sandbox: true,
+      devTools: !app.isPackaged,
       nodeIntegration: false,
       webSecurity: true,
       webviewTag: false,
@@ -76,6 +78,12 @@ export function createMainWindow(): BrowserWindow {
     }
   })
   mainWindow = window
+
+  if (isSandboxDisabled()) {
+    const warningTitle = 'Drakter — SIN SANDBOX (desarrollo)'
+    window.setTitle(warningTitle)
+    window.on('page-title-updated', (event) => event.preventDefault())
+  }
 
   window.once('ready-to-show', () => window.show())
   window.on('closed', () => {

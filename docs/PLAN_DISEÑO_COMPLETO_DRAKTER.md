@@ -2,6 +2,8 @@
 
 ## Documento maestro de arquitectura, diseño y funcionamiento
 
+> **Prevalencia.** Pese a su título, este documento es **subordinado**: es el último en el orden de prevalencia de `DECISIONS.md` (entrada "Jerarquía de documentos y numeración única de fases": `DECISIONS.md` más reciente, `CLAUDE.md`, `MASTER_PLAN.md`, `ROADMAP.md` y este documento). No es maestro ni definitorio. Donde choque con una decisión registrada, manda la decisión. Sus "Fases 0 a 10" (§20) equivalen a los pasos de la tabla de esa entrada (p. ej. Fase 8 = paso 6, Personalidad y contexto). Los esquemas de datos (entidades, campos, estados, enums, tipos de relación), el catálogo de herramientas y los eventos WebSocket los resuelve `drakter/contratos` (entrada "Contratos de datos que resuelve drakter/contratos"); las listas de este documento son orientativas hasta que publique.
+
 **Versión del diseño:** 1.0  
  **Fecha:** 4 de noviembre de 2026  
  **Tipo:** Aplicación personal de escritorio con agente de IA integrado  
@@ -57,7 +59,7 @@ Tecnologías:
 - TypeScript.
 - Tailwind CSS.
 - Rive para la cara animada.
-- Recharts para gráficos y estadísticas.
+- Gráficos y estadísticas: fuera de la v1; sin Recharts hasta que hagan falta (decisión "Trabajo sin clave y alcance de automejora, copias y v1").
 
 Responsabilidad:
 
@@ -78,8 +80,7 @@ Tecnologías:
 - Python.
 - FastAPI.
 - Pydantic.
-- SQLAlchemy.
-- Alembic.
+- SQL propio con `sqlite3` y migraciones `.sql`, sin SQLAlchemy ni Alembic.
 
 Responsabilidad:
 
@@ -202,7 +203,7 @@ Responsabilidad:
 Componentes:
 
 - Gestor de permisos.
-- Almacén seguro de credenciales.
+- Credenciales fuera del repositorio (`~/.config/drakter/.env`).
 - Registro de actividad.
 - Registro de cambios.
 - Copias de seguridad.
@@ -378,47 +379,13 @@ La personalidad tendrá una estructura separada del razonamiento y de la memoria
 
 ### 5.1. Archivos de personalidad
 
-~/.hermes/SOUL.md
+La personalidad vive en archivos, separada del modelo. Fuente única: `agent/identity/` en el repositorio, con 14 archivos `.md` (`SOUL`, `PERSONALITY`, `BEHAVIOR`, `COMMUNICATION`, `EMOTIONAL_STYLE`, `VALUES`, `USER`, `ENVIRONMENT`, `PREFERENCES`, `CURRENT_CONTEXT`, `CAPABILITIES`, `WORKSPACE_GUIDE`, `TOOL_GUIDE` y `SYSTEM_GUIDE`). Un cargador los compone y los publica en el `HERMES_HOME` de un perfil propio de Drakter, y comprueba el tope de 20.000 caracteres de los archivos de contexto de Hermes. `~/.hermes/SOUL.md` no es la fuente, y la personalidad no se configura con archivos YAML en `config/` (decisión "Los 14 archivos de identidad viven en agent/identity/").
 
-Contendrá:
+`USER.md` y `PREFERENCES.md` del repositorio son plantillas sin datos reales; la plantilla rellenada vive fuera del repositorio y solo inicializa el `USER.md` nativo de Hermes, que a partir de ahí es el vivo (decisión "agent/identity/USER.md es plantilla; el USER.md vivo es el de Hermes").
 
-- Identidad de Drakter.
-- Forma de comunicarse.
-- Personalidad estable.
-- Rasgos de carácter.
-- Humor.
-- Nivel de formalidad.
-- Forma de tratar al usuario.
-- Comportamiento general.
-- Límites de comportamiento.
+Los parámetros de estilo (humor, formalidad, concisión, expresividad, proactividad, intensidad y velocidad de voz) se expresan en esos archivos de identidad.
 
-drakter/config/personality.yaml
-
-Contendrá parámetros configurables:
-
-- Nivel de humor.
-- Formalidad.
-- Concisión.
-- Expresividad.
-- Proactividad.
-- Intensidad de voz.
-- Velocidad de habla.
-- Preferencias de interacción.
-
-drakter/config/emotional_states.yaml
-
-Definirá estados expresivos:
-
-- Neutral.
-- Curioso.
-- Concentrado.
-- Satisfecho.
-- Entusiasmado.
-- Preocupado.
-- Confundido.
-- Frustrado.
-- Tranquilo.
-- Atento.
+Catálogo cerrado de expresiones (7): `neutral`, `curious`, `focused`, `happy`, `concerned`, `confused`, `calm` (decisión "Las expresiones no tienen campo propio"). La expresión viaja en `animation`; no hay campo `expression`. El evento `agent.expression_changed` la transporta en `expression` (entrada "Eventos WebSocket resueltos en contracts/" de `DECISIONS.md`).
 
 Estos estados son etiquetas de representación conversacional y visual, no emociones experimentadas por el modelo.
 
@@ -457,7 +424,7 @@ El agente podrá producir un objeto estructurado de salida:
 - intensity: intensidad.
 - speech_rate: velocidad.
 - voice_profile: perfil de voz.
-- animation: animación recomendada.
+- animation: animación recomendada; transporta la expresión del catálogo de 7 (no hay campo `expression`).
 
 La aplicación validará esos valores contra un catálogo cerrado.
 
@@ -493,7 +460,7 @@ Estados funcionales:
 - success
 - error
 - interrupted
-- sleeping
+- offline
 
 Estados expresivos:
 
@@ -530,6 +497,8 @@ Evolución:
 - Transiciones naturales entre formas de boca.
 
 ### 6.4. Eventos
+
+Lista orientativa. El catálogo definitivo está en `contracts/python/drakter_contracts/events.py` (entrada "Eventos WebSocket resueltos en contracts/" de `DECISIONS.md`).
 
 La interfaz recibirá eventos del agente:
 
@@ -653,26 +622,25 @@ Al detectar una interrupción:
 
 Memoria integrada de Hermes + OpenViking como proveedor externo principal.
 
-No se activarán simultáneamente OpenViking, Mem0, Hindsight, Supermemory y Honcho como proveedores externos de Hermes.
+Solo hay un proveedor externo activo: OpenViking.
 
 La documentación de Hermes contempla un proveedor externo activo cada vez, junto a la memoria integrada.
 
-OpenViking será la primera elección porque permite organizar recursos, memorias, skills y reglas en una estructura jerárquica con recuperación progresiva.
+OpenViking ocupa el único lugar de proveedor externo (`memory.provider: openviking`), junto a `MEMORY.md` y `USER.md`; Hindsight, Mem0, Supermemory y Honcho quedan fuera del plan (decisión "Memoria: nativa de Hermes + OpenViking con capas L0/L1/L2"). OpenViking es la elección porque permite organizar recursos, memorias, skills y reglas en una estructura jerárquica con recuperación progresiva.
 
 ### 8.2. Archivos de Hermes
 
 Directorio:
 
-~/.hermes/
+`HERMES_HOME` del perfil propio de Drakter (no el `~/.hermes/` por defecto como fuente de identidad).
 
 Archivos y carpetas:
 
-- SOUL.md: identidad estable de Drakter.
-- memories/USER.md: perfil y preferencias del usuario.
+- SOUL.md: identidad estable de Drakter, publicada desde `agent/identity/` (el repositorio es la fuente).
+- memories/USER.md: perfil y preferencias del usuario (el vivo es este; el del repositorio es solo plantilla).
 - memories/MEMORY.md: notas persistentes del agente.
 - config.yaml: configuración de Hermes.
-- .env: credenciales y secretos.
-- auth.json: credenciales de proveedores cuando corresponda.
+- .env y auth.json: los secretos no se versionan; el origen único de credenciales de Drakter es `~/.config/drakter/.env`.
 - skills/: skills instaladas y creadas.
 - sessions/: sesiones.
 - cron/: trabajos programados.
@@ -705,7 +673,7 @@ viking://session/
 
 Contexto de la sesión en curso.
 
-OpenViking utilizará resúmenes y niveles de detalle para evitar cargar todo el contenido.
+OpenViking utilizará resúmenes y niveles de detalle para evitar cargar todo el contenido. La ingesta del almacén en OpenViking es opcional por recurso, viene apagada por defecto y pasa siempre por el backend.
 
 ### 8.4. Capas de memoria
 
@@ -737,16 +705,13 @@ Durante una conversación:
 
 1. El agente recibe el mensaje.
 2. Identifica qué contexto necesita.
-3. Consulta memoria relevante.
+3. Consulta memoria relevante (la recuperación ocurre dentro de Hermes, con las herramientas del proveedor; el backend solo entrega mensaje y contexto de sesión).
 4. Consulta recursos si hace falta.
 5. Recibe resultados resumidos y referencias.
 6. Responde o ejecuta acciones.
-7. Al terminar la sesión, se evalúa qué información merece conservarse.
-8. Se extraen posibles recuerdos.
-9. Se clasifican.
-10. Se eliminan duplicados.
-11. Se comprueban contradicciones.
-12. Se guardan los recuerdos aprobados según las reglas configuradas.
+7. Al terminar la sesión, OpenViking evalúa qué información merece conservarse.
+8. Extracción, clasificación, deduplicación y resolución de contradicciones las hace OpenViking, configurado y comprobado (lo que falte se anota con ⚠️). Drakter no tiene pipeline propio ni guarda recuerdos en el repositorio (decisión "Memoria sin pipeline propio ni recuerdos en el repositorio").
+9. Se guardan los recuerdos aprobados según las reglas configuradas.
 
 ### 8.6. Tipos de memoria
 
@@ -810,13 +775,13 @@ Cada skill tendrá:
 - Ejemplos de entrada y salida.
 - Pruebas.
 
-Las skills se guardarán en el sistema de skills de Hermes y podrán tener documentación complementaria en OpenViking.
+La fuente de las skills está en `agent/` y se publican al perfil de Hermes; podrán tener documentación complementaria en OpenViking.
 
 No se duplicarán instrucciones innecesariamente.
 
 ## 10. Automejora y evolución controlada
 
-Drakter tendrá un sistema de mejora continua, pero no modificará su propio código ni sus reglas de forma autónoma y silenciosa.
+Drakter tendrá un sistema de mejora continua, pero no modificará su propio código ni sus reglas de forma autónoma y silenciosa. Lo publicado al agente en uso (Skills incluidas) cuenta como producción: todo cambio pasa por propuesta y autorización (decisión "Trabajo sin clave y alcance de automejora, copias y v1").
 
 ### 10.1. Qué podrá mejorar
 
@@ -825,7 +790,7 @@ Drakter tendrá un sistema de mejora continua, pero no modificará su propio có
 - Procedimientos.
 - Recuperación contextual.
 - Clasificación de recuerdos.
-- Configuración de personalidad.
+- Archivos de identidad (siempre con propuesta y autorización).
 - Prompts de trabajo.
 - Flujos de automatización.
 
@@ -848,7 +813,7 @@ Drakter tendrá un sistema de mejora continua, pero no modificará su propio có
 5. Ejecuta pruebas.
 6. Compara resultados.
 7. Presenta los cambios.
-8. Solicita aprobación cuando afecten al comportamiento o a datos importantes.
+8. Solicita siempre aprobación antes de publicar, también en Skills.
 9. Guarda la versión aprobada.
 10. Mantiene la posibilidad de revertir.
 
@@ -860,9 +825,9 @@ El sistema conservará historial de versiones.
 
 Tecnología: SQLite.
 
-Acceso mediante SQLAlchemy.
+Acceso con SQL propio.
 
-Migraciones mediante Alembic.
+Migraciones `.sql` en `backend/migrations/` (entrada "SQL propio sin Alembic" de `DECISIONS.md`).
 
 Búsqueda textual mediante SQLite FTS5.
 
@@ -1139,7 +1104,9 @@ No habrá una implementación de negocio para la GUI y otra distinta para Hermes
 
 ## 13. Herramientas de Drakter
 
-El servidor MCP tendrá las siguientes familias de herramientas.
+Lista orientativa. El catálogo base es `MASTER_PLAN.md` §19, y lo congela `drakter/contratos`; si difiere, manda su entrada (decisión "Huecos de MASTER_PLAN §19: borrar o mover archivos y listar hábitos"). `list_habits` se mantiene (solo lectura). Eliminar o mover recursos no tiene herramienta de agente en la v1: se hace solo desde la GUI, con confirmación; si el agente recibe esa petición, lo dice y no improvisa un sustituto. Las herramientas las sirve el backend por MCP en loopback (servidor delgado, sin lógica de negocio) y Hermes es solo cliente (decisión "Puente Hermes-backend y flujo de una petición").
+
+Las familias siguientes son las de este plan; las operaciones destructivas de la lista (`delete_task`, `delete_event`, `remove_relationship`) crean una confirmación pendiente y no se ejecutan hasta que la GUI la resuelve.
 
 ### Tasks
 
@@ -1250,12 +1217,15 @@ Requieren confirmación.
 
 Ejemplos:
 
-- Eliminar muchos elementos.
-- Mover o renombrar archivos.
+- Eliminar cualquier elemento (toda eliminación confirma, no solo las masivas).
+- Mover grandes cantidades de recursos (mover o renombrar archivos concretos solo es posible desde la GUI; ver §13 y `MASTER_PLAN.md` §24).
 - Modificar una gran cantidad de datos.
-- Cambiar permisos.
 - Ejecutar acciones externas.
 - Modificar configuración crítica.
+
+Cambiar permisos está prohibido para el agente: no es una acción confirmable, solo la GUI puede hacerlo (decisión "Contratos de datos que resuelve drakter/contratos").
+
+Flujo de confirmación (decisión "Herramientas con su módulo; confirmación y auditoría antes de la primera"): la herramienta destructiva crea una confirmación pendiente y devuelve su id sin ejecutar; solo la GUI la resuelve, por un endpoint que no es herramienta; la ejecución y la auditoría ocurren después. La confirmación es obligatoria y el undo es adicional. Permisos, confirmaciones pendientes y auditoría existen antes de la primera herramienta.
 
 El usuario podrá consultar qué herramienta se ha ejecutado y qué datos ha cambiado.
 
@@ -1268,9 +1238,11 @@ Se conservará un registro de operaciones con:
 - Elementos afectados.
 - Usuario o agente que inició la operación.
 
-Las claves API no se guardarán en la base de datos del Workspace ni en el frontend. Se utilizará el almacén seguro del sistema o el mecanismo de credenciales de Hermes.
+Las claves API no se guardarán en la base de datos del Workspace ni en el frontend. El origen único de credenciales es `~/.config/drakter/.env`, fuera del repositorio.
 
 ## 15. Automatizaciones y notificaciones
+
+Alcance v1: las automatizaciones avanzadas quedan fuera; solo se incluye un mínimo local que dispara recordatorios (decisión "Trabajo sin clave y alcance de automejora, copias y v1"). El resto de esta sección describe el diseño completo, no la v1.
 
 Se incorporará un servicio de tareas programadas.
 
@@ -1299,6 +1271,8 @@ Las automatizaciones no podrán saltarse el sistema de permisos.
 
 ## 16. Monitorización
 
+Alcance v1: los paneles avanzados quedan fuera; el panel de estado y los indicadores siguientes describen el diseño completo, no la v1.
+
 La aplicación tendrá un panel de estado.
 
 Indicadores:
@@ -1319,223 +1293,15 @@ Indicadores:
 - Errores recientes.
 - CPU.
 - RAM.
-- GPU, cuando sea detectable.
+- GPU, cuando sea detectable (la máquina de desarrollo no tiene VRAM dedicada: 14 GB de RAM y gráfica integrada Intel UHD 620; ver decisión "Hardware real y paralelismo acotado").
 
 El coste se calculará utilizando los precios configurados del proveedor y el uso real registrado.
 
 ## 17. Estructura del proyecto
 
-Repositorio principal:
+La estructura vigente es la de `MASTER_PLAN.md` Parte XII con las desviaciones registradas en `DECISIONS.md` (entrada "Datos fuera del repositorio y estructura de carpetas"). Se descartan `apps/` y `docker-compose`; el árbol de este plan queda eliminado para no duplicar la estructura. Las carpetas se crean cuando entra código. La configuración no sensible puede versionarse; la sensible, nunca. Los datos de ejecución viven en `DRAKTER_DATA_DIR` (por defecto `user_data_dir("drakter")`, según `backend/CONTRACT.md`); `workspace/` no guarda datos.
 
-drakter/
-
-drakter/
-
-│
-
-├── apps/
-
-│   └── desktop/
-
-│       ├── electron/
-
-│       │   ├── main.ts
-
-│       │   ├── preload.ts
-
-│       │   └── ipc/
-
-│       │
-
-│       ├── src/
-
-│       │   ├── app/
-
-│       │   ├── components/
-
-│       │   ├── layouts/
-
-│       │   ├── pages/
-
-│       │   │   ├── home/
-
-│       │   │   ├── habits/
-
-│       │   │   ├── tasks/
-
-│       │   │   ├── projects/
-
-│       │   │   ├── storage/
-
-│       │   │   ├── calendar/
-
-│       │   │   ├── subjects/
-
-│       │   │   ├── relationships/
-
-│       │   │   └── settings/
-
-│       │   ├── character/
-
-│       │   ├── chat/
-
-│       │   ├── audio/
-
-│       │   ├── services/
-
-│       │   └── styles/
-
-│       │
-
-│       └── assets/
-
-│           ├── character/
-
-│           ├── icons/
-
-│           └── sounds/
-
-│
-
-├── backend/
-
-│   ├── app/
-
-│   │   ├── api/
-
-│   │   ├── core/
-
-│   │   ├── database/
-
-│   │   ├── models/
-
-│   │   ├── schemas/
-
-│   │   ├── services/
-
-│   │   ├── modules/
-
-│   │   │   ├── tasks/
-
-│   │   │   ├── projects/
-
-│   │   │   ├── habits/
-
-│   │   │   ├── calendar/
-
-│   │   │   ├── subjects/
-
-│   │   │   ├── resources/
-
-│   │   │   └── relationships/
-
-│   │   ├── permissions/
-
-│   │   └── main.py
-
-│   │
-
-│   └── migrations/
-
-│
-
-├── agent/
-
-│   ├── mcp_server/
-
-│   ├── hermes/
-
-│   ├── skills/
-
-│   ├── prompts/
-
-│   └── adapters/
-
-│
-
-├── voice/
-
-│   ├── wakeword/
-
-│   ├── vad/
-
-│   ├── stt/
-
-│   ├── tts/
-
-│   ├── audio/
-
-│   └── lipsync/
-
-│
-
-├── memory/
-
-│   ├── openviking/
-
-│   ├── retrieval/
-
-│   ├── extraction/
-
-│   └── evaluation/
-
-│
-
-├── config/
-
-│   ├── app.yaml
-
-│   ├── agent.yaml
-
-│   ├── personality.yaml
-
-│   ├── emotional_states.yaml
-
-│   ├── voice.yaml
-
-│   ├── permissions.yaml
-
-│   └── logging.yaml
-
-│
-
-├── docs/
-
-│   ├── architecture/
-
-│   ├── api/
-
-│   ├── database/
-
-│   ├── agent/
-
-│   └── decisions/
-
-│
-
-├── tests/
-
-│   ├── unit/
-
-│   ├── integration/
-
-│   ├── e2e/
-
-│   └── evaluations/
-
-│
-
-├── scripts/
-
-├── .env.example
-
-├── .gitignore
-
-├── README.md
-
-└── docker-compose.yml
-
-Los archivos de datos y credenciales se guardarán fuera del repositorio.
+Los archivos de datos (`DRAKTER_DATA_DIR`) y las credenciales (`~/.config/drakter/.env`) se guardan fuera del repositorio.
 
 ## 18. Despliegue local
 
@@ -1543,7 +1309,7 @@ Servicios:
 
 - Drakter Desktop.
 - Drakter Backend.
-- Hermes Gateway.
+- Runner de Hermes.
 - Drakter MCP Server.
 - Voice Service.
 - OpenViking.
@@ -1555,7 +1321,7 @@ La aplicación comprobará su estado y mostrará errores claros si alguno no est
 
 La comunicación local utilizará interfaces restringidas a localhost. No se expondrán servicios a la red local o Internet por defecto.
 
-Docker podrá utilizarse para servicios que lo necesiten, pero la aplicación de escritorio no dependerá de que absolutamente todo funcione dentro de contenedores.
+Sin Docker hasta que haga falta (decisión "Trabajo sin clave y alcance de automejora, copias y v1"); la aplicación de escritorio no depende de contenedores.
 
 ## 19. Copias de seguridad y recuperación
 
@@ -1563,11 +1329,14 @@ Se realizarán copias de seguridad de:
 
 - Base de datos.
 - Configuración.
-- Archivos de personalidad.
+- Archivos de identidad (`agent/identity/`).
 - Skills.
 - Índices y metadatos.
 - Configuración de memoria.
 - Datos de OpenViking.
+- Home de Hermes.
+
+Sin secretos en las copias.
 
 Los archivos originales del almacén no se duplicarán automáticamente en las copias de seguridad de Drakter, salvo que se configure expresamente.
 
@@ -1594,8 +1363,10 @@ Se conservarán versiones recientes y un procedimiento de restauración probado.
 
 ### Fase 2. Cara
 
+(Las Fases de este plan equivalen a los pasos de la tabla de `DECISIONS.md`; ver Prevalencia.)
+
 - Diseño del personaje.
-- Archivo Rive.
+- Archivo Rive (el `.riv` lo diseña el usuario; hasta entonces, personaje provisional con la misma API de estados y ⚠️ en sus casillas).
 - Estados.
 - Expresiones.
 - Eventos.
@@ -1630,7 +1401,7 @@ Se conservarán versiones recientes y un procedimiento de restauración probado.
 
 - Archivos de Hermes.
 - OpenViking.
-- Extracción.
+- Extracción y clasificación configuradas en OpenViking (sin pipeline propio).
 - Recuperación.
 - Evaluación.
 - Skills.
@@ -1646,7 +1417,7 @@ Se conservarán versiones recientes y un procedimiento de restauración probado.
 
 ### Fase 8. Personalidad
 
-- SOUL.md.
+- Archivos de `agent/identity/` y su cargador.
 - Perfiles vocales.
 - Estados expresivos.
 - Contexto.
@@ -1680,7 +1451,7 @@ Se conservarán versiones recientes y un procedimiento de restauración probado.
 4. Se comprueba la configuración local.
 5. Se inicia o verifica el backend FastAPI.
 6. El backend comprueba SQLite.
-7. Se inicia o verifica Hermes Gateway.
+7. Se inicia o verifica el runner de Hermes (proceso aparte sobre `AIAgent`, sin gateway, supervisado por FastAPI).
 8. Se inicia o verifica OpenViking.
 9. Se inicia o verifica el servidor MCP.
 10. Se comprueba el servicio de voz.
@@ -1700,10 +1471,10 @@ Si algún servicio falla, Drakter seguirá funcionando en modo degradado cuando 
 4. El backend crea un identificador de interacción.
 5. Se envía el mensaje a Hermes.
 6. Hermes recibe el contexto base.
-7. Se evalúa si necesita memoria.
-8. Se recuperan recuerdos relevantes.
+7. Hermes evalúa si necesita memoria.
+8. Hermes recupera los recuerdos relevantes con las herramientas de OpenViking (la recuperación ocurre dentro de Hermes).
 9. Se buscan recursos si la petición lo requiere.
-10. Se construye el contexto de la petición.
+10. El backend entrega el mensaje y el contexto de sesión a Hermes, que recupera la memoria.
 11. El modelo analiza la instrucción.
 12. Decide si necesita herramientas.
 13. Ejecuta las herramientas necesarias.
@@ -1742,7 +1513,7 @@ Si algún servicio falla, Drakter seguirá funcionando en modo degradado cuando 
 ## 4. Ejecución de una herramienta
 
 1. Hermes identifica una operación necesaria.
-2. Selecciona una herramienta MCP.
+2. Selecciona una herramienta MCP (servida por el backend en loopback).
 3. Envía los parámetros.
 4. El servidor MCP valida el esquema.
 5. El backend comprueba permisos.
@@ -1792,14 +1563,11 @@ Ejemplo: el usuario pide crear una tarea para un proyecto, relacionarla con una 
 ## 7. Memoria persistente
 
 1. Se registra la interacción.
-2. Se identifican datos potencialmente reutilizables.
-3. Se clasifican por tipo.
-4. Se detectan duplicados.
-5. Se detectan posibles contradicciones.
-6. Se comprueba si existe una regla que impida guardar el dato.
-7. Se guarda en el sistema correspondiente.
-8. OpenViking organiza el contenido.
-9. En futuras sesiones se recupera únicamente cuando resulta relevante.
+2. OpenViking identifica datos potencialmente reutilizables, los clasifica, detecta duplicados y contradicciones (sin pipeline propio).
+3. Se comprueba si existe una regla que impida guardar el dato.
+4. Se guarda en el sistema correspondiente.
+5. OpenViking organiza el contenido.
+6. En futuras sesiones se recupera únicamente cuando resulta relevante.
 
 ## 8. Automejora
 
@@ -1810,7 +1578,7 @@ Ejemplo: el usuario pide crear una tarea para un proyecto, relacionarla con una 
 5. Ejecuta pruebas.
 6. Compara el resultado.
 7. Presenta el cambio.
-8. El usuario aprueba o rechaza.
+8. El usuario aprueba o rechaza (siempre, también en Skills).
 9. Si se aprueba, se publica la nueva versión.
 10. Se conserva la versión anterior para poder revertir.
 

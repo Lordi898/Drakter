@@ -10,6 +10,8 @@
 **Sistema operativo inicial:** Linux, con arquitectura preparada para Windows  
 **Estrategia:** Desarrollo modular, local-first y ampliable.
 
+> **Prevalencia.** Donde este plan contradiga una decisión registrada, manda la entrada más reciente de `DECISIONS.md` (orden completo en su entrada "Jerarquía de documentos y numeración única de fases"). La fase se identifica por el **paso** de la tabla de esa entrada; la numeración de Fases de este documento es solo la suya. Las listas de casillas de la Parte XVI son históricas: la lista viva es `docs/IMPLEMENTATION_STATUS.md`. Los conflictos de esquema y de catálogo (entidades, campos, estados, herramientas) los resuelve la entrada "Contratos de datos que resuelve drakter/contratos".
+
 # PARTE I. DEFINICIÓN GENERAL DEL PROYECTO
 
 ## 1. Objetivo
@@ -65,7 +67,7 @@ Los tres estarán conectados mediante APIs internas.
 | Voz TTS alternativa | Piper |
 | Memoria nativa del agente | Memoria nativa de Hermes |
 | Memoria jerárquica (L0/L1/L2) | OpenViking |
-| Contexto del repositorio de desarrollo | ByteRover |
+| Contexto del repositorio de desarrollo (utilidad opcional, fuera del producto) | ByteRover |
 | Habilidades del agente | Hermes Skills |
 | Orquestación futura de voz | LiveKit Agents |
 | Control de versiones | Git + GitHub |
@@ -175,7 +177,6 @@ Incluye:
 - Memoria procedimental.
 - Memoria nativa de Hermes.
 - OpenViking.
-- ByteRover para el conocimiento del repositorio de desarrollo.
 - Archivos de contexto.
 - Índices.
 - Recuperación selectiva.
@@ -296,16 +297,15 @@ Los estados funcionales serán independientes de las expresiones:
 
 Se implementarán expresiones como:
 
-- Neutralidad.
-- Curiosidad.
-- Concentración.
-- Sorpresa.
-- Alegría.
-- Preocupación.
-- Confusión.
-- Satisfacción.
-- Frustración representada de forma moderada.
-- Atención.
+- `neutral`
+- `curious`
+- `focused`
+- `happy`
+- `concerned`
+- `confused`
+- `calm`
+
+Son un catálogo cerrado de 7 (decisión "Las expresiones no tienen campo propio"). La expresión viaja en el campo `animation` del objeto expresivo; no existe un campo `expression` propio. La app valida cada valor contra este catálogo.
 
 Las expresiones se seleccionarán mediante información contextual generada por Drakter.
 
@@ -325,7 +325,8 @@ Orden de implementación:
 
 ### 6.5. Comunicación de estados
 
-Drakter enviará eventos al frontend:
+Drakter enviará eventos al frontend. La lista siguiente es orientativa: el catálogo definitivo está en `contracts/python/drakter_contracts/events.py` (entrada "Eventos WebSocket resueltos en contracts/" de `DECISIONS.md`).
+
 
 - agent.listening
 - agent.thinking
@@ -334,7 +335,6 @@ Drakter enviará eventos al frontend:
 - agent.success
 - agent.error
 - agent.interrupted
-- agent.offline
 - agent.expression_changed
 
 El frontend transformará estos eventos en animaciones.
@@ -423,35 +423,27 @@ drakter/
 
 └── agent/
 
-├── identity/
+└── identity/
 
-│   ├── SOUL.md
+├── SOUL.md
 
-│   ├── PERSONALITY.md
+├── PERSONALITY.md
 
-│   ├── BEHAVIOR.md
+├── BEHAVIOR.md
 
-│   ├── COMMUNICATION.md
+├── COMMUNICATION.md
 
-│   ├── EMOTIONAL_STYLE.md
+├── EMOTIONAL_STYLE.md
 
-│   └── VALUES.md
+├── VALUES.md
 
-│
+├── USER.md
 
-├── context/
+├── ENVIRONMENT.md
 
-│   ├── USER.md
+├── PREFERENCES.md
 
-│   ├── ENVIRONMENT.md
-
-│   ├── PREFERENCES.md
-
-│   └── CURRENT_CONTEXT.md
-
-│
-
-└── knowledge/
+├── CURRENT_CONTEXT.md
 
 ├── CAPABILITIES.md
 
@@ -460,6 +452,8 @@ drakter/
 ├── TOOL_GUIDE.md
 
 └── SYSTEM_GUIDE.md
+
+Los 14 archivos viven en `agent/identity/`; `agent/context/` y `agent/knowledge/` no forman parte de la estructura vigente (decisión "Los 14 archivos de identidad viven en agent/identity/"). La fuente es el repositorio: un cargador los compone y los publica en el `HERMES_HOME` del perfil de Drakter. `USER.md` y `PREFERENCES.md` son plantillas sin datos reales; el `USER.md` vivo es el nativo de Hermes (véase §10).
 
 ### 8.2. Responsabilidad de cada archivo
 
@@ -489,7 +483,7 @@ Define principios, prioridades y límites.
 
 **USER.md**
 
-Contiene información estable y relevante sobre el usuario.
+Plantilla, sin datos reales, de la información estable y relevante sobre el usuario. El `USER.md` vivo es el nativo de Hermes (véase §10).
 
 **ENVIRONMENT.md**
 
@@ -497,7 +491,7 @@ Describe el entorno técnico, sistema operativo, dispositivos y servicios autori
 
 **PREFERENCES.md**
 
-Almacena preferencias persistentes.
+Plantilla de preferencias persistentes, sin datos reales; sigue el mismo criterio que `USER.md`.
 
 **CURRENT_CONTEXT.md**
 
@@ -532,6 +526,8 @@ Orden de prioridad:
 7. Instrucción actual.
 
 La memoria recuperada nunca podrá sustituir las reglas de seguridad.
+
+**Lectura del orden** (decisión "La memoria no se impone a la instrucción actual"): los niveles 1 a 5 enmarcan la instrucción actual; la memoria y los datos no confiables solo informan y nunca dan órdenes; el nivel 7 es lo que hay que hacer dentro de ese marco. Si la memoria contradice al usuario, vale lo que dice ahora y se señala la discrepancia. Para datos operativos, la fuente es el Workspace. La barrera real la impone el backend.
 
 # PARTE VI. MEMORIA Y CONOCIMIENTO
 
@@ -615,6 +611,8 @@ La memoria nunca es la fuente de verdad de un dato operativo: guarda la referenc
 
 Hermes solo admite un proveedor de memoria externo activo. Ese lugar lo ocupa OpenViking (`memory.provider: openviking`), y la memoria nativa sigue activa a su lado.
 
+**`USER.md`:** en el repositorio (`agent/identity/USER.md`) solo hay una plantilla sin datos reales. El `USER.md` nativo, en el `HERMES_HOME` del perfil de Drakter, guarda lo esencial y OpenViking guarda lo demás. La plantilla rellenada por el usuario vive fuera del repositorio, en el directorio de datos de Drakter, y solo inicializa el `USER.md` nativo; a partir de ahí manda el nativo (decisión "agent/identity/USER.md es plantilla; el USER.md vivo es el de Hermes").
+
 ### 10.2. Las tres capas de OpenViking
 
 | Capa | Lectura | Límite por defecto | Uso en Drakter |
@@ -662,7 +660,7 @@ Escritura:
 1. Los datos esenciales y estables van a la memoria nativa.
 2. Lo explícito se guarda con `viking_remember`.
 3. Al confirmar la sesión, OpenViking extrae memorias en seis categorías.
-4. Los documentos del almacén entran en `viking://resources/` **a través del backend**, tras validar ruta y permisos.
+4. La ingesta de documentos del almacén en `viking://resources/` es **opcional por recurso y viene apagada por defecto**. Cuando se activa, pasa siempre **a través del backend**, tras validar ruta y permisos.
 
 ### 10.6. Drakter Memory Adapter
 
@@ -688,67 +686,13 @@ Es un servicio del backend, no una capa multiproveedor. El agente usa las herram
 
 ### 10.9. ByteRover
 
-Contexto estructurado del repositorio durante el desarrollo. No guarda recuerdos personales ni forma parte de la memoria de Drakter en ejecución.
+Utilidad opcional de desarrollo para el contexto estructurado del repositorio. No guarda recuerdos personales y queda fuera de la memoria del producto y de la Capa 5 (decisión "Memoria sin pipeline propio ni recuerdos en el repositorio").
 
 ## 11. Archivos de memoria
 
-drakter/
+`memory/` guarda **configuración e integración** de la memoria (configuración de OpenViking y del proveedor de Hermes, adaptador, scripts de comprobación). **Nunca guarda recuerdos ni datos personales**: los recuerdos viven en la memoria nativa de Hermes y en OpenViking, y sus datos en `DRAKTER_DATA_DIR`, fuera del repositorio.
 
-└── memory/
-
-├── working/
-
-│   ├── CURRENT_SESSION.md
-
-│   ├── ACTIVE_CONTEXT.md
-
-│   └── ACTIVE_OPERATIONS.md
-
-│
-
-├── episodic/
-
-│   ├── events/
-
-│   └── decisions/
-
-│
-
-├── semantic/
-
-│   ├── user/
-
-│   ├── projects/
-
-│   ├── preferences/
-
-│   └── environment/
-
-│
-
-├── procedural/
-
-│   ├── workflows/
-
-│   └── procedures/
-
-│
-
-├── indexes/
-
-│   ├── resource_index/
-
-│   └── context_index/
-
-│
-
-└── logs/
-
-├── memory_operations.log
-
-└── retrieval.log
-
-Estos archivos serán una representación organizada y auditable de la información.
+No hay pipeline propio de memoria. Extraer, clasificar, deduplicar y resolver contradicciones se configura y se comprueba en OpenViking; lo que falte se anota con ⚠️ en `IMPLEMENTATION_STATUS.md`. La taxonomía de la sección 9 y las capas L0/L1/L2 de la sección 10 se conservan.
 
 Las bases de datos internas de OpenViking no se manipularán directamente desde la GUI. Se utilizarán sus interfaces y adaptadores.
 
@@ -1073,6 +1017,7 @@ Hermes tendrá herramientas específicas para cada módulo.
 
 - create_habit
 - update_habit
+- list_habits
 - register_habit_completion
 - get_habit_history
 - get_habit_statistics
@@ -1122,6 +1067,13 @@ Hermes tendrá herramientas específicas para cada módulo.
 
 Todas las herramientas tendrán esquemas de parámetros, validaciones, permisos y resultados estructurados.
 
+**Notas (decisión "Huecos de MASTER_PLAN §19: borrar o mover archivos y listar hábitos"):**
+
+- `list_habits` es de solo lectura.
+- Eliminar o mover recursos del almacén **no tiene herramienta de agente en la v1**: se hace desde la GUI, con confirmación (clasificado en §24). Si el agente recibe esa petición, lo dice y no improvisa un sustituto.
+- Esta lista es la base del catálogo; el catálogo definitivo de herramientas y Skills lo congela `drakter/contratos`, y si difiere, manda su entrada posterior en `DECISIONS.md`.
+- Las herramientas las sirve el backend por MCP en loopback (véase §28); cada una se construye con su módulo (véase Parte XIII).
+
 # PARTE IX. VOZ
 
 ## 20. Sistema de escucha
@@ -1160,9 +1112,9 @@ Configuración inicial:
 - Idioma español configurado inicialmente.
 - Modelo medium como alternativa si las pruebas de rendimiento lo justifican.
 
-Con 32 GB de RAM y 4 GB de VRAM, se priorizará la ejecución local en CPU para no saturar la memoria gráfica.
+La máquina de desarrollo y de comprobación es un i7-8665U de 8 hilos con 14 GB de RAM y gráfica integrada Intel UHD 620, sin VRAM dedicada (decisión "Hardware real y paralelismo acotado"). La voz se dimensiona para CPU y las cifras de rendimiento solo se publican medidas.
 
-Se medirá latencia real antes de decidir si merece la pena utilizar GPU.
+Se medirá latencia real, uso de CPU y de RAM antes de decidir el modelo; no hay GPU dedicada con la que contar.
 
 ## 21. Sistema TTS
 
@@ -1263,9 +1215,11 @@ Se implementará un ciclo controlado:
 6. Crear una propuesta documentada.
 7. Ejecutar pruebas en entorno aislado.
 8. Mostrar resultados.
-9. Solicitar aprobación cuando corresponda.
+9. Solicitar autorización del usuario (siempre).
 10. Aplicar cambios autorizados.
 11. Registrar la versión y el resultado.
+
+Todo cambio pasa por propuesta y autorización, también en Skills. Lo publicado al agente en uso (identidad, Skills, configuración del perfil) cuenta como producción (decisión "Trabajo sin clave y alcance de automejora, copias y v1").
 
 ### 23.1. Archivos
 
@@ -1303,7 +1257,7 @@ No podrá:
 - Modificar sus permisos para ampliarlos.
 - Desactivar confirmaciones.
 - Cambiar sus reglas de seguridad.
-- Modificar código de producción sin autorización.
+- Modificar producción (código, identidad, Skills o configuración publicada al agente) sin autorización.
 - Eliminar registros de auditoría.
 - Ejecutar cambios no probados.
 
@@ -1335,6 +1289,8 @@ Podrán ejecutarse directamente si están autorizadas:
 - Consultar hábitos.
 
 ### Acciones que requieren confirmación
+
+La confirmación es obligatoria (el undo, si existe, es adicional). Flujo: la herramienta destructiva crea una confirmación pendiente y devuelve su id sin ejecutar; solo la GUI la resuelve, por un endpoint que no es herramienta; la ejecución y la auditoría ocurren después. Los detalles los congela `drakter/contratos` (decisión "Herramientas con su módulo; confirmación y auditoría antes de la primera").
 
 - Eliminar elementos.
 - Eliminar archivos.
@@ -1371,12 +1327,16 @@ Se implementará:
 
 - Copia de SQLite.
 - Copia de configuración.
+- Copia de la identidad.
+- Copia de las Skills.
+- Copia de los datos de OpenViking.
+- Copia del home de Hermes.
 - Copia de índices reconstruibles.
 - Copia de metadatos del almacén.
 - Exportación de datos.
 - Restauración verificada.
 
-Las copias no deben incluir automáticamente todos los documentos originales si estos permanecen en ubicaciones externas.
+Las copias no incluyen secretos y no deben incluir automáticamente todos los documentos originales si estos permanecen en ubicaciones externas.
 
 # PARTE XII. ESTRUCTURA DEL REPOSITORIO
 
@@ -1484,31 +1444,17 @@ Drakter/
 
 ├── agent/
 
-│   ├── identity/
-
-│   ├── context/
-
-│   ├── knowledge/
+│   ├── identity/      (los 14 archivos .md)
 
 │   ├── skills/
+
+│   ├── mcp_server/    (servidor MCP delgado de herramientas, sin lógica de negocio)
 
 │   └── configuration/
 
 │
 
-├── memory/
-
-│   ├── working/
-
-│   ├── episodic/
-
-│   ├── semantic/
-
-│   ├── procedural/
-
-│   ├── indexes/
-
-│   └── logs/
+├── memory/            (solo configuración e integración; sin recuerdos)
 
 │
 
@@ -1530,17 +1476,7 @@ Drakter/
 
 │
 
-├── workspace/
-
-│   ├── data/
-
-│   ├── storage/
-
-│   ├── indexes/
-
-│   ├── exports/
-
-│   └── backups/
+├── workspace/         (código del módulo; no guarda datos)
 
 │
 
@@ -1590,7 +1526,22 @@ Drakter/
 
 Los archivos de configuración y secretos se mantendrán fuera del repositorio.
 
+**Reglas de esta estructura** (decisión "Datos fuera del repositorio y estructura de carpetas"):
+
+- Los datos de ejecución (SQLite, almacén, índices, exportaciones, copias, datos de OpenViking, home de Hermes) viven en `DRAKTER_DATA_DIR`, que por defecto es el `user_data_dir("drakter")` fijado en `backend/CONTRACT.md`. `workspace/` no guarda datos.
+- Las carpetas se crean **cuando entra código**, no todas al inicio. Este árbol es el destino, no una lista de carpetas a crear de golpe.
+- No se usan `apps/` ni `docker-compose`.
+- La configuración no sensible puede versionarse; la sensible, nunca (credenciales en `~/.config/drakter/.env`).
+- Las Skills y la identidad tienen su fuente en `agent/` y se publican al perfil de Hermes.
+
 # PARTE XIII. IMPLEMENTACIÓN POR FASES
+
+**Cómo leer esta parte** (decisiones "Jerarquía de documentos y numeración única de fases" y "Herramientas con su módulo; confirmación y auditoría antes de la primera"):
+
+- El orden real de desarrollo es el de los 20 pasos de la tabla de `DECISIONS.md`; las Fases de abajo se ejecutan en ese orden. En particular, **Skills y herramientas (Fase 11, paso 14) va antes que Memoria (Fase 10, paso 15)**, y la Skill de memoria pasa al paso 15.
+- Cada herramienta se construye **con su módulo** (tareas, proyectos, hábitos, etc.) y se comprueba por llamada directa; la Fase 11 integra las Skills y comprueba la selección de herramientas con el modelo.
+- Permisos, confirmación pendiente y auditoría van en el backend base o en el modelo de datos, **antes de la primera herramienta**. Las tareas de seguridad de la Fase 14 pasan a ser revisión y endurecimiento.
+- Las "pruebas" y "pruebas completas" de las tareas y los criterios de finalización se leen según `CLAUDE.md` §4: una comprobación rápida de que funciona y se ve bien, sin suites. Solo se escribe un test puntual en los casos que §4 enumera.
 
 ## Fase 0. Especificación y preparación
 
@@ -1849,6 +1800,8 @@ Cualquier elemento puede consultar sus relaciones permitidas y Drakter puede cre
 
 Objetivo: incorporar memoria avanzada sin cargarla completa en el contexto.
 
+Sin pipeline propio y sin recuerdos en el repositorio (véase §11). Lo que OpenViking no cubra se anota con ⚠️.
+
 Tareas:
 
 1. Definir interfaces de memoria.
@@ -1856,16 +1809,16 @@ Tareas:
 3. Configurar OpenViking como proveedor de Hermes.
 4. Configurar capas L0/L1/L2.
 5. Elegir embedding multilingüe.
-6. Definir el flujo de extracción.
-7. Definir clasificación de recuerdos.
-8. Definir deduplicación.
-9. Definir resolución de contradicciones.
+6. Configurar y comprobar la extracción en OpenViking.
+7. Configurar y comprobar la clasificación de recuerdos en OpenViking.
+8. Configurar y comprobar la deduplicación en OpenViking.
+9. Configurar y comprobar la resolución de contradicciones en OpenViking.
 10. Implementar recuperación selectiva.
 11. Implementar límites de contexto.
-12. Implementar memoria de trabajo.
-13. Implementar memoria episódica.
-14. Implementar memoria semántica.
-15. Implementar memoria procedimental.
+12. Memoria de trabajo: sesión de Hermes.
+13. Memoria episódica: OpenViking (`events`, `cases`).
+14. Memoria semántica: OpenViking y `USER.md` nativo.
+15. Memoria procedimental: Skills de Hermes y OpenViking (`patterns`).
 16. Crear registros de recuperación.
 17. Crear pruebas de persistencia.
 18. Documentar copias de seguridad.
@@ -1876,7 +1829,7 @@ Drakter recuerda información relevante entre sesiones y recupera únicamente lo
 
 ## Fase 11. Skills y herramientas
 
-Objetivo: conectar todas las capacidades con Hermes.
+Objetivo: conectar todas las capacidades con Hermes. Se ejecuta antes que la Fase 10 (memoria); las herramientas ya existen, construidas con su módulo, y aquí se integran las Skills.
 
 Tareas:
 
@@ -1888,13 +1841,13 @@ Tareas:
 6. Crear Skill de asignaturas.
 7. Crear Skill de almacén.
 8. Crear Skill de relaciones.
-9. Crear Skill de memoria.
+9. Crear Skill de memoria (se hace en el paso 15, junto con la memoria).
 10. Crear Skill de configuración.
 11. Definir parámetros.
-12. Definir permisos.
-13. Definir confirmaciones.
+12. Revisar permisos (ya definidos en el backend base).
+13. Revisar confirmaciones (ya implementadas antes de la primera herramienta destructiva).
 14. Definir errores.
-15. Crear pruebas de uso de herramientas.
+15. Comprobar la selección de herramientas con el modelo.
 
 Criterio de finalización:
 
@@ -1966,7 +1919,7 @@ Tareas:
 8. Implementar restauración.
 9. Medir consumo de RAM.
 10. Medir CPU.
-11. Medir VRAM.
+11. Medir uso de CPU y RAM bajo carga de voz (sin VRAM dedicada).
 12. Medir latencia de voz.
 13. Optimizar consultas.
 14. Optimizar recuperación de memoria.
@@ -2004,25 +1957,25 @@ No son requisitos para la primera versión:
 1. El usuario escribe en la GUI.
 2. React envía el mensaje al backend.
 3. FastAPI identifica la sesión.
-4. El backend obtiene el contexto actual.
-5. Se recuperan recuerdos relevantes (herramientas `viking_*` y memoria nativa de Hermes).
-6. Se construye el contexto de Hermes.
-7. Hermes recibe el mensaje.
-8. Claude Haiku 5.5 procesa la solicitud.
-9. Hermes decide si necesita herramientas.
-10. Si no necesita herramientas, genera respuesta.
-11. Si necesita herramientas, llama a la Skill correspondiente.
-12. La Skill llama a la API interna.
-13. FastAPI valida permisos y parámetros.
-14. El servicio correspondiente ejecuta la operación.
-15. SQLite guarda los cambios.
-16. Se genera un evento.
-17. WebSocket informa a la GUI.
-18. Hermes recibe el resultado.
-19. El agente prepara la respuesta.
-20. La GUI muestra la respuesta.
-21. Se registra la interacción.
-22. El sistema de memoria evalúa si existe información que conservar.
+4. El backend entrega a Hermes el mensaje y el contexto de sesión.
+5. Hermes corre como proceso aparte, supervisado por FastAPI: un runner propio sobre `AIAgent`, sin gateway.
+6. La recuperación de memoria ocurre **dentro de Hermes** (memoria nativa y herramientas `viking_*` de OpenViking), no antes de él.
+7. Claude Haiku 5.5 procesa la solicitud.
+8. Hermes decide si necesita herramientas.
+9. Si no necesita herramientas, genera respuesta.
+10. Si necesita herramientas, llama a la herramienta correspondiente, que el backend sirve por MCP en loopback (servidor delgado, sin lógica de negocio, que usa los mismos servicios que la API). Hermes es solo cliente, con lista de permitidos.
+11. FastAPI valida permisos y parámetros.
+12. El servicio correspondiente ejecuta la operación. Si es destructiva, crea una confirmación pendiente que solo la GUI resuelve.
+13. SQLite guarda los cambios.
+14. Se genera un evento.
+15. WebSocket informa a la GUI.
+16. Hermes recibe el resultado.
+17. El agente prepara la respuesta.
+18. La GUI muestra la respuesta.
+19. Se registra la interacción (auditoría).
+20. El sistema de memoria evalúa si existe información que conservar.
+
+El modelo y Hermes se tratan como no confiables: la frontera real es el backend (decisión "Puente Hermes-backend y flujo de una petición").
 
 ## 29. Flujo de una operación sobre el Workspace
 
@@ -2049,8 +2002,8 @@ Ejemplo: crear una tarea relacionada con un proyecto, una asignatura y un docume
 3. Se captura audio.
 4. Faster-Whisper transcribe.
 5. El texto se entrega al backend.
-6. Se construye contexto.
-7. Hermes procesa la petición.
+6. Se entrega el contexto de sesión a Hermes.
+7. Hermes procesa la petición y recupera la memoria pertinente.
 8. Se ejecutan herramientas si son necesarias.
 9. Se genera una respuesta.
 10. Voice Personality Engine selecciona parámetros.
@@ -2073,11 +2026,13 @@ Ejemplo: crear una tarea relacionada con un proyecto, una asignatura y un docume
 9. Se actualiza la organización contextual.
 10. Se registra el cambio.
 
-En la siguiente conversación, el constructor de contexto recuperará únicamente los recuerdos pertinentes.
+En la siguiente conversación, Hermes recuperará, con las herramientas de OpenViking, únicamente los recuerdos pertinentes.
 
 # PARTE XV. PRUEBAS Y CRITERIOS DE CALIDAD
 
 ## 32. Pruebas obligatorias
+
+Esta parte se lee según `CLAUDE.md` §4: criterio de "hecho" es que funciona como se espera y se ve bien, con una comprobación rápida y sin suites exhaustivas. Las listas siguientes son áreas a comprobar, no tests a escribir. Test puntual solo para: rutas y permisos del almacén, confirmaciones de acciones destructivas, migraciones y copia/restauración, y que la memoria recuperada no sobrescriba reglas de seguridad.
 
 ### Interfaz
 
@@ -2147,7 +2102,7 @@ En la siguiente conversación, el constructor de contexto recuperará únicament
 
 # PARTE XVI. CHECKLISTS GENERALES DE IMPLEMENTACIÓN
 
-Las siguientes listas son el control de trabajo del proyecto. Se marcarán únicamente cuando la tarea esté implementada y probada.
+Las siguientes listas son el control de trabajo del proyecto. Son históricas: la lista viva es `docs/IMPLEMENTATION_STATUS.md`. Una tarea se marca cuando está implementada y funciona como se espera (`CLAUDE.md` §4: "funciona y se ve bien"), sin exigir suites de tests.
 
 ## Checklist 0. Arquitectura y preparación
 
@@ -2383,12 +2338,12 @@ Las siguientes listas son el control de trabajo del proyecto. Se marcarán únic
 ## Checklist 12. Memoria
 
 - [ ] Definir cuatro capas de memoria.
-- [ ] Crear estructura de archivos.
+- [ ] Crear estructura de archivos (solo configuración e integración en `memory/`; sin recuerdos).
 - [ ] Crear Memory Adapter.
 - [ ] Configurar OpenViking como proveedor de Hermes.
 - [ ] Configurar capas L0/L1/L2.
 - [ ] Elegir embedding multilingüe.
-- [ ] Integrar ByteRover para el repositorio.
+- [ ] Integrar ByteRover para el repositorio (utilidad opcional de desarrollo, fuera de la memoria del producto).
 - [ ] Crear extracción de recuerdos.
 - [ ] Crear clasificación.
 - [ ] Crear deduplicación.
@@ -2481,7 +2436,7 @@ Las siguientes listas son el control de trabajo del proyecto. Se marcarán únic
 
 - [ ] Medir consumo de RAM.
 - [ ] Medir CPU.
-- [ ] Medir VRAM.
+- [ ] Medir uso de CPU y RAM (sin VRAM dedicada).
 - [ ] Medir latencia de STT.
 - [ ] Medir latencia de TTS.
 - [ ] Medir latencia de Hermes.
@@ -2560,6 +2515,8 @@ El orden de implementación será:
 19. Optimización.
 20. Empaquetado y lanzamiento.
 
-La regla durante todo el desarrollo será que cada fase debe terminar con pruebas satisfactorias antes de empezar a depender de ella en la siguiente.
+La regla durante todo el desarrollo será que cada fase debe terminar funcionando y viéndose bien (`CLAUDE.md` §4: comprobación rápida, sin suites) antes de empezar a depender de ella en la siguiente.
+
+Este orden de 20 pasos es el de la tabla de `DECISIONS.md`: Skills y herramientas (paso 14) va antes que memoria (paso 15); cada herramienta se construye con su módulo; y permisos, confirmación pendiente y auditoría existen antes de la primera herramienta.
 
 **Resultado esperado:** Drakter será una aplicación de escritorio propia, con un agente Hermes como motor, una identidad y personalidad persistentes, un personaje animado, conversación por voz, memoria externa organizada y un Workspace personal cuyos módulos estarán conectados mediante un sistema común de datos y relaciones.

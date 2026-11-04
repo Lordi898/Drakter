@@ -1,0 +1,583 @@
+[blocked]
+haiku = "Requiere Claude Haiku 5.5 real: el stub no lo prueba."
+hardware = "Requiere micrófono, altavoz o medición en el hardware del usuario."
+humano = "Requiere una persona: criterio visual, de producto o archivo .riv."
+empaquetado = "Requiere el artefacto empaquetado instalado."
+documental = "Revisión documental: esta pasada no ejecuta nada que lo pruebe."
+
+[[section]]
+checklist = 18
+reason = "Ampliaciones futuras: fuera de alcance por CLAUDE.md §3."
+
+[[item]]
+checklist = 0
+text = "Crear repositorio Drakter."
+blocked = "documental"
+reason = "Estructura, documentación o convenciones: la revisión es documental."
+
+[[item]]
+checklist = 0
+text = "Configurar Git."
+blocked = "documental"
+reason = "Estructura, documentación o convenciones: la revisión es documental."
+
+[[item]]
+checklist = 0
+text = "Crear estructura de carpetas."
+blocked = "documental"
+reason = "Estructura, documentación o convenciones: la revisión es documental."
+
+[[item]]
+checklist = 0
+text = "Crear README."
+blocked = "documental"
+reason = "Estructura, documentación o convenciones: la revisión es documental."
+
+[[item]]
+checklist = 0
+text = "Crear CHANGELOG."
+blocked = "documental"
+reason = "Estructura, documentación o convenciones: la revisión es documental."
+
+[[item]]
+checklist = 0
+text = "Documentar arquitectura."
+blocked = "documental"
+reason = "Estructura, documentación o convenciones: la revisión es documental."
+
+[[item]]
+checklist = 0
+text = "Documentar decisiones técnicas."
+blocked = "documental"
+reason = "Estructura, documentación o convenciones: la revisión es documental."
+
+[[item]]
+checklist = 0
+text = "Definir convenciones."
+blocked = "documental"
+reason = "Estructura, documentación o convenciones: la revisión es documental."
+
+[[item]]
+checklist = 0
+text = "Definir modelos de datos."
+blocked = "documental"
+reason = "Estructura, documentación o convenciones: la revisión es documental."
+
+[[item]]
+checklist = 0
+text = "Definir API."
+blocked = "documental"
+reason = "Estructura, documentación o convenciones: la revisión es documental."
+
+[[item]]
+checklist = 0
+text = "Definir eventos."
+blocked = "documental"
+reason = "Estructura, documentación o convenciones: la revisión es documental."
+
+[[item]]
+checklist = 0
+text = "Definir permisos."
+blocked = "documental"
+reason = "Estructura, documentación o convenciones: la revisión es documental."
+
+[[item]]
+checklist = 0
+text = "Definir configuración."
+blocked = "documental"
+reason = "Estructura, documentación o convenciones: la revisión es documental."
+
+[[item]]
+checklist = 0
+text = "Preparar entorno de desarrollo."
+blocked = "documental"
+reason = "Estructura, documentación o convenciones: la revisión es documental."
+
+[[item]]
+checklist = 1
+text = "Configurar Electron."
+checks = ["desktop.arranca"]
+
+[[item]]
+checklist = 1
+text = "Crear ventana principal."
+checks = ["desktop.arranca", "desktop.ventana_segura"]
+
+[[item]]
+checklist = 1
+text = "Crear navegación lateral."
+checks = ["desktop.navegacion"]
+
+[[item]]
+checklist = 1
+text = "Crear notificaciones."
+checks = ["desktop.notificaciones"]
+
+[[item]]
+checklist = 1
+text = "Crear configuración."
+checks = ["desktop.configuracion"]
+
+[[item]]
+checklist = 1
+text = "Crear gestión de errores."
+reason = "Cero errores en consola no prueba la gestión: habría que provocar un fallo y ver la pantalla."
+
+[[item]]
+checklist = 1
+text = "Configurar empaquetado."
+blocked = "empaquetado"
+
+[[item]]
+checklist = 2
+text = "Crear FastAPI."
+checks = ["backend.arranca"]
+
+[[item]]
+checklist = 2
+text = "Configurar migraciones."
+checks = ["backend.migraciones"]
+
+[[item]]
+checklist = 2
+text = "Crear WebSocket."
+checks = ["backend.websocket"]
+
+[[item]]
+checklist = 2
+text = "Crear gestión de errores."
+checks = ["backend.errores"]
+
+[[item]]
+checklist = 3
+text = "Configurar Claude Haiku 5.5."
+blocked = "haiku"
+reason = "El stub no es Claude Haiku 5.5."
+
+[[item]]
+checklist = 3
+text = "Conectar Hermes con backend."
+checks = ["conversacion.respuesta"]
+
+[[item]]
+checklist = 3
+text = "Crear envío de mensajes."
+checks = ["conversacion.respuesta"]
+
+[[item]]
+checklist = 3
+text = "Crear recepción de respuestas."
+checks = ["conversacion.respuesta"]
+
+[[item]]
+checklist = 3
+text = "Crear eventos de agente."
+checks = ["conversacion.eventos"]
+
+[[item]]
+checklist = 3
+text = "Probar conversación completa."
+checks = ["conversacion.respuesta", "desktop.conversacion"]
+blocked = "haiku"
+
+[[item]]
+checklist = 4
+text = "Crear SOUL.md."
+blocked = "documental"
+reason = "Archivo de identidad: la revisión de su contenido es documental."
+
+[[item]]
+checklist = 4
+text = "Crear PERSONALITY.md."
+blocked = "documental"
+reason = "Archivo de identidad: la revisión de su contenido es documental."
+
+[[item]]
+checklist = 4
+text = "Crear BEHAVIOR.md."
+blocked = "documental"
+reason = "Archivo de identidad: la revisión de su contenido es documental."
+
+[[item]]
+checklist = 4
+text = "Crear COMMUNICATION.md."
+blocked = "documental"
+reason = "Archivo de identidad: la revisión de su contenido es documental."
+
+[[item]]
+checklist = 4
+text = "Crear EMOTIONAL_STYLE.md."
+blocked = "documental"
+reason = "Archivo de identidad: la revisión de su contenido es documental."
+
+[[item]]
+checklist = 4
+text = "Crear VALUES.md."
+blocked = "documental"
+reason = "Archivo de identidad: la revisión de su contenido es documental."
+
+[[item]]
+checklist = 4
+text = "Crear USER.md."
+blocked = "documental"
+reason = "Archivo de identidad: la revisión de su contenido es documental."
+
+[[item]]
+checklist = 4
+text = "Crear ENVIRONMENT.md."
+blocked = "documental"
+reason = "Archivo de identidad: la revisión de su contenido es documental."
+
+[[item]]
+checklist = 4
+text = "Crear PREFERENCES.md."
+blocked = "documental"
+reason = "Archivo de identidad: la revisión de su contenido es documental."
+
+[[item]]
+checklist = 4
+text = "Crear CURRENT_CONTEXT.md."
+blocked = "documental"
+reason = "Archivo de identidad: la revisión de su contenido es documental."
+
+[[item]]
+checklist = 4
+text = "Crear CAPABILITIES.md."
+blocked = "documental"
+reason = "Archivo de identidad: la revisión de su contenido es documental."
+
+[[item]]
+checklist = 4
+text = "Crear WORKSPACE_GUIDE.md."
+blocked = "documental"
+reason = "Archivo de identidad: la revisión de su contenido es documental."
+
+[[item]]
+checklist = 4
+text = "Crear TOOL_GUIDE.md."
+blocked = "documental"
+reason = "Archivo de identidad: la revisión de su contenido es documental."
+
+[[item]]
+checklist = 4
+text = "Crear SYSTEM_GUIDE.md."
+blocked = "documental"
+reason = "Archivo de identidad: la revisión de su contenido es documental."
+
+[[item]]
+checklist = 4
+text = "Probar consistencia de personalidad."
+blocked = "haiku"
+
+[[item]]
+checklist = 5
+text = "Diseñar identidad visual."
+blocked = "humano"
+
+[[item]]
+checklist = 5
+text = "Diseñar ojos."
+blocked = "humano"
+
+[[item]]
+checklist = 5
+text = "Diseñar boca."
+blocked = "humano"
+
+[[item]]
+checklist = 5
+text = "Diseñar expresiones."
+blocked = "humano"
+
+[[item]]
+checklist = 5
+text = "Crear proyecto Rive."
+blocked = "humano"
+
+[[item]]
+checklist = 5
+text = "Crear estado idle."
+blocked = "humano"
+
+[[item]]
+checklist = 5
+text = "Crear estado listening."
+blocked = "humano"
+
+[[item]]
+checklist = 5
+text = "Crear estado thinking."
+blocked = "humano"
+
+[[item]]
+checklist = 5
+text = "Crear estado speaking."
+blocked = "humano"
+
+[[item]]
+checklist = 5
+text = "Crear estado executing."
+blocked = "humano"
+
+[[item]]
+checklist = 5
+text = "Crear estado success."
+blocked = "humano"
+
+[[item]]
+checklist = 5
+text = "Crear estado error."
+blocked = "humano"
+
+[[item]]
+checklist = 5
+text = "Crear estado interrupted."
+blocked = "humano"
+
+[[item]]
+checklist = 5
+text = "Crear estado offline."
+blocked = "humano"
+
+[[item]]
+checklist = 5
+text = "Crear transiciones."
+blocked = "humano"
+
+[[item]]
+checklist = 5
+text = "Integrar Rive con React."
+blocked = "humano"
+reason = "Requiere el archivo .riv real."
+
+[[item]]
+checklist = 5
+text = "Implementar sincronización labial."
+blocked = "humano"
+
+[[item]]
+checklist = 5
+text = "Probar animaciones."
+blocked = "humano"
+
+[[item]]
+checklist = 6
+text = "Crear esquema SQLite."
+checks = ["backend.migraciones"]
+
+[[item]]
+checklist = 6
+text = "Crear tabla de tareas."
+checks = ["modulo.tareas"]
+
+[[item]]
+checklist = 6
+text = "Crear tabla de proyectos."
+checks = ["modulo.proyectos"]
+
+[[item]]
+checklist = 6
+text = "Crear tabla de hábitos."
+checks = ["modulo.habitos"]
+
+[[item]]
+checklist = 6
+text = "Crear tabla de asignaturas."
+checks = ["modulo.asignaturas"]
+
+[[item]]
+checklist = 6
+text = "Crear tabla de recursos."
+checks = ["modulo.almacen"]
+
+[[item]]
+checklist = 6
+text = "Crear tabla de relaciones."
+checks = ["modulo.relaciones"]
+
+[[item]]
+checklist = 6
+text = "Crear tabla de auditoría."
+checks = ["auditoria.registro"]
+
+[[item]]
+checklist = 6
+text = "Crear migraciones."
+checks = ["backend.migraciones"]
+
+[[item]]
+checklist = 7
+text = "Crear tareas."
+checks = ["modulo.tareas"]
+
+[[item]]
+checklist = 7
+text = "Crear proyectos."
+checks = ["modulo.proyectos"]
+
+[[item]]
+checklist = 8
+text = "Crear hábitos."
+checks = ["modulo.habitos"]
+
+[[item]]
+checklist = 9
+text = "Crear eventos."
+checks = ["modulo.calendario"]
+
+[[item]]
+checklist = 9
+text = "Crear asignaturas."
+checks = ["modulo.asignaturas"]
+
+[[item]]
+checklist = 11
+text = "Crear servicio de relaciones."
+checks = ["modulo.relaciones"]
+
+[[item]]
+checklist = 13
+text = "Probar selección de herramientas."
+checks = ["conversacion.herramienta_permitida"]
+blocked = "haiku"
+
+[[item]]
+checklist = 14
+text = "Configurar palabra de activación."
+blocked = "hardware"
+
+[[item]]
+checklist = 14
+text = "Configurar detección de voz."
+blocked = "hardware"
+
+[[item]]
+checklist = 14
+text = "Probar modelo small."
+blocked = "hardware"
+
+[[item]]
+checklist = 14
+text = "Medir latencia."
+blocked = "hardware"
+
+[[item]]
+checklist = 14
+text = "Evaluar modelo medium."
+blocked = "hardware"
+
+[[item]]
+checklist = 14
+text = "Crear reproducción de audio."
+blocked = "hardware"
+
+[[item]]
+checklist = 14
+text = "Crear interrupciones."
+blocked = "hardware"
+
+[[item]]
+checklist = 14
+text = "Crear cancelación de audio."
+blocked = "hardware"
+
+[[item]]
+checklist = 14
+text = "Sincronizar boca."
+blocked = "hardware"
+
+[[item]]
+checklist = 14
+text = "Probar conversación por voz completa."
+blocked = "hardware"
+
+[[item]]
+checklist = 16
+text = "Crear confirmaciones."
+checks = ["confirmacion.destructiva"]
+
+[[item]]
+checklist = 16
+text = "Proteger operaciones destructivas."
+checks = ["confirmacion.destructiva", "conversacion.accion_destructiva"]
+
+[[item]]
+checklist = 16
+text = "Crear auditoría."
+checks = ["auditoria.registro"]
+
+[[item]]
+checklist = 16
+text = "Crear copias de seguridad."
+checks = ["data.copia_restauracion"]
+
+[[item]]
+checklist = 16
+text = "Probar restauración."
+checks = ["data.copia_restauracion", "data.restauracion_rechaza_ajenos"]
+
+[[item]]
+checklist = 16
+text = "Probar desconexiones."
+reason = "Hay que cortar el backend con la interfaz abierta; esta pasada no lo hace."
+
+[[item]]
+checklist = 17
+text = "Medir consumo de RAM."
+blocked = "hardware"
+
+[[item]]
+checklist = 17
+text = "Medir CPU."
+blocked = "hardware"
+
+[[item]]
+checklist = 17
+text = "Medir VRAM."
+blocked = "hardware"
+
+[[item]]
+checklist = 17
+text = "Medir latencia de STT."
+blocked = "hardware"
+
+[[item]]
+checklist = 17
+text = "Medir latencia de TTS."
+blocked = "hardware"
+
+[[item]]
+checklist = 17
+text = "Medir latencia de Hermes."
+blocked = "haiku"
+reason = "Depende del modelo real."
+
+[[item]]
+checklist = 17
+text = "Crear instalador."
+blocked = "empaquetado"
+
+[[item]]
+checklist = 17
+text = "Crear actualización de aplicación."
+blocked = "empaquetado"
+
+[[item]]
+checklist = 17
+text = "Crear documentación de instalación."
+blocked = "documental"
+
+[[item]]
+checklist = 17
+text = "Crear documentación de uso."
+blocked = "documental"
+
+[[item]]
+checklist = 17
+text = "Crear versión estable."
+blocked = "empaquetado"
+
+[[item]]
+checklist = 3
+text = "Instalar Hermes."
+checks = ["hermes.preflight"]
