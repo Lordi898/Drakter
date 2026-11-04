@@ -40,6 +40,7 @@ R = TypeVar("R")
 _DOMAIN: Final = "tasks"
 _ERR_READ: Final = ("not_found", "validation_error")
 _ERR_WRITE: Final = ("not_found", "conflict", "revision_mismatch", "validation_error")
+_ERR_CYCLE: Final = (*_ERR_WRITE, "hierarchy_cycle")
 _ERR_CONFIRM: Final = (*_ERR_WRITE, "confirmation_required", "confirmation_unavailable")
 
 
@@ -60,7 +61,7 @@ def run_service(ctx: ToolContext, tool_name: str, call: Callable[[ServiceContext
         raise ToolError(
             "confirmation_required",
             exc.ticket.summary,
-            details=exc.ticket.model_dump(mode="json"),
+            details=[exc.ticket.model_dump(mode="json")],
         ) from None
     except AppError as exc:
         raise ToolError(
@@ -315,7 +316,7 @@ TOOLS: tuple[ToolSpec, ...] = (
     ),
     _spec(
         "update_task", "Modifica campos de una tarea.", UpdateTaskArgs, TaskOut, _update_task,
-        "tasks.write", W_, _ERR_WRITE, {**_ID_AUDIT, "patch": "hash"},
+        "tasks.write", W_, _ERR_CYCLE, {**_ID_AUDIT, "patch": "hash"},
     ),
     _spec(
         "complete_task", "Marca una tarea como completada.", CompleteTaskArgs, TaskOut,
@@ -335,7 +336,7 @@ TOOLS: tuple[ToolSpec, ...] = (
     ),
     _spec(
         "create_subtask", "Crea una subtarea dentro de otra tarea.", CreateSubtaskArgs, TaskOut,
-        _create_subtask, "tasks.write", W_, _ERR_WRITE,
+        _create_subtask, "tasks.write", W_, _ERR_CYCLE,
         {"parent_task_id": "log", "subtask": "hash"},
     ),
     _spec(
@@ -344,8 +345,8 @@ TOOLS: tuple[ToolSpec, ...] = (
         {
             "status": "log", "priority": "log", "project_id": "log", "no_project": "log",
             "subject_id": "log", "parent_task_id": "log", "root_only": "log", "tag": "hash",
-            "due_before": "log", "due_after": "log", "q": "hash", "archived": "log",
-            "sort": "log", "limit": "log", "cursor": "log",
+            "due_before": "log", "due_after": "log", "q": "hash", "include_archived": "log",
+            "sort": "log", "limit": "log", "offset": "log",
         },
         idempotent=True,
     ),
@@ -361,7 +362,7 @@ TOOLS: tuple[ToolSpec, ...] = (
     ),
     _spec(
         "add_task_dependency", "Hace que una tarea dependa de otra.", TaskDependencyArgs,
-        TaskDetail, _add_task_dependency, "tasks.write", W_, _ERR_WRITE,
+        TaskDetail, _add_task_dependency, "tasks.write", W_, _ERR_CYCLE,
         {"task_id": "log", "depends_on_task_id": "log"},
     ),
     _spec(

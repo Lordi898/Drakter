@@ -147,8 +147,8 @@ TOOLS: tuple[ToolSpec, ...] = (
         "list_projects", "Lista proyectos con filtros.", ProjectListQuery, Page[ProjectOut],
         _list_projects, R_,
         {
-            "status": "log", "priority": "log", "q": "hash", "archived": "log",
-            "sort": "log", "limit": "log", "cursor": "log",
+            "status": "log", "priority": "log", "q": "hash", "include_archived": "log",
+            "sort": "log", "limit": "log", "offset": "log",
         },
         idempotent=True,
     ),
