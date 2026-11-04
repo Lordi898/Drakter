@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from pathlib import Path
 from typing import Final, Literal, Self
 from urllib.parse import urlsplit
 
@@ -11,9 +12,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from app.core.config import Settings
 
-# The only Hermes this code was checked against. Compare by commit: the same commit has been
-# seen as "v0.22.7" and as "v0.21.5+20302.gb200f5b". Build: `uv sync --frozen --extra anthropic
-# --extra mcp --extra sms` on Python 3.14, own venv; `sms` is the extra that adds only aiohttp.
+# The only Hermes this code was checked against. Compare by commit: the version text of the
+# same commit varies. Build: `uv sync --frozen --extra anthropic --extra mcp` on Python 3.14, own venv.
 HERMES_VERSION: Final = "v0.22.7"
 HERMES_COMMIT: Final = "b200f5bc60e31588ba2cb60e288029c4a54ba5fa"
 
@@ -36,8 +36,7 @@ class AgentSettings(BaseSettings):
     model_provider: Literal["anthropic", "dev_stub"] = "anthropic"
     model_name: str = "claude-haiku-5-5"
     dev_stub_url: str = "http://127.0.0.1:28517"
-    hermes_command: str = "hermes"
-    hermes_port: int = Field(default=8767, ge=1024, le=65535)
+    hermes_python: Path = Path("hermes-python")  # python of the Hermes venv; a bare name goes through PATH
     agent_max_turns: int = Field(default=12, ge=1, le=200)
     turn_timeout_s: float = Field(default=300, gt=0)
     idle_timeout_s: float = Field(default=120, gt=0)
@@ -48,13 +47,6 @@ class AgentSettings(BaseSettings):
     def _valid_model_name(cls, value: str) -> str:
         if not _MODEL_NAME_RE.fullmatch(value):
             raise ValueError("model_name has unexpected characters")
-        return value
-
-    @field_validator("hermes_command")
-    @classmethod
-    def _valid_command(cls, value: str) -> str:
-        if not value or value != value.strip() or "\x00" in value:
-            raise ValueError("hermes_command must be one executable, without arguments")
         return value
 
     @field_validator("dev_stub_url")

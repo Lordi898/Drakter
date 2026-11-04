@@ -60,7 +60,7 @@ _IDENTITY_ORDER: Final = (
 _NEUTRAL_SOUL: Final = "# Drakter\n\nEres Drakter, el asistente personal de una sola persona. Responde en español.\n"
 
 # Every native toolset name of v0.22.7 that is not a hermes-* composite. Second layer only:
-# the list that decides is platform_toolsets.api_server.
+# what decides is enabled_toolsets=["mcp-drakter"] in the runner, checked against agent.tools.
 _DISABLED_TOOLSETS: Final = (
     "a2a",
     "bot_room",
@@ -102,10 +102,6 @@ _DISABLED_TOOLSETS: Final = (
     "x_search",
     "yuanbao",
 )
-# Marks both lists as already offered, so a future "recently shipped" toolset or a plugin
-# toolset cannot widen the saved allowlist.
-_KNOWN_BUILTIN_TOOLSETS: Final = tuple(name for name in _DISABLED_TOOLSETS if name not in ("a2a", "spotify"))
-_KNOWN_PLUGIN_TOOLSETS: Final = ("a2a", "spotify")
 _AUX_TASKS: Final = (
     "approval",
     "compression",
@@ -208,12 +204,8 @@ def render_config(s: AgentSettings, tool_names: Sequence[str], *, cwd: Path) -> 
         "context_file_max_chars": SOUL_MAX_CHARS,
         "curator": {"enabled": False},
         "fallback_providers": [],
-        "gateway": {"api_server": {"max_concurrent_runs": 1}},
         "hooks": {},
         "hooks_auto_accept": False,
-        "kanban": {"dispatch_in_gateway": False},
-        "known_builtin_toolsets": {"api_server": list(_KNOWN_BUILTIN_TOOLSETS)},
-        "known_plugin_toolsets": {"api_server": list(_KNOWN_PLUGIN_TOOLSETS)},
         "lsp": {"enabled": False},
         "mcp_servers": {
             MCP_SERVER_NAME: {
@@ -230,7 +222,6 @@ def render_config(s: AgentSettings, tool_names: Sequence[str], *, cwd: Path) -> 
         "memory": {"memory_enabled": False, "user_profile_enabled": False},
         "model": _render_model(s),
         "model_catalog": {"enabled": False},
-        "platform_toolsets": {"api_server": [MCP_SERVER_NAME], "cron": ["no_mcp"]},
         "plugins": {"auto_update_check_hours": 0, "enabled": [GUARD_NAME], "load_timeout_seconds": 0},
         "security": {"allow_lazy_installs": False},
         "terminal": {"cwd": str(cwd)},

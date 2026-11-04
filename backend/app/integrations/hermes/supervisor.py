@@ -1,8 +1,9 @@
-"""Runs `hermes gateway run` as a watched subprocess (Linux).
+"""Runs the Hermes runner (runner/drakter_runner.py) as a watched subprocess, Linux.
 
-Hermes is not trusted: it gets an allowlisted environment, a dedicated HOME, and
-a key and guard nonce that change on every launch. Nothing here raises towards
-the caller: a failure ends in state="failed" with a safe `detail`.
+Hermes is not trusted: it gets an allowlisted environment, a dedicated HOME and a
+guard nonce that changes on every launch, and turns only start after its `ready`
+matches what this side expects. Nothing here raises towards the caller: a failure
+ends in state="failed" with a safe `detail`, and every turn ends in a terminal event.
 """
 
 from __future__ import annotations
@@ -16,12 +17,12 @@ import os
 import secrets
 import shutil
 import signal
-from collections.abc import Callable, Sequence
+from collections.abc import AsyncIterator, Callable, Sequence
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Final, Literal
 from urllib.parse import urlsplit
-
-import httpx
+from uuid import UUID
 
 from app.core.config import BIND_HOST, ensure_private_dir
 from app.core.logging import redact, register_secret
@@ -33,30 +34,30 @@ from app.integrations.hermes.home import (
     HomeError,
     HomeManifest,
     HomePaths,
+    captured_tool_name,
     materialize_home,
     verify_home,
 )
-from app.integrations.hermes.settings import AgentSettings
+from app.integrations.hermes.settings import HERMES_COMMIT, AgentSettings
 
 logger = logging.getLogger(__name__)
 
 SupervisorState = Literal["stopped", "starting", "ready", "restarting", "failed"]
 
+RUNNER_PATH: Final = Path(__file__).resolve().parent / "runner" / "drakter_runner.py"
 READY_TIMEOUT_S: Final = 120.0  # imports are slow when the machine is swapping
-POLL_INTERVAL_S: Final = 0.25
-STOP_GRACE_S: Final = 15.0
-HEALTH_INTERVAL_S: Final = 10.0
-HEALTH_MAX_FAILURES: Final = 3
+EOF_GRACE_S: Final = 3.0  # the runner exits by itself once stdin closes
+STOP_GRACE_S: Final = 5.0
 MAX_RESTARTS: Final = 5
 BACKOFF_BASE_S: Final = 1.0
 BACKOFF_MAX_S: Final = 30.0
 STABLE_AFTER_S: Final = 300.0
 LOG_MAX_BYTES: Final = 5 * 1024 * 1024
-STREAM_LIMIT: Final = 1024 * 1024
+STREAM_LIMIT: Final = 16 * 1024 * 1024  # a `completed` line holds the whole answer
 LOG_LINE_MAX: Final = 8192
+EXIT_FOREIGN_TOOLS: Final = 3
+TERMINAL_EVENTS: Final = frozenset({"completed", "cancelled", "failed"})
 _PASSTHROUGH_ENV: Final = ("LANG", "LC_ALL", "LC_CTYPE", "TZ")
-_REQUIRED_FEATURES: Final = ("run_submission", "run_events_sse", "run_stop")
-_CHILD_RECORD: Final = "gateway-child.json"
 
 
 class _Fatal(Exception):
@@ -68,7 +69,7 @@ class _Transient(Exception):
 
 
 class _RedactedLog:
-    """Hermes stdout and stderr, line by line, after redaction, 0600, one rotated copy."""
+    """Runner stderr, line by line, after redaction, 0600, one rotated copy."""
 
     def __init__(self, path: Path) -> None:
         self._path = path
@@ -81,9 +82,9 @@ class _RedactedLog:
             0o600,
         )
 
-    def write(self, stream: str, raw: bytes) -> None:
+    def write(self, raw: bytes) -> None:
         text = raw.decode("utf-8", "replace").rstrip("\r\n")[:LOG_LINE_MAX]
-        line = f"{stream}: {redact(text)}\n".encode()
+        line = f"{redact(text)}\n".encode()
         try:
             if os.fstat(self._fd).st_size + len(line) > LOG_MAX_BYTES:
                 os.close(self._fd)
@@ -101,18 +102,17 @@ class _RedactedLog:
             self._fd = -1
 
 
+@dataclass(slots=True)
+class _Turn:
+    turn_id: str
+    events: asyncio.Queue[dict[str, Any]] = field(default_factory=asyncio.Queue)
+    finished: asyncio.Event = field(default_factory=asyncio.Event)
+    stopping: bool = False
+
+
 def _token_text(token: Any) -> str:
     reveal = getattr(token, "reveal", None)
     return reveal() if callable(reveal) else str(token)
-
-
-def _process_start_ticks(pid: int) -> int | None:
-    """Field 22 of /proc/<pid>/stat: tells a live process from a reused pid."""
-    try:
-        stat = Path(f"/proc/{pid}/stat").read_text(encoding="ascii", errors="replace")
-        return int(stat.rsplit(")", 1)[1].split()[19])
-    except (OSError, ValueError, IndexError):
-        return None
 
 
 def _is_loopback_http(url: str) -> bool:
@@ -149,15 +149,17 @@ class HermesSupervisor:
         self._paths = HomePaths.under(self._data_dir)
         self._state: SupervisorState = "stopped"
         self._detail = ""
-        self._api_key = ""
         self._nonce = ""
         self._manifest: HomeManifest | None = None
         self._proc: asyncio.subprocess.Process | None = None
-        self._pumps: list[asyncio.Task[None]] = []
         self._log: _RedactedLog | None = None
+        self._tasks: list[asyncio.Task[None]] = []
+        self._ready: asyncio.Future[dict[str, Any]] | None = None
+        self._turn: _Turn | None = None
         self._task: asyncio.Task[None] | None = None
         self._settled = asyncio.Event()
         self._restarts = 0
+        self._kill_requested = False
 
     @property
     def state(self) -> SupervisorState:
@@ -172,24 +174,22 @@ class HermesSupervisor:
         return self._manifest
 
     @property
-    def api_base(self) -> str:
-        return f"http://{BIND_HOST}:{self._settings.hermes_port}"
-
-    @property
     def child_pid(self) -> int | None:
         proc = self._proc
         return proc.pid if proc is not None and proc.returncode is None else None
 
-    def api_key(self) -> str:
-        return self._api_key
-
     async def start(self) -> None:
-        """Returns once the first launch has settled; restarts continue in the background."""
+        """Returns at once: the launch goes on in the background and on_state reports it."""
         if self._task is not None and not self._task.done():
             return
         self._settled = asyncio.Event()
         self._restarts = 0
+        self._state, self._detail = "stopped", ""
+        self._set_state("starting", "")
         self._task = asyncio.create_task(self._run(), name="hermes-supervisor")
+
+    async def wait_settled(self) -> None:
+        """Until the first launch has ended in ready, restarting or failed."""
         await self._settled.wait()
 
     async def stop(self) -> None:
@@ -199,6 +199,51 @@ class HermesSupervisor:
             await asyncio.gather(task, return_exceptions=True)
         await self._terminate()
         self._set_state("stopped", "")
+
+    async def run_turn(
+        self, turn_id: UUID | str, session_id: UUID | str, text: str, instructions: str
+    ) -> AsyncIterator[dict[str, Any]]:
+        """Raw runner events; the last one is always terminal. A dead runner never repeats a turn."""
+        tid = str(turn_id)
+        if self._turn is not None:
+            yield {"ev": "failed", "turn_id": tid, "code": "agent_busy", "message": "Ya hay un turno en curso."}
+            return
+        if self._state != "ready":
+            yield {"ev": "failed", "turn_id": tid, "code": "agent_unavailable", "message": "El agente no está listo."}
+            return
+        turn = _Turn(tid)
+        self._turn = turn
+        message = {"op": "turn", "turn_id": tid, "session_id": str(session_id), "input": text}
+        if not await self._send({**message, "instructions": instructions}):
+            self._finish_turn(turn, self._lost_event(turn))
+        terminal = False
+        try:
+            while not terminal:
+                event = await turn.events.get()
+                terminal = event.get("ev") in TERMINAL_EVENTS
+                yield event
+        finally:
+            if not terminal:  # abandoned by the consumer: Hermes must not keep working unseen
+                task = asyncio.ensure_future(self.stop_turn(tid))
+                task.add_done_callback(lambda done: done.exception())
+
+    async def stop_turn(self, turn_id: UUID | str, grace_s: float = STOP_GRACE_S) -> None:
+        """`stop` to the runner; with no terminal in `grace_s`, kill the group and restart."""
+        turn = self._turn
+        if turn is None or turn.turn_id != str(turn_id):
+            return
+        turn.stopping = True
+        await self._send({"op": "stop", "turn_id": turn.turn_id})
+        with contextlib.suppress(TimeoutError):
+            await asyncio.wait_for(turn.finished.wait(), grace_s)
+            return
+        logger.warning("hermes_turn_kill")
+        proc = self._proc
+        if proc is not None and proc.returncode is None:
+            self._kill_requested = True
+            _signal_group(proc.pid, signal.SIGKILL)
+        with contextlib.suppress(TimeoutError):
+            await asyncio.wait_for(turn.finished.wait(), EOF_GRACE_S)
 
     def _set_state(self, state: SupervisorState, detail: str) -> None:
         changed = state != self._state
@@ -215,10 +260,37 @@ class HermesSupervisor:
         except Exception:
             logger.exception("hermes_on_state_failed")
 
+    async def _send(self, message: dict[str, Any]) -> bool:
+        proc = self._proc
+        if proc is None or proc.stdin is None or proc.returncode is not None:
+            return False
+        try:
+            proc.stdin.write(json.dumps(message, ensure_ascii=False).encode() + b"\n")
+            await proc.stdin.drain()
+        except (OSError, RuntimeError):
+            return False
+        return True
+
+    def _finish_turn(self, turn: _Turn, event: dict[str, Any]) -> None:
+        turn.events.put_nowait(event)
+        turn.finished.set()
+        if self._turn is turn:
+            self._turn = None
+
+    @staticmethod
+    def _lost_event(turn: _Turn) -> dict[str, Any]:
+        if turn.stopping:
+            return {"ev": "cancelled", "turn_id": turn.turn_id}
+        return {
+            "ev": "failed",
+            "turn_id": turn.turn_id,
+            "code": "agent_disconnected",
+            "message": "El agente se ha detenido a mitad del turno.",
+        }
+
     async def _run(self) -> None:
         loop = asyncio.get_running_loop()
         try:
-            self._set_state("starting", "")
             while True:
                 launched_at = loop.time()
                 try:
@@ -226,10 +298,15 @@ class HermesSupervisor:
                     await self._await_ready(proc)
                     self._set_state("ready", "")
                     self._settled.set()
-                    detail = await self._watch(proc)
+                    code = await proc.wait()
+                    detail = f"runner exited with code {code}"
                 except _Transient as exc:
                     detail = str(exc)
                 await self._terminate()
+                if self._kill_requested:  # a stop that needed force is not a crash
+                    self._kill_requested = False
+                    self._set_state("restarting", "restarting after a forced stop")
+                    continue
                 if loop.time() - launched_at >= STABLE_AFTER_S:
                     self._restarts = 0
                 self._restarts += 1
@@ -251,18 +328,19 @@ class HermesSupervisor:
         finally:
             self._settled.set()
 
-    def _binary(self) -> str:
-        found = shutil.which(self._settings.hermes_command)
+    def _python(self) -> str:
+        found = shutil.which(str(self._settings.hermes_python))
         if found is None:
-            raise _Fatal("hermes executable not found")
+            raise _Fatal("python of the Hermes venv not found")
+        # Not resolved: a venv python is a symlink and needs its own path to find the venv.
         return os.path.abspath(found)
 
-    def _child_env(self, binary: str, nonce: str) -> dict[str, str]:
+    def _child_env(self, python: str) -> dict[str, str]:
         s, paths = self._settings, self._paths
         env = {name: os.environ[name] for name in _PASSTHROUGH_ENV if name in os.environ}
         env.setdefault("LANG", "C.UTF-8")
         env.update(
-            PATH=os.pathsep.join((os.path.dirname(binary), "/usr/local/bin", "/usr/bin", "/bin")),
+            PATH=os.pathsep.join((os.path.dirname(python), "/usr/local/bin", "/usr/bin", "/bin")),
             HOME=str(paths.user_home),
             XDG_CONFIG_HOME=str(paths.user_home / ".config"),
             XDG_CACHE_HOME=str(paths.user_home / ".cache"),
@@ -271,21 +349,18 @@ class HermesSupervisor:
             HERMES_HOME=str(paths.root),
             PYTHONDONTWRITEBYTECODE="1",  # no __pycache__ inside plugins/
             PYTHONUNBUFFERED="1",
-            API_SERVER_ENABLED="true",
-            API_SERVER_HOST=BIND_HOST,
-            API_SERVER_PORT=str(s.hermes_port),
-            API_SERVER_KEY=self._api_key,
+            DRAKTER_PARENT_PID=str(os.getpid()),
         )
         env[MCP_URL_ENV] = self._agent_tools_url
         env[MCP_TOKEN_ENV] = _token_text(self._agent_tool_token)
-        env[GUARD_NONCE_ENV] = nonce
+        env[GUARD_NONCE_ENV] = self._nonce
         if s.model_provider == "anthropic" and s.anthropic_api_key is not None:
             env["ANTHROPIC_API_KEY"] = s.anthropic_api_key.get_secret_value()
         return env
 
     async def _launch(self) -> asyncio.subprocess.Process:
         s = self._settings
-        binary = self._binary()
+        python = self._python()
         if not _is_loopback_http(self._agent_tools_url):
             raise _Fatal("the agent tools URL must be plain http on loopback")
         if s.model_provider == "anthropic" and (
@@ -297,29 +372,24 @@ class HermesSupervisor:
         except HomeError as exc:
             raise _Fatal(str(exc)) from exc
 
-        await self._reap_stale_child()
-        self._api_key = secrets.token_urlsafe(48)
-        nonce = secrets.token_hex(32)
-        for secret in (self._api_key, nonce, _token_text(self._agent_tool_token)):
-            register_secret(secret)
+        self._nonce = secrets.token_hex(32)
+        register_secret(self._nonce)
+        register_secret(_token_text(self._agent_tool_token))
         if s.anthropic_api_key is not None:
             register_secret(s.anthropic_api_key.get_secret_value())
-        proof = self._paths.run / GUARD_PROOF
-        proof.unlink(missing_ok=True)
-        env = self._child_env(binary, nonce)
+        (self._paths.run / GUARD_PROOF).unlink(missing_ok=True)
         logs_dir = self._data_dir / "logs"
         try:
             ensure_private_dir(logs_dir)
             verify_home(self._manifest)
             self._log = _RedactedLog(logs_dir / "hermes.log")
             proc = await asyncio.create_subprocess_exec(
-                binary,
-                "gateway",
-                "run",
-                "--external-supervisor",
+                python,
+                "-I",
+                str(RUNNER_PATH),
                 cwd=self._paths.cwd,
-                env=env,
-                stdin=asyncio.subprocess.DEVNULL,
+                env=self._child_env(python),
+                stdin=asyncio.subprocess.PIPE,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
                 start_new_session=True,  # own group: stop reaches every descendant
@@ -328,157 +398,112 @@ class HermesSupervisor:
         except HomeError as exc:
             raise _Fatal(str(exc)) from exc
         except (OSError, ValueError) as exc:
-            raise _Fatal(f"hermes could not be started: {type(exc).__name__}") from exc
+            raise _Fatal(f"the runner could not be started: {type(exc).__name__}") from exc
         self._proc = proc
-        self._record_child(proc.pid)
-        self._pumps = [
-            asyncio.create_task(self._pump("stdout", proc.stdout)),
-            asyncio.create_task(self._pump("stderr", proc.stderr)),
+        self._ready = asyncio.get_running_loop().create_future()
+        self._tasks = [
+            asyncio.create_task(self._read_protocol(proc)),
+            asyncio.create_task(self._read_stderr(proc)),
         ]
-        self._nonce = nonce
         return proc
 
-    def _record_child(self, pid: int) -> None:
-        record = {"pid": pid, "start_ticks": _process_start_ticks(pid)}
-        path = self._paths.run / _CHILD_RECORD
-        with contextlib.suppress(OSError):
-            path.unlink(missing_ok=True)
-            fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
-            with os.fdopen(fd, "w", encoding="utf-8") as handle:
-                json.dump(record, handle)
-
-    async def _reap_stale_child(self) -> None:
-        """A backend killed with SIGKILL leaves Hermes running: finish it here."""
-        path = self._paths.run / _CHILD_RECORD
-        try:
-            record = json.loads(path.read_text(encoding="utf-8"))
-            pid, ticks = int(record["pid"]), int(record["start_ticks"])
-        except (OSError, ValueError, KeyError, TypeError):
-            path.unlink(missing_ok=True)
-            return
-        if _process_start_ticks(pid) == ticks:
-            logger.warning("hermes_stale_child_reaped", extra={"pid": pid})
-            _signal_group(pid, signal.SIGTERM)
-            deadline = asyncio.get_running_loop().time() + STOP_GRACE_S
-            while _process_start_ticks(pid) == ticks and asyncio.get_running_loop().time() < deadline:
-                await asyncio.sleep(POLL_INTERVAL_S)
-            _signal_group(pid, signal.SIGKILL)
-        path.unlink(missing_ok=True)
-
-    async def _pump(self, name: str, stream: asyncio.StreamReader | None) -> None:
-        if stream is None:
-            return
+    async def _read_stderr(self, proc: asyncio.subprocess.Process) -> None:
+        assert proc.stderr is not None
         while True:
             try:
-                raw = await stream.readline()
+                raw = await proc.stderr.readline()
             except ValueError:  # one line above STREAM_LIMIT, already discarded by asyncio
                 continue
             if not raw:
                 return
             if self._log is not None:
-                self._log.write(name, raw)
+                self._log.write(raw)
+
+    async def _read_protocol(self, proc: asyncio.subprocess.Process) -> None:
+        assert proc.stdout is not None
+        while True:
+            try:
+                raw = await proc.stdout.readline()
+            except ValueError:
+                logger.warning("hermes_protocol_line_too_long")
+                continue
+            if not raw:
+                break
+            try:
+                event = json.loads(raw)
+            except ValueError:
+                event = None
+            if isinstance(event, dict):
+                self._dispatch(event)
+        if self._ready is not None and not self._ready.done():
+            self._ready.set_result({})
+        turn = self._turn
+        if turn is not None:
+            self._finish_turn(turn, self._lost_event(turn))
+
+    def _dispatch(self, event: dict[str, Any]) -> None:
+        kind = event.get("ev")
+        if kind == "ready":
+            if self._ready is not None and not self._ready.done():
+                self._ready.set_result(event)
+            return
+        turn = self._turn
+        if turn is None or event.get("turn_id") != turn.turn_id:
+            return  # a late event of a finished turn, or something this side never asked for
+        if kind in TERMINAL_EVENTS:
+            self._finish_turn(turn, event)
+        else:
+            turn.events.put_nowait(event)
 
     async def _await_ready(self, proc: asyncio.subprocess.Process) -> None:
-        loop = asyncio.get_running_loop()
-        deadline = loop.time() + self._ready_timeout_s
-        async with httpx.AsyncClient(base_url=self.api_base, timeout=5.0, trust_env=False) as client:
-            while True:
-                if proc.returncode is not None:
-                    raise _Transient("hermes exited during startup")
-                if loop.time() >= deadline:
-                    raise _Transient("hermes did not become healthy in time")
-                try:
-                    response = await client.get("/health")
-                    if response.status_code == 200 and response.json().get("status") == "ok":
-                        break
-                except (httpx.HTTPError, ValueError, AttributeError):
-                    pass
-                await asyncio.sleep(POLL_INTERVAL_S)
-            await self._check_key_required(client)
-            await self._check_capabilities(client)
-        await self._await_guard_proof(deadline)
-
-    async def _check_key_required(self, client: httpx.AsyncClient) -> None:
-        """Hermes ignores a weak API_SERVER_KEY: without this the API could be open."""
+        assert self._ready is not None
         try:
-            response = await client.get("/v1/capabilities")
-        except httpx.HTTPError as exc:
-            raise _Transient("hermes capabilities could not be read") from exc
-        if response.status_code != 401:
-            raise _Fatal("the Hermes API answers without the launch key")
-
-    async def _check_capabilities(self, client: httpx.AsyncClient) -> None:
-        try:
-            response = await client.get(
-                "/v1/capabilities", headers={"Authorization": f"Bearer {self._api_key}"}
-            )
-            data = response.json()
-        except (httpx.HTTPError, ValueError) as exc:
-            raise _Transient("hermes capabilities could not be read") from exc
-        if response.status_code != 200 or not isinstance(data, dict):
-            # A 401 means another process answers on this port: our key is one launch old at most.
-            raise _Fatal("the process on the Hermes port rejected the launch key")
-        features = data.get("features") or {}
-        auth = data.get("auth") or {}
-        if (
-            data.get("object") != "hermes.api_server.capabilities"
-            or auth.get("required") is not True
-            or not all(features.get(name) is True for name in _REQUIRED_FEATURES)
-        ):
-            raise _Fatal("hermes does not offer the required API")
-
-    async def _await_guard_proof(self, deadline: float) -> None:
-        loop = asyncio.get_running_loop()
-        path = self._paths.run / GUARD_PROOF
-        while True:
-            with contextlib.suppress(OSError):
-                if secrets.compare_digest(path.read_bytes(), self._nonce.encode()):
-                    return
-            if loop.time() >= deadline:
-                raise _Fatal("drakter_guard did not load: runs are refused")
-            await asyncio.sleep(POLL_INTERVAL_S)
-
-    async def _watch(self, proc: asyncio.subprocess.Process) -> str:
-        """Blocks while Hermes is healthy; returns the safe reason it stopped being so."""
-        failures = 0
-        exited = asyncio.create_task(proc.wait())
-        try:
-            async with httpx.AsyncClient(base_url=self.api_base, timeout=5.0, trust_env=False) as client:
-                while True:
-                    done, _ = await asyncio.wait({exited}, timeout=HEALTH_INTERVAL_S)
-                    if done:
-                        return f"hermes exited with code {exited.result()}"
-                    try:
-                        healthy = (await client.get("/health")).status_code == 200
-                    except httpx.HTTPError:
-                        healthy = False
-                    failures = 0 if healthy else failures + 1
-                    if failures >= HEALTH_MAX_FAILURES:
-                        return "hermes stopped answering"
-        finally:
-            exited.cancel()
+            ready = await asyncio.wait_for(asyncio.shield(self._ready), self._ready_timeout_s)
+        except TimeoutError as exc:
+            raise _Transient("the runner did not become ready in time") from exc
+        if not ready:
+            code = await proc.wait()
+            if code == EXIT_FOREIGN_TOOLS:
+                raise _Fatal("Hermes offered tools outside the Drakter catalog")
+            raise _Transient(f"the runner exited during startup with code {code}")
+        nonce = ready.get("nonce")
+        if not isinstance(nonce, str) or not secrets.compare_digest(nonce.encode(), self._nonce.encode()):
+            raise _Fatal("drakter_guard did not load: turns are refused")
+        if ready.get("commit") != HERMES_COMMIT:
+            raise _Fatal("this Hermes is not the verified commit")
+        tools = ready.get("tools")
+        expected = {captured_tool_name(name) for name in self._tool_names}
+        if not isinstance(tools, list) or set(tools) != expected:
+            raise _Fatal("Hermes does not offer exactly the Drakter catalog")
 
     async def _terminate(self) -> None:
-        """SIGTERM to the group, SIGKILL after the grace period, then sweep what is left."""
+        """Close stdin (the runner exits on EOF), then SIGTERM, then SIGKILL, then sweep the group."""
         proc, self._proc = self._proc, None
-        self._api_key = ""
         if proc is not None:
             pgid = proc.pid
-            if proc.returncode is None:
+            if proc.stdin is not None:
+                proc.stdin.close()
+            if not await self._exited(proc, EOF_GRACE_S):
                 _signal_group(pgid, signal.SIGTERM)
-                try:
-                    await asyncio.wait_for(proc.wait(), STOP_GRACE_S)
-                except TimeoutError:
+                if not await self._exited(proc, EOF_GRACE_S):
                     logger.warning("hermes_stop_timeout")
             _signal_group(pgid, signal.SIGKILL)
             await proc.wait()
-            pumps, self._pumps = self._pumps, []
-            if pumps:
-                await asyncio.wait(pumps, timeout=2.0)
-                for pump in pumps:
-                    pump.cancel()
-            with contextlib.suppress(OSError):
-                (self._paths.run / _CHILD_RECORD).unlink(missing_ok=True)
+            tasks, self._tasks = self._tasks, []
+            if tasks:
+                await asyncio.wait(tasks, timeout=2.0)
+                for task in tasks:
+                    task.cancel()
+        turn = self._turn
+        if turn is not None:
+            self._finish_turn(turn, self._lost_event(turn))
         if self._log is not None:
             self._log.close()
             self._log = None
+
+    @staticmethod
+    async def _exited(proc: asyncio.subprocess.Process, timeout_s: float) -> bool:
+        with contextlib.suppress(TimeoutError):
+            await asyncio.wait_for(proc.wait(), timeout_s)
+            return True
+        return False
