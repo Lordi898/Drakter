@@ -30,9 +30,11 @@ from app.core.config import Settings
 from app.core.errors import AppError
 from app.core.security import SessionToken
 from app.database.migrator import migrate
+from app.events.hub import EventHub
 from app.main import create_app
 from app.permissions.engine import PermissionEngine
-from app.permissions.models import ActionSpec, ActorContext, Principal
+from app.permissions.models import ActionRegistry, ActionSpec, ActorContext, Principal
+from app.permissions.canonical import canonical_json, compute_params_hash
 from app.permissions.setup import install_security, start_security, stop_security
 from app.services.actions import ActionService, ConfirmationRequiredError
 from app.tools.dispatcher import dispatch
@@ -73,8 +75,7 @@ def effect(name: str):
 def write_setting(conn: sqlite3.Connection, params: Args) -> dict[str, str]:
     calls["demo_write"] += 1
     conn.execute(
-        "INSERT INTO settings (key, value_json, updated_at, updated_by) "
-        "VALUES (?, '1', '2026-01-01T00:00:00.000Z', 'system')",
+        "INSERT INTO settings (key, value, updated_at) VALUES (?, '1', '2026-01-01T00:00:00.000Z')",
         (params.key,),
     )
     return {"done": params.key}
@@ -160,6 +161,8 @@ async def main(root: Path) -> None:
     session, approver = secrets.token_urlsafe(32), secrets.token_urlsafe(32)
     credentials = Credentials(ui=SessionToken(session), approver=SessionToken(approver))
     app = create_app(settings, credentials=credentials, port=PORT, on_ready=lambda: None)
+    hub = EventHub()
+    app.state.event_hub = hub
     actions = install_security(app, settings, agent_grants_path=grants)
     for spec in SPECS:
         actions.registry.register(spec)
@@ -380,6 +383,58 @@ async def main(root: Path) -> None:
     check("sin tokens de sesión", session not in dump and approver not in dump)
     check("params_hash, turno y taint registrados",
           conn.execute("SELECT count(*) FROM audit_events WHERE params_hash IS NOT NULL AND turn_id IS NOT NULL").fetchone()[0] > 0)
+
+    print("-- ejecutores de otros módulos y eventos")
+    ran: list[tuple[str, dict]] = []
+    def executor(c, ctx, args):
+        check("corre sin transacción abierta y con executing confirmado", not c.in_transaction)
+        ran.append((ctx.principal.value, dict(args)))
+        return {"ok": True}
+    def broken(c, ctx, args):
+        raise AppError("has_dependents", "Folder is not empty", 409)
+    events: list = []
+    class Sink:
+        def publish(self, type, payload, *, correlation_id=None):
+            events.append((type, payload))
+    modular = ActionService(db_path=settings.db_path, registry=ActionRegistry(), engine=PermissionEngine(()),
+                            events=Sink(), executors={"delete_folder": executor, "delete_broken": broken})
+    ids = {}
+    def foreign_row(tool, targets=(), hashed=None):
+        action_id, canonical = str(uuid4()), canonical_json({"folder_id": "f"})
+        ids[tool] = action_id
+        conn.execute("INSERT INTO pending_confirmations (id, tool_name, actor_type, origin, correlation_id, args_json, args_hash, targets_json, summary, affected_count, risk, created_at, expires_at) "
+                     "VALUES (?, ?, 'user', 'rest', 'c', ?, ?, ?, 's', 1, 'confirm', '2026-01-01T00:00:00.000Z', '2999-01-01T00:00:00.000Z')",
+                     (action_id, tool, canonical, hashed or compute_params_hash(tool, canonical), canonical_json(list(targets))))
+        return action_id
+    first = foreign_row("delete_folder")
+    check("fila ajena anunciada una vez", modular.announce_pending(conn) >= 1 and modular.announce_pending(conn) == 0)
+    check("evento confirmation.requested", any(t == "confirmation.requested" and str(p.action_id) == first for t, p in events), events[:1])
+    hash_first = modular.detail(conn, UUID(first))["params_hash"]
+    result = modular.approve(conn, UUID(first), hash_first, Principal.APPROVER, correlation_id="c")
+    check("approve invoca al ejecutor con los args guardados", ran == [("approver", {"folder_id": "f"})] and result.status == "executed", ran)
+    check("la fila acaba executed", status_of(conn, first) == "executed")
+    code = foreign_row("delete_broken")
+    try:
+        modular.approve(conn, UUID(code), modular.detail(conn, UUID(code))["params_hash"], Principal.APPROVER, correlation_id="c")
+        check("error del ejecutor sube", False)
+    except AppError as exc:
+        check("error del ejecutor sube con su código", exc.code == "has_dependents", exc.code)
+    check("fallo del ejecutor deja failed sin reintento", status_of(conn, code) == "failed")
+    stale_entity = foreign_row("delete_folder", [{"id": str(uuid4()), "revision": 1}])
+    try:
+        modular.approve(conn, UUID(stale_entity), modular.detail(conn, UUID(stale_entity))["params_hash"], Principal.APPROVER, correlation_id="c")
+        check("objetivo desaparecido da conflict", False)
+    except AppError as exc:
+        check("objetivo desaparecido da conflict", exc.code == "conflict" and status_of(conn, stale_entity) == "failed", exc.code)
+    tampered = foreign_row("delete_folder", hashed="a" * 64)
+    try:
+        modular.approve(conn, UUID(tampered), "a" * 64, Principal.APPROVER, correlation_id="c")
+        check("hash que no corresponde a los args no ejecuta", False)
+    except AppError as exc:
+        check("hash que no corresponde a los args no ejecuta", exc.code == "conflict" and len(ran) == 1, exc.code)
+    envelope = hub.publish("confirmation.requested", events[0][1], correlation_id="c")
+    check("el hub real acepta el evento", envelope.type == "confirmation.requested")
+    check("TTL de 300 s", actions._ttl == 300)  # noqa: SLF001
 
     print("-- actividad")
     code, body = await asgi(app, "GET", "/api/v1/activity?limit=3", ui)

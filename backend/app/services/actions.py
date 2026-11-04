@@ -77,7 +77,12 @@ ToolResult = ToolOk | ToolFailed | ToolConfirmationRequired
 
 
 class EventSink(Protocol):
-    def publish(self, event_type: str, payload: Mapping[str, Any], correlation_id: str) -> None: ...
+    """`app.events.hub.EventHub`. Safe to call from a worker thread, after COMMIT."""
+
+    def publish(self, type: str, payload: BaseModel, *, correlation_id: str | None = None) -> Any: ...
+
+
+ConfirmedExecutor = Callable[[sqlite3.Connection, ActorContext, Mapping[str, Any]], Any]
 
 
 class ConfirmationRequiredError(Exception):
@@ -109,6 +114,14 @@ def _failed(code: str, message: str) -> ToolFailed:
     return ToolFailed(error=ToolErrorBody(code=code, message=message))
 
 
+def _as_data(outcome: Any) -> dict[str, Any]:
+    if isinstance(outcome, BaseModel):
+        return outcome.model_dump(mode="json")
+    if isinstance(outcome, Mapping):
+        return dict(outcome)
+    return {} if outcome is None else {"result": str(outcome)}
+
+
 def _displayable(text: str) -> str:
     """Drop control and bidi characters: a summary must read as what it stores."""
     cleaned = "".join(
@@ -125,6 +138,7 @@ class ActionService:
         registry: ActionRegistry,
         engine: PermissionEngine,
         events: EventSink | None = None,
+        executors: Mapping[str, ConfirmedExecutor] | None = None,
         ttl_seconds: float = CONFIRMATION_TTL_SECONDS,
         clock: Callable[[], datetime] = utc_now,
     ) -> None:
@@ -132,6 +146,9 @@ class ActionService:
         self._db_path = db_path
         self._engine = engine
         self._events = events
+        self._executors = dict(executors or {})
+        self._announce_lock = threading.Lock()
+        self._announced: set[str] = set()
         self._ttl = ttl_seconds
         self._clock = clock
         self._turn_lock = threading.Lock()
@@ -331,19 +348,7 @@ class ActionService:
             ),
         )
         conn.execute("COMMIT")
-        self._publish(
-            "confirmation.requested",
-            ConfirmationRequested(
-                action_id=UUID(action_id),
-                session_id=UUID(ctx.session_id) if ctx.session_id else None,
-                turn_id=UUID(turn_id) if turn_id else None,
-                tool=spec.name,
-                summary=summary,
-                affected_count=affected,
-                expires_at=after(now, self._ttl),
-            ),
-            ctx.correlation_id,
-        )
+        self.announce_pending(conn)
         return ToolConfirmationRequired(
             action_id=UUID(action_id), summary=summary, expires_at=after(now, self._ttl)
         )
@@ -403,22 +408,24 @@ class ActionService:
                 (row["id"],),
             )
 
-            spec, params = self._prepare(conn, row)
-            if spec.external:
+            run, external = self._prepare(conn, ctx, row)
+            if external:
                 write(conn, ctx, self._row_event(row, "confirmation.approved", "success"))
                 conn.execute("COMMIT")
-                outcome = spec.handler(conn, params)
+                outcome = run()
+                if conn.in_transaction:
+                    raise RuntimeError("An executor left a transaction open")
                 conn.execute("BEGIN IMMEDIATE")
             else:
-                outcome = spec.handler(conn, params)
+                outcome = run()
                 self._require_transaction(conn)
-            data = dict(outcome)
+            data = _as_data(outcome)
             conn.execute(
                 "UPDATE pending_confirmations SET status = 'executed', executed_at = ?, "
                 "result_json = ? WHERE id = ? AND status = 'executing'",
                 (format_instant(self._clock()), canonical_json(data), row["id"]),
             )
-            write(conn, ctx, self._row_event(row, spec.name, "success"))
+            write(conn, ctx, self._row_event(row, row["tool_name"], "success"))
             conn.execute("COMMIT")
         except AppError as exc:
             # Only the call that won the row may close it: a loser must not touch it.
@@ -473,6 +480,29 @@ class ActionService:
                 conn.execute("ROLLBACK")
             raise
         self._publish_resolved(row["id"], "rejected", None, correlation_id)
+
+    def announce_pending(self, conn: sqlite3.Connection) -> int:
+        """Emit `confirmation.requested` once per row, whichever module created it."""
+        if self._events is None:
+            return 0
+        with self._announce_lock:
+            rows = self._select(conn, "status = 'pending'", ())
+            fresh = [row for row in rows if row["id"] not in self._announced]
+            self._announced = {row["id"] for row in rows}
+            for row in fresh:
+                self._publish(
+                    "confirmation.requested",
+                    ConfirmationRequested(
+                        action_id=UUID(row["id"]),
+                        turn_id=UUID(row["turn_id"]) if row["turn_id"] else None,
+                        tool=row["tool_name"],
+                        summary=row["summary"],
+                        affected_count=row["affected_count"],
+                        expires_at=row["expires_at"],
+                    ),
+                    row["correlation_id"],
+                )
+        return len(fresh)
 
     def expire_due(self, conn: sqlite3.Connection) -> int:
         now = format_instant(self._clock())
@@ -616,14 +646,25 @@ class ActionService:
         return None
 
     def _prepare(
-        self, conn: sqlite3.Connection, row: Mapping[str, Any]
-    ) -> tuple[ActionSpec, BaseModel]:
-        """Rebuild the action from the stored row and check nothing moved underneath."""
-        spec = self.registry.get(row["tool_name"])
+        self, conn: sqlite3.Connection, ctx: ActorContext, row: Mapping[str, Any]
+    ) -> tuple[Callable[[], Any], bool]:
+        """Rebuild the action from the stored row and check nothing moved underneath.
+
+        Returns what to run and whether it must run outside the transaction. The
+        executors of a module open their own transaction and audit their own effect.
+        """
+        tool_name = row["tool_name"]
+        if compute_params_hash(tool_name, row["args_json"]) != row["args_hash"]:
+            raise _error(ErrorCode.CONFLICT, "Stored arguments do not match")
+        executor = self._executors.get(tool_name)
+        if executor is not None:
+            self._check_stored_targets(conn, row)
+            args = json.loads(row["args_json"])
+            return (lambda: executor(conn, ctx, args)), True
+
+        spec = self.registry.get(tool_name)
         if spec is None:
             raise _error(ErrorCode.CONFIRMATION_UNAVAILABLE, "Action no longer exists")
-        if compute_params_hash(row["tool_name"], row["args_json"]) != row["args_hash"]:
-            raise _error(ErrorCode.CONFLICT, "Stored arguments do not match")
         params = spec.args_model.model_validate(json.loads(row["args_json"]))
         targets = spec.resolve_targets(conn, params) if spec.resolve_targets else []
         if canonical_json(targets) != row["targets_json"]:
@@ -631,7 +672,20 @@ class ActionService:
         affected = spec.count_affected(conn, params) if spec.count_affected else 1
         if affected != row["affected_count"]:
             raise _error(ErrorCode.CONFLICT, "Targets changed since the request")
-        return spec, params
+        return (lambda: spec.handler(conn, params)), spec.external
+
+    @staticmethod
+    def _check_stored_targets(conn: sqlite3.Connection, row: Mapping[str, Any]) -> None:
+        """Targets that stored a `revision` must still be at it."""
+        for target in json.loads(row["targets_json"]):
+            if target.get("revision") is None:
+                continue
+            target_id = target.get("entity_id") or target.get("id")
+            found = conn.execute(
+                "SELECT revision FROM entities WHERE id = ?", (target_id,)
+            ).fetchone()
+            if found is None or found[0] != target["revision"]:
+                raise _error(ErrorCode.CONFLICT, "Targets changed since the request")
 
     def _fail(
         self,
@@ -850,6 +904,6 @@ class ActionService:
         if self._events is None:
             return
         try:
-            self._events.publish(event_type, payload.model_dump(mode="json"), correlation_id)
+            self._events.publish(event_type, payload, correlation_id=correlation_id)
         except Exception:  # noqa: BLE001
             logger.exception("Event not published", extra={"event": "event_not_published"})
