@@ -66,7 +66,7 @@ Hoy la actualización es manual. Antes de instalar una versión nueva:
 cd backend && python -m app.database.cli backup     # copia verificada en <datos>/backups
 ```
 
-Con el backend ya en marcha, el bundle `pre-update` se crea desde la API de copias (ver `backend/CONTRACT.md`). Restaurar: `python -m app.database.cli restore <archivo>`. Las migraciones del backend nuevo se aplican al arrancar y hacen su propia copia previa.
+Esos comandos son para una instalación desde el repositorio: el backend congelado no incluye esa CLI. El bundle `pre-update` no se pide por la API, que solo crea copias `manual`: lo crea el flujo de actualización llamando a `create_bundle(settings, "pre-update")`, y ese flujo aún no existe. En una instalación empaquetada, haz una copia `manual` desde la API de copias antes de actualizar y restáurala desde ahí, con confirmación en la interfaz. Las migraciones del backend nuevo se aplican al arrancar y hacen su propia copia previa.
 
 ## Actualización: manual por ahora
 
@@ -75,6 +75,7 @@ Con el backend ya en marcha, el bundle `pre-update` se crea desde la API de copi
 ## Qué falta para Windows
 
 - Firma de código del instalador y del `.exe` (hoy sin certificado; SmartScreen avisará).
+- **Bloqueante:** el backend no arranca en Windows: `backend/app/database/connection.py` usa `os.geteuid`, y las copias usan `os.O_NOFOLLOW`; ninguno existe allí.
 - Ejecutar el `.spec` y el lanzador **en Windows** (nunca probados; el lanzador solo asume `uv.exe` en el PATH).
 - Icono `.ico` (ver abajo) y comprobar rutas de `platformdirs` y que el backend arranca como proceso hijo sin consola visible.
 
