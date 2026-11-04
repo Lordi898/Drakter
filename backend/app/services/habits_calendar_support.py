@@ -175,7 +175,7 @@ def record_audit(
 
 def deletion_summary(kind: str, name: str, dependents: int = 0) -> str:
     """Plantilla de contracts/README.md §5. `name` es dato del usuario: la GUI lo pinta como texto."""
-    extra = f" y {dependents} dependientes" if dependents else ""
+    extra = f" y {dependents} {'dependiente' if dependents == 1 else 'dependientes'}" if dependents else ""
     return f"Vas a eliminar 1 {kind}: «{name}»{extra}. Esta acción no se puede deshacer."
 
 

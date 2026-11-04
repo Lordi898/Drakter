@@ -21,8 +21,10 @@ export function ConfirmationDialog({ confirmation, onResolved }: ConfirmationDia
     try {
       const outcome = await reviewConfirmation(confirmation.id)
       if (outcome === 'approved') onResolved(true)
-      else if (outcome === 'rejected' || outcome === 'dismissed') onResolved(false)
+      else if (outcome === 'rejected') onResolved(false)
       else if (outcome === 'expired') setMessage('La confirmación ha caducado. Inténtalo de nuevo.')
+      else if (outcome === 'conflict') setMessage('El elemento ha cambiado; no se ha borrado. Recarga y vuelve a intentarlo.')
+      else if (outcome === 'failed') setMessage('No se pudo completar. Comprueba si el elemento sigue ahí antes de repetir.')
       else setMessage('Las confirmaciones aún no están disponibles; no se ha borrado nada.')
     } catch {
       setMessage('No se pudo revisar la confirmación; no se ha borrado nada.')

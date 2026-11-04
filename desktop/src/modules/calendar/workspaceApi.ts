@@ -1,20 +1,13 @@
 /**
- * Ayudas de hábitos, calendario y asignaturas sobre el cliente común.
- * Aquí no hay fetch ni token: todo pasa por `apiRequest`, y aprobar lo decide el
+ * Ayudas de hábitos, calendario y asignaturas sobre el cliente común. Aquí no hay
+ * red ni token: todo pasa por `apiRequest` y `window.api`, y aprobar lo decide el
  * diálogo nativo de main. El renderer solo pide la revisión.
  */
-import { ApiError, apiRequest, describeError, type ApiRequestInit } from '@/services/api'
-import { getExtendedBridge, type ReviewOutcome } from '@/services/session'
+import { ApiError, apiRequest, describeError, type ConfirmationTicket } from '@/services/api'
 
-export { ApiError }
+export { ApiError, type ConfirmationTicket }
 
-export interface ConfirmationTicket {
-  readonly id: string
-  readonly summary: string
-  readonly affected_count: number | null
-  readonly expires_at: string
-  readonly params_hash: string
-}
+export type ReviewOutcome = 'approved' | 'rejected' | 'expired' | 'conflict' | 'failed' | 'unavailable'
 
 export interface Page<T> {
   readonly items: readonly T[]
@@ -37,32 +30,32 @@ function withQuery(path: string, query?: Query): string {
 export function api<T>(
   method: Method,
   path: string,
+  // `revision` (If-Match) se ignora: `window.api.call` no admite cabeceras todavía.
   options: { readonly query?: Query; readonly body?: unknown; readonly revision?: number } = {}
 ): Promise<T> {
-  const init = {
-    method: method as ApiRequestInit['method'],
-    ...(options.body === undefined ? {} : { body: options.body }),
-    ...(options.revision === undefined ? {} : { headers: { 'If-Match': `"${options.revision}"` } })
-  }
-  return apiRequest<T>(`/api/v1${withQuery(path, options.query)}`, init)
+  return apiRequest<T>(`/api/v1${withQuery(path, options.query)}`, {
+    method,
+    ...(options.body === undefined ? {} : { body: options.body })
+  })
 }
 
 /** Un 409 `confirmation_required` no es un fallo: trae lo que hay que revisar. */
 export function confirmationOf(error: unknown): ConfirmationTicket | null {
-  if (!(error instanceof ApiError) || error.code !== 'confirmation_required') return null
-  const ticket = (error as ApiError & { confirmation?: ConfirmationTicket | null }).confirmation
-  return ticket ?? null
+  return error instanceof ApiError && error.code === 'confirmation_required' ? error.confirmation : null
 }
 
 export async function reviewConfirmation(id: string): Promise<ReviewOutcome> {
-  const bridge = getExtendedBridge()
-  if (!bridge?.reviewConfirmation) return 'unavailable'
-  return (await bridge.reviewConfirmation(id)).outcome
+  if (typeof window === 'undefined' || typeof window.api === 'undefined') return 'unavailable'
+  try {
+    return await window.api.requestApproval(id)
+  } catch {
+    return 'unavailable'
+  }
 }
 
 /** Sin sesión o sin respuesta del servicio local: se muestra ese estado, nunca datos falsos. */
 export function isBackendUnavailable(error: unknown): boolean {
-  return error instanceof ApiError && (error.status === 0 || error.status === 401 || error.status === 503)
+  return error instanceof ApiError && (error.status === 0 || error.status === 503)
 }
 
 export function errorText(error: unknown, fallback = 'No se pudo completar la acción.'): string {

@@ -144,7 +144,8 @@ def delete_time_block(block_id: str, conn: Conn, ctx: Ctx) -> JSONResponse:
 def get_agenda(
     conn: Conn, from_: FromQ, to: ToQ, timezone: str, types: str | None = None, status: str | None = None
 ) -> AgendaResponse:
-    kinds = [t.strip() for t in types.split(",") if t.strip()] if types else None
+    aliases = {"class_session": "class"}  # el origen y el `kind` de una clase se llaman distinto
+    kinds = [aliases.get(t.strip(), t.strip()) for t in types.split(",") if t.strip()] if types else None
     return service.agenda(conn, from_, to, timezone, kinds, status=status)
 
 
