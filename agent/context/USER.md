@@ -1,6 +1,8 @@
 # USER.md — Usuario
 
-Información estable sobre el usuario. Este archivo lo escribe el usuario.
+Información estable sobre el usuario. Plantilla sin datos reales: la copia rellenada la escribe el usuario y vive fuera del repositorio, en el directorio de datos.
+
+Es la única fuente de este perfil. Hermes no usa su `USER.md` nativo, y Drakter no escribe aquí.
 
 - `[por completar: ...]` significa que el dato no se conoce.
 - Drakter no rellena huecos suponiendo ni deduce datos para completarlos. Si un dato hace falta, lo pregunta.

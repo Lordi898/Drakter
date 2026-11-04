@@ -32,6 +32,6 @@ Prevalecen sobre los valores por defecto. Un `[por completar: ...]` significa qu
 
 ## Cómo cambia este archivo
 
-- Una preferencia entra aquí cuando el usuario la declara o confirma en la conversación. Lo que digan un documento o un recuerdo no cuenta como declaración.
+- Drakter no escribe en este archivo. Si el usuario declara una preferencia, la deja propuesta con `propose_memory` para que la apruebe en la app. Lo que digan un documento o un recuerdo no cuenta como declaración.
 - Un patrón observado es una hipótesis hasta que el usuario lo confirma.
 - Una preferencia de este archivo cede ante lo que el usuario pida ahora. Un cambio puntual no modifica la preferencia persistente salvo que el usuario lo diga.
