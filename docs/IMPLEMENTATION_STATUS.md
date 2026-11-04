@@ -249,13 +249,13 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 - [ ] Configurar y comprobar la clasificación de OpenViking.
 - [ ] Configurar y comprobar la deduplicación de OpenViking.
 - [ ] Configurar y comprobar la detección de contradicciones de OpenViking.
-- [ ] Crear memoria de trabajo.
-- [ ] Crear memoria episódica.
-- [ ] Crear memoria semántica.
-- [ ] Crear memoria procedimental.
-- [ ] Crear recuperación selectiva.
-- [ ] Crear límites de contexto.
-- [ ] Crear registros de memoria.
+- [ ] Configurar y comprobar la memoria de trabajo en Hermes y OpenViking.
+- [ ] Configurar y comprobar la memoria episódica en Hermes y OpenViking.
+- [ ] Configurar y comprobar la memoria semántica en Hermes y OpenViking.
+- [ ] Configurar y comprobar la memoria procedimental en Hermes y OpenViking.
+- [ ] Configurar y comprobar la recuperación selectiva.
+- [ ] Configurar y comprobar los límites de contexto.
+- [ ] Configurar y comprobar los registros de memoria.
 - [ ] Crear Skill de memoria.
 - [ ] Probar persistencia.
 - [ ] Probar recuperación.

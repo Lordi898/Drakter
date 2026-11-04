@@ -335,7 +335,6 @@ Drakter enviará eventos al frontend. La lista siguiente es orientativa: el cat�
 - agent.success
 - agent.error
 - agent.interrupted
-- agent.offline
 - agent.expression_changed
 
 El frontend transformará estos eventos en animaciones.
@@ -2003,8 +2002,8 @@ Ejemplo: crear una tarea relacionada con un proyecto, una asignatura y un docume
 3. Se captura audio.
 4. Faster-Whisper transcribe.
 5. El texto se entrega al backend.
-6. Se construye contexto.
-7. Hermes procesa la petición.
+6. Se entrega el contexto de sesión a Hermes.
+7. Hermes procesa la petición y recupera la memoria pertinente.
 8. Se ejecutan herramientas si son necesarias.
 9. Se genera una respuesta.
 10. Voice Personality Engine selecciona parámetros.
@@ -2027,7 +2026,7 @@ Ejemplo: crear una tarea relacionada con un proyecto, una asignatura y un docume
 9. Se actualiza la organización contextual.
 10. Se registra el cambio.
 
-En la siguiente conversación, el constructor de contexto recuperará únicamente los recuerdos pertinentes.
+En la siguiente conversación, Hermes recuperará, con las herramientas de OpenViking, únicamente los recuerdos pertinentes.
 
 # PARTE XV. PRUEBAS Y CRITERIOS DE CALIDAD
 

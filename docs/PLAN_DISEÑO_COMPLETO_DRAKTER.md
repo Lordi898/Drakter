@@ -386,7 +386,7 @@ La personalidad vive en archivos, separada del modelo. Fuente única: `agent/ide
 
 Los parámetros de estilo (humor, formalidad, concisión, expresividad, proactividad, intensidad y velocidad de voz) se expresan en esos archivos de identidad.
 
-Catálogo cerrado de expresiones (7): `neutral`, `curious`, `focused`, `happy`, `concerned`, `confused`, `calm` (decisión "Las expresiones no tienen campo propio"). La expresión viaja en `animation`; no hay campo `expression`. El nombre del campo del evento `agent.expression_changed` lo fija `drakter/contratos`.
+Catálogo cerrado de expresiones (7): `neutral`, `curious`, `focused`, `happy`, `concerned`, `confused`, `calm` (decisión "Las expresiones no tienen campo propio"). La expresión viaja en `animation`; no hay campo `expression`. El evento `agent.expression_changed` la transporta en `expression` (entrada "Eventos WebSocket resueltos en contracts/" de `DECISIONS.md`).
 
 Estos estados son etiquetas de representación conversacional y visual, no emociones experimentadas por el modelo.
 
@@ -1475,7 +1475,7 @@ Si algún servicio falla, Drakter seguirá funcionando en modo degradado cuando 
 7. Hermes evalúa si necesita memoria.
 8. Hermes recupera los recuerdos relevantes con las herramientas de OpenViking (la recuperación ocurre dentro de Hermes).
 9. Se buscan recursos si la petición lo requiere.
-10. Se construye el contexto de la petición.
+10. El backend entrega el mensaje y el contexto de sesión a Hermes, que recupera la memoria.
 11. El modelo analiza la instrucción.
 12. Decide si necesita herramientas.
 13. Ejecuta las herramientas necesarias.

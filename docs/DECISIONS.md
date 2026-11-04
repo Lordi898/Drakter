@@ -228,7 +228,7 @@ Decisiones técnicas, cambios de tecnología y motivos.
 
 ## [2026-11-04] Contratos de datos que resuelve drakter/contratos
 - **Contexto:** quedan conflictos de esquema y de catálogo que son decisiones de contrato: catálogo de herramientas y Skills (C-09, C-10), entidades y campos (C-23, C-24), pertenencia (C-25), estados (C-26), tipos de relación (C-27), calendario (C-28), asignaturas (C-29), hábitos (C-30), auditoría (C-31), permisos (C-34) y FTS (C-18).
-- **Decisión:** los planes no los resuelven: remiten al contrato. Cuando `drakter/contratos` publique, su entrada en este archivo y su contrato prevalecen sobre las listas de los planes. Criterios fijos ya: fuente única de pertenencia, toda eliminación confirma, y el agente no modifica permisos.
+- **Decisión:** los planes no los resuelven: remiten al contrato. Cuando `drakter/contratos` publique, su entrada en este archivo y su contrato prevalecen sobre las listas de los planes. Criterios fijos ya: fuente única de pertenencia, todo borrado definitivo confirma, y el agente no modifica permisos. Archivar es reversible y no cuenta como eliminación, salvo que supere el umbral de operación masiva.
 - **Estado:** RESUELTA EN PARTE por la entrada "Eventos WebSocket resueltos en contracts/". Sigue pendiente lo que allí se indica.
 - **Alternativas descartadas:** decidir el esquema desde documentación (un frente lo tiene asignado, y haría dos contratos).
 - **Motivo:** evitar dos fuentes.
@@ -251,3 +251,12 @@ Decisiones técnicas, cambios de tecnología y motivos.
 - **Alternativas descartadas:** `api.call(opId, args)`, el borrador anterior.
 - **Motivo:** decisión del orquestador; no se han recibido más motivos.
 - **Impacto:** `desktop/electron/`, contrato de rutas. No se ha comprobado en ejecución.
+
+## [2026-11-04] Servidor MCP en listener propio de loopback con puerto efímero
+- **Contexto:** el borrador D-07 montaba el MCP en el puerto del backend. La referencia D-07 no consta en este archivo; la desviación la comunica el orquestador.
+- **Decisión:** el MCP escucha en un listener propio de loopback con puerto efímero (`127.0.0.1:0`), dentro del proceso del backend y separado del puerto de la GUI. El WebSocket es único: `/api/v1/events`. `contracts/README.md` ya lo recoge en `drakter/contratos` (`2b48344`).
+- **Alternativas descartadas:** montar el MCP en el puerto del backend (el token del agente quedaría separado de las rutas de la GUI solo por la matriz de permisos).
+- **Motivo:** aislar por construcción el token del agente de toda ruta de la GUI, además de la matriz.
+- **Coste:** un servidor más en el proceso.
+- **Impacto:** backend, integración con Hermes. No se ha comprobado en ejecución en esta rama.
+
