@@ -4,7 +4,7 @@ Congelado para `drakter/habitos-calendario`. Fuente: `backend/app/schemas/{habit
 
 ## Reglas comunes
 
-- Capas: `api/<m>.py` (rutas finas) → `services/<m>.py` (reglas, transacción, auditoría) → `repositories/<m>.py` (SQL parametrizado con `sqlite3`, sin reglas). `tools/<m>_tools.py` llama a servicios, nunca a repositorios ni SQL.
+- Capas: `api/<m>.py` (rutas finas) → `services/<m>.py` (reglas, transacción, auditoría) → `repositories/<m>.py` (SQL parametrizado con `sqlite3`, sin reglas). `tools/<m>.py` (autodescubierto, `TOOLS: tuple[ToolSpec, ...]`) llama a servicios, nunca a repositorios ni SQL.
 - Los servicios son síncronos, reciben `(conn, ctx, ...)` y usan `transaction(conn)`. Mutación y `record_audit` van en la misma transacción. Las rutas son `def` (no `async`), con `Depends(get_db)` y `Depends(rest_context)`.
 - Errores con `AppError(code, message, status)`: `not_found` 404, `conflict` 409, `revision_mismatch` 412, `invalid_rrule` 422, `invalid_timezone` 422, `nonexistent_local_time` 422, `window_too_large` 422.
 - PATCH: solo `model_fields_set`. `If-Match: <revision>` opcional, se pasa a `touch_entity`. Las salidas exponen `revision`, `archived_at`, `created_at` y `updated_at` de `entities`.
@@ -45,7 +45,7 @@ La serie se expande en lectura sobre hora local y solo en ventana acotada; nunca
 - Estadísticas: `unrecorded` = programados pasados sin registro, sin contar hoy. `completion_rate = done/(scheduled-skipped)`. Racha: días programados consecutivos con `done`; `skipped` ni suma ni rompe; hoy sin registro no rompe.
 - `goal_project_id` debe existir en `projects`. `goal_note` ↔ columna `target_note`. Recordatorios: se guarda la definición (`reminder_enabled` + `preferred_local_time`); la entrega queda fuera.
 
-Herramientas (`tools/habits_tools.py`, `TOOLS: tuple[ToolSpec, ...]`): `create_habit`, `get_habit`, `update_habit`, `archive_habit`, `list_habits`, `register_habit_completion`, `get_habit_history`, `get_habit_statistics`.
+Herramientas (`tools/habits.py`): `create_habit`, `get_habit`, `update_habit`, `archive_habit`, `list_habits`, `register_habit_completion`, `get_habit_history`, `get_habit_statistics`.
 
 ## Calendario (`api/calendar.py`)
 
@@ -61,7 +61,7 @@ Herramientas (`tools/habits_tools.py`, `TOOLS: tuple[ToolSpec, ...]`): `create_h
 - `DELETE` de evento y bloque: confirmación (`delete_event`, `delete_time_block`). Una excepción `cancelled` no pide confirmación: es reversible y afecta a una sola ocurrencia.
 - Cambiar el rango temporal de una serie con excepciones: `conflict`.
 
-Herramientas (`tools/calendar_tools.py`): `create_event`, `get_event`, `update_event`, `delete_event`, `create_event_exception`, `create_time_block`, `update_time_block`, `move_time_block`, `delete_time_block`, `get_schedule`, `check_availability`.
+Herramientas (`tools/calendar.py`): `create_event`, `get_event`, `update_event`, `delete_event`, `create_event_exception`, `create_time_block`, `update_time_block`, `move_time_block`, `delete_time_block`, `get_schedule`, `check_availability`.
 
 ## Asignaturas (`api/subjects.py`)
 
@@ -72,6 +72,15 @@ Herramientas (`tools/calendar_tools.py`): `create_event`, `get_event`, `update_e
 - `GET /subjects/{id}/resources`: devuelve `{"items": []}` hasta que exista el módulo de relaciones; se declara en el informe.
 - Validar que las clases no se pisan entre sí: aviso `conflicts` en la respuesta de creación.
 
-Herramientas (`tools/subjects_tools.py`): `create_subject`, `get_subject`, `update_subject`, `list_subjects`, `create_class_session`, `update_class_session`, `delete_class_session`, `create_schedule_exception`, `get_timetable`, `get_subject_resources`.
+Herramientas (`tools/subjects.py`): `create_subject`, `get_subject`, `update_subject`, `list_subjects`, `create_class_session`, `update_class_session`, `delete_class_session`, `create_schedule_exception`, `get_timetable`, `get_subject_resources`.
 
-Toda herramienta `create/update` lleva `risk="write"`; lectura `risk="read"`, `read_only=True`; `delete_*` `risk="sensitive"`, `confirmation="always"`. El agente no tiene herramienta de aprobar.
+## Herramientas
+
+Contrato: `git show drakter/agente-hermes:backend/app/integrations/hermes/CONTRACT.md` §1. Se importa todo de `app.tools.habits_calendar_toolspec` (adaptador). Cada herramienta: `ToolSpec(name, description, domain, args_model, result_model, permission="<dominio>.read|write", risk, handler=service_handler(name, servicio), errors=(...), audit={...})`.
+
+- `args_model` con `extra="forbid"` definido en el propio archivo si no vale un schema; `result_model` siempre `BaseModel` (envuelve listas en un modelo con `items`).
+- El servicio envuelto tiene firma `(conn, ctx, args) -> result_model`.
+- `risk`: lectura `RiskClass.READ`; `create/update/register/archive/move` `RiskClass.WRITE`; `delete_*` `RiskClass.CONFIRM` con `summarize` obligatorio y `permission` `<dominio>.write`.
+- La confirmación de CONFIRM la impone `ToolGate` antes del handler, así que el handler de `delete_*` llama al ejecutor registrado con `@confirmed_action`, nunca a `request_confirmation`. Las rutas REST sí usan `request_confirmation`.
+- `audit`: `"log"` solo para ids, fechas y estados; títulos, notas y descripciones `"omit"`.
+- No hay herramienta de aprobar. `returns_untrusted=False`: datos propios del usuario; el contenido libre sigue siendo dato.
