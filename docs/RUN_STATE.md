@@ -5,7 +5,7 @@ Foto operativa de la construcción. El detalle por tareas está en `IMPLEMENTATI
 ## Estado actual (2026-11-04)
 
 - **Rama de trabajo:** `drakter/build` (en `3b1e691` al escribir esto). `main` no se ha tocado. Cada frente trabaja en su rama `drakter/*`.
-- **Fase:** construcción en paralelo e integración en curso. `drakter/build` ya contiene contratos, intérprete de escritorio, identidad, memoria y `dev-stub`, entre otros; `drakter/agente-hermes` y `drakter/electron-host` no estaban fusionadas. Sin pasada integrada, no se ha marcado ninguna casilla.
+- **Fase:** construcción en paralelo e integración en curso. `drakter/build` ya contiene contratos, shell de escritorio, identidad, memoria y `dev-stub`, entre otros; `drakter/agente-hermes` y `drakter/electron-host` no estaban fusionadas. Sin pasada integrada, no se ha marcado ninguna casilla.
 - **Documentos:** los `.md` de `docs/` son la fuente de verdad; los `.docx` se han eliminado.
 - **Tooling versionado:** agentes, skills, `build-orchestrator` y `astraeus` llegan completos a clones y worktrees.
 - **Configuración local:** `worktree.baseRef = head` y `workflowSizeGuideline = unrestricted` en `.claude/settings.local.json`. Ese archivo no se versiona, así que hay que fijarlo en cada checkout nuevo.
