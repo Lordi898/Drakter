@@ -33,7 +33,7 @@ Hermes no toca la BD ni el sistema de archivos: solo `app/tools/`, que llama a l
 - **Instante:** `YYYY-MM-DDTHH:MM:SS.sssZ`, ancho fijo, en BD y JSON. Usa `format_instant`. Nunca `isoformat()`. Se rechaza lo que no tenga zona.
 - **Fecha:** `YYYY-MM-DD`. **Hora local:** `HH:MM`. **Fecha-hora local:** `YYYY-MM-DDTHH:MM:SS`. **Zona:** nombre IANA.
 - **Enumerados:** inglés `snake_case`; el texto en español es cosa de la GUI.
-- **Listados:** `{items, total}` con `limit` y `offset`, acotados por el servidor. `sort=campo,-campo` con lista blanca por ruta.
+- **Listados:** `{items, next_cursor, total?}` con `limit` y `cursor`. El cursor es opaco y se calcula sobre (campo de orden, id), nunca sobre la versión del UUID; `limit` lo acota el servidor; `total` es opcional. `sort=campo,-campo` con lista blanca por ruta.
 - **PATCH:** parcial; distingue ausente de `null`. `If-Match: <revision>` opcional → 412 `revision_mismatch`. Las entradas usan `extra="forbid"`.
 - **Idempotencia:** `Idempotency-Key` en POST de REST, guardada en `idempotency_records`. En herramientas, solo las declaradas `idempotent`.
 
@@ -50,7 +50,7 @@ Todo error HTTP: `{"error":{"code","message","request_id","details":[{"field","c
 - **Calendario:** verdad = hora de pared + zona; `*_utc` son derivados y se recalculan si cambia tzdata. Día completo: `start_date` + `end_date_exclusive`. Recurrencia: subconjunto RRULE (`FREQ` DAILY/WEEKLY/MONTHLY/YEARLY, `INTERVAL`, `COUNT`, `UNTIL`, `BYDAY`, `BYMONTHDAY`), expandido en lectura dentro de una ventana acotada, nunca materializado. Hora inexistente: en creación puntual, `nonexistent_local_time`; en series, se mueve con el desfase previo (02:30 → 03:30) conservando el `local_start` nominal en `occurrence_id = <source_id>:<local_start>`. Hora ambigua: primera ocurrencia.
 - **Hábitos:** `habit_records.occurrence_date` es fecha, única por hábito. Cambiar frecuencia = nueva fila en `habit_schedule_versions`.
 - **Almacén:** `location_id` + `relative_path`; nunca ruta absoluta desde API o agente. La validación vive en un único servicio: `realpath`, sin symlink fuera de raíz, comprobada al abrir. `storage_locations` solo se gestiona desde la GUI, sin herramienta para el agente. La búsqueda devuelve metadatos y `snippet`; el contenido, solo bajo demanda con `UntrustedEnvelope`.
-- **Búsqueda:** el servicio escribe `search_documents` en la misma transacción. Escapa cada término como frase con `*` final; la API expone `q`, `types`, `limit`, `offset`, sin sintaxis FTS. Une con `entities` para excluir archivados.
+- **Búsqueda:** el servicio escribe `search_documents` en la misma transacción. Escapa cada término como frase con `*` final; la API expone `q`, `types`, `limit`, `cursor`, sin sintaxis FTS. Une con `entities` para excluir archivados.
 - **Auditoría:** mutación y auditoría en la misma transacción; denegados y fallidos, en la suya. Toda llamada del agente se audita, también lecturas, sin contenido de documentos. Parámetros por lista blanca (`ToolSpec.audit`). `INSERT OR REPLACE` queda prohibido en repositorios.
 - **Secretos:** nunca en `settings` ni en ninguna tabla. Zona por defecto: ajuste `default_timezone`, `Europe/Madrid`, nunca implícita en datos.
 - **Memoria:** `memory_records` guarda el texto y `memory_fts` su copia indexada; borrar un registro borra ambos, sin FK fuera de `memory_*`. Es dato no confiable y entra en copias.

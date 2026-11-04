@@ -100,7 +100,8 @@ class Origin(StrEnum):
 
 
 class Page(BaseModel, Generic[T]):
-    """Forma única de todo listado. `limit` y `offset` los acota el servidor."""
+    """Forma única de todo listado. Cursor opaco; `limit` lo acota el servidor."""
 
     items: list[T]
-    total: int
+    next_cursor: str | None = None
+    total: int | None = None
