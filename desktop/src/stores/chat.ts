@@ -9,7 +9,7 @@ import {
 } from '@/services/api'
 import { notify } from '@/services/notify'
 import type { ServerEvent } from '@/services/protocol'
-import { startBackendLink, subscribeLinkStatus, subscribeServerEvents } from '@/services/ws'
+import { startBackendLink, subscribeLinkStatus, subscribeResync, subscribeServerEvents } from '@/services/ws'
 
 export type ChatMessageStatus = 'sending' | 'streaming' | 'complete' | 'failed' | 'interrupted'
 
@@ -35,16 +35,14 @@ export const MAX_MESSAGE_CHARS = 8000
 const MAX_KEPT = 500
 const MAX_ENDED_TURNS = 200
 const TURN_FAILED = 'El agente no pudo completar esta respuesta.'
-const BUSY = 'Drakter sigue respondiendo. Espera a que termine o cancela el turno.'
 
 /*
- * Supuestos sobre el protocolo (hermes CONTRACT §4):
- * - Una burbuja del agente por turno, identificada por turn_id (id local `agent:<turn>`).
- * - `message_completed.text` es autoritativo y cierra el turno; puede promover un mensaje
- *   `interrupted` (corte de enlace o cancelación) a `complete`.
- * - Tras un corte de enlace, el replay por after_seq reanuda los deltas perdidos, así que
- *   un mensaje `interrupted` por enlace sigue recibiendo deltas. Tras cancelar, no.
- * - `seq` y la deduplicación los resuelve ws.ts.
+ * Contrato de eventos (contracts/ v1):
+ * - `agent.turn_finished` es el terminal real del turno (completed/failed/cancelled/interrupted).
+ * - `agent.message_started` aporta `message_id`; un turno puede tener varios mensajes. Los deltas
+ *   no llevan `message_id`: van al mensaje en curso del turno, o a un marcador `agent:<turn>` que
+ *   `message_started`/`message_completed` adoptan sin perder lo recibido.
+ * - `seq`, huecos y boot_id los resuelve ws.ts, que avisa con resync.
  */
 
 let messages: readonly ChatMessage[] = []
@@ -57,7 +55,6 @@ let rehydrating = false
 
 const endedTurns = new Set<string>()
 const endedOrder: string[] = []
-const cancelledTurns = new Set<string>()
 const listeners = new Set<() => void>()
 
 function emit(): void {
@@ -83,7 +80,6 @@ function endTurn(turnId: string): void {
       const oldest = endedOrder.shift()
       if (oldest !== undefined) {
         endedTurns.delete(oldest)
-        cancelledTurns.delete(oldest)
       }
     }
   }
@@ -110,57 +106,108 @@ function clean(text: string, max: number): string {
   return text.replace(/[\u0000-\u001f\u007f]+/g, ' ').trim().slice(0, max)
 }
 
-/** Burbuja del agente de un turno; la crea (en `streaming`) si no existe. `guard` decide si se puede tocar. */
-function upsertAgent(
-  turnId: string,
-  guard: (existing: ChatMessage) => boolean,
-  mutate: (message: ChatMessage) => ChatMessage
-): boolean {
-  const id = agentId(turnId)
-  const index = messages.findIndex((m) => m.id === id)
-  const existing = messages[index]
-  if (existing) {
-    if (!guard(existing)) return false
-    setMessages(messages.map((m, i) => (i === index ? mutate(m) : m)))
-    return true
+function placeholderId(turnId: string): string {
+  return agentId(turnId)
+}
+
+/** Mensaje del agente en curso en un turno (el último `streaming`; un `interrupted` por enlace puede reanudarse). */
+function currentBubble(turnId: string): ChatMessage | undefined {
+  let resumable: ChatMessage | undefined
+  for (let i = messages.length - 1; i >= 0; i -= 1) {
+    const m = messages[i]
+    if (!m || m.role !== 'agent' || m.turnId !== turnId) continue
+    if (m.status === 'streaming') return m
+    if (m.status === 'interrupted' && !endedTurns.has(turnId) && !resumable) resumable = m
   }
-  const created: ChatMessage = { id, role: 'agent', content: '', status: 'streaming', turnId, tools: [] }
-  setMessages([...messages, mutate(created)])
-  return true
+  return resumable
+}
+
+function addBubble(message: ChatMessage): void {
+  setMessages([...messages, message])
+}
+
+function patchBubble(id: string, change: (m: ChatMessage) => ChatMessage): void {
+  setMessages(messages.map((m) => (m.id === id && m.role === 'agent' ? change(m) : m)))
+}
+
+function newBubble(id: string, turnId: string): ChatMessage {
+  return { id, role: 'agent', content: '', status: 'streaming', turnId, tools: [] }
 }
 
 function upsertTool(turnId: string, tool: ToolActivity): void {
-  upsertAgent(
-    turnId,
-    (m) => m.status === 'streaming' || m.status === 'interrupted',
-    (m) => {
-      const known = m.tools.some((t) => t.id === tool.id)
-      return { ...m, tools: known ? m.tools.map((t) => (t.id === tool.id ? tool : t)) : [...m.tools, tool] }
-    }
-  )
+  const target = currentBubble(turnId)
+  const apply = (m: ChatMessage): ChatMessage => {
+    const known = m.tools.some((t) => t.id === tool.id)
+    return { ...m, tools: known ? m.tools.map((t) => (t.id === tool.id ? tool : t)) : [...m.tools, tool] }
+  }
+  if (target) patchBubble(target.id, apply)
+  else addBubble(apply(newBubble(placeholderId(turnId), turnId)))
+}
+
+function finishTurn(turnId: string, outcome: 'completed' | 'failed' | 'cancelled' | 'interrupted'): void {
+  endTurn(turnId)
+  const mine = (m: ChatMessage): boolean =>
+    m.role === 'agent' && m.turnId === turnId && (m.status === 'streaming' || m.status === 'interrupted')
+  if (outcome === 'failed') {
+    failTurn(turnId, false)
+    return
+  }
+  const next = messages.map((m): ChatMessage => {
+    if (!mine(m)) return m
+    if (outcome === 'completed') return { ...m, status: 'complete' }
+    return { ...m, status: 'interrupted', tools: failTools(m.tools) }
+  })
+  setMessages(next)
 }
 
 function handleEvent(event: ServerEvent): void {
   switch (event.type) {
+    case 'agent.turn_started': {
+      const { turn_id } = event.payload
+      if (!endedTurns.has(turn_id)) setActiveTurn(turn_id)
+      return
+    }
+    case 'agent.turn_finished':
+      finishTurn(event.payload.turn_id, event.payload.outcome)
+      return
+    case 'agent.message_started': {
+      const { turn_id, message_id } = event.payload
+      if (endedTurns.has(turn_id)) return
+      if (messages.some((m) => m.role === 'agent' && m.id === message_id)) return
+      const holder = messages.find((m) => m.role === 'agent' && m.id === placeholderId(turn_id) && m.status === 'streaming')
+      if (holder) setMessages(messages.map((m) => (m === holder ? { ...m, id: message_id } : m)))
+      else addBubble(newBubble(message_id, turn_id))
+      setActiveTurn(turn_id)
+      return
+    }
     case 'agent.message_delta': {
       const { turn_id, delta } = event.payload
-      if (cancelledTurns.has(turn_id)) return
-      const applied = upsertAgent(
-        turn_id,
-        (m) => m.status === 'streaming' || m.status === 'interrupted',
-        (m) => ({ ...m, content: m.content + delta, status: 'streaming' })
-      )
-      if (applied && !endedTurns.has(turn_id)) setActiveTurn(turn_id)
+      if (endedTurns.has(turn_id)) return
+      const target = currentBubble(turn_id)
+      const apply = (m: ChatMessage): ChatMessage => ({ ...m, content: m.content + delta, status: 'streaming' })
+      if (target) patchBubble(target.id, apply)
+      else addBubble(apply(newBubble(placeholderId(turn_id), turn_id)))
+      setActiveTurn(turn_id)
       return
     }
     case 'agent.message_completed': {
-      const { turn_id, text } = event.payload
-      upsertAgent(
-        turn_id,
-        (m) => m.status !== 'failed',
-        (m) => ({ ...withoutError(m), content: text, status: 'complete', turnId: turn_id })
-      )
-      endTurn(turn_id)
+      const { turn_id, message_id, text } = event.payload
+      const exact = messages.find((m) => m.role === 'agent' && m.id === message_id)
+      const holder =
+        exact ?? messages.find((m) => m.role === 'agent' && m.id === placeholderId(turn_id)) ?? currentBubble(turn_id)
+      const done = (m: ChatMessage): ChatMessage => ({
+        ...withoutError(m),
+        id: message_id,
+        content: text,
+        status: 'complete',
+        turnId: turn_id
+      })
+      if (holder) {
+        if (holder.status === 'failed') return
+        setMessages(messages.map((m) => (m === holder ? done(m) : m)))
+      } else {
+        addBubble(done(newBubble(message_id, turn_id)))
+      }
       return
     }
     case 'agent.tool_started': {
@@ -187,21 +234,18 @@ function handleEvent(event: ServerEvent): void {
     }
     case 'agent.error': {
       const { turn_id, message, retryable } = event.payload
-      if (turn_id !== null) {
-        failTurn(turn_id, retryable)
-      } else if (!retryable) {
+      if (typeof turn_id === 'string') {
+        failTurn(turn_id, retryable === true)
+      } else {
         notify({
-          tone: 'error',
+          tone: retryable === true ? 'warning' : 'error',
           title: 'El agente ha tenido un problema',
           body: clean(message, 200) || 'Error no especificado.',
-          desktop: true
+          desktop: retryable !== true
         })
       }
       return
     }
-    case 'agent.replay_truncated':
-      void rehydrate()
-      return
     default:
       return
   }
@@ -209,20 +253,25 @@ function handleEvent(event: ServerEvent): void {
 
 function failTurn(turnId: string, retryable: boolean): void {
   endTurn(turnId)
-  const id = agentId(turnId)
-  const existing = messages.find((m) => m.id === id)
-  if (existing && (existing.status === 'complete' || existing.status === 'failed')) return
-  const failed: ChatMessage = {
-    id,
-    role: 'agent',
-    content: existing?.content ?? '',
-    status: 'failed',
-    turnId,
-    error: TURN_FAILED,
-    retryable,
-    tools: failTools(existing?.tools ?? [])
+  const mine = messages.filter((m) => m.role === 'agent' && m.turnId === turnId)
+  const open = mine.filter((m) => m.status === 'streaming' || m.status === 'interrupted')
+  if (open.length === 0) {
+    if (mine.length > 0) return // ya terminó (completa o fallida)
+    addBubble({
+      ...newBubble(placeholderId(turnId), turnId),
+      status: 'failed',
+      error: TURN_FAILED,
+      retryable
+    })
+    return
   }
-  setMessages(existing ? messages.map((m) => (m === existing ? failed : m)) : [...messages, failed])
+  setMessages(
+    messages.map((m): ChatMessage =>
+      open.includes(m)
+        ? { ...m, status: 'failed', error: TURN_FAILED, retryable, tools: failTools(m.tools) }
+        : m
+    )
+  )
 }
 
 function interruptStreaming(turnId: string | null): void {
@@ -237,14 +286,10 @@ function interruptStreaming(turnId: string | null): void {
   if (touched) setMessages(next)
 }
 
-/** El replay ya no cubre lo perdido: se relee el historial de la sesión y se sustituye la lista. */
+/** Tras un resync se relee el historial de la sesión (si hay) y se sustituye la lista. */
 async function rehydrate(): Promise<void> {
   const id = sessionId
-  if (id === null || rehydrating) {
-    interruptStreaming(null)
-    setActiveTurn(null)
-    return
-  }
+  if (id === null || rehydrating) return
   rehydrating = true
   try {
     const stored = await listSessionMessages(id)
@@ -265,8 +310,7 @@ async function rehydrate(): Promise<void> {
     )
     setMessages([...fromServer, ...local])
   } catch {
-    interruptStreaming(null)
-    setActiveTurn(null)
+    console.warn('No se pudo releer el historial del chat.')
   } finally {
     rehydrating = false
   }
@@ -274,6 +318,7 @@ async function rehydrate(): Promise<void> {
 
 // Suscripciones: una sola vez, al cargar el módulo.
 subscribeServerEvents(handleEvent)
+subscribeResync(() => void rehydrate())
 subscribeLinkStatus((status) => {
   if (status === 'open') {
     wasOpen = true
@@ -281,7 +326,7 @@ subscribeLinkStatus((status) => {
   }
   if (!wasOpen) return
   wasOpen = false
-  // Enlace perdido: lo que llegaba queda cortado; el replay o un `message_completed` posterior pueden reanudarlo.
+  // Enlace perdido: lo que llegaba queda cortado; el resync o el terminal del turno lo aclaran después.
   interruptStreaming(null)
   setActiveTurn(null)
 })
@@ -325,14 +370,16 @@ async function deliver(id: string, content: string): Promise<void> {
     const { turn_id: turnId } = await post(id, content)
     patchMessage(id, (m) => ({ ...withoutError(m), status: 'complete', turnId }))
     // Los eventos del turno pueden haber llegado antes que esta respuesta: la burbuja ya existe por turn_id.
-    const bubble = messages.find((m) => m.id === agentId(turnId))
-    const settled = bubble !== undefined && bubble.status !== 'streaming'
+    const bubbles = messages.filter((m) => m.role === 'agent' && m.turnId === turnId)
+    const settled = bubbles.length > 0 && bubbles.every((m) => m.status !== 'streaming')
     if (!endedTurns.has(turnId) && !settled) setActiveTurn(turnId)
   } catch (error) {
-    const message =
-      error instanceof ApiError && error.code === 'agent_busy'
-        ? BUSY
-        : describeError(error, 'No se pudo enviar el mensaje.')
+    if (error instanceof ApiError && error.confirmation !== null) {
+      // Pide confirmación: no es un fallo del envío. El aviso llega por el store de confirmaciones.
+      patchMessage(id, (m) => ({ ...withoutError(m), status: 'complete' }))
+      return
+    }
+    const message = describeError(error, 'No se pudo enviar el mensaje.')
     patchMessage(id, (m) => ({ ...m, status: 'failed', error: message }))
   }
 }
@@ -394,8 +441,7 @@ export async function cancelActiveTurn(): Promise<void> {
   } finally {
     cancelling = false
   }
-  // El contrato no define evento terminal de cancelación: se cierra aquí. Un message_completed posterior lo sustituye.
-  cancelledTurns.add(turnId)
+  // El terminal real es agent.turn_finished; aquí se cierra ya en local por si tarda.
   interruptStreaming(turnId)
   endTurn(turnId)
 }

@@ -6,14 +6,22 @@ import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 import { useDrakterState } from '@/stores/agent'
+import { useLinkStatus, type LinkStatus } from '@/stores/connection'
 import { MAX_MESSAGE_CHARS, cancelActiveTurn, sendMessage, useActiveTurn, useChatMessages } from '@/stores/chat'
 
-const OFFLINE_NOTICE = 'Drakter no está conectado ahora. Podrás escribirle cuando vuelva la conexión.'
+const LINK_NOTICES: Readonly<Record<Exclude<LinkStatus, 'open'>, string>> = {
+  idle: 'Conectando con Drakter…',
+  connecting: 'Conectando con Drakter…',
+  reconnecting: 'Reconectando con Drakter. Podrás escribirle en cuanto vuelva la conexión.',
+  disconnected: 'Drakter no está conectado ahora. Podrás escribirle cuando vuelva la conexión.'
+}
 const TOO_LONG_NOTICE = `El mensaje supera el límite de ${MAX_MESSAGE_CHARS} caracteres.`
 const SEND_FAILED_NOTICE = 'No se ha podido enviar el mensaje. Inténtalo de nuevo.'
 
 export function ChatComposer({ className }: { className?: string }) {
-  const offline = useDrakterState() === 'offline'
+  useDrakterState() // la primera suscripción arranca el enlace con el backend
+  const link = useLinkStatus()
+  const offline = link !== 'open'
   const activeTurn = useActiveTurn()
   const sending = useChatMessages().some((message) => message.status === 'sending')
   const [draft, setDraft] = useState('')
@@ -22,7 +30,7 @@ export function ChatComposer({ className }: { className?: string }) {
   const text = draft.trim()
   const tooLong = text.length > MAX_MESSAGE_CHARS
   const canSend = !offline && !sending && activeTurn === null && text.length > 0 && !tooLong
-  const notice = offline ? OFFLINE_NOTICE : tooLong ? TOO_LONG_NOTICE : failure
+  const notice = link !== 'open' ? LINK_NOTICES[link] : tooLong ? TOO_LONG_NOTICE : failure
 
   function send(): void {
     if (!canSend) return

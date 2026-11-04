@@ -1,35 +1,30 @@
 /**
- * Protocolo renderer ↔ backend: ÚNICO archivo que conoce rutas y formas de red.
+ * Protocolo renderer ↔ backend: formas de datos y validación.
  *
- * Fuente: `backend/app/integrations/hermes/CONTRACT.md` §4 (rama drakter/agente-hermes)
- * y `backend/CONTRACT.md`. Los campos marcados SUPUESTO no constan en el contrato.
+ * Fuente: `contracts/` (rama drakter/contratos, manda sobre todo lo demás),
+ * `contracts/python/drakter_contracts/events.py` y
+ * `backend/app/integrations/hermes/CONTRACT.md`. SUPUESTO marca lo no contratado.
  *
- * Aprobar o rechazar NO está aquí a propósito: lo hace el proceso principal con un
- * diálogo nativo. El renderer no conoce esas rutas ni tiene forma de llamarlas.
+ * El renderer no tiene credenciales ni red (D-14): todo va por `window.api`.
+ * Aprobar o rechazar no existe aquí: lo hace main con un diálogo nativo.
  *
  * Todo lo que llega por red es dato no confiable: se valida aquí y se muestra
  * siempre como texto plano, nunca como HTML ni como instrucción.
  */
 
-export const WS_SUBPROTOCOL = 'drakter.v1'
-export const WS_AUTH_PREFIX = 'drakter.auth.'
 export const EVENT_VERSION = 1
 
-export const API_PATHS = {
-  authCheck: '/api/v1/auth/check',
-  agentStatus: '/api/v1/agent/status',
-  chatSessions: '/api/v1/chat/sessions',
-  sessionMessages: (sessionId: string) =>
-    `/api/v1/chat/sessions/${encodeURIComponent(sessionId)}/messages`,
-  cancelTurn: (turnId: string) => `/api/v1/chat/turns/${encodeURIComponent(turnId)}/cancel`
-} as const
-
-/** Ruta WS con reanudación. `afterSeq` nulo: solo eventos nuevos. */
-export function chatEventsPath(afterSeq: number | null): string {
-  return afterSeq === null ? '/api/v1/chat/events' : `/api/v1/chat/events?after_seq=${afterSeq}`
-}
-
-export const AGENT_STATES = ['idle', 'thinking', 'executing', 'speaking', 'error', 'offline'] as const
+export const AGENT_STATES = [
+  'idle',
+  'listening',
+  'thinking',
+  'speaking',
+  'executing',
+  'success',
+  'error',
+  'interrupted',
+  'offline'
+] as const
 export type AgentState = (typeof AGENT_STATES)[number]
 
 // ---- REST ------------------------------------------------------------------
@@ -65,6 +60,15 @@ export interface StoredChatMessage {
   readonly turn_id: string | null
 }
 
+/** Cuerpo `confirmation` de un 409 `confirmation_required` (contracts/errors.py). */
+export interface ConfirmationTicket {
+  readonly id: string
+  readonly summary: string
+  readonly affected_count: number | null
+  readonly expires_at: string
+  readonly params_hash?: string
+}
+
 export interface ApiErrorDetail {
   readonly field: string | null
   readonly code: string
@@ -73,63 +77,80 @@ export interface ApiErrorDetail {
 
 // ---- Eventos WebSocket ------------------------------------------------------
 
-/** `summary` lo calcula el backend, nunca el modelo. */
+/** `summary` y `affected_count` los calcula el backend, nunca el modelo. */
 export interface PendingConfirmation {
-  readonly session_id: string
-  readonly turn_id: string
   readonly action_id: string
+  readonly session_id?: string | null
+  readonly turn_id?: string | null
+  readonly tool?: string
   readonly summary: string
+  readonly affected_count?: number | null
   readonly expires_at: string
 }
 
+export const CONFIRMATION_STATUSES = ['approved', 'rejected', 'expired', 'executed', 'failed'] as const
+
+interface TurnRef {
+  readonly session_id: string
+  readonly turn_id: string
+}
+
+interface ToolCall extends TurnRef {
+  readonly tool: string
+  readonly call_id: string
+  readonly source?: 'drakter' | 'hermes'
+}
+
 export interface EventPayloads {
-  'agent.status_changed': { readonly state: AgentState }
-  /** ROADMAP §5.4; el backend aún no lo emite. */
-  'agent.expression_changed': { readonly expression: string }
-  'agent.message_delta': {
-    readonly session_id: string
-    readonly turn_id: string
-    readonly delta: string
+  'agent.status_changed': {
+    readonly state: AgentState
+    readonly previous?: AgentState | null
+    readonly turn_id?: string | null
+    readonly reason?: string | null
   }
-  'agent.message_completed': {
-    readonly session_id: string
-    readonly turn_id: string
-    readonly message_id: string
-    readonly text: string
+  'agent.expression_changed': {
+    readonly expression: string
+    readonly intensity?: number | null
+    readonly turn_id?: string | null
   }
-  'agent.tool_started': {
-    readonly session_id: string
-    readonly turn_id: string
-    readonly tool: string
-    readonly call_id: string
+  'agent.turn_started': TurnRef & { readonly input_source?: 'text' | 'voice' }
+  'agent.turn_finished': TurnRef & {
+    readonly outcome: 'completed' | 'failed' | 'cancelled' | 'interrupted'
   }
-  'agent.tool_completed': {
-    readonly session_id: string
-    readonly turn_id: string
-    readonly tool: string
-    readonly call_id: string
-    readonly error?: boolean
-  }
-  'agent.confirmation_required': PendingConfirmation
+  'agent.message_started': TurnRef & { readonly message_id: string }
+  'agent.message_delta': TurnRef & { readonly delta: string }
+  'agent.message_completed': TurnRef & { readonly message_id: string; readonly text: string }
+  'agent.tool_started': ToolCall
+  'agent.tool_completed': ToolCall & { readonly error?: boolean }
   'agent.error': {
-    readonly session_id: string | null
-    readonly turn_id: string | null
+    readonly session_id?: string | null
+    readonly turn_id?: string | null
     readonly code: string
     readonly message: string
-    readonly retryable: boolean
+    readonly retryable?: boolean
   }
-  'agent.replay_truncated': Readonly<Record<string, unknown>>
+  'confirmation.requested': PendingConfirmation
+  'confirmation.resolved': {
+    readonly action_id: string
+    readonly status: (typeof CONFIRMATION_STATUSES)[number]
+    readonly error_code?: string | null
+  }
+  'system.resync_required': {
+    readonly reason: 'buffer_overflow' | 'boot_changed' | 'client_lagging'
+  }
 }
 
 export type EventType = keyof EventPayloads
 
 export interface EventEnvelope<T extends EventType = EventType> {
   readonly event_id: string
-  /** Secuencia global del backend: base de `after_seq` y de la deduplicación. */
+  /** Monótono por `boot_id`. Un hueco o un `boot_id` nuevo obligan a releer por REST. */
   readonly seq: number
+  readonly boot_id: string
   readonly timestamp: string
   readonly type: T
   readonly version: number
+  readonly correlation_id?: string | null
   readonly payload: EventPayloads[T]
 }
 
@@ -159,12 +180,38 @@ export function isAgentState(value: unknown): value is AgentState {
   return (AGENT_STATES as readonly unknown[]).includes(value)
 }
 
+const isOptionalString = (value: unknown): boolean => value === undefined || isStringOrNull(value)
+const isOptionalCount = (value: unknown): boolean => value === undefined || value === null || isCount(value)
+
 const TURN = { session_id: isString, turn_id: isString }
 const TOOL_CALL = { ...TURN, tool: isString, call_id: isString }
-const CONFIRMATION = { ...TURN, action_id: isString, summary: isString, expires_at: isDate }
+const CONFIRMATION = {
+  action_id: isString,
+  session_id: isOptionalString,
+  turn_id: isOptionalString,
+  tool: isOptionalString,
+  summary: isString,
+  affected_count: isOptionalCount,
+  expires_at: isDate
+}
+const RESYNC_REASONS = new Set(['buffer_overflow', 'boot_changed', 'client_lagging'])
+const TURN_OUTCOMES = new Set(['completed', 'failed', 'cancelled', 'interrupted'])
 
 export function isPendingConfirmation(value: unknown): value is PendingConfirmation {
   return isRecord(value) && has(value, CONFIRMATION)
+}
+
+export function isConfirmationTicket(value: unknown): value is ConfirmationTicket {
+  return (
+    isRecord(value) &&
+    has(value, {
+      id: isString,
+      summary: isString,
+      affected_count: (v) => v === null || v === undefined || isCount(v),
+      expires_at: isDate,
+      params_hash: (v) => v === undefined || isString(v)
+    })
+  )
 }
 
 export function isStoredChatMessage(value: unknown): value is StoredChatMessage {
@@ -182,27 +229,43 @@ export function isStoredChatMessage(value: unknown): value is StoredChatMessage 
 const PAYLOAD_CHECKS: { readonly [T in EventType]: (payload: Json) => boolean } = {
   'agent.status_changed': (p) => isAgentState(p['state']),
   'agent.expression_changed': (p) => has(p, { expression: isString }),
+  'agent.turn_started': (p) => has(p, TURN),
+  'agent.turn_finished': (p) => has(p, { ...TURN, outcome: (v) => TURN_OUTCOMES.has(v as string) }),
+  'agent.message_started': (p) => has(p, { ...TURN, message_id: isString }),
   'agent.message_delta': (p) => has(p, { ...TURN, delta: isString }),
   'agent.message_completed': (p) => has(p, { ...TURN, message_id: isString, text: isString }),
   'agent.tool_started': (p) => has(p, TOOL_CALL),
   'agent.tool_completed': (p) => has(p, { ...TOOL_CALL, error: isOptionalBoolean }),
-  'agent.confirmation_required': (p) => has(p, CONFIRMATION),
   'agent.error': (p) =>
     has(p, {
-      session_id: isStringOrNull,
-      turn_id: isStringOrNull,
+      session_id: isOptionalString,
+      turn_id: isOptionalString,
       code: isString,
       message: isString,
-      retryable: isBoolean
+      retryable: isOptionalBoolean
     }),
-  'agent.replay_truncated': () => true
+  'confirmation.requested': (p) => has(p, CONFIRMATION),
+  'confirmation.resolved': (p) =>
+    has(p, {
+      action_id: isString,
+      status: (v) => (CONFIRMATION_STATUSES as readonly unknown[]).includes(v)
+    }),
+  'system.resync_required': (p) => RESYNC_REASONS.has(p['reason'] as string)
 }
 
-/** Devuelve el evento validado, o `null` si es desconocido, de otra versión o malformado. */
+/** Tipos del catálogo v1 que esta capa no consume: se ignoran sin avisar. */
+export function isKnownEventType(type: string): type is EventType {
+  return Object.hasOwn(PAYLOAD_CHECKS, type)
+}
+
+/**
+ * Devuelve el evento validado, o `null` si es de un tipo que aquí no se consume,
+ * de otra versión o malformado. `version` es por tipo; hoy todos van en 1.
+ */
 export function parseServerEvent(raw: unknown): ServerEvent | null {
   if (!isRecord(raw)) return null
-  const { event_id, seq, timestamp, type, version, payload } = raw
-  if (!isString(event_id) || !isCount(seq) || !isString(timestamp) || version !== EVENT_VERSION) return null
-  if (!isString(type) || !Object.hasOwn(PAYLOAD_CHECKS, type) || !isRecord(payload)) return null
-  return PAYLOAD_CHECKS[type as EventType](payload) ? (raw as unknown as ServerEvent) : null
+  const { event_id, seq, boot_id, timestamp, type, version, payload } = raw
+  if (!isString(event_id) || !isCount(seq) || !isString(boot_id) || !isString(timestamp)) return null
+  if (version !== EVENT_VERSION || !isString(type) || !isKnownEventType(type) || !isRecord(payload)) return null
+  return PAYLOAD_CHECKS[type](payload) ? (raw as unknown as ServerEvent) : null
 }
