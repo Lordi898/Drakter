@@ -9,6 +9,8 @@ Foto operativa de la construcción. El detalle por tareas está en `IMPLEMENTATI
 - **Documentos:** los `.md` de `docs/` son la fuente de verdad; los `.docx` se han eliminado.
 - **Tooling versionado:** agentes, skills, `build-orchestrator` y `astraeus` llegan completos a clones y worktrees.
 - **Configuración local:** `worktree.baseRef = head` y `workflowSizeGuideline = unrestricted` en `.claude/settings.local.json`. Ese archivo no se versiona, así que hay que fijarlo en cada checkout nuevo.
+- **Anidación:** `drakter-lider` lanza subagentes (dos niveles comprobados en sesión nueva).
+- **Identidad Git:** esta máquina no tiene `user.name` ni `user.email`. Los commits usan `git -c user.name=... -c user.email=...` con la identidad de los commits existentes.
 - **Secretos:** `~/.config/drakter/.env` pertenece al usuario y queda fuera del repositorio.
 
 ## Copias de seguridad

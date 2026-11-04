@@ -75,3 +75,10 @@ Decisiones técnicas, cambios de tecnología y motivos.
 - **Alternativas descartadas:** `.claude/settings.json` (se versionaría una preferencia de esta máquina).
 - **Motivo:** decisión del usuario, para que el trabajo paralelo parta de la rama actual y sin tope de tamaño.
 - **Impacto:** `.gitignore`, `.claude/settings.local.json` (no versionado, hay que fijarlo en cada checkout nuevo), `.claude/agents/drakter-orquestator.md`, `docs/RUN_STATE.md`. `RUN_STATE.md` se suma a los tres documentos de control de `CLAUDE.md` §2 como foto operativa. `CLAUDE.md` no mencionaba gitlinks ni `Workflow`, así que no ha cambiado.
+
+## [2026-11-04] Anidación de drakter-lider comprobada
+- **Contexto:** la entrada del orquestador dejaba la anidación pendiente de comprobar. Desde una sesión ya abierta falla con `Agent type 'drakter-lider' not found`, porque la lista de agentes se carga al arrancar y el agente se añadió después.
+- **Decisión:** comprobarla en una sesión nueva de `claude -p` sobre un worktree temporal de `drakter/build`. El flujo registró `principal → drakter-lider → general-purpose` y la cadena de prueba volvió intacta.
+- **Alternativas descartadas:** dar la anidación por buena solo por el frontmatter (no demuestra que funcione en ejecución).
+- **Motivo:** dos niveles bajo el hilo principal funcionan sin configuración adicional. El tercer nivel no se ha probado.
+- **Impacto:** `drakter-toolkit`, `docs/RUN_STATE.md`. Los agentes nuevos solo se pueden usar en sesiones arrancadas después de añadirlos.

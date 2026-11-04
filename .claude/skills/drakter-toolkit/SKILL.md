@@ -109,6 +109,7 @@ Reutiliza un rol del catálogo si existe. Un rol puntual va con `general-purpose
 
 - **Base de los worktrees:** salen de `origin/main` salvo con `"worktree": {"baseRef": "head"}`. Solo ven lo commiteado: haz commit antes de cada lote.
 - **Agentes de `Workflow`:** los que no llevan `agentType` no pueden lanzar subagentes. Para anidar, lanza `drakter-lider` desde el hilo principal con `Agent`.
+- **Agentes nuevos:** la lista se carga al arrancar la sesión. Un agente añadido después da `Agent type not found` hasta abrir una sesión nueva.
 - **Dentro de un worktree** solo carga su propia `.claude/skills`. Lo sin commitear no existe allí.
 - **Máquina:** 8 CPU y 14 GB de RAM; limita instalaciones y compilaciones simultáneas.
 - **Coste de contexto:** el catálogo completo se anuncia en cada sesión. Recortarlo reduce ese coste.
