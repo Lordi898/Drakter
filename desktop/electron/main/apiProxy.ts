@@ -30,6 +30,8 @@ const CODE_PATTERN = /^[A-Za-z0-9_.-]{1,64}$/
 const CONFIRMATIONS_PREFIX = '/api/v1/confirmations/'
 const STORAGE_LOCATIONS = '/api/v1/storage-locations'
 const MAX_PATH_CHARS = 2048
+/** ASCII imprimible: excluye CR y LF, así que no se pueden inyectar cabeceras. */
+const HEADER_VALUE_PATTERN = /^[\x20-\x7e]{1,128}$/
 const METHODS: ReadonlySet<string> = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE'])
 
 // Defensa en profundidad: decidir confirmaciones y escribir raíces de almacén exigen
@@ -120,6 +122,21 @@ function hasDecisionSegment(path: string): boolean {
   })
 }
 
+/** Traduce `options` a cabeceras. `null` si no es válido. */
+function headersFromOptions(method: string, options: unknown): Record<string, string> | null {
+  if (options === undefined) return {}
+  if (!isPlainObject(options)) return null
+  const headers: Record<string, string> = {}
+  for (const [key, value] of Object.entries(options)) {
+    if (value === undefined) continue
+    if (typeof value !== 'string' || !HEADER_VALUE_PATTERN.test(value) || method === 'GET') return null
+    if (key === 'ifMatch') headers['If-Match'] = value
+    else if (key === 'idempotencyKey') headers['Idempotency-Key'] = value
+    else return null
+  }
+  return headers
+}
+
 function serializeBody(body: unknown): string {
   let json: string | undefined
   try {
@@ -143,7 +160,8 @@ export function requestBackend(
   method: HttpMethod,
   path: string,
   body?: unknown,
-  timeoutMs: number = REQUEST_TIMEOUT_MS
+  timeoutMs: number = REQUEST_TIMEOUT_MS,
+  extraHeaders: Readonly<Record<string, string>> = {}
 ): Promise<HttpReply> {
   return new Promise<HttpReply>((resolve, reject) => {
     let payload: string | undefined
@@ -158,6 +176,7 @@ export function requestBackend(
     }
 
     const headers: Record<string, string | number> = {
+      ...extraHeaders,
       Authorization: `Bearer ${token}`,
       Accept: 'application/json'
     }
@@ -236,11 +255,13 @@ export async function callOperation(host: BackendHost, payload: unknown): Promis
     if (!isPlainObject(payload) || typeof payload.method !== 'string' || !METHODS.has(payload.method)) {
       return invalid()
     }
-    if (Object.keys(payload).some((key) => key !== 'method' && key !== 'path' && key !== 'body')) return invalid()
+    if (Object.keys(payload).some((key) => !['method', 'path', 'body', 'options'].includes(key))) return invalid()
 
     const method = payload.method as HttpMethod
     const path = validatePath(method, payload.path)
     if (path === null) return invalid()
+    const extraHeaders = headersFromOptions(method, payload.options)
+    if (extraHeaders === null) return invalid()
     if (payload.body !== undefined) {
       if (method === 'GET') return invalid()
       serializeBody(payload.body)
@@ -250,7 +271,15 @@ export async function callOperation(host: BackendHost, payload: unknown): Promis
     const endpoint = await host.waitUntilReady(READY_TIMEOUT_MS)
     if (endpoint === null) return failure('backend_unavailable')
 
-    const reply = await requestBackend(endpoint, endpoint.uiToken, method, path, payload.body)
+    const reply = await requestBackend(
+      endpoint,
+      endpoint.uiToken,
+      method,
+      path,
+      payload.body,
+      REQUEST_TIMEOUT_MS,
+      extraHeaders
+    )
     const parsed = parseReplyBody(reply.text)
     if (reply.status >= 200 && reply.status < 300) {
       return { ok: true, status: reply.status, data: parsed }

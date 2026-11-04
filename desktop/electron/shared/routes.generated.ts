@@ -135,5 +135,7 @@ export const GENERATED_ROUTES = [
   ['GET', '/api/v1/improvement/proposals/{id}'],
   ['POST', '/api/v1/improvement/proposals/{id}/approve'],
   ['POST', '/api/v1/improvement/proposals/{id}/reject'],
-  ['POST', '/api/v1/improvement/feedback']
+  ['POST', '/api/v1/improvement/feedback'],
+  ['GET', '/api/v1/tasks/tags'],
+  ['PUT', '/api/v1/tasks/{id}/tags']
 ] as const
