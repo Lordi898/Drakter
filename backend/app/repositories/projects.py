@@ -95,12 +95,12 @@ def list_projects(
     statuses: Sequence[str],
     priorities: Sequence[str],
     q: str | None,
-    archived: str,
+    include_archived: bool,
     sort: str,
     limit: int,
     offset: int,
-) -> list[dict[str, Any]]:
-    """Hasta `limit + 1` filas, para saber si hay otra página."""
+) -> tuple[list[dict[str, Any]], int]:
+    """Devuelve la página y el total que cumple el filtro."""
     where: list[str] = []
     params: list[Any] = []
     if statuses:
@@ -115,19 +115,20 @@ def list_projects(
             "(p.name LIKE ? ESCAPE '\\' OR COALESCE(p.description, '') LIKE ? ESCAPE '\\')"
         )
         params.extend((pattern, pattern))
-    if archived == "exclude":
+    if not include_archived:
         where.append("e.archived_at IS NULL")
-    elif archived == "only":
-        where.append("e.archived_at IS NOT NULL")
     order: list[str] = []
     for part in sort.split(","):
         descending = part.startswith("-")
         order.append(f"{_SORT_SQL[part.removeprefix('-')]} {'DESC' if descending else 'ASC'}")
     order.append("p.id ASC")
-    sql = _SELECT + (f" WHERE {' AND '.join(where)}" if where else "")
-    sql += f" ORDER BY {', '.join(order)} LIMIT ? OFFSET ?"
-    rows = conn.execute(sql, (*params, limit + 1, offset)).fetchall()
-    return [_row(row) for row in rows]
+    clause = f" WHERE {' AND '.join(where)}" if where else ""
+    total = conn.execute(
+        "SELECT count(*) FROM projects p JOIN entities e ON e.id = p.id" + clause, tuple(params)
+    ).fetchone()[0]
+    sql = _SELECT + clause + f" ORDER BY {', '.join(order)} LIMIT ? OFFSET ?"
+    rows = conn.execute(sql, (*params, limit, offset)).fetchall()
+    return [_row(row) for row in rows], total
 
 
 def progress_counts(
@@ -189,6 +190,5 @@ def release_tasks(conn: sqlite3.Connection, project_id: str, now: str) -> list[t
 
 
 def delete_project(conn: sqlite3.Connection, project_id: str) -> None:
-    """Borra la fila de dominio; el trigger borra su entidad."""
-    conn.execute("DELETE FROM entity_tags WHERE entity_id = ?", (project_id,))
+    """Borra la fila de dominio; `trg_projects_delete_entity` borra su entidad (y sus etiquetas, en cascada)."""
     conn.execute("DELETE FROM projects WHERE id = ?", (project_id,))

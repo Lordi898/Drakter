@@ -15,7 +15,7 @@ from app.schemas.projects import (
     ProjectProgress,
     ProjectUpdate,
 )
-from app.schemas.tasks import DEFAULT_LIMIT, MAX_LIMIT, HistoryEntry, Page
+from app.schemas.tasks import DEFAULT_LIMIT, MAX_LIMIT, MAX_OFFSET, HistoryEntry, Page
 from app.services import projects as service
 from app.services.tasks_ports import ConfirmationRequired
 
@@ -87,7 +87,7 @@ def project_activity(
     request: Request,
     project_id: UUID,
     limit: Annotated[int, Query(ge=1, le=MAX_LIMIT)] = DEFAULT_LIMIT,
-    cursor: Annotated[str | None, Query(max_length=200)] = None,
+    offset: Annotated[int, Query(ge=0, le=MAX_OFFSET)] = 0,
 ) -> Page[HistoryEntry]:
     with service_context(request) as ctx:
-        return service.project_activity(ctx, str(project_id), limit=limit, cursor=cursor)
+        return service.project_activity(ctx, str(project_id), limit=limit, offset=offset)

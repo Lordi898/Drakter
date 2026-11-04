@@ -31,8 +31,6 @@ from app.services.tasks_ports import (
     ServiceContext,
     check_revision,
     conflict,
-    decode_cursor,
-    encode_cursor,
     new_id,
     not_found,
     transaction,
@@ -153,22 +151,20 @@ def get_project(ctx: ServiceContext, project_id: str) -> ProjectOut:
 
 
 def list_projects(ctx: ServiceContext, query: ProjectListQuery) -> Page[ProjectOut]:
-    offset = decode_cursor(query.cursor)
-    rows = repo.list_projects(
+    page, total = repo.list_projects(
         ctx.conn,
         statuses=query.status,
         priorities=query.priority,
         q=query.q,
-        archived=query.archived,
+        include_archived=query.include_archived,
         sort=query.sort,
         limit=query.limit,
-        offset=offset,
+        offset=query.offset,
     )
-    page = rows[: query.limit]
     counts = repo.progress_counts(ctx.conn, [row["id"] for row in page], utc_now())
     return Page[ProjectOut](
         items=[_out(row, counts[row["id"]]) for row in page],
-        next_cursor=encode_cursor(offset + query.limit) if len(rows) > query.limit else None,
+        total=total,
     )
 
 
@@ -255,7 +251,7 @@ def _set_archived(
             changes={"archived_at": {"from": row["archived_at"], "to": target}},
         )
         revision = row["revision"] + 1
-    _publish(ctx, "updated", project_id, revision)
+    _publish(ctx, "archived" if archive else "restored", project_id, revision)
     return _out_one(ctx.conn, project_id)
 
 
@@ -282,9 +278,10 @@ def delete_project(
         row = _load(ctx.conn, project_id)
         check_revision(row["revision"], expected_revision)
         affected = len(repo.task_ids_of_project(ctx.conn, project_id))
-        summary = f"Borrar el proyecto «{row['name']}»"
-        summary += (
-            f"; sus {affected} tareas se quedarán sin proyecto." if affected else "."
+        dependents = f" y {affected} dependientes" if affected else ""
+        summary = (
+            f"Vas a eliminar 1 proyecto: «{row['name']}»{dependents}."
+            " Esta acción no se puede deshacer."
         )
         ticket = ctx.ports.confirmations.request(
             ctx.conn,
@@ -328,15 +325,13 @@ def get_project_progress(ctx: ServiceContext, project_id: str) -> ProjectProgres
 
 
 def project_activity(
-    ctx: ServiceContext, project_id: str, *, limit: int, cursor: str | None
+    ctx: ServiceContext, project_id: str, *, limit: int, offset: int
 ) -> Page[HistoryEntry]:
     _load(ctx.conn, project_id)
-    offset = decode_cursor(cursor)
     ids = [project_id, *repo.task_ids_of_project(ctx.conn, project_id)]
-    rows = history_for(ctx.conn, ids, limit, offset)
+    rows, total = history_for(ctx.conn, ids, limit, offset)
     return Page[HistoryEntry](
-        items=[HistoryEntry.model_validate(row) for row in rows[:limit]],
-        next_cursor=encode_cursor(offset + limit) if len(rows) > limit else None,
+        items=[HistoryEntry.model_validate(row) for row in rows], total=total
     )
 
 
