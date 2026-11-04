@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Label } from '@/components/ui/label'
+import { Switch } from '@/components/ui/switch'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { TextInput } from '../tasks/Field'
 import {
@@ -7,7 +8,6 @@ import {
   PRIORITY_LABELS,
   PROJECT_STATUSES,
   PROJECT_STATUS_LABELS,
-  type ArchivedFilter,
   type Priority,
   type ProjectStatus
 } from './types'
@@ -16,7 +16,7 @@ export interface ProjectFilterValues {
   readonly q: string
   readonly status: ProjectStatus | 'all'
   readonly priority: Priority | 'all'
-  readonly archived: ArchivedFilter
+  readonly includeArchived: boolean
   readonly sort: string
 }
 
@@ -24,14 +24,8 @@ export const DEFAULT_FILTERS: ProjectFilterValues = {
   q: '',
   status: 'all',
   priority: 'all',
-  archived: 'exclude',
+  includeArchived: false,
   sort: '-updated_at'
-}
-
-const ARCHIVED_LABELS: Readonly<Record<ArchivedFilter, string>> = {
-  exclude: 'Sin archivados',
-  only: 'Solo archivados',
-  include: 'Todos'
 }
 
 const SORT_LABELS: Readonly<Record<string, string>> = {
@@ -113,12 +107,16 @@ export function ProjectFilters({
         onChange={(priority) => onChange({ ...values, priority })}
         options={[['all', 'Todas'], ...PRIORITIES.map((p) => [p, PRIORITY_LABELS[p]] as const)]}
       />
-      <Option
-        label="Archivo"
-        value={values.archived}
-        onChange={(archived) => onChange({ ...values, archived })}
-        options={Object.entries(ARCHIVED_LABELS) as Array<[ArchivedFilter, string]>}
-      />
+      <div className="flex items-center gap-2 pb-1.5">
+        <Switch
+          id="project-archived"
+          checked={values.includeArchived}
+          onCheckedChange={(includeArchived) => onChange({ ...values, includeArchived })}
+        />
+        <Label htmlFor="project-archived" className="text-sm">
+          Mostrar archivados
+        </Label>
+      </div>
       <Option
         label="Orden"
         value={values.sort}

@@ -35,13 +35,13 @@ function ProjectRow({ project, onOpen }: { readonly project: Project; readonly o
 
 export function ProjectList({
   items,
-  hasMore,
+  total,
   loadingMore,
   onLoadMore,
   onOpen
 }: {
   readonly items: readonly Project[]
-  readonly hasMore: boolean
+  readonly total: number
   readonly loadingMore: boolean
   readonly onLoadMore: () => void
   readonly onOpen: (id: string) => void
@@ -53,7 +53,7 @@ export function ProjectList({
           <ProjectRow key={project.id} project={project} onOpen={() => onOpen(project.id)} />
         ))}
       </ul>
-      {hasMore ? (
+      {items.length < total ? (
         <Button variant="outline" className="self-start" disabled={loadingMore} onClick={onLoadMore}>
           {loadingMore ? 'Cargando…' : 'Cargar más'}
         </Button>

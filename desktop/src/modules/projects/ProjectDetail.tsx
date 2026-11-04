@@ -57,34 +57,34 @@ export function ProjectDetail({
   }
 
   const backButton = (
-    <Button variant="ghost" size="sm" className="self-start" onClick={onBack}>
+    <Button variant="ghost" size="sm" className="mb-4 self-start" onClick={onBack}>
       ← Todos los proyectos
     </Button>
   )
 
   if (project.error !== null) {
     return (
-      <div className="flex flex-col gap-4">
+      <>
         {backButton}
         <LoadFailure error={project.error} what="el proyecto" onRetry={project.reload} />
-      </div>
+      </>
     )
   }
   const current = project.data
   if (current === null) {
     return (
-      <div className="flex flex-col gap-4">
+      <>
         {backButton}
         <LoadingNote label="Cargando proyecto…" />
-      </div>
+      </>
     )
   }
   const archived = current.archived_at !== null
 
   return (
-    <div className="flex flex-col gap-8">
+    <>
       {backButton}
-      <header className="flex flex-col gap-4">
+      <header className="mb-8 flex flex-col gap-4">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="flex flex-col gap-2">
             <h1 className="type-display text-3xl text-foreground">{current.name}</h1>
@@ -117,7 +117,7 @@ export function ProjectDetail({
         <ProjectProgressBar progress={current.progress} name={current.name} detailed />
       </header>
 
-      <section aria-labelledby="project-summary" className="flex flex-col gap-4 rounded-[var(--radius-sheet)] border border-border bg-card p-5">
+      <section aria-labelledby="project-summary" className="mb-8 flex flex-col gap-4 rounded-[var(--radius-sheet)] border border-border bg-card p-5">
         <h2 id="project-summary" className="sr-only">
           Resumen
         </h2>
@@ -136,7 +136,9 @@ export function ProjectDetail({
         <Dates project={current} />
       </section>
 
-      <ProjectTasks projectId={current.id} archived={archived} version={version} run={runner.run} onChanged={refresh} />
+      <div className="mb-8">
+        <ProjectTasks projectId={current.id} archived={archived} version={version} run={runner.run} onChanged={refresh} />
+      </div>
       <ProjectActivity projectId={current.id} version={version} />
 
       <ProjectForm
@@ -150,6 +152,6 @@ export function ProjectDetail({
         }}
       />
       <ConfirmationDialog ticket={runner.ticket} onResolved={resolved} />
-    </div>
+    </>
   )
 }

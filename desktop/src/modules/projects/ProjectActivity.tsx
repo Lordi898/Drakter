@@ -70,7 +70,7 @@ function describe(entry: HistoryEntry): string {
 /** Actividad del proyecto y de sus tareas, de más reciente a más antigua. */
 export function ProjectActivity({ projectId, version }: { readonly projectId: string; readonly version: number }) {
   const [items, setItems] = useState<readonly HistoryEntry[]>([])
-  const [cursor, setCursor] = useState<string | null>(null)
+  const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<LoadError | null>(null)
   const [tick, setTick] = useState(0)
@@ -83,7 +83,7 @@ export function ProjectActivity({ projectId, version }: { readonly projectId: st
       .then((page) => {
         if (!current) return
         setItems(page.items)
-        setCursor(page.next_cursor)
+        setTotal(page.total)
       })
       .catch((e: unknown) => current && setError(toLoadError(e)))
       .finally(() => current && setLoading(false))
@@ -93,12 +93,12 @@ export function ProjectActivity({ projectId, version }: { readonly projectId: st
   }, [projectId, version, tick])
 
   async function more() {
-    if (cursor === null) return
+    if (items.length >= total) return
     setLoading(true)
     try {
-      const page = await projectActivity(projectId, 30, cursor)
+      const page = await projectActivity(projectId, 30, items.length)
       setItems((c) => [...c, ...page.items])
-      setCursor(page.next_cursor)
+      setTotal(page.total)
     } catch (e) {
       setError(toLoadError(e))
     } finally {
@@ -138,7 +138,7 @@ export function ProjectActivity({ projectId, version }: { readonly projectId: st
           })}
         </ol>
       ) : null}
-      {cursor !== null ? (
+      {items.length < total ? (
         <Button variant="outline" size="sm" className="self-start" disabled={loading} onClick={() => void more()}>
           {loading ? 'Cargando…' : 'Ver más'}
         </Button>

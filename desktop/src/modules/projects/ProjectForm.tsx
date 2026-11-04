@@ -11,7 +11,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { notify } from '@/services/notify'
-import { ApiError } from '../tasks/client'
+import { ApiError } from '@/services/api'
 import { Field, TextInput } from '../tasks/Field'
 import {
   MAX_DESCRIPTION,
@@ -153,10 +153,10 @@ function FormBody({ project, onClose, onSubmit, onStale }: Omit<ProjectFormProps
         onStale()
         onClose()
       } else if (error instanceof ApiError) {
-        setFormError(error.message)
+        setFormError(error.code === 'conflict' ? (error.details[0]?.message ?? error.message) : error.message)
         const fieldErrors: Errors = {}
-        for (const item of error.fields) {
-          if (item.field != null && item.field in values) fieldErrors[item.field as keyof Values] = item.message
+        for (const item of error.details) {
+          if (item.field !== null && item.field in values) fieldErrors[item.field as keyof Values] = item.message
         }
         setErrors(fieldErrors)
       } else {

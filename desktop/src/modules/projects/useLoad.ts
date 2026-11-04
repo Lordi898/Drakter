@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ApiError } from '../tasks/client'
+import { ApiError } from '@/services/api'
 
 export interface LoadError {
   readonly code: string

@@ -118,7 +118,7 @@ export function ProjectTasks({
           })}
         </ul>
       ) : null}
-      {tasks.data?.next_cursor != null ? (
+      {tasks.data !== null && tasks.data.total > tasks.data.items.length ? (
         <p className="text-xs text-muted-foreground">Se muestran las primeras 100 tareas; el resto está en Tareas.</p>
       ) : null}
       {archived ? (

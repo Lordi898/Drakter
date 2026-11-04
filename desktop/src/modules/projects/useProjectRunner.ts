@@ -1,20 +1,20 @@
 import { useCallback, useState } from 'react'
 import { notify } from '@/services/notify'
-import { ApiError, ConfirmationNeeded, type ConfirmationTicket } from '../tasks/client'
-import type { ConfirmationOutcome } from '../tasks/ConfirmationDialog'
+import { ApiError } from '@/services/api'
+import type { ConfirmationDialogProps, ConfirmationOutcome } from '../tasks/ConfirmationDialog'
 import { toLoadError } from './useLoad'
 
 export type RunProject = <T>(action: () => Promise<T>, success?: string) => Promise<boolean>
 
 export interface ProjectRunner {
   readonly run: RunProject
-  readonly ticket: ConfirmationTicket | null
+  readonly ticket: ConfirmationDialogProps['ticket']
   readonly resolveConfirmation: (outcome: ConfirmationOutcome) => void
 }
 
 /** Ejecuta una operación y traduce sus fallos. Devuelve `true` solo si se completó. */
 export function useProjectRunner(onChanged: () => void): ProjectRunner {
-  const [ticket, setTicket] = useState<ConfirmationTicket | null>(null)
+  const [ticket, setTicket] = useState<ConfirmationDialogProps['ticket']>(null)
 
   const run = useCallback<RunProject>(
     async (action, success) => {
@@ -24,8 +24,8 @@ export function useProjectRunner(onChanged: () => void): ProjectRunner {
         onChanged()
         return true
       } catch (error) {
-        if (error instanceof ConfirmationNeeded) {
-          setTicket(error.ticket)
+        if (error instanceof ApiError && error.confirmation != null) {
+          setTicket(error.confirmation)
         } else if (error instanceof ApiError && error.code === 'revision_mismatch') {
           notify({
             tone: 'warning',
@@ -34,7 +34,7 @@ export function useProjectRunner(onChanged: () => void): ProjectRunner {
           })
           onChanged()
         } else if (error instanceof ApiError && error.code === 'conflict') {
-          notify({ tone: 'error', title: 'No se puede hacer eso', body: error.message })
+          notify({ tone: 'error', title: 'No se puede hacer eso', body: error.details[0]?.message ?? error.message })
         } else {
           notify({ tone: 'error', title: 'No se pudo completar la operación', body: toLoadError(error).message })
         }

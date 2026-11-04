@@ -18,7 +18,7 @@ function toParams(f: ProjectFilterValues): ProjectListParams {
     ...(f.q.trim() === '' ? {} : { q: f.q.trim() }),
     ...(f.status === 'all' ? {} : { status: [f.status] }),
     ...(f.priority === 'all' ? {} : { priority: [f.priority] }),
-    archived: f.archived,
+    ...(f.includeArchived ? { include_archived: true } : {}),
     sort: f.sort,
     limit: 25
   }
@@ -26,7 +26,7 @@ function toParams(f: ProjectFilterValues): ProjectListParams {
 
 function useProjectList(filters: ProjectFilterValues) {
   const [items, setItems] = useState<readonly Project[]>([])
-  const [cursor, setCursor] = useState<string | null>(null)
+  const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState<LoadError | null>(null)
@@ -42,12 +42,12 @@ function useProjectList(filters: ProjectFilterValues) {
       .then((page) => {
         if (id !== latest.current) return
         setItems(page.items)
-        setCursor(page.next_cursor)
+        setTotal(page.total)
       })
       .catch((e: unknown) => {
         if (id !== latest.current) return
         setItems([])
-        setCursor(null)
+        setTotal(0)
         setError(toLoadError(e))
       })
       .finally(() => {
@@ -56,14 +56,14 @@ function useProjectList(filters: ProjectFilterValues) {
   }, [params, tick])
 
   const loadMore = useCallback(() => {
-    if (cursor === null) return
+    if (items.length >= total) return
     const id = ++latest.current
     setLoadingMore(true)
-    listProjects({ ...params, cursor })
+    listProjects({ ...params, offset: items.length })
       .then((page) => {
         if (id !== latest.current) return
         setItems((c) => [...c, ...page.items])
-        setCursor(page.next_cursor)
+        setTotal(page.total)
       })
       .catch((e: unknown) => {
         if (id === latest.current) notify({ tone: 'error', title: 'No se pudieron cargar más proyectos', body: toLoadError(e).message })
@@ -71,10 +71,10 @@ function useProjectList(filters: ProjectFilterValues) {
       .finally(() => {
         if (id === latest.current) setLoadingMore(false)
       })
-  }, [cursor, params])
+  }, [items.length, total, params])
 
   const reload = useCallback(() => setTick((n) => n + 1), [])
-  return { items, hasMore: cursor !== null, loading, loadingMore, error, loadMore, reload }
+  return { items, total, loading, loadingMore, error, loadMore, reload }
 }
 
 export function ProjectsPage() {
@@ -87,17 +87,33 @@ export function ProjectsPage() {
     return <ProjectDetail id={openId} onBack={() => setOpenId(null)} onChanged={list.reload} />
   }
 
-  const filtered = filters.q.trim() !== '' || filters.status !== 'all' || filters.priority !== 'all' || filters.archived !== 'exclude'
+  const filtered = filters.q.trim() !== '' || filters.status !== 'all' || filters.priority !== 'all' || filters.includeArchived
+  const unavailable = list.error !== null
   const create = (
-    <Button onClick={() => setCreating(true)}>Crear proyecto</Button>
+    <>
+      <Button
+        aria-disabled={unavailable}
+        aria-describedby={unavailable ? 'create-project-reason' : undefined}
+        onClick={() => {
+          if (!unavailable) setCreating(true)
+        }}
+      >
+        Crear proyecto
+      </Button>
+      {unavailable ? (
+        <span id="create-project-reason" className="sr-only">
+          No disponible mientras no haya conexión con el espacio de trabajo.
+        </span>
+      ) : null}
+    </>
   )
 
   return (
-    <div>
+    <>
       <PageHeader
         title="Proyectos"
         summary="Tus proyectos con su objetivo, fechas, prioridad y progreso."
-        actions={list.error === null ? create : undefined}
+        actions={create}
       />
       <ProjectFilters values={filters} onChange={setFilters} />
 
@@ -113,21 +129,16 @@ export function ProjectsPage() {
             drawing={<ProjectsDrawing />}
           />
         ) : (
-          <div className="flex flex-col gap-4">
-            <EmptyState
-              title="Todavía no hay proyectos"
-              description="Un proyecto reúne un objetivo, unas fechas y las tareas que lo hacen avanzar. Crea el primero cuando quieras."
-              drawing={<ProjectsDrawing />}
-            />
-            <Button className="self-start" onClick={() => setCreating(true)}>
-              Crear proyecto
-            </Button>
-          </div>
+          <EmptyState
+            title="Aún no hay proyectos"
+            description="Un proyecto reúne un objetivo, unas fechas y las tareas que lo hacen avanzar. Crea el primero con el botón de arriba."
+            drawing={<ProjectsDrawing />}
+          />
         )
       ) : (
         <ProjectList
           items={list.items}
-          hasMore={list.hasMore}
+          total={list.total}
           loadingMore={list.loadingMore}
           onLoadMore={list.loadMore}
           onOpen={setOpenId}
@@ -146,6 +157,6 @@ export function ProjectsPage() {
           setOpenId(created.id)
         }}
       />
-    </div>
+    </>
   )
 }

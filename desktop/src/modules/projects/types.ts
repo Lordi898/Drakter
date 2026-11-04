@@ -68,7 +68,10 @@ export interface ProjectCreate {
 
 export type ProjectUpdate = Partial<ProjectCreate>
 
-export type ArchivedFilter = 'exclude' | 'only' | 'include'
+export interface ListPage<T> {
+  readonly items: readonly T[]
+  readonly total: number
+}
 
 export const PROJECT_SORT_FIELDS = [
   'name',
@@ -83,9 +86,9 @@ export interface ProjectListParams {
   readonly status?: readonly ProjectStatus[]
   readonly priority?: readonly Priority[]
   readonly q?: string
-  readonly archived?: ArchivedFilter
+  readonly include_archived?: boolean
   /** Campo de `PROJECT_SORT_FIELDS`; prefijo `-` para orden descendente. */
   readonly sort?: string
   readonly limit?: number
-  readonly cursor?: string
+  readonly offset?: number
 }
