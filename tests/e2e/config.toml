@@ -1,0 +1,7 @@
+# Variables extra del backend cuando el stub está arriba. {stub_url} y {work} se expanden.
+# La integración real de Hermes (drakter/agente-hermes) fija aquí sus nombres definitivos.
+[backend_env_with_stub]
+ANTHROPIC_BASE_URL = "{stub_url}"
+ANTHROPIC_API_KEY = "stub-sin-valor-real"
+DRAKTER_MODEL_NAME = "drakter-dev-stub"
+HERMES_HOME = "{work}/hermes-home"
