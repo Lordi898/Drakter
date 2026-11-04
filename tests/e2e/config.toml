@@ -1,6 +1,8 @@
 # Hermes exigido: se verifica por commit, nunca por texto de versión.
+# `tool_pattern` es la lista blanca de lo que puede llegar al modelo (CONTRACT.md §2bis).
 [hermes]
 commit = "b200f5bc60e31588ba2cb60e288029c4a54ba5fa"
+tool_pattern = "mcp__drakter__[a-z0-9_]+"
 
 # Variables del backend con stub y Hermes válidos. Nombres de AgentSettings
 # (drakter/agente-hermes). No se pasa ninguna clave: el stub no la necesita.
@@ -9,6 +11,4 @@ DRAKTER_AGENT_PROVIDER = "hermes"
 DRAKTER_MODEL_PROVIDER = "dev_stub"
 DRAKTER_MODEL_NAME = "drakter-dev-stub"
 DRAKTER_DEV_STUB_URL = "{stub_url}"
-DRAKTER_HERMES_COMMAND = "{hermes_command}"
-DRAKTER_HERMES_PORT = "{hermes_port}"
-DRAKTER_AGENT_TOOLS_PORT = "{tools_port}"
+DRAKTER_HERMES_PYTHON = "{hermes_python}"

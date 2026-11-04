@@ -24,19 +24,22 @@ class Response:
 
 
 class Api:
-    def __init__(self, port: int, token: str) -> None:
+    """Cliente con los dos roles de D-14. Las credenciales solo viven en este proceso."""
+
+    def __init__(self, port: int, ui: str, approver: str) -> None:
         self.port = port
-        self.token = token
+        self.tokens = {"ui": ui, "approver": approver}
 
     def request(self, method: str, path: str, *, json_body: Any = None, auth: bool = True,
-                headers: dict[str, str] | None = None, timeout: float = 30) -> Response:
+                role: str = "ui", headers: dict[str, str] | None = None,
+                timeout: float = 30) -> Response:
         data = None if json_body is None else json.dumps(json_body).encode()
         request = urllib.request.Request(f"http://127.0.0.1:{self.port}{path}", data=data,
                                          method=method)
         if data is not None:
             request.add_header("Content-Type", "application/json")
         if auth:
-            request.add_header("Authorization", f"Bearer {self.token}")
+            request.add_header("Authorization", f"Bearer {self.tokens[role]}")
         for key, value in (headers or {}).items():
             request.add_header(key, value)
         try:
@@ -45,16 +48,15 @@ class Api:
         except urllib.error.HTTPError as exc:
             return _response(exc.code, exc.read(), exc.headers)
 
-    def ws(self, path: str = "/ws", *, origin: str | None = None, auth: bool = True,
-           open_timeout: float = 5):
-        """Abre un WebSocket con el contrato real: subprotocolo, nunca token en la URL."""
+    def ws(self, path: str = "/api/v1/events", *, origin: str | None = None, role: str | None = "ui",
+           subprotocols: tuple[str, ...] = ("drakter.v1",), open_timeout: float = 5):
+        """Abre un WebSocket con el contrato real: token en `Authorization`, nunca en la URL."""
         from websockets.sync.client import connect
 
-        protocols = ["drakter.v1"]
-        if auth:
-            protocols.append(f"drakter.auth.{self.token}")
-        return connect(f"ws://127.0.0.1:{self.port}{path}", subprotocols=protocols, origin=origin,
-                       proxy=None, open_timeout=open_timeout)
+        headers = {"Authorization": f"Bearer {self.tokens[role]}"} if role else None
+        return connect(f"ws://127.0.0.1:{self.port}{path}", subprotocols=list(subprotocols),
+                       origin=origin, additional_headers=headers, proxy=None,
+                       open_timeout=open_timeout)
 
 
 def _response(status: int, raw: bytes, headers: Any) -> Response:

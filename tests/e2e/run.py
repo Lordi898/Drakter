@@ -157,8 +157,12 @@ def main() -> int:
 
     stack.check_hermes()
     stack.start_stub()  # antes que el backend: este debe conocer su URL
+    stack.write_env_file()
     stack.start_backend()
     run_phase(PHASES[0])
+    # D-14: Electron lanza su propio backend y la instancia es exclusiva. El arnés hace ese
+    # papel en la fase sin ventana y le cede los mismos datos antes de abrirlo.
+    backend_exit = stack.stop("backend")
     if args.no_desktop:
         stack.state["desktop"] = "omitido con --no-desktop"
     else:
@@ -180,7 +184,8 @@ def main() -> int:
     run_phase(PHASES[1])
     if ctx.cdp is not None:
         ctx.cdp.close()
-    ctx.state["exit_codes"] = stack.stop_all()
+    stack.stop_all()
+    ctx.state["backend_exit"] = backend_exit
     run_phase(PHASES[2])
 
     if args.only:

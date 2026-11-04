@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import stat
+from pathlib import Path
 
 from harness.model import NotChecked, check
 
@@ -12,9 +13,9 @@ def starts(ctx):
         raise AssertionError(ctx.stack.why_unavailable("backend"))
     if not ctx.stack.available("backend"):
         raise NotChecked(ctx.stack.why_unavailable("backend"))
-    reply = ctx.api.request("GET", "/health", auth=False)
+    reply = ctx.api.request("GET", "/health")
     assert reply.status == 200 and reply.body == {"status": "ok"}, f"/health → {reply.status} {reply.body}"
-    return "GET /health → 200 sin token"
+    return f"handshake por stdin, puerto {ctx.api.port} anunciado y GET /health → 200"
 
 
 @check("backend.stub_arranca", "El stub LLM arranca y se identifica como stub", needs=())
@@ -26,14 +27,14 @@ def stub_starts(ctx):
     return f"stub en 127.0.0.1:{ctx.stack.stub_port} con dev_stub=true"
 
 
-@check("hermes.preflight", "Hermes es el commit fijado, con venv propio Python >= 3.14 y aiohttp", needs=())
+@check("hermes.preflight", "Hermes es el commit fijado, con venv propio Python >= 3.14 y runner propio", needs=())
 def hermes_preflight(ctx):
     if "hermes" in ctx.stack.failed:
         raise AssertionError(ctx.stack.why_unavailable("hermes"))
     if not ctx.stack.available("hermes"):
         raise NotChecked(ctx.stack.why_unavailable("hermes"))
     commit = ctx.stack.layout.config["hermes"]["commit"]
-    return f"commit {commit[:12]} verificado en el venv; Python y aiohttp correctos"
+    return f"commit {commit[:12]} verificado en el venv; Python correcto; runner presente"
 
 
 @check("backend.loopback", "El backend escucha solo en 127.0.0.1")
@@ -55,20 +56,48 @@ def auth(ctx):
     assert ctx.api.request("GET", path).body == {"authenticated": True}
     wrong = ctx.api.request("GET", path, auth=False, headers={"Authorization": "Bearer malo"})
     assert wrong.status == 401, f"token falso → {wrong.status}"
-    query = ctx.api.request("GET", f"{path}?token={ctx.api.token}", auth=False)
+    query = ctx.api.request("GET", f"{path}?token={ctx.api.tokens['ui']}", auth=False)
     assert query.status == 401, f"token en la URL → {query.status}"
     ghost = ctx.api.request("GET", "/api/v1/no-existe", auth=False)
     assert ghost.status == 401, f"ruta inexistente sin token → {ghost.status}"
     return "401 sin token, con token falso y con token en la URL; 200 con token"
 
 
-@check("backend.guardia", "Se rechazan Host y Origin ajenos")
+@check("backend.guardia", "Se rechazan Host y cualquier Origin, también en /health")
 def guard(ctx):
-    host = ctx.api.request("GET", "/health", auth=False, headers={"Host": "evil.example"})
-    assert host.status == 403 and host.error_code == "forbidden_host", f"Host → {host.status}"
-    origin = ctx.api.request("GET", "/health", auth=False, headers={"Origin": "https://evil.example"})
-    assert origin.status == 403 and origin.error_code == "forbidden_origin", f"Origin → {origin.status}"
-    return "403 forbidden_host y 403 forbidden_origin"
+    bare = ctx.api.request("GET", "/health", auth=False)
+    assert bare.status == 401, f"/health sin token → {bare.status}"
+    for label, headers in (("ajeno", "evil.example"), ("localhost", f"localhost:{ctx.api.port}")):
+        host = ctx.api.request("GET", "/health", headers={"Host": headers})
+        assert host.status == 403 and host.error_code == "forbidden_host", f"Host {label} → {host.status}"
+    for value in ("https://evil.example", "app://drakter", "null"):
+        origin = ctx.api.request("GET", "/health", headers={"Origin": value})
+        assert origin.status == 403 and origin.error_code == "forbidden_origin", f"Origin {value} → {origin.status}"
+    return "/health exige token; 403 con Host ajeno o localhost y con cualquier Origin"
+
+
+@check("backend.roles", "Cada token solo vale para su rol")
+def roles(ctx):
+    approve = "/api/v1/confirmations/00000000-0000-0000-0000-000000000000/approve"
+    ui = ctx.api.request("POST", approve)
+    assert ui.status == 403 and ui.error_code == "permission_denied", f"ui aprobando → {ui.status}"
+    locations = ctx.api.request("POST", "/api/v1/storage-locations", json_body={})
+    assert locations.status == 403, f"ui en storage-locations → {locations.status}"
+    approver = ctx.api.request("GET", "/health", role="approver")
+    assert approver.status == 403 and approver.error_code == "permission_denied", f"approver en /health → {approver.status}"
+    return "ui no aprueba ni toca ubicaciones; approver no accede al resto"
+
+
+@check("backend.credenciales", "Los tokens no están en argv, entorno ni disco")
+def credentials(ctx):
+    proc = ctx.stack.procs["backend"]
+    exposed = b"".join(Path(f"/proc/{proc.pid}/{name}").read_bytes() for name in ("cmdline", "environ"))
+    files = [p for p in ctx.stack.layout.work.rglob("*") if p.is_file() and p.suffix not in (".db", ".log")]
+    for token in ctx.stack.tokens:
+        assert token.encode() not in exposed, "token en argv o entorno"
+        assert not any(token.encode() in p.read_bytes() for p in files), "token en disco"
+    assert not list(ctx.stack.layout.work.rglob("session.json")), "existe session.json"
+    return f"argv y entorno limpios; {len(files)} archivos revisados; sin session.json"
 
 
 @check("backend.errores", "Los errores usan el sobre estándar con request_id")
@@ -80,41 +109,31 @@ def errors(ctx):
     return f"404 con código {body['code']}"
 
 
-@check("backend.websocket", "El WebSocket autentica por subprotocolo y rechaza lo ajeno")
+@check("backend.websocket", "El WebSocket exige token de ui en la cabecera y rechaza lo ajeno")
 def websocket(ctx):
-    # El contrato mueve /ws a /api/v1/events, que solo emite: el ping es exclusivo de /ws.
-    configured = ctx.catalog.get("conversation", {}).get("ws_path", "/ws")
-    accepted = None
-    for path in dict.fromkeys((configured, "/ws")):
+    path = ctx.catalog.get("conversation", {}).get("ws_path", "/api/v1/events")
+    with ctx.api.ws(path) as socket:
+        assert socket.subprotocol == "drakter.v1", f"subprotocolo {socket.subprotocol}"
+    token = ctx.api.tokens["ui"]
+    rejected = (("sin token", {"role": None}), ("Origin", {"origin": "app://drakter"}),
+                ("rol approver", {"role": "approver"}),
+                ("token en subprotocolo", {"role": None, "subprotocols": ("drakter.v1", f"drakter.auth.{token}")}))
+    for label, kwargs in rejected:
         try:
-            socket = ctx.api.ws(path)
-        except Exception:  # noqa: BLE001 - ruta sin WebSocket: se prueba la siguiente.
-            continue
-        accepted = path
-        with socket:
-            assert socket.subprotocol == "drakter.v1", f"subprotocolo {socket.subprotocol}"
-            if path == "/ws":
-                socket.send("ping")
-                assert socket.recv(timeout=5) == "pong"
-        break
-    assert accepted, f"ningún WebSocket acepta el token: {configured}, /ws"
-    for label, kwargs in (("sin token", {"auth": False}), ("Origin ajeno", {"origin": "https://evil.example"})):
-        try:
-            ctx.api.ws(accepted, **kwargs).close()
+            ctx.api.ws(path, **kwargs).close()
         except Exception:  # noqa: BLE001 - el rechazo del handshake llega como excepción.
             continue
-        raise AssertionError(f"WebSocket {accepted} aceptado {label}")
-    return f"{accepted} acepta con token; handshake rechazado sin token y con Origin ajeno"
+        raise AssertionError(f"WebSocket {path} aceptado: {label}")
+    return f"{path} acepta ui; rechaza sin token, con Origin, con approver y con token en subprotocolo"
 
 
-@check("backend.permisos", "Sesión y base de datos son privadas")
+@check("backend.permisos", "Datos y base de datos son privados")
 def permissions(ctx):
     modes = {path: stat.S_IMODE(path.stat().st_mode) for path in (
-        ctx.stack.session_file, ctx.stack.data_dir / "drakter.db")}
-    modes[ctx.stack.runtime_dir] = stat.S_IMODE(ctx.stack.runtime_dir.stat().st_mode)
+        ctx.stack.data_dir, ctx.stack.data_dir / "drakter.db", ctx.stack.data_dir / "logs")}
     wrong = {str(path): oct(mode) for path, mode in modes.items() if mode & 0o077}
     assert not wrong, f"permisos abiertos: {wrong}"
-    return "session.json y drakter.db sin acceso de grupo ni otros"
+    return "datos, drakter.db y logs sin acceso de grupo ni otros"
 
 
 @check("backend.migraciones", "El esquema queda al día tras arrancar")

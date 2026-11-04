@@ -71,7 +71,7 @@ def backup_restore(ctx):
         previous = copied_path(restored.stdout, "copia previa: ")
         assert read_canary(db) == "antes", "la restauración no devolvió el valor copiado"
         assert read_canary(previous) == "despues", "la copia previa no conserva el estado sustituido"
-    assert ctx.api.request("GET", "/health", auth=False).status == 200, "/health cae tras restaurar"
+    assert ctx.api.request("GET", "/health").status == 200, "/health cae tras restaurar"
     return "rechazada en caliente; con el backend parado recupera el valor, crea copia previa y rearranca"
 
 
