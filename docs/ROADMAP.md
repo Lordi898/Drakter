@@ -676,7 +676,7 @@ correctos de conexión y desconexión.
 
 ### Tareas
 
--   [ ] Instalar Hermes siguiendo documentación oficial, en entorno propio y con versión fijada (v0.22.7), sin compartir entorno con el backend (Python 3.12).
+-   [ ] Instalar Hermes desde git, tag v0.22.7 (`b200f5bc`), en venv propio con Python 3.14 y como subproceso, sin compartir entorno con el backend (Python 3.12). PyPI queda descartado.
 -   [ ] Registrar versión instalada.
 -   [ ] Configurar Claude Haiku 5.5 mediante configuración segura.
 -   [ ] Crear interfaz interna `AgentProvider`.

@@ -12,7 +12,7 @@ Drakter se compone de tres sistemas conectados por APIs internas:
 - **Drakter Desktop**: Electron + React + TypeScript + Tailwind + shadcn/ui + Rive (personaje animado), voz y paneles.
 - **Drakter Workspace**: SQLite (+ FTS5) con tareas, proyectos, hábitos, calendario, asignaturas, almacén y relaciones.
 
-Backend: Python 3.12 + FastAPI (REST + WebSocket). Hermes y OpenViking corren en procesos y entornos propios (ver `docs/DECISIONS.md`). Local-first, un solo usuario, Linux primero (arquitectura preparada para Windows).
+Backend: Python 3.12 + FastAPI (REST + WebSocket), versión elegida por el proyecto. Hermes (tag v0.22.7, `b200f5bc`, instalado desde git, no desde PyPI) corre como subproceso en su propio venv con Python 3.14; OpenViking, en otro entorno (ver `docs/DECISIONS.md`). Local-first, un solo usuario, Linux primero (arquitectura preparada para Windows).
 El detalle completo (arquitectura, módulos, fases, estructura de carpetas) está en `docs/MASTER_PLAN.md`. **No lo copies aquí; consúltalo.**
 
 ---
