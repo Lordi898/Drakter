@@ -7,6 +7,8 @@ from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, Query, Request, Response
 
+from app.api.storage_confirmation import ConfirmationRoute
+
 from app.api.storage import db, get_deps
 from app.schemas.relations import (
     RelatedItems, RelationshipCreate, RelationshipOut, RelationshipPage, RelationshipSearch,
@@ -16,7 +18,7 @@ from app.schemas.storage import Cursor, Uuid
 from app.services import relations as svc
 from app.services.storage_ports import Actor, StorageDeps
 
-router = APIRouter(tags=["relationships"])
+router = APIRouter(tags=["relationships"], route_class=ConfirmationRoute)
 
 Conn = Annotated[sqlite3.Connection, Depends(db)]
 Deps = Annotated[StorageDeps, Depends(get_deps)]

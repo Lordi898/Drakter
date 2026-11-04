@@ -8,6 +8,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Path, Query, Request, Response
 
+from app.api.storage_confirmation import ConfirmationRoute
 from app.database.connection import connect
 from app.schemas.storage import (
     Cursor,
@@ -36,7 +37,7 @@ from app.schemas.storage import (
 from app.services import storage_catalog, storage_index, storage_scan
 from app.services.storage_ports import Actor, StorageDeps
 
-router = APIRouter(prefix="/api/v1")
+router = APIRouter(prefix="/api/v1", route_class=ConfirmationRoute)
 
 ResourceId = Annotated[Uuid, Path()]
 ConfirmationId = Annotated[str | None, Query(max_length=100)]

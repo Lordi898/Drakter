@@ -2,7 +2,7 @@
 
 Local a `drakter/almacen-relaciones`. Lo que no fija este archivo lo fija `backend/CONTRACT.md`.
 Base común: `app/services/storage_ports.py`, `app/schemas/storage.py`, `app/schemas/relations.py`.
-Esquema real: `backend/migrations/0001`, `0005`, `0006`, `0008`, `0009` (solo drakter-11 las edita), más el delta propuesto `app/schemas/ddl_storage.sql` (`storage_locations.agent_read`, `root_dev`, `root_ino`). Instantes con `storage_ports.utc_now()`: 24 caracteres, milisegundos y `Z`. `entities.metadata_json` de un recurso guarda `{"file_dev","file_ino","index_content"}`.
+Esquema real: `backend/migrations/0001`, `0005`, `0006`, `0007`, `0008`, `0009` (solo drakter-11 las edita). Instantes con `storage_ports.utc_now()`: 24 caracteres, milisegundos y `Z`. `entities.metadata_json` de un recurso guarda `{"file_dev","file_ino","index_content"}`.
 
 ## Reglas transversales
 

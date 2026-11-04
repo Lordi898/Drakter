@@ -97,15 +97,23 @@ def update_location(conn: sqlite3.Connection, deps: StorageDeps, actor: Actor, l
     return _location_out(_location(conn, location_id))
 
 
+def repo_location_label(conn: sqlite3.Connection, location_id: str) -> str:
+    row = conn.execute("SELECT label FROM storage_locations WHERE id = ?", (location_id,)).fetchone()
+    return str(row["label"]) if row is not None else location_id
+
+
 def delete_location(conn: sqlite3.Connection, deps: StorageDeps, actor: Actor, location_id: str, confirmation_id: str | None) -> None:
     _require_user(conn, deps, actor, "storage.location.delete", location_id)
     _location(conn, location_id)
     count = repo.count_location_resources(conn, location_id)
     if count:
         raise AppError("has_dependents", "Location still has resources", 409)
+    label = repo_location_label(conn, location_id)
     deps.gate.require(conn, actor, tool="delete_storage_location", args={"location_id": location_id},
-                      summary="Quitar la ubicación del catálogo (los archivos no se tocan)",
-                      affected_count=1, confirmation_id=confirmation_id)
+                      summary=f"Vas a eliminar 1 ubicación: «{label}». Esta acción no se puede deshacer. "
+                              "Los archivos originales no se tocan.",
+                      affected_count=1, confirmation_id=confirmation_id,
+                      targets=[{"id": location_id}])
     with write_tx(conn):
         repo.delete_location(conn, location_id)
         deps.audit.record(conn, actor, action="storage.location.delete", result="success",
@@ -174,11 +182,13 @@ def update_folder(conn: sqlite3.Connection, deps: StorageDeps, actor: Actor, fol
 
 
 def delete_folder(conn: sqlite3.Connection, deps: StorageDeps, actor: Actor, folder_id: str, confirmation_id: str | None) -> None:
-    _folder(conn, folder_id)
+    row = _folder(conn, folder_id)
     if repo.count_folder_children(conn, folder_id):
         raise AppError("has_dependents", "Folder is not empty", 409)
     deps.gate.require(conn, actor, tool="delete_folder", args={"folder_id": folder_id},
-                      summary="Borrar una carpeta vacía del catálogo", affected_count=1, confirmation_id=confirmation_id)
+                      summary=f"Vas a eliminar 1 carpeta: «{row['name']}». Esta acción no se puede deshacer.",
+                      affected_count=1, confirmation_id=confirmation_id,
+                      targets=[{"id": folder_id, "revision": row["revision"]}])
     with write_tx(conn):
         repo.delete_folder(conn, folder_id)
         deps.audit.record(conn, actor, action="storage.folder.delete", result="success",
@@ -330,15 +340,17 @@ def delete_resource(
     conn: sqlite3.Connection, deps: StorageDeps, actor: Actor, resource_id: str, confirmation_id: str | None,
     detach: bool = False,
 ) -> None:
-    _resource_row(conn, resource_id)
+    row = _resource_row(conn, resource_id)
     related = repo.count_relationships(conn, resource_id)
     if related and not detach:
         raise AppError("has_dependents", "Resource has relationships", 409)
     deps.gate.require(
         conn, actor, tool="delete_resource", args={"resource_id": resource_id, "detach": detach},
-        summary="Quitar el recurso del catálogo (el archivo original no se toca)"
-        + (f" y {related} relaciones" if related else ""),
+        summary=f"Vas a eliminar 1 recurso: «{row['title']}»"
+        + (f" y {related} dependientes" if related else "")
+        + ". Esta acción no se puede deshacer. El archivo original no se toca.",
         affected_count=1 + related, confirmation_id=confirmation_id,
+        targets=[{"id": resource_id, "revision": row["revision"]}],
     )
     with write_tx(conn):
         if related:

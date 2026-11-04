@@ -22,7 +22,7 @@ from app.schemas.storage import (  # noqa: E402
 from app.services import storage_catalog as cat  # noqa: E402
 from app.services import storage_index as idx  # noqa: E402
 from app.services import storage_scan as scan  # noqa: E402
-from app.services.storage_ports import Actor, ApprovedByDispatcher, StorageDeps  # noqa: E402
+from app.services.storage_ports import Actor, ApprovedByDispatcher, DenyAllConfirmations, StorageDeps  # noqa: E402
 from storage_bootstrap import open_database  # noqa: E402
 
 FAILED: list[str] = []
@@ -58,7 +58,7 @@ def main() -> int:
         conn = open_database(base / "db")
         settings = Settings(data_dir=base / "data", runtime_dir=base / "run")
         deps = StorageDeps(settings=settings, gate=ApprovedByDispatcher())
-        closed = StorageDeps(settings=settings)  # DenyAllConfirmations
+        closed = StorageDeps(settings=settings, gate=DenyAllConfirmations())
         user = Actor("user", "rest")
         agent = Actor("agent", "mcp")
 

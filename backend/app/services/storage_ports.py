@@ -307,7 +307,7 @@ class StorageLimits:
 class StorageDeps:
     settings: Settings
     audit: AuditSink = field(default_factory=SqlAudit)
-    gate: ConfirmationGate = field(default_factory=DenyAllConfirmations)
+    gate: ConfirmationGate = field(default_factory=TicketGate)
     limits: StorageLimits = field(default_factory=StorageLimits)
 
     @property

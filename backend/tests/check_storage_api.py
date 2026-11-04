@@ -88,11 +88,17 @@ def main() -> int:
               and r.json()["content_trust"] == "untrusted", r.text)
 
         r = c.delete(f"/api/v1/resources/{note_id}")
-        check("DELETE sin gate real: 503 confirmation_unavailable (o 409 confirmation_required)",
-              (r.status_code, r.json()["error"]["code"]) in {(503, "confirmation_unavailable"),
-                                                             (409, "confirmation_required")}, r.text)
+        body = r.json()
+        ticket = body.get("confirmation", {})
+        check("DELETE: 409 confirmation_required con ticket completo",
+              r.status_code == 409 and body["error"]["code"] == "confirmation_required"
+              and set(ticket) == {"id", "summary", "affected_count", "expires_at", "params_hash"}, r.text)
         r = c.get(f"/api/v1/resources/{note_id}")
         check("la nota sigue ahi", r.status_code == 200, r.text)
+        r = c.delete(f"/api/v1/resources/{note_id}", params={"confirmation_id": ticket.get("id")})
+        check("DELETE con ticket sin aprobar no borra", r.status_code == 409, r.text)
+        check("la nota sigue tras ticket sin aprobar",
+              c.get(f"/api/v1/resources/{note_id}").status_code == 200)
     print("FALLOS: " + ", ".join(FAILS) if FAILS else "TODO OK")
     return 1 if FAILS else 0
 
