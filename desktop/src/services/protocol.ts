@@ -135,6 +135,12 @@ export interface EventPayloads {
     readonly status: (typeof CONFIRMATION_STATUSES)[number]
     readonly error_code?: string | null
   }
+  'notification.created': {
+    readonly notification_id: string
+    readonly kind: string
+    readonly title: string
+    readonly severity?: 'info' | 'success' | 'warning' | 'error'
+  }
   'system.resync_required': {
     readonly reason: 'buffer_overflow' | 'boot_changed' | 'client_lagging'
   }
@@ -195,6 +201,7 @@ const CONFIRMATION = {
   expires_at: isDate
 }
 const RESYNC_REASONS = new Set(['buffer_overflow', 'boot_changed', 'client_lagging'])
+const NOTIFICATION_SEVERITIES = new Set(['info', 'success', 'warning', 'error'])
 const TURN_OUTCOMES = new Set(['completed', 'failed', 'cancelled', 'interrupted'])
 
 export function isPendingConfirmation(value: unknown): value is PendingConfirmation {
@@ -249,6 +256,13 @@ const PAYLOAD_CHECKS: { readonly [T in EventType]: (payload: Json) => boolean } 
     has(p, {
       action_id: isString,
       status: (v) => (CONFIRMATION_STATUSES as readonly unknown[]).includes(v)
+    }),
+  'notification.created': (p) =>
+    has(p, {
+      notification_id: isString,
+      kind: isString,
+      title: isString,
+      severity: (v) => v === undefined || NOTIFICATION_SEVERITIES.has(v as string)
     }),
   'system.resync_required': (p) => RESYNC_REASONS.has(p['reason'] as string)
 }
