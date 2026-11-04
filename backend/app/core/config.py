@@ -25,6 +25,7 @@ class Settings(BaseSettings):
         env_prefix="DRAKTER_",
         env_file=_env_file(),
         env_file_encoding="utf-8",
+        env_ignore_empty=True,
         extra="ignore",
         frozen=True,
     )
