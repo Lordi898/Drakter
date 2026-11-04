@@ -204,8 +204,8 @@ prevalecen sobre esta tabla.
   Persistencia principal  SQLite                  Una fuente de verdad para
                                                   el Workspace
 
-  Migraciones             Alembic o alternativa   Elegir tras validar el
-                          compatible              ORM y esquema
+  Migraciones             SQL propio              `backend/migrations/`, sin
+                                                  Alembic ni ORM
 
   Búsqueda textual        SQLite FTS5             Índice reconstruible
 
@@ -425,7 +425,7 @@ Los documentos de control viven en `docs/`: `MASTER_PLAN.md`,
 `RUN_STATE.md`. Los datos de ejecución (SQLite, almacén, índices,
 exportaciones, copias, recuerdos) viven fuera del repositorio, en
 `DRAKTER_DATA_DIR` (por defecto `user_data_dir("drakter")`). `agent/context/`
-y `agent/knowledge/` no existen. La configuración no sensible puede
+y `agent/knowledge/` no forman parte de la estructura vigente. La configuración no sensible puede
 versionarse; la sensible, nunca (credenciales solo en
 `~/.config/drakter/.env`).
 
@@ -682,8 +682,8 @@ correctos de conexión y desconexión.
 -   [ ] Crear interfaz interna `AgentProvider`.
 -   [ ] Crear adaptador Hermes.
 -   [ ] Gestionar el ciclo de vida del proceso Hermes según "Puente
-    Hermes-backend": `hermes gateway run` con API server en loopback,
-    supervisado por FastAPI.
+    Hermes-backend" y "Hermes sin gateway": runner propio sobre `AIAgent`
+    en proceso aparte, supervisado por FastAPI.
 -   [ ] Servir las herramientas desde el backend por MCP en loopback
     (Hermes solo cliente, perfil con lista de permitidos).
 -   [ ] Definir protocolo de mensajes.
@@ -720,7 +720,7 @@ Drakter.
 
 Los 14 archivos viven en `agent/identity/` (entrada "Los 14 archivos de
 identidad viven en agent/identity/"); `agent/context/` y
-`agent/knowledge/` no existen.
+`agent/knowledge/` no forman parte de la estructura vigente.
 
 ``` text
 agent/identity/

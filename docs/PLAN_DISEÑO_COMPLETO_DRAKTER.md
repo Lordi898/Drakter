@@ -80,8 +80,7 @@ Tecnologías:
 - Python.
 - FastAPI.
 - Pydantic.
-- SQLAlchemy.
-- Alembic.
+- SQL propio con `sqlite3` y migraciones `.sql`, sin SQLAlchemy ni Alembic.
 
 Responsabilidad:
 
@@ -826,9 +825,9 @@ El sistema conservará historial de versiones.
 
 Tecnología: SQLite.
 
-Acceso mediante SQLAlchemy.
+Acceso con SQL propio.
 
-Migraciones mediante Alembic.
+Migraciones `.sql` en `backend/migrations/` (entrada "SQL propio sin Alembic" de `DECISIONS.md`).
 
 Búsqueda textual mediante SQLite FTS5.
 
@@ -1310,7 +1309,7 @@ Servicios:
 
 - Drakter Desktop.
 - Drakter Backend.
-- Hermes Gateway.
+- Runner de Hermes.
 - Drakter MCP Server.
 - Voice Service.
 - OpenViking.
@@ -1452,7 +1451,7 @@ Se conservarán versiones recientes y un procedimiento de restauración probado.
 4. Se comprueba la configuración local.
 5. Se inicia o verifica el backend FastAPI.
 6. El backend comprueba SQLite.
-7. Se inicia o verifica Hermes Gateway (proceso aparte con API server en loopback, supervisado por FastAPI).
+7. Se inicia o verifica el runner de Hermes (proceso aparte sobre `AIAgent`, sin gateway, supervisado por FastAPI).
 8. Se inicia o verifica OpenViking.
 9. Se inicia o verifica el servidor MCP.
 10. Se comprueba el servicio de voz.

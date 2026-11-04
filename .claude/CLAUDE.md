@@ -51,7 +51,7 @@ Los documentos de control están en `docs/`. Tres son la memoria del proyecto en
 
 - **Memoria:** se usa la memoria nativa de Hermes + OpenViking como único proveedor externo, con sus capas L0/L1/L2 (`MASTER_PLAN.md` §10). Hindsight y Mem0 quedan fuera. Antes de guardar datos reales hay que elegir un embedding multilingüe y validar el modelo que genera L0/L1.
 - **Rive:** el archivo `.riv` se diseña en el editor visual de Rive y no puede generarse por código. Construye el componente React, el receptor de eventos y un personaje placeholder (SVG/CSS) con la misma API de estados (`idle`, `listening`, `thinking`, `speaking`, `executing`, `success`, `error`, `interrupted`, `offline`). El `.riv` real se enchufa después sin tocar el resto.
-- **Hermes embebido:** Hermes es un framework de agente completo (bucle propio, CLI, gateway). Corre como proceso aparte supervisado por FastAPI, con API server en loopback y herramientas servidas por el backend mediante MCP. La decisión está en `docs/DECISIONS.md` y aún no se ha probado en ejecución.
+- **Hermes embebido:** Hermes es un framework de agente completo (bucle propio, CLI, gateway). No se usa su gateway: un runner propio crea `AIAgent` en un proceso aparte, con el venv de Hermes, supervisado por FastAPI, y las herramientas las sirve el backend mediante MCP. La decisión está en `docs/DECISIONS.md` y aún no se ha probado en ejecución.
 - **Voz:** la latencia real depende del hardware. La máquina de desarrollo es un i7-8665U con 14 GB de RAM y gráfica integrada, sin VRAM dedicada: se dimensiona para CPU. Deja medición y configuración listas, pero no inventes cifras.
 
 ---

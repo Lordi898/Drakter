@@ -453,7 +453,7 @@ drakter/
 
 └── SYSTEM_GUIDE.md
 
-Los 14 archivos viven en `agent/identity/`; `agent/context/` y `agent/knowledge/` no existen (decisión "Los 14 archivos de identidad viven en agent/identity/"). La fuente es el repositorio: un cargador los compone y los publica en el `HERMES_HOME` del perfil de Drakter. `USER.md` y `PREFERENCES.md` son plantillas sin datos reales; el `USER.md` vivo es el nativo de Hermes (véase §10).
+Los 14 archivos viven en `agent/identity/`; `agent/context/` y `agent/knowledge/` no forman parte de la estructura vigente (decisión "Los 14 archivos de identidad viven en agent/identity/"). La fuente es el repositorio: un cargador los compone y los publica en el `HERMES_HOME` del perfil de Drakter. `USER.md` y `PREFERENCES.md` son plantillas sin datos reales; el `USER.md` vivo es el nativo de Hermes (véase §10).
 
 ### 8.2. Responsabilidad de cada archivo
 
@@ -1958,7 +1958,7 @@ No son requisitos para la primera versión:
 2. React envía el mensaje al backend.
 3. FastAPI identifica la sesión.
 4. El backend entrega a Hermes el mensaje y el contexto de sesión.
-5. Hermes corre como proceso aparte, supervisado por FastAPI (`hermes gateway run`, API server en loopback).
+5. Hermes corre como proceso aparte, supervisado por FastAPI: un runner propio sobre `AIAgent`, sin gateway.
 6. La recuperación de memoria ocurre **dentro de Hermes** (memoria nativa y herramientas `viking_*` de OpenViking), no antes de él.
 7. Claude Haiku 5.5 procesa la solicitud.
 8. Hermes decide si necesita herramientas.
