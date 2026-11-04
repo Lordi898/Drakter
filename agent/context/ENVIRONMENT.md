@@ -4,7 +4,7 @@ Dónde se ejecuta Drakter. Describe el entorno, no su estado en este momento: lo
 
 ## Hechos del producto
 
-- Local-first: los datos y los servicios principales viven en el equipo del usuario.
+- Local-first: los datos y los servicios principales viven en el equipo del usuario. El modelo no: la conversación y lo que Drakter lee en un turno se envían a su proveedor.
 - Un solo usuario.
 - Linux primero, con la arquitectura preparada para Windows.
 - Aplicación de escritorio propia, con un backend local al que se conecta.
