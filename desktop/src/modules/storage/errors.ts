@@ -45,11 +45,9 @@ export interface PendingConfirmation {
 
 /** Datos de `error.confirmation` (409 `confirmation_required`), leídos con cautela. */
 export function confirmationOf(error: unknown): PendingConfirmation | null {
-  const raw = (error as { confirmation?: unknown } | null)?.confirmation
-  if (typeof raw !== 'object' || raw === null) return null
-  const { summary, affected_count } = raw as Record<string, unknown>
-  if (typeof summary !== 'string') return null
-  return { summary: summary.slice(0, 300), affected: typeof affected_count === 'number' ? affected_count : null }
+  if (!(error instanceof ApiError) || !error.confirmation) return null
+  const { summary, affected_count } = error.confirmation
+  return { summary: summary.slice(0, 300), affected: affected_count }
 }
 
 export function describeConfirmation(error: unknown): string {

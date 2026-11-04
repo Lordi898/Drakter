@@ -73,6 +73,5 @@ export function isDisconnected(error: unknown): boolean {
 
 /** Resumen de la confirmación pendiente (409 `confirmation_required`), si el cliente lo trae. */
 export function confirmationSummary(error: unknown): string | null {
-  const confirmation = (error as { confirmation?: { summary?: unknown } } | null)?.confirmation
-  return typeof confirmation?.summary === 'string' ? confirmation.summary.slice(0, 300) : null
+  return error instanceof ApiError && error.confirmation ? error.confirmation.summary.slice(0, 300) : null
 }

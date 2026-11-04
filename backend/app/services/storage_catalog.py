@@ -347,7 +347,7 @@ def delete_resource(
     deps.gate.require(
         conn, actor, tool="delete_resource", args={"resource_id": resource_id, "detach": detach},
         summary=f"Vas a eliminar 1 recurso: «{row['title']}»"
-        + (f" y {related} dependientes" if related else "")
+        + (f" y {related} dependiente{"s" if related != 1 else ""}" if related else "")
         + ". Esta acción no se puede deshacer. El archivo original no se toca.",
         affected_count=1 + related, confirmation_id=confirmation_id,
         targets=[{"id": resource_id, "revision": row["revision"]}],

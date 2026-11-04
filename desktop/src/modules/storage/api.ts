@@ -8,10 +8,9 @@ export const PAGE_SIZE = 30
 
 type Method = 'GET' | 'POST' | 'PATCH' | 'DELETE'
 
-/** `apiRequest` aún tipa solo GET/POST; se programa contra la firma ampliada acordada. */
 function backendRequest<T>(method: Method, path: string, body?: unknown): Promise<T> {
   const init = { method, ...(body === undefined ? {} : { body }) }
-  return apiRequest<T>(`/api/v1${path}`, init as never)
+  return apiRequest<T>(`/api/v1${path}`, init)
 }
 
 function query(params: Record<string, string | number | boolean | null | undefined>): string {

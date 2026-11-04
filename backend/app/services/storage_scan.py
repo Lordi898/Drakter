@@ -75,9 +75,11 @@ def scan_location(
         if info is not None:
             adds.append(info)
     moved_ids = {m[0]["id"] for m in moves}
+    # `scan` calla lo que salta (EACCES, profundidad): no verlo no prueba que falte.
     gone = [] if truncated else [
         r for p, r in existing.items()
         if p not in seen_paths and r["id"] not in moved_ids and r["availability_status"] != "missing"
+        and _really_missing(deps, root, identity, p)
     ]
 
     # 2. Escritura en lotes, cada uno en su transacción corta.
@@ -136,6 +138,16 @@ def scan_location(
                       entity_id=location_id, affected_count=sum(counts.values()) - counts["skipped"],
                       params={**counts, "truncated": truncated})
     return result
+
+
+def _really_missing(deps: StorageDeps, root: Any, identity: Any, relative: str) -> bool:
+    try:
+        safefs.stat_file(root, identity, relative, denied=deps.denied_roots)
+    except safefs.MissingFile:
+        return True
+    except Exception:
+        return False
+    return False
 
 
 def _inspect(deps: StorageDeps, loc: sqlite3.Row, relative: str, counts: dict[str, int]) -> FileInfo | None:

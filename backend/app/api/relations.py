@@ -18,7 +18,7 @@ from app.schemas.storage import Cursor, Uuid
 from app.services import relations as svc
 from app.services.storage_ports import Actor, StorageDeps
 
-router = APIRouter(tags=["relationships"], route_class=ConfirmationRoute)
+router = APIRouter(prefix="/api/v1", tags=["relationships"], route_class=ConfirmationRoute)
 
 Conn = Annotated[sqlite3.Connection, Depends(db)]
 Deps = Annotated[StorageDeps, Depends(get_deps)]

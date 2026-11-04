@@ -207,7 +207,7 @@ def main() -> int:
         async def rid(request, call_next):  # noqa: ANN001, ANN202
             request.scope.setdefault("state", {})["request_id"] = "t"
             return await call_next(request)
-        app.include_router(api.router, prefix="/api/v1")
+        app.include_router(api.router)
         from app.core.errors import install_error_handlers  # noqa: PLC0415
         install_error_handlers(app)
         client = TestClient(app)
