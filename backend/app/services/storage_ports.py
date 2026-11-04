@@ -7,12 +7,13 @@ Sin adaptador real las confirmaciones fallan cerradas: nada destructivo se ejecu
 
 from __future__ import annotations
 
+import hashlib
 import json
 import sqlite3
-from collections.abc import Iterator, Mapping
+from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, Final, Literal, Protocol
 from uuid import uuid4
@@ -25,6 +26,7 @@ Origin = Literal["rest", "mcp", "scheduler", "internal"]
 AuditResult = Literal["success", "denied", "failed", "confirmation_required"]
 
 MAX_AUDIT_VALUE_CHARS: Final = 200
+CONFIRMATION_TTL_SECONDS: Final = 600  # propuesto, sin fijar en contracts
 
 
 @dataclass(frozen=True)
@@ -65,6 +67,7 @@ class ConfirmationGate(Protocol):
         summary: str,
         affected_count: int,
         confirmation_id: str | None,
+        targets: Sequence[Mapping[str, Any]] = (),
     ) -> None:
         """Vuelve solo si hay una aprobación válida de la GUI para estos argumentos.
 
@@ -126,6 +129,7 @@ class ApprovedByDispatcher:
         summary: str,
         affected_count: int,
         confirmation_id: str | None,
+        targets: Sequence[Mapping[str, Any]] = (),
     ) -> None:
         return None
 
@@ -143,10 +147,130 @@ class DenyAllConfirmations:
         summary: str,
         affected_count: int,
         confirmation_id: str | None,
+        targets: Sequence[Mapping[str, Any]] = (),
     ) -> None:
         # Nunca `confirmation_required`: ese código exige un objeto `confirmation` con
         # ticket, y aquí no existe ninguno que la GUI pueda aprobar.
         raise AppError("confirmation_unavailable", "Confirmation service unavailable", 503)
+
+
+class ConfirmationRequired(AppError):
+    """409 con `confirmation` junto a `error`; lo serializa `ConfirmationRoute`."""
+
+    def __init__(self, ticket: Mapping[str, Any]) -> None:
+        super().__init__("confirmation_required", "Esta operación necesita tu confirmación.", 409)
+        self.ticket = dict(ticket)
+
+
+def _canonical(value: Any) -> str:
+    return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False)
+
+
+def _args_hash(tool: str, canonical_args: str) -> str:
+    """Igual que `app/permissions/canonical.py` de drakter/seguridad."""
+    return hashlib.sha256("\x00".join((tool, canonical_args)).encode("utf-8")).hexdigest()
+
+
+class TicketGate:
+    """Crea y canjea filas de `pending_confirmations`; la decisión es siempre de la GUI.
+
+    Sustituible por el pipeline común. Se llama fuera de `write_tx`: un ticket emitido
+    debe sobrevivir a la excepción que lo comunica. Canjear pasa por
+    `approved -> executing -> executed` con una sola fila afectada, así que un
+    ticket no se ejecuta dos veces.
+    """
+
+    def require(
+        self,
+        conn: sqlite3.Connection,
+        actor: Actor,
+        *,
+        tool: str,
+        args: Mapping[str, Any],
+        summary: str,
+        affected_count: int,
+        confirmation_id: str | None,
+        targets: Sequence[Mapping[str, Any]] = (),
+    ) -> None:
+        canonical_args = _canonical(dict(args))
+        args_hash = _args_hash(tool, canonical_args)
+        targets_json = _canonical(list(targets))
+        if confirmation_id is not None:
+            self._redeem(conn, confirmation_id, tool, args_hash, targets_json)
+            return
+        now = utc_now()
+        conn.execute("BEGIN IMMEDIATE")
+        try:
+            row = conn.execute(
+                "SELECT id, expires_at FROM pending_confirmations WHERE status = 'pending'"
+                " AND args_hash = ? AND targets_json = ? AND expires_at > ?",
+                (args_hash, targets_json, now),
+            ).fetchone()
+            if row is None:
+                ticket_id, expires_at = str(uuid4()), _expiry()
+                conn.execute(
+                    "INSERT INTO pending_confirmations (id, tool_name, actor_type, origin,"
+                    " correlation_id, args_json, args_hash, targets_json, summary, affected_count,"
+                    " risk, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'confirm', ?, ?)",
+                    (
+                        ticket_id, tool, actor.kind, actor.origin, actor.correlation_id, canonical_args,
+                        args_hash, targets_json, summary, affected_count, now, expires_at,
+                    ),
+                )
+            else:
+                ticket_id, expires_at = row[0], row[1]
+        except BaseException:
+            conn.execute("ROLLBACK")
+            raise
+        conn.execute("COMMIT")
+        raise ConfirmationRequired(
+            {
+                "id": ticket_id,
+                "summary": summary,
+                "affected_count": affected_count,
+                "expires_at": expires_at,
+                "params_hash": args_hash,
+            }
+        )
+
+    def _redeem(
+        self,
+        conn: sqlite3.Connection,
+        confirmation_id: str,
+        tool: str,
+        args_hash: str,
+        targets_json: str,
+    ) -> None:
+        row = conn.execute(
+            "SELECT status, tool_name, args_hash, targets_json, expires_at"
+            " FROM pending_confirmations WHERE id = ?",
+            (confirmation_id,),
+        ).fetchone()
+        if row is None or row[1] != tool or row[2] != args_hash:
+            raise AppError("not_found", "Confirmation not found", 404)
+        if row[0] == "pending":
+            if row[4] <= utc_now():
+                raise AppError("confirmation_expired", "Confirmation expired", 410)
+            raise AppError("conflict", "Confirmation is still pending", 409)
+        if row[0] != "approved":
+            raise AppError("confirmation_already_resolved", "Confirmation already resolved", 409)
+        if row[3] != targets_json:
+            raise AppError("conflict", "Targets changed since the confirmation", 409)
+        claimed = conn.execute(
+            "UPDATE pending_confirmations SET status = 'executing' WHERE id = ? AND status = 'approved'",
+            (confirmation_id,),
+        )
+        if claimed.rowcount != 1:
+            raise AppError("confirmation_already_resolved", "Confirmation already resolved", 409)
+        conn.execute(
+            "UPDATE pending_confirmations SET status = 'executed', executed_at = ? WHERE id = ?",
+            (utc_now(), confirmation_id),
+        )
+
+
+def _expiry() -> str:
+    moment = datetime.now(UTC) + timedelta(seconds=CONFIRMATION_TTL_SECONDS)
+    return moment.isoformat(timespec="milliseconds").replace("+00:00", "Z")
 
 
 @dataclass(frozen=True)
