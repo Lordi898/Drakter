@@ -2,9 +2,9 @@
  * Contrato del puente preload ↔ renderer. Es lo ÚNICO que el renderer ve del
  * sistema: `window.drakter`. Todo mensaje se valida en el proceso principal.
  */
-import type { OpId } from './operations'
+import type { HttpMethod } from './operations'
 
-export type { OpId } from './operations'
+export type { HttpMethod } from './operations'
 
 export const IPC_CHANNELS = {
   getAppInfo: 'drakter:app-info',
@@ -47,13 +47,6 @@ export interface RendererErrorReport {
   readonly stack?: string
 }
 
-/** Argumentos de `api.call`. Main los valida; `path` rellena los `{marcadores}` de la ruta. */
-export interface ApiCallArgs {
-  readonly path?: Readonly<Record<string, string>>
-  readonly query?: Readonly<Record<string, string | number | boolean>>
-  readonly body?: unknown
-}
-
 /**
  * No se rechaza por errores HTTP: `ok: false` lleva el estado y el cuerpo sin
  * interpretar (dato no confiable). `status: 0` significa que no hubo respuesta:
@@ -76,19 +69,24 @@ export interface BackendConnection {
   readonly state: BackendState
 }
 
-/** `events`: cada evento WS, parseado y SIN validar. `connection`: `BackendConnection`. */
-export type ApiChannel = 'events' | 'connection'
+/** `events`: cada evento de `/ws`, parseado y SIN validar. `connection`: `BackendConnection`. */
+export type ApiTopic = 'events' | 'connection'
 
+/**
+ * `window.api`: ÚNICA interfaz del renderer con el backend (D-14). El renderer no
+ * tiene token, puerto ni red. Main valida método y ruta contra `ALLOWED_ROUTES` y
+ * añade la credencial; `path` puede llevar query (`/api/v1/tasks?status=open`).
+ */
 export interface DrakterApi {
-  call(op: OpId, args?: ApiCallArgs): Promise<ApiCallResult>
-  subscribe(channel: ApiChannel, callback: (event: unknown) => void): () => void
+  call(method: HttpMethod, path: string, body?: unknown): Promise<ApiCallResult>
+  subscribe(topic: ApiTopic, callback: (event: unknown) => void): () => void
   /** Abre el diálogo nativo en main. El renderer no puede aprobar por otra vía. */
   requestApproval(actionId: string): Promise<ApprovalOutcome>
   getConnection(): Promise<BackendConnection>
 }
 
+/** `window.drakter`: solo servicios de escritorio, sin relación con el backend. */
 export interface DrakterBridge {
-  readonly api: DrakterApi
   getAppInfo(): Promise<AppInfo>
   showDesktopNotification(request: DesktopNotificationRequest): Promise<void>
   reportRendererError(report: RendererErrorReport): Promise<void>
