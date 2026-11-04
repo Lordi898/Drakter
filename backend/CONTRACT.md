@@ -9,7 +9,7 @@ Fuera de alcance: tablas de dominio, rutas de dominio, eventos WebSocket de nego
 - La dirección no es configurable: `BIND_HOST = "127.0.0.1"`, constante.
 - Uvicorn: `log_config=None`, `access_log=False`, `server_header=False`, `proxy_headers=False`, `ws="websockets-sansio"`, `ws_max_size=1048576`, `lifespan="on"`.
 - `create_app(settings: Settings) -> FastAPI` en `app/main.py`. No existe un `app` a nivel de módulo. `docs_url`, `redoc_url` y `openapi_url` son `None`.
-- Orden del `lifespan`: preparar directorios → `configure_logging` → `migrate` → escribir archivo de sesión. Al apagar, borrar el archivo de sesión. Si `migrate` falla, el arranque falla.
+- Orden del `lifespan`: preparar directorios → `configure_logging` → `exclusive_instance` → `migrate` → escribir archivo de sesión. Al apagar, borrar el archivo de sesión. Si `migrate` falla, el arranque falla.
 
 ## `app/core/config.py`
 
@@ -31,6 +31,8 @@ def ensure_private_dir(path: Path) -> None: ...
 def load_settings() -> Settings: ...
 ```
 
+`python -m app` captura `ValidationError` de `load_settings`: imprime solo los nombres de los campos inválidos y sale con 1, sin valores.
+
 - `DRAKTER_ALLOWED_ORIGINS` es una lista separada por comas. Rechaza `*`, `null`, y cualquier valor que no sea exactamente `scheme://host[:port]` (sin ruta, consulta, fragmento ni credenciales). Se normaliza a minúsculas.
 - `ensure_private_dir`: crea con 0700 y padres; si existe, es symlink, no es del usuario actual o da permisos a grupo u otros, lanza `ValueError` (no corrige en silencio salvo que el directorio sea del usuario y no sea symlink: entonces `chmod 0700`).
 
@@ -44,8 +46,8 @@ class JsonFormatter(logging.Formatter): ...
 ```
 
 - Una línea JSON por evento con `ts` (UTC ISO 8601), `level`, `logger`, `message` y los campos de `extra`. Salida a stderr y a `logs_dir/"backend.log"` (rotación 5 MiB, 3 copias, permisos 600, también las rotadas).
-- Redacción en el formateador, sobre el texto final, incluidos `extra` y trazas de excepción. Sustituye por `[REDACTED]`: valores registrados con `register_secret`; valores de claves que contengan `authorization`, `token`, `secret`, `password`, `api_key`, `apikey`, `cookie`, `credential` (sin distinguir mayúsculas, también anidadas); `Bearer <x>`; `drakter.auth.<x>`; `sk-…`; y `<clave>=<valor>` o `"clave": "valor"` en texto libre con esas claves.
-- `configure_logging` encamina también `uvicorn`, `uvicorn.error`, `uvicorn.access`, y es idempotente: no duplica manejadores.
+- Redacción en el formateador, sobre el texto final, incluidos `extra`, objetos no `str` y trazas de excepción, en tiempo lineal: primero se sustituyen los valores registrados, luego se trunca cada campo a 16 KiB y por último se aplican los patrones. Sustituye por `[REDACTED]`: valores registrados con `register_secret`; valores completos de claves que contengan `authorization`, `token`, `secret`, `password`, `api_key`, `api-key`, `apikey`, `cookie`, `credential` (sin distinguir mayúsculas, también anidadas, en listas de pares y con cualquier esquema, como `Basic`); `Bearer <x>`; `drakter.auth.<x>`; `sk-…`; y `<clave>=<valor>` o `"clave": "valor"` en texto libre con esas claves.
+- `configure_logging` encamina también `uvicorn` y `uvicorn.error`, deja `uvicorn.access` sin handlers ni propagación (la línea de acceso incluye la consulta) y es idempotente: no duplica manejadores.
 
 ## `app/core/errors.py`
 
@@ -99,7 +101,7 @@ Archivo de sesión: JSON `{"token","port","pid","started_at"}`, escrito en un te
 5. Solo en HTTP, deja pasar sin token las rutas de `PUBLIC_PATHS` y las preflight CORS (`OPTIONS` con `Origin` ya validado y `Access-Control-Request-Method`). En websocket, `/health` también exige token.
 6. Todo lo demás, incluidas rutas inexistentes, exige token: `Authorization: Bearer <token>`. En websocket vale además el subprotocolo `drakter.auth.<token>`. Nunca por query string ni cookie. Si no: 401 `unauthorized` con `WWW-Authenticate: Bearer`.
 
-En websocket, cualquier rechazo se hace antes de aceptar: se consume `websocket.connect` y se envía `websocket.close` con código 1008, de modo que el cliente recibe un rechazo del handshake. El guardia nunca registra cabeceras, consulta ni token. Registra `event`, `method`, `path` sin consulta, `status` y `request_id`.
+En websocket, cualquier rechazo se hace antes de aceptar: se consume `websocket.connect` y se envía `websocket.close` con código 1008, de modo que el cliente recibe un rechazo del handshake. El guardia nunca registra cabeceras, consulta ni token. Registra `event`, `method`, `path` sin consulta y truncado a 256 caracteres, `status` y `request_id`.
 
 Con un `Origin` validado, el guardia lo guarda en `scope["state"]["cors_origin"]` y sus 401 y el 500 de `install_error_handlers` añaden `Access-Control-Allow-Origin`, porque nacen fuera de `CORSMiddleware`. Una preflight con método no permitido devuelve el 400 en texto plano de `CORSMiddleware`.
 
@@ -107,7 +109,7 @@ CORS: `CORSMiddleware` dentro del guardia, con `allow_origins=settings.allowed_o
 
 ## `app/api/`
 
-- `health.py`: `GET /health` (público) → `{"status":"ok"}`; hace `SELECT 1` con `connect`. Si falla → `AppError("service_unavailable", ..., 503)`, sin detalles.
+- `health.py`: `GET /health` (público) → `{"status":"ok"}`; hace `SELECT 1` con `connect` sin `create`, así una base desaparecida da 503. Si falla → `AppError("service_unavailable", ..., 503)`, sin detalles.
 - `auth.py`: `GET /api/v1/auth/check` → `{"authenticated": true}`.
 - `ws.py`: `WS /ws`. Si el cliente ofreció `drakter.v1`, acepta con ese subprotocolo; nunca devuelve el de autenticación. Si recibe el texto `ping`, responde `pong`. Cualquier otra entrada cierra con 1003.
 
@@ -115,7 +117,7 @@ CORS: `CORSMiddleware` dentro del guardia, con `allow_origins=settings.allowed_o
 
 ```python
 # connection.py
-def connect(db_path: Path) -> sqlite3.Connection: ...
+def connect(db_path: Path, *, create: bool = False) -> sqlite3.Connection: ...
 
 # migrator.py
 SCHEMA_VERSION_TABLE: Final = "schema_version"
@@ -131,13 +133,20 @@ def migrate(db_path: Path, backups_dir: Path, migrations_dir: Path = MIGRATIONS_
 class BackupError(Exception): ...
 def create_backup(db_path: Path, backups_dir: Path, label: str) -> Path: ...
 def verify_backup(backup_path: Path) -> None: ...
-def restore_backup(db_path: Path, backups_dir: Path, backup_path: Path) -> Path: ...  # devuelve la copia de seguridad previa
+def restore_backup(db_path: Path, backups_dir: Path, backup_path: Path,
+                   migrations_dir: Path = MIGRATIONS_DIR) -> Path: ...  # devuelve la copia previa o la cuarentena
+
+# lock.py
+class DatabaseInUse(Exception): ...
+@contextmanager
+def exclusive_instance(db_path: Path) -> Iterator[None]: ...  # flock no bloqueante sobre <db>.lock, 0600
 
 # cli.py: python -m app.database.cli status|migrate|backup|restore <archivo>
 ```
 
-- `connect`: crea la base con `os.open(..., O_CREAT|O_RDWR|O_NOFOLLOW, 0o600)`, fuerza 0600 si ya existía, rechaza symlink o propietario ajeno, y aplica `journal_mode=WAL`, `foreign_keys=ON`, `synchronous=NORMAL`, `busy_timeout=5000`, con `isolation_level=None` (transacciones explícitas). Verifica que WAL y `foreign_keys` han quedado activos. Los `-wal` y `-shm` también quedan en 0600 cuando existan.
+- `connect`: sin `create=True`, una base inexistente lanza `FileNotFoundError` y no se crea: solo `migrate` y `create_backup`/`restore_backup` cuando corresponda la crean. Al crear usa `os.open` con `O_CREAT|O_EXCL|O_NOFOLLOW` y 0600; sobre una base existente no abre descriptor propio (cerrarlo cancelaría los bloqueos POSIX de SQLite) y usa `lstat` más comparación de inodo tras abrir. Fuerza 0600, rechaza con `ValueError` symlink o propietario ajeno, y aplica `journal_mode=WAL`, `foreign_keys=ON`, `synchronous=NORMAL`, `busy_timeout=5000`, con `isolation_level=None` (transacciones explícitas). Verifica que WAL y `foreign_keys` han quedado activos. Los `-wal` y `-shm` también quedan en 0600 cuando existan.
 - Migraciones: archivos `NNNN_nombre.sql` en `migrations/`, numerados de 1 en 1 sin huecos. `schema_version(version INTEGER PRIMARY KEY, name TEXT NOT NULL, checksum TEXT NOT NULL, applied_at TEXT NOT NULL)`, con SHA-256 y hora UTC ISO 8601.
-- `migrate`: valida los archivos antes de tocar nada. Falla con `MigrationError` si hay huecos, duplicados, un checksum aplicado que cambió, una migración aplicada que falta o una base más nueva que el código. Sin pendientes no crea copia y es idempotente. Con pendientes y datos existentes, crea y verifica una copia y solo entonces aplica todo dentro de una transacción `BEGIN IMMEDIATE`, comprobando dentro del bloqueo la versión actual. Trocea con `sqlite3.complete_statement`, ejecuta sentencia a sentencia (nunca `executescript`) y rechaza sentencias de control de transacción, `PRAGMA`, `ATTACH` y `DETACH` en los archivos. Antes del `COMMIT` ejecuta `foreign_key_check` e `integrity_check`. Cualquier fallo hace `ROLLBACK` y lanza `MigrationError` citando la copia.
-- Copias: API `sqlite3.Connection.backup`, archivo `drakter-<AAAAmmddTHHMMSSffffffZ>-<label>.db` en `backups_dir` (0700) con permisos 0600, escritas en temporal y publicadas con `os.replace` tras `integrity_check`. `label` solo admite `[a-z0-9-]`.
-- `restore_backup`: exige que `backup_path` resuelto esté dentro de `backups_dir`, sea archivo regular y no symlink; lo abre en solo lectura (`mode=ro`), lo verifica, crea una copia con label `pre-restore` y vuelca con la API de backup sobre la base viva, sin sustituir archivos. Tras restaurar, comprueba `integrity_check` y permisos.
+- `migrate`: valida los archivos antes de tocar nada. Falla con `MigrationError` si hay huecos, duplicados, un checksum aplicado que cambió, una migración aplicada que falta o una base más nueva que el código. Sin pendientes no crea copia y es idempotente. Con pendientes y datos existentes, crea y verifica una copia y solo entonces aplica todo dentro de una transacción `BEGIN IMMEDIATE`, comprobando dentro del bloqueo la versión actual. Migra con `PRAGMA foreign_keys=OFF`, fijado fuera de la transacción y restaurado siempre al terminar, para que reconstruir una tabla con `DROP TABLE` no dispare cascadas. Un `DELETE` de migración tampoco cascada: si deja huérfanos, `foreign_key_check` aborta. Trocea con `sqlite3.complete_statement`, ejecuta sentencia a sentencia (nunca `executescript`) y rechaza sentencias de control de transacción, `PRAGMA`, `ATTACH` y `DETACH` en los archivos. Antes del `COMMIT` ejecuta `foreign_key_check` e `integrity_check`. Cualquier fallo hace `ROLLBACK` y lanza `MigrationError` citando la copia.
+- Copias: API `sqlite3.Connection.backup`, en `journal_mode=DELETE`, archivo `drakter-<AAAAmmddTHHMMSSffffffZ>-<label>.db` en `backups_dir` (0700) con permisos 0600, escritas en temporal y publicadas con `os.replace` tras `integrity_check`, junto a `<archivo>.sha256` (0600) con su SHA-256. `label` solo admite `[a-z0-9-]`. `verify_backup` exige sidecar y hash correctos, `integrity_check` y `schema_version` presente.
+- `restore_backup`: toma `exclusive_instance` durante toda la operación (si el backend está vivo, `BackupError` sin tocar nada: el backend es el único escritor). Exige que `backup_path` resuelto esté dentro de `backups_dir`, sea archivo regular y no symlink; lo abre en solo lectura (`mode=ro`), lo verifica, y comprueba antes de tocar la base viva que cada fila de `schema_version` coincide en versión y checksum con `migrations_dir` y que su versión no supera la del código. Después crea una copia con label `pre-restore` y vuelca con la API de backup sobre la base viva, sin sustituir archivos. Si la base viva está dañada y no admite copia, la mueve con `-wal` y `-shm` a `backups_dir/quarantine-<fecha>/` (0700), nunca la borra, y restaura sobre una base nueva. Tras restaurar, comprueba `integrity_check` y permisos.
+- El backend mantiene `exclusive_instance` toda su vida: lo toma en `lifespan` antes de `migrate` y lo suelta al apagar. Si no puede, el arranque falla.

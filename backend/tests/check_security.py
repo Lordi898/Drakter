@@ -394,6 +394,11 @@ def ws_cases(srv: Server, token: str) -> None:
 # ---------------------------------------------------------------- sistema
 def system_cases(srv: Server, token: str) -> None:
     port = srv.port
+    marker = "query-marker-7f3a"
+    r = raw_request(port, "GET", f"/api/v1/auth/check?{marker}=1", token=token)
+    time.sleep(0.2)
+    check("la consulta de una peticion no llega a backend.log",
+          r.status == 200 and srv.logfile.exists() and marker not in srv.logfile.read_text(), f"{r.status}")
     ss = subprocess.run(["ss", "-ltnH"], capture_output=True, text=True).stdout.splitlines()
     mine = [l.split()[3] for l in ss if len(l.split()) > 3 and l.split()[3].rsplit(":", 1)[-1] == str(port)]
     check("ss -ltn: el puerto solo escucha en 127.0.0.1", bool(mine) and all(a == f"127.0.0.1:{port}" for a in mine), repr(mine))
