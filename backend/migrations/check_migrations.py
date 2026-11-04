@@ -5,6 +5,7 @@ Uso, desde backend/: TMPDIR=/var/tmp/drakter-contratos python3 migrations/check_
 """
 from __future__ import annotations
 
+import json
 import shutil
 import sqlite3
 import sys
@@ -20,6 +21,14 @@ from app.database.migrator import migrate  # noqa: E402
 
 NOW = "2026-11-04T10:00:00.000Z"
 FAILS: list[str] = []
+REQUIRED_TRIGGERS = {
+    *(f"trg_{t}_delete_entity" for t in ("tasks", "projects", "subjects", "habits", "calendar_events", "time_blocks", "class_sessions", "resources", "folders")),
+    "trg_tasks_no_cycle", "trg_folders_no_cycle", "trg_relationships_no_cycle",
+    "trg_audit_no_update", "trg_audit_no_delete", "trg_audit_no_replace",
+    "trg_pc_transition", "trg_pc_immutable", "trg_pc_no_delete", "trg_pc_no_replace",
+    "trg_search_ai", "trg_search_ad", "trg_search_au",
+    "trg_memory_records_ai", "trg_memory_records_au", "trg_memory_records_ad",
+}
 
 
 def ok(name: str, cond: bool) -> None:
@@ -81,12 +90,36 @@ def confirmation(conn: sqlite3.Connection, verb: str = "INSERT", cid: str | None
 
 def run(root: Path) -> None:
     db, backups = root / "d.db", root / "backups"
+    old_dir = root / "v10"
+    old_dir.mkdir()
+    for sql in sorted(Path(__file__).parent.glob("00*.sql"))[:10]:
+        shutil.copy(sql, old_dir)
+    migrate(db, backups, old_dir)
+    conn = connect(db)
+    try:
+        for key, raw in (("default_timezone", '"Europe/Madrid"'), ("bulk_threshold", "20")):
+            conn.execute("INSERT INTO settings (key, value_json, updated_at, updated_by) VALUES (?,?,?,'user')", (key, raw, NOW))
+    finally:
+        conn.close()
     first = migrate(db, backups)
-    ok("aplica todas las migraciones", first.to_version == len(list(Path(__file__).parent.glob("0*.sql"))))
+    ok("0011 con datos crea copia", first.backup is not None and first.applied == ("0011_settings_value.sql",))
+    first_version = first.to_version
+    ok("aplica todas las migraciones", first_version == len(list(Path(__file__).parent.glob("0*.sql"))))
     ok("segunda pasada idempotente", migrate(db, backups).applied == ())
 
     conn = connect(db)
     try:
+        rows = dict(conn.execute("SELECT key, value FROM settings").fetchall())
+        ok("0011 conserva valores", rows == {"default_timezone": "Europe/Madrid", "bulk_threshold": "20"})
+        lectura = dict(conn.execute("SELECT key, value_json FROM settings").fetchall())
+        ok("value_json sigue siendo JSON", json.loads(lectura["default_timezone"]) == "Europe/Madrid" and json.loads(lectura["bulk_threshold"]) == 20)
+        conn.execute("INSERT INTO settings (key, value, updated_at) VALUES ('tema', 'oscuro', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value", (NOW,))
+        rejected(conn, "value_json no se escribe", "UPDATE settings SET value_json = '1' WHERE key = 'tema'")
+        rejected(conn, "valor demasiado largo", "UPDATE settings SET value = ? WHERE key = 'tema'", ("x" * 65,))
+        conn.execute("DELETE FROM settings WHERE key = 'tema'")
+        found = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type = 'trigger'")}
+        ok("triggers obligatorios", REQUIRED_TRIGGERS <= found)
+        ok("sin triggers de mas", found - REQUIRED_TRIGGERS == set())
         a, b, c = task(conn, "a"), task(conn, "b"), task(conn, "c")
         ok("restriccion de FK activa", conn.execute("PRAGMA foreign_keys").fetchone()[0] == 1)
         rejected(conn, "tipo declarado incorrecto", "INSERT INTO projects (id, name) VALUES (?, 'p')", (a,))
@@ -175,12 +208,13 @@ def run(root: Path) -> None:
         after = {t: conn.execute(f"SELECT count(*) FROM {t}").fetchone()[0] for t in counts}
         ok("restaurar recupera conteos", after == counts)
         names = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type = 'trigger'")}
-        ok("triggers tras restaurar", {"trg_audit_no_replace", "trg_pc_no_replace", "trg_tasks_delete_entity", "trg_search_au"} <= names)
+        ok("triggers tras restaurar", REQUIRED_TRIGGERS <= names)
         try:
             conn.execute("INSERT INTO search_fts(search_fts, rank) VALUES('integrity-check', 1)")
             ok("FTS tras restaurar", True)
         except sqlite3.Error:
             ok("FTS tras restaurar", False)
+        ok("sin entidades huerfanas tras restaurar", conn.execute("SELECT count(*) FROM v_orphan_entities").fetchone()[0] == 0)
     finally:
         conn.close()
 
