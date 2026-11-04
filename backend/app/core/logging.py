@@ -22,20 +22,28 @@ _SENSITIVE: Final = (
     "secret",
     "password",
     "api_key",
+    "api-key",
     "apikey",
     "cookie",
     "credential",
 )
-_KW = "|".join(_SENSITIVE)
 
-_BEARER_RE = re.compile(r"(?i)\bBearer\s+[^\s\"',;]+")
+_MAX_FIELD: Final = 16 * 1024
+_MAX_DEPTH: Final = 8
+
+# Every pattern below is linear: no unbounded quantifier is nested or follows another
+# unbounded one, so there is no backtracking blow-up on adversarial input.
+_BEARER_RE = re.compile(r"(?i)\bBearer[ \t]{1,16}[^\s\"',;]+")
 _WS_AUTH_RE = re.compile(r"drakter\.auth\.[A-Za-z0-9_\-.~+/=]+")
 _SK_RE = re.compile(r"\bsk-[A-Za-z0-9_\-]+")
-_KV_RE = re.compile(
-    r"(?P<pre>(?P<kq>[\"']?)[\w\-]*(?:" + _KW + r")[\w\-]*(?P=kq)\s*[:=]\s*)"
-    r"(?P<val>\"[^\"]*\"|'[^']*'|[^\s,;&}\]\"']+)",
+_KEY_RE = re.compile(
+    r"(?P<kw>authorization|token|secret|password|api[_\-]key|apikey|cookie|credential)"
+    r"[\w\-]{0,64}+(?:\\?[\"'])?[ \t]{0,16}+[:=][ \t]{0,16}+",
     re.IGNORECASE,
 )
+_HEADER_VALUE_RE = re.compile(r"[^\r\n]*")
+_PLAIN_VALUE_RE = re.compile(r"[^\s,;&})\]\"']*")
+_HEADER_KEYS: Final = frozenset({"authorization", "cookie"})
 
 _secrets: set[str] = set()
 _secrets_lock = threading.Lock()
@@ -65,18 +73,54 @@ def _mask_registered(text: str) -> str:
     return text
 
 
-def _kv_sub(match: re.Match[str]) -> str:
-    val = match.group("val")
-    quote = val[0] if val[0] in "\"'" else ""
-    return f"{match.group('pre')}{quote}{REDACTED}{quote}"
+def _value_span(text: str, start: int, kw: str) -> tuple[int, int]:
+    """Span of the value that begins at ``start`` (quotes excluded)."""
+    if start >= len(text):
+        return start, start
+    if text[start] == "\\" and text[start + 1 : start + 2] in ('"', "'"):
+        closer = text[start : start + 2]
+        value_start = start + 2
+        end = text.find(closer, value_start)
+        return value_start, len(text) if end == -1 else end
+    if text[start] in "\"'":
+        quote = text[start]
+        value_start = start + 1
+        end = text.find(quote, value_start)
+        while end != -1 and text[end - 1] == "\\":
+            end = text.find(quote, end + 1)
+        return value_start, len(text) if end == -1 else end
+    pattern = _HEADER_VALUE_RE if kw in _HEADER_KEYS else _PLAIN_VALUE_RE
+    match = pattern.match(text, start)
+    return start, match.end() if match else start
+
+
+def _redact_key_values(text: str) -> str:
+    parts: list[str] = []
+    pos = last = 0
+    while (match := _KEY_RE.search(text, pos)) is not None:
+        value_start, value_end = _value_span(text, match.end(), match.group("kw").lower())
+        if value_end <= value_start:
+            pos = max(match.end(), value_end)
+            continue
+        parts.append(text[last:value_start])
+        parts.append(REDACTED)
+        last = pos = value_end
+    parts.append(text[last:])
+    return "".join(parts)
+
+
+def _truncate(text: str) -> str:
+    if len(text) > _MAX_FIELD:
+        return text[:_MAX_FIELD] + "...[truncated]"
+    return text
 
 
 def _redact_text(text: str) -> str:
-    text = _mask_registered(text)
+    text = _truncate(_mask_registered(text))
     text = _BEARER_RE.sub(f"Bearer {REDACTED}", text)
     text = _WS_AUTH_RE.sub(f"drakter.auth.{REDACTED}", text)
     text = _SK_RE.sub(REDACTED, text)
-    return _KV_RE.sub(_kv_sub, text)
+    return _redact_key_values(text)
 
 
 def _is_sensitive_key(key: object) -> bool:
@@ -84,19 +128,39 @@ def _is_sensitive_key(key: object) -> bool:
     return any(word in lowered for word in _SENSITIVE)
 
 
-def redact(value: object) -> object:
-    """Return a copy of ``value`` with secrets replaced by ``[REDACTED]``."""
+def _redact(value: object, depth: int) -> object:
     if isinstance(value, str):
         return _redact_text(value)
+    if isinstance(value, bytes):
+        return _redact_text(value[:_MAX_FIELD].decode("utf-8", "replace"))
+    if depth >= _MAX_DEPTH and isinstance(value, (dict, list, tuple, set, frozenset)):
+        return "[TRUNCATED]"
     if isinstance(value, dict):
         return {
-            str(k): (REDACTED if _is_sensitive_key(k) else redact(v)) for k, v in value.items()
+            str(k): (REDACTED if _is_sensitive_key(k) else _redact(v, depth + 1))
+            for k, v in value.items()
         }
     if isinstance(value, (list, tuple, set, frozenset)):
-        return [redact(v) for v in value]
-    if isinstance(value, bytes):
-        return _redact_text(value.decode("utf-8", "replace"))
+        items = list(value)
+        if len(items) == 2:
+            name = items[0].decode("latin-1") if isinstance(items[0], bytes) else items[0]
+            if isinstance(name, str) and _is_sensitive_key(name):
+                return [_redact(items[0], depth + 1), REDACTED]
+        return [_redact(v, depth + 1) for v in items]
     return value
+
+
+def redact(value: object) -> object:
+    """Return a copy of ``value`` with secrets replaced by ``[REDACTED]``."""
+    return _redact(value, 0)
+
+
+def _json_default(value: object) -> str:
+    """Fallback for non-JSON objects: their text is redacted too."""
+    try:
+        return _redact_text(str(value))
+    except Exception:  # noqa: BLE001 - never let logging raise
+        return "<unprintable>"
 
 
 class JsonFormatter(logging.Formatter):
@@ -124,7 +188,7 @@ class JsonFormatter(logging.Formatter):
         )
         ordered = {k: payload.pop(k) for k in ("ts", "level", "logger", "message")}
         ordered.update(payload)
-        line = json.dumps(ordered, ensure_ascii=False, default=str)
+        line = json.dumps(ordered, ensure_ascii=False, default=_json_default)
         return _mask_registered(line)
 
 
@@ -179,9 +243,16 @@ def configure_logging(level: str, logs_dir: Path) -> None:
         root.addHandler(handler)
     root.setLevel(numeric)
 
-    for name in ("uvicorn", "uvicorn.error", "uvicorn.access"):
+    for name in ("uvicorn", "uvicorn.error"):
         lg = logging.getLogger(name)
         for old in list(lg.handlers):
             lg.removeHandler(old)
-        lg.propagate = True
+        # The access line carries the query string: it must go nowhere.
+        lg.propagate = name != "uvicorn.access"
         lg.setLevel(numeric)
+
+    # Uvicorn activa el log de acceso si este logger alcanza algún handler, y ese log
+    # incluye la consulta de cada petición.
+    access = logging.getLogger("uvicorn.access")
+    access.handlers.clear()
+    access.propagate = False

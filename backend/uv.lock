@@ -47,6 +47,7 @@ name = "drakter-backend"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
+    { name = "drakter-contracts" },
     { name = "fastapi" },
     { name = "platformdirs" },
     { name = "pydantic" },
@@ -57,6 +58,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
+    { name = "drakter-contracts", editable = "../contracts/python" },
     { name = "fastapi" },
     { name = "platformdirs" },
     { name = "pydantic" },
@@ -64,6 +66,17 @@ requires-dist = [
     { name = "uvicorn" },
     { name = "websockets" },
 ]
+
+[[package]]
+name = "drakter-contracts"
+version = "1.0.0"
+source = { editable = "../contracts/python" }
+dependencies = [
+    { name = "pydantic" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "pydantic", specifier = ">=2.11" }]
 
 [[package]]
 name = "fastapi"
