@@ -1,118 +1,121 @@
 ---
 name: drakter-toolkit
-description: Registro e instrucciones de las skills y agentes del proyecto Drakter. Úsala SIEMPRE al empezar el proyecto (Fase 0) para instalar las skills necesarias, y cada vez que vayas a construir Electron/React/Vite, interfaz con frontend-design, integrar Hermes, crear skills o subagentes nuevos, planificar trabajo en paralelo o instalar/clonar skills y agentes de la comunidad. Úsala aunque el usuario no mencione "skills" explícitamente: en cualquier tarea de Drakter que implique elegir herramientas, delegar en subagentes o instalar recursos externos.
+description: Mapa de todo el tooling del proyecto Drakter: skills, agentes, subagentes, sublíderes, comandos, plugins y sus trampas. Úsala antes de elegir herramientas, delegar, repartir una fase, planificar trabajo paralelo, lanzar drakter-lider, usar build-orchestrator o /batch, construir Electron/React/FastAPI, integrar Hermes u OpenViking, crear una skill o un agente, o instalar o clonar recursos de la comunidad. Actívala con frases como "qué agente uso", "qué skills hay", "lanza agentes", "reparte el trabajo", "instala esta skill". No la uses para el contenido del producto: eso está en docs/MASTER_PLAN.md.
 ---
 
 # Drakter Toolkit
 
-Skills y agentes del proyecto Drakter, cómo instalarlos y cuándo usar cada uno.
-Complementa a `CLAUDE.md` (que manda en caso de conflicto): velocidad primero, pruebas mínimas, agentes sin límite.
+Inventario de lo instalado y cómo combinarlo. `CLAUDE.md` manda en caso de conflicto. Para crear agentes o redactar briefs, usa `agent-forge`.
 
-## 1. Skills del proyecto
+## Flota
 
-| # | Skill | Origen | Para qué se usa en Drakter |
-|---|---|---|---|
-| 1 | Selección de `LLMTooling/agent-skills` (lista en `CLAUDE.md`, sección 6) | https://github.com/LLMTooling/agent-skills | Electron, Vite, TypeScript, React, shadcn/ui, Tailwind, FastAPI, Pydantic, MCP, Vitest, Playwright CLI, etc. (Fases 1, 6–9, 14) |
-| 2 | `skill-creator` | `anthropics/skills` | Crear skills propias del proyecto y mejorarlas |
-| 3 | `frontend-design` | `anthropics/skills` | Diseño de la GUI: sidebar, pestañas, chat, paneles (Fases 1, 4, 6–9) |
-| 4 | `superpowers` | `obra/superpowers` | Brainstorming, planes, ejecución paralela, depuración. **Sin TDD** |
-| 5 | `hermes-agent` | https://skillselion.com/skills/nousresearch/hermes-agent (repo `nousresearch/hermes-agent`) | Configurar y operar Hermes, memoria, skills de Hermes (Fases 2, 10, 11) |
+Claude Code admite hasta 3 niveles de subagentes bajo el hilo principal; en el último desaparece `Agent`.
 
-## 2. Instalación (hazla en la Fase 0, en paralelo)
+| Nivel | Agente | Función |
+|---|---|---|
+| 0 | `drakter-orquestator` | Agente principal: planifica, crea, despliega, integra e informa |
+| 1 | `drakter-lider` | Dirige un frente y despliega sus especialistas |
+| 2 | Especialistas | Construyen una pieza |
+| 3 | Ayudantes | Tareas hoja |
 
-Lanza un subagente por skill. Si un comando falla, **no te detengas**: usa el método alternativo (clonar y copiar) y anota en `DECISIONS.md` lo que hiciste. Verifica siempre que cada skill queda en `.claude/skills/` (proyecto) o `~/.claude/skills/` (global) y que aparece disponible.
+Agentes propios en `.claude/agents/`:
 
-**1. LLMTooling/agent-skills (todas):**
-```bash
-git clone --depth=1 https://github.com/LLMTooling/agent-skills /tmp/llmtooling-skills
-# Las skills son paquetes zip en skills/<categoría>/<nombre>.skill.
-# Extrae solo las de la lista de CLAUDE.md (sección 6), cada una en .claude/skills/<name del frontmatter>/.
-# Normaliza a LF su SKILL.md: varios vienen con CRLF.
-unzip -q /tmp/llmtooling-skills/skills/electron/electron.skill -d .claude/skills/electron
-```
-
-**2 y 3. skill-creator y frontend-design (anthropics/skills):**
-```bash
-npx skills add anthropics/skills --skill skill-creator
-npx skills add anthropics/skills --skill frontend-design
-# Alternativa: clonar https://github.com/anthropics/skills y copiar skills/skill-creator y skills/frontend-design a .claude/skills/
-```
-
-**4. superpowers:**
-```bash
-# Dentro de Claude Code:
-/plugin marketplace add obra/superpowers-marketplace
-/plugin install superpowers@claude-plugins-official
-# Alternativa: npx skills add obra/superpowers
-```
-
-**5. hermes-agent:**
-```bash
-npx skills add https://github.com/nousresearch/hermes-agent --skill hermes-agent
-# Alternativa: clonar https://github.com/NousResearch/hermes-agent y copiar su carpeta de skill a .claude/skills/
-```
-
-Cuando termine la instalación, deja constancia en `DECISIONS.md` (qué se instaló, de dónde, versión o commit) y marca la casilla correspondiente en `IMPLEMENTATION_STATUS.md`.
-
-## 3. Cómo usar cada skill en este proyecto
-
-- **LLMTooling (electron, electron-vite, electron-builder, vite, vitest, typescript-best-practices, playwright-cli):** consúltalas al crear el proyecto Electron + React + TypeScript, la comunicación main/preload/renderer y el empaquetado. De `vitest` y `playwright-cli` usa solo lo imprescindible: la política de pruebas es mínima (ver `CLAUDE.md`, sección 4). `playwright-cli` sirve también para comprobar visualmente que la UI se ve bien.
-- **frontend-design:** úsala para cada pantalla principal (Cara de Drakter, Tareas, Proyectos, Calendario, Almacén, Asignaturas, Relaciones, Configuración). Define una vez la identidad visual (paleta, tipografía, componentes shadcn/ui) y reutilízala; no rediseñes pantalla por pantalla.
-- **superpowers:** aprovecha brainstorming y planificación para cada fase, y la ejecución con subagentes en paralelo. **Desactiva el TDD obligatorio**: en este proyecto no se escribe test antes del código. Si la skill lo exige, indica que `CLAUDE.md` lo anula.
-- **hermes-agent:** úsala para instalar Hermes, configurar Claude Haiku 5.5 por variables de entorno, ver sus opciones de proveedor de memoria y definir las Skills propias de Drakter en el formato de Hermes. Recuerda el riesgo conocido: Hermes admite un solo proveedor de memoria externo activo; el Memory Adapter debe llamar a OpenViking, Hindsight y Mem0 directamente.
-- **skill-creator:** cuando un patrón se repita en 3 o más sitios, conviértelo en skill propia. Candidatas: `drakter-conventions` (capas, nombres, "todo pasa por servicios"), `drakter-tool-contract` (esquema, validación, permisos, resultado estructurado y auditoría de cada herramienta de Hermes), `drakter-migrations` (reglas SQLite, UUID, migraciones). Hazlas rápido, sin ciclos de evaluación ni benchmarks salvo que el usuario los pida.
-
-## 4. Agentes y subagentes
-
-**No hay límite.** Usa todos los que quieras, en paralelo, para terminar lo antes posible con el nivel y la corrección intactos.
-
-### Fuentes permitidas
-- **Internos:** los subagentes de Claude Code (herramienta Task / agentes en `.claude/agents/`).
-- **Comunidad / externos:** cualquier agente o subagente de GitHub o de registros de la comunidad. Puedes **instalarlos, copiarlos o clonarlos** y usarlos tal cual o adaptarlos. Búscalos tú mismo en internet cuando te falte uno.
-- **Propios:** créalos en `.claude/agents/<nombre>.md` (frontmatter con `name`, `description`, `tools` y el prompt de sistema). Hazlos específicos y con una sola responsabilidad.
-
-### Agentes propios sugeridos (créalos si te ayudan)
-| Agente | Responsabilidad |
+| Agente | Cuándo |
 |---|---|
-| `contract-architect` | Fija esquema de BD, modelos Pydantic, rutas API, eventos WS y firmas de herramientas Hermes antes de paralelizar |
-| `backend-module-builder` | Repositorio + servicio + API de un módulo (tareas, hábitos, calendario…) |
-| `ui-module-builder` | Pantalla React de un módulo siguiendo `frontend-design` |
-| `hermes-tool-writer` | Herramientas y skills de Hermes de un módulo, con permisos y auditoría |
-| `voice-integrator` | openWakeWord, Silero VAD, Faster-Whisper, Kokoro, Piper |
-| `researcher` | Busca documentación, repos y skills/agentes de la comunidad mientras otros construyen |
-| `docs-keeper` | Mantiene `IMPLEMENTATION_STATUS.md` y `DECISIONS.md` sin frenar al resto |
-| `integrator` | Une ramas, resuelve conflictos y comprueba que todo arranca junto |
+| `contract-architect` | Antes de paralelizar: BD, Pydantic, API, eventos, herramientas |
+| `integrator` | Al cerrar un lote: fusionar y comprobar que arranca |
+| `docs-keeper` | Mantener `IMPLEMENTATION_STATUS.md` y `DECISIONS.md` |
+| `researcher` | Investigar en segundo plano con fuentes primarias |
+| `agent-organizer` | Heredado; `drakter-orquestator` lo sustituye como coordinador |
 
-### Patrón de paralelización recomendado
-1. `contract-architect` congela los contratos del módulo o fase.
-2. Se lanzan **en paralelo** tantos `backend-module-builder`, `ui-module-builder` y `hermes-tool-writer` como módulos independientes haya (p. ej., en la Fase 7: hábitos, calendario y asignaturas a la vez).
-3. Cada agente trabaja en su propia rama o `git worktree` y sobre archivos que solo él toca.
-4. `researcher` y `docs-keeper` trabajan de fondo durante todo el proceso.
-5. `integrator` fusiona y hace la comprobación rápida de que funciona y se ve bien.
+### Catálogo de especialistas
 
-### Higiene al instalar recursos de terceros
-Permitido y fomentado. Antes de ejecutar scripts de un skill o agente externo, revisa en un minuto qué comandos corre y a qué red accede; fija versión o commit si puedes; registra origen y versión en `DECISIONS.md`. No es una auditoría, solo una lectura rápida.
+`.claude/agents/categories/` tiene 202 archivos de comunidad en 17 categorías. Núcleo útil para Drakter:
 
-## 5. Plantilla para crear un subagente propio
+| Área | Agentes |
+|---|---|
+| Escritorio y UI | `electron-pro`, `frontend-developer`, `react-specialist`, `typescript-pro`, `ui-designer`, `ux-designer`, `accessibility-tester` |
+| Backend y datos | `python-pro`, `fastapi-developer`, `backend-developer`, `api-designer`, `websocket-engineer`, `database-optimizer`, `sql-pro` |
+| Agente e IA | `ai-engineer`, `llm-architect`, `prompt-engineer`, `mcp-developer`, `nlp-engineer` |
+| Calidad y seguridad | `surgeon-reviewer`, `code-reviewer`, `security-auditor`, `penetration-tester`, `architect-reviewer`, `debugger`, `performance-engineer`, `ui-ux-tester` |
+| Operación | `git-workflow-manager`, `dependency-manager`, `build-engineer`, `documentation-engineer`, `research-analyst` |
 
-```markdown
----
-name: backend-module-builder
-description: Construye repositorio, servicio y endpoints FastAPI de un módulo del Workspace de Drakter. Úsalo para tareas, proyectos, hábitos, calendario, asignaturas, almacén o relaciones.
-tools: Read, Write, Edit, Bash, Grep, Glob
----
+Hay 29 nombres duplicados entre categorías (`debugger`, `python-pro`, `ai-engineer`, `electron-pro`, `typescript-pro`, `frontend-developer`…): solo se carga una copia, sin precedencia documentada. Si importa cuál, lee el archivo o crea un agente propio.
 
-Eres un ingeniero backend de Drakter. Sigues MASTER_PLAN.md y CLAUDE.md.
-Entradas: módulo a construir, contrato (modelos y rutas) ya fijado.
-Reglas: solo editas archivos de tu módulo; todo pasa por servicios; UUID; validación Pydantic;
-registro en auditoría; sin tests exhaustivos (comprobación rápida de que funciona).
-Salida: módulo funcionando + resumen de 5 líneas + decisiones para DECISIONS.md.
-```
+Algunos agentes declaran herramientas que aquí no existen (`mcp__context7*`, `sequential-thinking`). Si uno falla por eso, usa `general-purpose` con el rol en el brief.
 
-## 6. Resumen de prioridades
+## Skills por tarea
 
-1. `CLAUDE.md` manda sobre cualquier skill en caso de conflicto.
-2. Rápido y correcto: se avanza en cuanto funciona y se ve bien.
-3. Pruebas mínimas; TDD desactivado.
-4. Agentes y skills ilimitados, propios o de la comunidad.
-5. Todo cambio relevante queda en `DECISIONS.md`; todo avance, en `IMPLEMENTATION_STATUS.md`.
+**Orquestación**
+- `build-orchestrator`: skill principal para construir en lotes con contratos, worktrees, revisión y fusión. Admite `--roadmap <ruta>`.
+- `agent-forge`: crear agentes y redactar briefs.
+- `writing-plans`, `executing-plans`, `subagent-driven-development`: planificar y ejecutar.
+- `dispatching-parallel-agents`, `using-git-worktrees`, `finishing-a-development-branch`: paralelo y cierre.
+- `brainstorming`: explorar antes de diseñar.
+
+**Calidad**
+- `systematic-debugging`, `verification-before-completion`.
+- `requesting-code-review`, `receiving-code-review`.
+
+**Escritorio**: `electron`, `electron-vite`, `electron-builder`, `vite`, `react-19`, `typescript-best-practices`.
+
+**Interfaz**: `frontend-design` (identidad visual, una vez y para toda la app), `shadcn`, `radix-ui`, `tailwind-css`, `lucide-react`, `motion`, `react-arborist`.
+
+**Backend**: `fastapi`, `pydantic-dev`, `python-best-practices`, `fastmcp-sdk`.
+
+**Agente y memoria**: `hermes-agent`. La memoria es la nativa de Hermes + OpenViking con capas L0/L1/L2 (`MASTER_PLAN.md` §10); Hindsight y Mem0 están descartados.
+
+**Comprobación**: `playwright-cli` (ver la interfaz), `vitest` (solo lo imprescindible).
+
+**Documentos**: `pdf-to-markdown` (requiere `pymupdf4llm`).
+
+**Skills y recursos**: `skill-creator`, `writing-skills`, `find-skills`.
+
+**Superpowers internas**: `using-superpowers`, `diagnosing-superpowers`.
+
+## Comandos y plugins
+
+| Recurso | Uso |
+|---|---|
+| `/effort high`, `/effort ultracode on` | Fijar esfuerzo y orquestación por sesión |
+| `/workflows` | Ver y controlar flujos en curso |
+| `/batch <instrucción>` | Descomponer en 5-30 unidades. Entra en plan mode y pide aprobación; sus workers hacen push y abren PR salvo que se indique otra cosa |
+| `/astraeus` | Comando de terceros. Pide `curl \| sh` y `claude mcp add`: léelo antes de usarlo |
+| `plugin-builder@claude-market` | Crear plugins (`/plugin-builder:init`, `add`, `edit`, `validate`) |
+
+`specforge` y `specforge-backend-rust-axum` están en el marketplace `claude-market`, sin activar.
+
+## Reparto por tipo de trabajo
+
+| Trabajo | Combinación |
+|---|---|
+| Fase completa | `build-orchestrator` + `writing-plans` → `contract-architect` → un `drakter-lider` por frente → `integrator` → revisión |
+| Módulo del Workspace | `drakter-lider` con backend, UI y herramientas en paralelo |
+| Pantalla | `ui-designer` o `frontend-developer` + `frontend-design`, `shadcn`, `playwright-cli` |
+| Herramienta de Hermes | `mcp-developer` o `ai-engineer` + `hermes-agent` + `fastmcp-sdk` |
+| Fallo difícil | `debugger` + `systematic-debugging` |
+| Seguridad | `security-auditor` + `penetration-tester` |
+| Revisar un lote | `surgeon-reviewer`, `security-auditor` y `architect-reviewer`, distintos de los autores |
+
+Reutiliza un rol del catálogo si existe. Un rol puntual va con `general-purpose`; uno que se repite 3 o más veces merece archivo propio en `.claude/agents/`.
+
+## Adaptaciones al proyecto
+
+- **TDD desactivado.** `CLAUDE.md` §4 anula los pasos de test previo que aún aparecen en `writing-plans` y `executing-plans`. El paso se sustituye por una comprobación real.
+- **Revisión en `build-orchestrator`.** Pide Codex o Pi, que no están instalados. Usa revisores independientes y deja rastro de los hallazgos, porque esa skill detiene la orquestación si faltan dos revisiones.
+- **Concurrencia en `build-orchestrator`.** Sus topes de 2-3 agentes son un valor por defecto: paraleliza más solo con conjuntos de escritura disjuntos.
+
+## Trampas conocidas
+
+- **Base de los worktrees:** salen de `origin/main` salvo con `"worktree": {"baseRef": "head"}`. Solo ven lo commiteado: haz commit antes de cada lote.
+- **Gitlinks:** `build-orchestrator` y `astraeus` son gitlinks sin `.gitmodules` y llegan vacíos a clones y worktrees mientras no se conviertan en archivos normales.
+- **Agentes de `Workflow`:** los que no llevan `agentType` no pueden lanzar subagentes. Para anidar, lanza `drakter-lider` desde el hilo principal con `Agent`.
+- **Dentro de un worktree** solo carga su propia `.claude/skills`. Lo sin commitear no existe allí.
+- **Máquina:** 8 CPU y 14 GB de RAM; limita instalaciones y compilaciones simultáneas.
+- **Coste de contexto:** el catálogo completo se anuncia en cada sesión. Recortarlo reduce ese coste.
+
+## Instalar o añadir recursos
+
+Instalar de la comunidad está permitido. Antes de ejecutar scripts ajenos, lee en un minuto qué hacen y a qué red acceden, fija versión o commit y registra origen en `docs/DECISIONS.md`. Una actualización de superpowers debe repetir las adaptaciones anotadas allí.
+
+Candidatas a skill propia si el patrón se repite: `drakter-conventions`, `drakter-tool-contract`, `drakter-migrations`.

@@ -238,9 +238,9 @@ Las siguientes listas son el control de trabajo del proyecto. Se marcarán únic
 - [ ] Definir cuatro capas de memoria.
 - [ ] Crear estructura de archivos.
 - [ ] Crear Memory Adapter.
-- [ ] Integrar OpenViking.
-- [ ] Integrar Hindsight.
-- [ ] Integrar Mem0.
+- [ ] Configurar OpenViking como proveedor de Hermes.
+- [ ] Configurar capas L0/L1/L2.
+- [ ] Elegir embedding multilingüe.
 - [ ] Integrar ByteRover para el repositorio.
 - [ ] Crear extracción de recuerdos.
 - [ ] Crear clasificación.

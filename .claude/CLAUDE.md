@@ -47,7 +47,7 @@ Hay exactamente **tres archivos `.md` de control** en la raíz del repositorio. 
 
 ### Riesgos ya identificados (regístralos en DECISIONS.md al llegar a ellos)
 
-- **Memoria:** Hermes solo permite un proveedor de memoria externo activo a la vez, y el plan usa OpenViking + Hindsight + Mem0. El `Drakter Memory Adapter` debe llamarlos directamente, no mediante el plugin de memoria de Hermes. Verifica y decide.
+- **Memoria:** se usa la memoria nativa de Hermes + OpenViking como único proveedor externo, con sus capas L0/L1/L2 (`MASTER_PLAN.md` §10). Hindsight y Mem0 quedan fuera. Antes de guardar datos reales hay que elegir un embedding multilingüe y validar el modelo que genera L0/L1.
 - **Rive:** el archivo `.riv` se diseña en el editor visual de Rive y no puede generarse por código. Construye el componente React, el receptor de eventos y un personaje placeholder (SVG/CSS) con la misma API de estados (`idle`, `listening`, `thinking`, `speaking`, `executing`, `success`, `error`, `interrupted`, `offline`). El `.riv` real se enchufa después sin tocar el resto.
 - **Hermes embebido:** Hermes es un framework de agente completo (bucle propio, CLI, gateway). Investiga la mejor forma de integrarlo detrás de FastAPI (API server, MCP, librería) y documenta la elección.
 - **Voz:** la latencia real depende del hardware del usuario (32 GB RAM, 4 GB VRAM). Deja medición y configuración listas, pero no inventes cifras.
@@ -90,7 +90,7 @@ Tienes **libertad total y sin límite** para usar agentes y subagentes, cuantos 
 ### Reglas fijas
 
 - **Para crear, instalar o adaptar cualquier agente o subagente, usa siempre la skill `agent-forge`** (`.claude/skills/agent-forge/SKILL.md`). También para redactar el prompt de cada delegación.
-- **El agente orquestador es `orchestrator`** (`.claude/agents/orchestrator.md`). La sesión de desarrollo se arranca con `claude --agent orchestrator`, porque los subagentes no pueden lanzar otros subagentes: solo el hilo principal delega. Si esta sesión no corre como `orchestrator`, adopta igualmente su ciclo de trabajo.
+- **El agente principal es `drakter-orquestator`** (`.claude/agents/drakter-orquestator.md`), activo por `"agent"` en `.claude/settings.local.json` o con `claude --agent drakter-orquestator`. Los subagentes pueden lanzar subagentes hasta 3 niveles bajo el hilo principal; `drakter-lider` dirige los frentes grandes. Si esta sesión no corre como `drakter-orquestator`, adopta igualmente su ciclo de trabajo.
 
 ### Qué puedes hacer
 

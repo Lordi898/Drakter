@@ -693,7 +693,7 @@ viking://resources/
 
 Documentación, archivos, proyectos y fuentes.
 
-viking://memories/
+viking://user/<usuario>/memories/
 
 Preferencias, decisiones, experiencias y conocimiento persistente.
 
@@ -701,9 +701,9 @@ viking://agent/
 
 Skills y contexto reutilizable del agente.
 
-viking://rules/
+viking://session/
 
-Reglas aplicables a determinadas operaciones.
+Contexto de la sesión en curso.
 
 OpenViking utilizará resúmenes y niveles de detalle para evitar cargar todo el contenido.
 
@@ -726,6 +726,8 @@ Nivel 6: recursos recuperados mediante búsqueda.
 Nivel 7: historial de la sesión actual.
 
 Nivel 8: datos operativos consultados en el Workspace.
+
+Nota: estos "Niveles 0-8" son el orden de construcción del contexto; son distintos de las capas L0/L1/L2 de OpenViking, que describen el nivel de detalle de cada recuerdo (ver `MASTER_PLAN.md` §10.2).
 
 No todos estos niveles se inyectarán siempre. El contexto se seleccionará según la tarea.
 

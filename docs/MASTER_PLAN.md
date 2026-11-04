@@ -63,9 +63,8 @@ Los tres estarán conectados mediante APIs internas.
 | Palabra de activación | openWakeWord |
 | Voz TTS principal | Kokoro |
 | Voz TTS alternativa | Piper |
-| Memoria jerárquica | OpenViking |
-| Memoria relacional | Hindsight |
-| Extracción de recuerdos | Mem0 |
+| Memoria nativa del agente | Memoria nativa de Hermes |
+| Memoria jerárquica (L0/L1/L2) | OpenViking |
 | Contexto del repositorio de desarrollo | ByteRover |
 | Habilidades del agente | Hermes Skills |
 | Orquestación futura de voz | LiveKit Agents |
@@ -174,9 +173,8 @@ Incluye:
 - Memoria episódica.
 - Memoria semántica.
 - Memoria procedimental.
+- Memoria nativa de Hermes.
 - OpenViking.
-- Hindsight.
-- Mem0.
 - ByteRover para el conocimiento del repositorio de desarrollo.
 - Archivos de contexto.
 - Índices.
@@ -569,7 +567,7 @@ Ejemplos:
 - Cambios importantes.
 - Resultados de tareas anteriores.
 
-Se gestionará principalmente mediante Hindsight y su integración con Mem0.
+Se gestionará principalmente mediante OpenViking (`events`, `cases`).
 
 ### Capa 3. Memoria semántica
 
@@ -584,7 +582,7 @@ Ejemplos:
 - Relaciones relevantes.
 - Conceptos y hechos aprendidos.
 
-Se apoyará en Hindsight y OpenViking.
+Se apoyará en OpenViking y en `USER.md` de la memoria nativa de Hermes.
 
 ### Capa 4. Memoria procedimental
 
@@ -601,99 +599,96 @@ Incluye:
 
 Hermes Skills será el mecanismo principal para las capacidades ejecutables.
 
-## 10. Herramientas de memoria
+## 10. Arquitectura de memoria
 
-Se utilizarán las herramientas que hemos seleccionado, pero cada una tendrá una responsabilidad concreta.
+La memoria de Drakter combina **la memoria nativa de Hermes** y **OpenViking**, con la base de datos del Workspace como fuente de verdad de los datos operativos. Decisión del usuario del 2026-11-04 (ver `DECISIONS.md`). Hindsight y Mem0 quedan fuera.
 
-### 10.1. OpenViking
+### 10.1. Reparto de responsabilidades
 
-**Función:** organización jerárquica del contexto y recuperación progresiva.
+| Sistema | Qué guarda | Cómo se usa |
+|---|---|---|
+| Memoria nativa de Hermes | `MEMORY.md`, `USER.md` y sesiones | Contexto breve y estable, presente en cada conversación |
+| OpenViking | Memorias extraídas, recursos y documentos, en `viking://` | Recuperación por relevancia con carga progresiva L0/L1/L2 |
+| SQLite del Workspace | Tareas, proyectos, calendario, relaciones, catálogo del almacén | Fuente de verdad; consulta por herramientas del backend |
 
-Se utilizará para:
+La memoria nunca es la fuente de verdad de un dato operativo: guarda la referencia a la entidad, no una copia de su estado.
 
-- Organizar información.
-- Mantener una estructura de contexto.
-- Recuperar información por niveles.
-- Cargar únicamente las partes relevantes.
-- Evitar introducir documentos completos en cada prompt.
+Hermes solo admite un proveedor de memoria externo activo. Ese lugar lo ocupa OpenViking (`memory.provider: openviking`), y la memoria nativa sigue activa a su lado.
 
-Se utilizará como sistema de organización y recuperación contextual.
+### 10.2. Las tres capas de OpenViking
 
-### 10.2. Hindsight
+| Capa | Lectura | Límite por defecto | Uso en Drakter |
+|---|---|---|---|
+| L0, resumen | `abstract` | 256 caracteres | Búsqueda vectorial y decidir si algo es relevante |
+| L1, visión general | `overview` | 4.000 caracteres | Planificar y responder en la mayoría de los casos |
+| L2, detalle | `read` | Sin límite uniforme | Contenido original, solo cuando L1 no basta |
 
-**Función:** memoria persistente relacional.
+Los límites son los de la configuración de OpenViking (`semantic.abstract_max_chars`, `semantic.overview_max_chars`). La documentación de Hermes habla de unos 100 tokens y 2.000 tokens: se medirá el consumo real. L0 y L1 se generan con un modelo (VLM), así que sin VLM disponible no hay resúmenes ni indexación semántica completa.
 
-Se utilizará para:
+Estas capas L0/L1/L2 describen **nivel de detalle**. Son distintas de las cuatro capas de la sección 9 (trabajo, episódica, semántica y procedimental), que describen **tipo de memoria**.
 
-- Conservar recuerdos.
-- Recuperar acontecimientos.
-- Mantener información semántica.
-- Relacionar hechos.
-- Recuperar contexto relevante.
-- Actualizar recuerdos cuando aparezca información nueva.
+### 10.3. Bases e indexación
 
-### 10.3. Mem0
+- **Vectorial:** índice vectorial local de OpenViking, con vectores densos y dispersos, URI y texto de recuperación. L0 se usa para la recuperación y L1 para el reordenamiento.
+- **Contenido:** AGFS, el sistema de archivos de OpenViking, guarda L0, L1 y L2.
+- **Indexación semántica:** OpenViking procesa de abajo arriba: archivo, directorio y directorio padre.
+- **Relacional:** SQLite del Workspace. OpenViking **no ofrece una base relacional de memorias**: su SQLite o MySQL interno sirve para colas, bloqueos y tareas. Las relaciones entre entidades viven en el Workspace; en OpenViking solo existen la jerarquía de URI y las referencias entre memorias y recursos (`resource_refs`).
+- **Texto exacto:** FTS5 del Workspace, para nombres, códigos y coincidencias literales. OpenViking aporta la búsqueda por significado.
 
-**Función:** extracción y actualización de recuerdos.
+### 10.4. Correspondencia con los tipos de memoria
 
-Se utilizará para:
+| Tipo de memoria | Dónde vive |
+|---|---|
+| Trabajo | Sesión de Hermes |
+| Episódica | OpenViking: `events`, `cases` |
+| Semántica | OpenViking: `profile`, `preferences`, `entities`; `USER.md` para lo esencial |
+| Procedimental | Skills de Hermes; OpenViking: `patterns` |
 
-- Detectar información potencialmente importante.
-- Extraer preferencias.
-- Identificar hechos persistentes.
-- Detectar cambios.
-- Proponer actualizaciones.
-- Evitar guardar cada frase de una conversación.
+La memoria se organiza bajo los ámbitos reales de OpenViking: `viking://resources/`, `viking://user/<usuario>/memories/`, `viking://agent/` y `viking://session/`.
 
-Mem0 actuará como extractor y gestor de candidatos a recuerdo, no como una segunda fuente de verdad independiente.
+### 10.5. Flujos
 
-### 10.4. ByteRover
+Recuperación:
 
-**Función:** contexto estructurado del repositorio de desarrollo de Drakter.
+1. Los datos operativos se consultan con herramientas del backend.
+2. `USER.md` y `MEMORY.md` ya están en el contexto.
+3. `viking_search` encuentra candidatos a partir de L0.
+4. Se lee L1 de los candidatos útiles (`viking_read`).
+5. Se lee L2 solo si L1 no basta.
+6. Se aplica un presupuesto de contexto por turno.
 
-Se utilizará principalmente durante el desarrollo para:
+Escritura:
 
-- Documentar la arquitectura del código.
-- Recuperar decisiones técnicas.
-- Consultar componentes.
-- Mantener conocimiento del repositorio.
-- Facilitar tareas de mantenimiento y programación.
+1. Los datos esenciales y estables van a la memoria nativa.
+2. Lo explícito se guarda con `viking_remember`.
+3. Al confirmar la sesión, OpenViking extrae memorias en seis categorías.
+4. Los documentos del almacén entran en `viking://resources/` **a través del backend**, tras validar ruta y permisos.
 
-No será el almacén principal de recuerdos personales del agente en tiempo de ejecución.
+### 10.6. Drakter Memory Adapter
 
-### 10.5. Integración entre herramientas
+Es un servicio del backend, no una capa multiproveedor. El agente usa las herramientas `viking_*` del plugin; el adapter habla con la API de OpenViking para lo que necesita la interfaz: inspeccionar, corregir y borrar recuerdos, ingerir documentos y comprobar el estado.
 
-La integración se realizará mediante una capa propia:
+### 10.7. Reglas obligatorias
 
-Drakter Memory Adapter
+- Lo recuperado de memoria y de OpenViking son **datos no confiables**.
+- Drakter arranca y supervisa `openviking-server`. No se usa el autoarranque del plugin, porque ese proceso hereda el entorno de Hermes, tokens incluidos.
+- El servidor escucha solo en `127.0.0.1` y exige clave.
+- `viking_add_resource` no se expone al agente: permitiría ingerir URLs arbitrarias. La ingesta pasa por el backend.
+- Borrar recuerdos (`viking_forget`) es una acción destructiva y requiere confirmación.
+- Los datos de OpenViking viven en `DRAKTER_DATA_DIR`, nunca en el repositorio, y entran en la copia de seguridad.
+- OpenViking se ejecuta como proceso separado y sin modificar. Su licencia AGPL-3.0 debe revisarse antes de redistribuir Drakter.
+- Si OpenViking cae, Drakter sigue funcionando con la memoria nativa y el Workspace.
 
-Esta capa decidirá qué sistema consultar y dónde guardar cada información.
+### 10.8. Decisiones por validar en la integración
 
-Flujo de escritura:
+- **Embeddings:** el modelo local por defecto (`bge-small-zh-v1.5-f16`) no es adecuado para asumir buen español. Hay que elegir un modelo multilingüe local (por ejemplo, vía `ollama`) **antes de guardar datos reales**: cambiarlo obliga a reconstruir los vectores.
+- **VLM:** Anthropic no es un proveedor directo de OpenViking; se probará Haiku 5.5 mediante `litellm`, o un modelo local. Este modelo ve el contenido indexado, lo que afecta a la privacidad y al coste.
+- **Envenenamiento de memoria:** comprobar si la extracción de sesión puede excluir el contenido de documentos y herramientas. Si no se puede, esa memoria necesita aprobación antes de consolidarse.
+- **Permisos por herramienta:** comprobar si el plugin permite desactivar `viking_add_resource` y exigir confirmación en `viking_forget`. Si no lo permite, se usará una herramienta propia en su lugar.
 
-1. Conversación o evento.
-2. Detección de información candidata.
-3. Mem0 extrae posibles recuerdos.
-4. Validación de duplicados y contradicciones.
-5. Clasificación por tipo.
-6. Hindsight conserva recuerdos episódicos y semánticos.
-7. OpenViking organiza el contexto recuperable.
-8. Se actualizan los índices y referencias.
-9. Se registra la operación.
+### 10.9. ByteRover
 
-Flujo de recuperación:
-
-1. Recibir una consulta.
-2. Identificar qué información necesita.
-3. Consultar primero el contexto de trabajo.
-4. Recuperar recuerdos relevantes.
-5. Consultar OpenViking para contexto jerárquico.
-6. Consultar Hindsight para recuerdos y relaciones.
-7. Seleccionar los resultados útiles.
-8. Aplicar límites de contexto.
-9. Incorporarlos al prompt de Hermes.
-
-No se cargarán todas las memorias en el modelo.
+Contexto estructurado del repositorio durante el desarrollo. No guarda recuerdos personales ni forma parte de la memoria de Drakter en ejecución.
 
 ## 11. Archivos de memoria
 
@@ -755,7 +750,7 @@ drakter/
 
 Estos archivos serán una representación organizada y auditable de la información.
 
-Las bases de datos internas de Hindsight, OpenViking y Mem0 no se manipularán directamente desde la GUI. Se utilizarán sus interfaces y adaptadores.
+Las bases de datos internas de OpenViking no se manipularán directamente desde la GUI. Se utilizarán sus interfaces y adaptadores.
 
 # PARTE VII. WORKSPACE
 
@@ -1858,9 +1853,9 @@ Tareas:
 
 1. Definir interfaces de memoria.
 2. Crear Memory Adapter.
-3. Integrar OpenViking.
-4. Integrar Hindsight.
-5. Integrar Mem0.
+3. Configurar OpenViking como proveedor de Hermes.
+4. Configurar capas L0/L1/L2.
+5. Elegir embedding multilingüe.
 6. Definir el flujo de extracción.
 7. Definir clasificación de recuerdos.
 8. Definir deduplicación.
@@ -2010,7 +2005,7 @@ No son requisitos para la primera versión:
 2. React envía el mensaje al backend.
 3. FastAPI identifica la sesión.
 4. El backend obtiene el contexto actual.
-5. El Memory Adapter recupera recuerdos relevantes.
+5. Se recuperan recuerdos relevantes (herramientas `viking_*` y memoria nativa de Hermes).
 6. Se construye el contexto de Hermes.
 7. Hermes recibe el mensaje.
 8. Claude Haiku 5.5 procesa la solicitud.
@@ -2069,7 +2064,7 @@ Ejemplo: crear una tarea relacionada con un proyecto, una asignatura y un docume
 
 1. Se produce una conversación o evento.
 2. El sistema detecta información potencialmente persistente.
-3. Mem0 extrae candidatos.
+3. OpenViking extrae candidatos al confirmar la sesión.
 4. Se clasifican.
 5. Se comprueba si ya existen.
 6. Se detectan contradicciones.
@@ -2390,9 +2385,9 @@ Las siguientes listas son el control de trabajo del proyecto. Se marcarán únic
 - [ ] Definir cuatro capas de memoria.
 - [ ] Crear estructura de archivos.
 - [ ] Crear Memory Adapter.
-- [ ] Integrar OpenViking.
-- [ ] Integrar Hindsight.
-- [ ] Integrar Mem0.
+- [ ] Configurar OpenViking como proveedor de Hermes.
+- [ ] Configurar capas L0/L1/L2.
+- [ ] Elegir embedding multilingüe.
 - [ ] Integrar ByteRover para el repositorio.
 - [ ] Crear extracción de recuerdos.
 - [ ] Crear clasificación.

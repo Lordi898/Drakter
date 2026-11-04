@@ -33,8 +33,7 @@ verificable.
 4.  **Planifica tareas grandes.** Divide cada fase en tareas pequeñas,
     con resultados verificables.
 5.  **No inventes APIs.** Antes de integrar Hermes, OpenViking,
-    Hindsight, Mem0, Kokoro, Faster-Whisper, Rive u otros proyectos
-    externos, comprueba sus versiones, documentación y APIs disponibles.
+    Kokoro, Faster-Whisper, Rive u otros proyectos externos, comprueba sus versiones, documentación y APIs disponibles.
 6.  **Comprueba compatibilidad.** Verifica versiones de Python, Node.js,
     Electron, sistema operativo, modelos y dependencias antes de
     fijarlas.
@@ -200,15 +199,12 @@ antes de considerarse definitivas.
   TTS de respaldo         Piper                   Verificar modelo de voz
                                                   español disponible
 
-  Memoria contextual      OpenViking              Integrar solo mediante
-                                                  API soportada
+  Memoria nativa          Memoria de Hermes       MEMORY.md, USER.md y
+                                                  sesiones
 
-  Memoria relacional      Hindsight               Validar interfaz,
-                                                  persistencia y despliegue
-
-  Extracción de recuerdos Mem0                    Capa de extracción; no
-                                                  fuente de verdad
-                                                  duplicada
+  Memoria contextual      OpenViking              Único proveedor externo;
+                                                  capas L0/L1/L2; API
+                                                  soportada
 
   Contexto de código      ByteRover               Uso de
                                                   desarrollo/repositorio,
@@ -235,7 +231,7 @@ antes de considerarse definitivas.
 -   Ubicación de datos de usuario por sistema operativo.
 -   Estrategia de instalación y actualización.
 -   Compatibilidad de Rive con Electron.
--   Despliegue de OpenViking, Hindsight y Mem0.
+-   Despliegue de OpenViking.
 -   Si las herramientas de memoria se ejecutan como servicios locales,
     librerías o procesos separados.
 
@@ -283,10 +279,10 @@ flowchart TB
     H <--> TOOLS[Drakter Tools / Skills]
     TOOLS --> APP
 
-    CORE <--> MEM[Memory Adapter]
-    MEM <--> M0[Mem0]
-    MEM <--> HS[Hindsight]
-    MEM <--> OV[OpenViking]
+    H <--> NM[Memoria nativa de Hermes]
+    H <--> OV[OpenViking]
+    APP <--> MEM[Memory Adapter<br/>interfaz e ingesta]
+    MEM <--> OV
 
     API <--> VOICE[Voice Manager]
     VOICE --> WW[openWakeWord]
@@ -518,8 +514,6 @@ diseño.
 -   [ ] Definir cómo se iniciará y supervisará Hermes.
 -   [ ] Verificar mecanismo de integración de Hermes Skills.
 -   [ ] Verificar APIs y despliegue de OpenViking.
--   [ ] Verificar APIs y despliegue de Hindsight.
--   [ ] Verificar API de Mem0.
 -   [ ] Definir la responsabilidad exacta de cada sistema de memoria.
 -   [ ] Verificar compatibilidad de Rive con Electron.
 -   [ ] Verificar Kokoro y voces en español.
@@ -1156,17 +1150,17 @@ selectiva.
 
 ### Responsabilidades de proveedores
 
--   **Mem0:** extraer candidatos a recuerdo y detectar actualizaciones.
--   **Hindsight:** almacenar y recuperar recuerdos y relaciones.
--   **OpenViking:** organizar contexto jerárquico y recuperación
-    progresiva.
+-   **Memoria nativa de Hermes:** contexto breve y estable (`MEMORY.md`,
+    `USER.md`, sesiones).
+-   **OpenViking:** único proveedor externo; memorias extraídas y
+    recursos con recuperación progresiva L0/L1/L2.
 -   **ByteRover:** conocimiento del código y decisiones del repositorio
     durante desarrollo.
 
-No asumir que los tres proveedores personales forman una integración
-nativa. Drakter implementará adaptadores y contratos. Si una función no
-está disponible en una versión concreta, se documentará y se ofrecerá
-una implementación compatible o se aplazará.
+El Memory Adapter es un servicio del backend para la interfaz y la
+ingesta, no una capa multiproveedor (ver `MASTER_PLAN.md` §10). Si una
+función no está disponible en una versión concreta, se documentará y se
+ofrecerá una implementación compatible o se aplazará.
 
 ### Archivos de contexto
 
@@ -1194,16 +1188,15 @@ cuando corresponda.
 
 ### Tareas
 
--   [ ] Definir interfaz `MemoryProvider`.
 -   [ ] Crear `MemoryAdapter`.
 -   [ ] Definir esquema interno de recuerdo.
 -   [ ] Definir procedencia y fecha de cada recuerdo.
 -   [ ] Definir nivel de confianza.
 -   [ ] Definir caducidad cuando aplique.
 -   [ ] Implementar extracción de candidatos.
--   [ ] Integrar Mem0.
--   [ ] Integrar Hindsight.
--   [ ] Integrar OpenViking.
+-   [ ] Configurar OpenViking como proveedor de Hermes.
+-   [ ] Configurar capas L0/L1/L2.
+-   [ ] Elegir embedding multilingüe.
 -   [ ] Integrar ByteRover en flujo de desarrollo.
 -   [ ] Implementar deduplicación.
 -   [ ] Implementar detección de contradicciones.
@@ -1668,9 +1661,8 @@ DRAKTER_MODEL_NAME=claude-haiku-5-5
 HERMES_COMMAND=
 HERMES_CONFIG_PATH=
 
-MEM0_API_KEY=
-HINDSIGHT_URL=
-OPENVIKING_URL=
+OPENVIKING_ENDPOINT=
+OPENVIKING_API_KEY=
 
 DRAKTER_VOICE_ENABLED=false
 DRAKTER_STT_MODEL=small
