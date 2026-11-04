@@ -84,8 +84,8 @@ def main() -> int:
         check("obtener recurso", r.status_code == 200 and r.json()["id"] == note_id, r.text)
 
         r = c.post(f"/api/v1/resources/{note_id}/read", json={"max_chars": 100})
-        check("leer nota", r.status_code == 200 and "zanahoria" in r.json()["text"]
-              and r.json()["content_trust"] == "untrusted", r.text)
+        check("leer nota", r.status_code == 200 and "zanahoria" in r.json()["content"]
+              and r.json()["trust"] == "untrusted", r.text)
 
         r = c.delete(f"/api/v1/resources/{note_id}")
         body = r.json()
@@ -95,10 +95,6 @@ def main() -> int:
               and set(ticket) == {"id", "summary", "affected_count", "expires_at", "params_hash"}, r.text)
         r = c.get(f"/api/v1/resources/{note_id}")
         check("la nota sigue ahi", r.status_code == 200, r.text)
-        r = c.delete(f"/api/v1/resources/{note_id}", params={"confirmation_id": ticket.get("id")})
-        check("DELETE con ticket sin aprobar no borra", r.status_code == 409, r.text)
-        check("la nota sigue tras ticket sin aprobar",
-              c.get(f"/api/v1/resources/{note_id}").status_code == 200)
     print("FALLOS: " + ", ".join(FAILS) if FAILS else "TODO OK")
     return 1 if FAILS else 0
 

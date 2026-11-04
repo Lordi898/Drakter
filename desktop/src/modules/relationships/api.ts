@@ -38,8 +38,8 @@ export const createRelationship = (data: {
   relationship_type: RelationshipKind
 }) => apiRequest<RelationshipOut>(`${BASE}/relationships`, { method: 'POST', body: data })
 
-export const deleteRelationship = (id: string, confirmationId?: string) =>
-  apiRequest<unknown>(`${BASE}/relationships/${encodeURIComponent(id)}${query({ confirmation_id: confirmationId })}`, {
+export const deleteRelationship = (id: string) =>
+  apiRequest<unknown>(`${BASE}/relationships/${encodeURIComponent(id)}`, {
     method: 'DELETE'
   })
 

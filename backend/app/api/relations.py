@@ -59,9 +59,9 @@ def update_relationship(
 
 @router.delete("/relationships/{relationship_id}", status_code=204)
 def delete_relationship(
-    relationship_id: Uuid, request: Request, conn: Conn, deps: Deps, confirmation_id: str | None = None
+    relationship_id: Uuid, request: Request, conn: Conn, deps: Deps
 ) -> Response:
-    svc.delete_relationship(conn, deps, _actor(request), relationship_id, confirmation_id)
+    svc.delete_relationship(conn, deps, _actor(request), relationship_id)
     return Response(status_code=204)
 
 

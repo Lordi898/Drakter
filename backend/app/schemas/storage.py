@@ -56,7 +56,7 @@ class FolderCreate(StrictModel):
 class FolderUpdate(StrictModel):
     name: Title | None = None
     parent_folder_id: Uuid | None = None
-    expected_revision: Annotated[int, Field(ge=1)]
+    expected_revision: Annotated[int, Field(ge=1)] | None = None
 
 
 class FolderOut(BaseModel):
@@ -99,7 +99,7 @@ class ResourceUpdate(StrictModel):
     description: Description | None = None
     tags: Annotated[list[TagName], Field(max_length=32)] | None = None
     index_content: bool | None = None
-    expected_revision: Annotated[int, Field(ge=1)]
+    expected_revision: Annotated[int, Field(ge=1)] | None = None
 
 
 class ResourceSummary(BaseModel):
@@ -167,6 +167,21 @@ class ReadResult(BaseModel):
     metadata: dict[str, str | int | float | bool | None]
     source: ReadSource
     content_trust: Literal["untrusted"] = "untrusted"
+
+
+class ReadEnvelope(BaseModel):
+    """`UntrustedEnvelope` de contracts, más la paginación de la lectura."""
+
+    trust: Literal["untrusted"] = "untrusted"
+    source_type: str
+    source_id: str
+    retrieved_at: str
+    content_hash: str
+    truncated: bool
+    content: str
+    title: str
+    next_offset: int | None
+    metadata: dict[str, str | int | float | bool | None]
 
 
 class ScanRequest(StrictModel):

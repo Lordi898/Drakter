@@ -157,15 +157,13 @@ def describe(conn: sqlite3.Connection, relationship_id: str) -> str | None:
 
 def delete_relationship(
     conn: sqlite3.Connection, deps: StorageDeps, actor: Actor, relationship_id: str,
-    confirmation_id: str | None,
 ) -> None:
     summary = describe(conn, relationship_id)
     if summary is None:
         raise _not_found()
-    if actor.kind != "user":
-        deps.gate.require(conn, actor, tool="delete_relationship",
-                          args={"relationship_id": relationship_id}, summary=summary,
-                          affected_count=1, confirmation_id=confirmation_id)
+    deps.gate.require(conn, actor, tool="delete_relationship",
+                      args={"relationship_id": relationship_id}, summary=summary,
+                      affected_count=1)
     with write_tx(conn):
         if repo.get(conn, relationship_id) is None:
             raise _not_found()

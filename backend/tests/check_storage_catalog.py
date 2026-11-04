@@ -119,12 +119,12 @@ def main() -> int:
         # scan: alta, movido, ausente
         (files / "b.txt").write_text("segundo\n", encoding="utf-8")
         (files / "c.txt").write_text("tercero\n", encoding="utf-8")
-        check("agente no escanea", raises("permission_denied", scan.scan_location, conn, deps, agent, loc.id, None))
-        s1 = scan.scan_location(conn, deps, user, loc.id, None)
+        check("agente no escanea", raises("permission_denied", scan.scan_location, conn, deps, agent, loc.id))
+        s1 = scan.scan_location(conn, deps, user, loc.id)
         check("scan alta", s1.added == 2 and s1.seen == 3 and s1.missing == 0)
         os.rename(files / "b.txt", files / "b2.txt")
         (files / "c.txt").unlink()
-        s2 = scan.scan_location(conn, deps, user, loc.id, None)
+        s2 = scan.scan_location(conn, deps, user, loc.id)
         check("scan movido y ausente", s2.moved == 1 and s2.missing == 1 and s2.added == 0)
         rows = {r["relative_path"]: r["availability_status"] for r in conn.execute(
             "SELECT relative_path, availability_status FROM resources WHERE location_id = ?", (loc.id,))}
@@ -133,35 +133,35 @@ def main() -> int:
         # refresh
         (files / "a.txt").write_text("contenido nuevo unico zanahoria\n", encoding="utf-8")
         (files / "c.txt").write_text("vuelve\n", encoding="utf-8")
-        rf = idx.refresh_index(conn, deps, user, None)
+        rf = idx.refresh_index(conn, deps, user)
         check("refresh reindexa y recupera", rf.reindexed == 1 and rf.missing == 0 and rf.available == 3)
         check("buscar contenido nuevo", r_file.id in hits("zanahoria"))
         (files / "a.txt").unlink()
-        rf2 = idx.refresh_index(conn, deps, user, None)
+        rf2 = idx.refresh_index(conn, deps, user)
         check("refresh detecta ausente", rf2.missing == 1)
         check("lectura de ausente", raises("resource_unavailable", cat.read_resource, conn, deps, user, r_file.id,
                                            ReadRequest()))
         check("agente sin gate abierto en refresh", raises("confirmation_unavailable", idx.refresh_index, conn,
-                                                           closed, agent, None))
+                                                           closed, agent))
 
         # borrado
         before = conn.execute("SELECT COUNT(*) FROM resources").fetchone()[0]
         check("gate cerrado impide borrar", raises("confirmation_unavailable", cat.delete_resource, conn, closed,
-                                                   user, r_link.id, None)
+                                                   user, r_link.id)
               and conn.execute("SELECT COUNT(*) FROM resources").fetchone()[0] == before)
-        cat.delete_resource(conn, deps, user, r_note.id, None)
+        cat.delete_resource(conn, deps, user, r_note.id)
         check("borrado en cascada (documentos y etiquetas)",
               conn.execute("SELECT COUNT(*) FROM search_documents WHERE entity_id = ?", (r_note.id,)).fetchone()[0] == 0
               and conn.execute("SELECT COUNT(*) FROM entity_tags WHERE entity_id = ?", (r_file.id,)).fetchone()[0] == 2)
-        cat.delete_resource(conn, deps, user, r_file.id, None)
+        cat.delete_resource(conn, deps, user, r_file.id)
         check("cascada de etiquetas al borrar", conn.execute("SELECT COUNT(*) FROM entity_tags").fetchone()[0] == 0
               and conn.execute("SELECT COUNT(*) FROM entities WHERE id = ?", (r_file.id,)).fetchone()[0] == 0)
         check("FTS limpio tras borrar", r_file.id not in hits("zanahoria") and r_note.id not in hits("punteros"))
         check("ubicacion con recursos: has_dependents", raises("has_dependents", cat.delete_location, conn, deps,
-                                                              user, loc.id, None))
+                                                              user, loc.id))
         folder = cat.create_folder(conn, deps, user, FolderCreate(name="Uni"))
         check("carpeta duplicada", raises("conflict", cat.create_folder, conn, deps, user, FolderCreate(name="Uni")))
-        cat.delete_folder(conn, deps, user, folder.id, None)
+        cat.delete_folder(conn, deps, user, folder.id)
 
         # rollback ante fallo (la auditoria dentro de la transaccion falla)
         bad = StorageDeps(settings=settings, gate=ApprovedByDispatcher(), audit=FailingAudit())

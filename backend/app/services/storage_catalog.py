@@ -102,7 +102,7 @@ def repo_location_label(conn: sqlite3.Connection, location_id: str) -> str:
     return str(row["label"]) if row is not None else location_id
 
 
-def delete_location(conn: sqlite3.Connection, deps: StorageDeps, actor: Actor, location_id: str, confirmation_id: str | None) -> None:
+def delete_location(conn: sqlite3.Connection, deps: StorageDeps, actor: Actor, location_id: str) -> None:
     _require_user(conn, deps, actor, "storage.location.delete", location_id)
     _location(conn, location_id)
     count = repo.count_location_resources(conn, location_id)
@@ -112,7 +112,7 @@ def delete_location(conn: sqlite3.Connection, deps: StorageDeps, actor: Actor, l
     deps.gate.require(conn, actor, tool="delete_storage_location", args={"location_id": location_id},
                       summary=f"Vas a eliminar 1 ubicación: «{label}». Esta acción no se puede deshacer. "
                               "Los archivos originales no se tocan.",
-                      affected_count=1, confirmation_id=confirmation_id,
+                      affected_count=1,
                       targets=[{"id": location_id}])
     with write_tx(conn):
         repo.delete_location(conn, location_id)
@@ -157,7 +157,7 @@ def update_folder(conn: sqlite3.Connection, deps: StorageDeps, actor: Actor, fol
     try:
         with write_tx(conn):
             current = _folder(conn, folder_id)
-            if current["revision"] != data.expected_revision:
+            if data.expected_revision is not None and current["revision"] != data.expected_revision:
                 raise _revision_mismatch()
             fields: dict[str, Any] = {}
             if data.name is not None:
@@ -181,13 +181,13 @@ def update_folder(conn: sqlite3.Connection, deps: StorageDeps, actor: Actor, fol
     return _folder_out(_folder(conn, folder_id))
 
 
-def delete_folder(conn: sqlite3.Connection, deps: StorageDeps, actor: Actor, folder_id: str, confirmation_id: str | None) -> None:
+def delete_folder(conn: sqlite3.Connection, deps: StorageDeps, actor: Actor, folder_id: str) -> None:
     row = _folder(conn, folder_id)
     if repo.count_folder_children(conn, folder_id):
         raise AppError("has_dependents", "Folder is not empty", 409)
     deps.gate.require(conn, actor, tool="delete_folder", args={"folder_id": folder_id},
                       summary=f"Vas a eliminar 1 carpeta: «{row['name']}». Esta acción no se puede deshacer.",
-                      affected_count=1, confirmation_id=confirmation_id,
+                      affected_count=1,
                       targets=[{"id": folder_id, "revision": row["revision"]}])
     with write_tx(conn):
         repo.delete_folder(conn, folder_id)
@@ -231,7 +231,8 @@ def create_resource(conn: sqlite3.Connection, deps: StorageDeps, actor: Actor, d
     shapes = [is_file, data.url is not None, data.note_body is not None]
     if sum(shapes) != 1 or (is_file and (data.location_id is None or data.relative_path is None)):
         raise _invalid("Provide exactly one of file, url or note_body")
-    if is_file and actor.is_agent:
+    if (is_file or data.url is not None) and actor.is_agent:
+        # El agente solo crea notas: un enlace suyo sería una descarga a su elección.
         raise _denied(conn, deps, actor, "storage.resource.create", "resource", None)
     if data.folder_id:
         _folder(conn, data.folder_id)
@@ -260,6 +261,10 @@ def create_resource(conn: sqlite3.Connection, deps: StorageDeps, actor: Actor, d
     elif data.url is not None:
         if data.resource_type not in (None, "link"):
             raise _invalid("Links are always of type link")
+        try:
+            readers_link.validate_url(str(data.url))
+        except Exception as exc:
+            raise translate_error(exc) from None
         values.update(resource_type="link", url=str(data.url))
     else:
         if data.resource_type not in (None, *NOTE_TYPES):
@@ -286,7 +291,7 @@ def update_resource(conn: sqlite3.Connection, deps: StorageDeps, actor: Actor, r
     reindex = False
     with write_tx(conn):
         r = _resource_row(conn, resource_id)
-        if r["revision"] != data.expected_revision:
+        if data.expected_revision is not None and r["revision"] != data.expected_revision:
             raise _revision_mismatch()
         fields: dict[str, Any] = {}
         if data.title is not None:
@@ -337,7 +342,7 @@ def unarchive_resource(conn: sqlite3.Connection, deps: StorageDeps, actor: Actor
 
 
 def delete_resource(
-    conn: sqlite3.Connection, deps: StorageDeps, actor: Actor, resource_id: str, confirmation_id: str | None,
+    conn: sqlite3.Connection, deps: StorageDeps, actor: Actor, resource_id: str,
     detach: bool = False,
 ) -> None:
     row = _resource_row(conn, resource_id)
@@ -349,7 +354,7 @@ def delete_resource(
         summary=f"Vas a eliminar 1 recurso: «{row['title']}»"
         + (f" y {related} dependiente{"s" if related != 1 else ""}" if related else "")
         + ". Esta acción no se puede deshacer. El archivo original no se toca.",
-        affected_count=1 + related, confirmation_id=confirmation_id,
+        affected_count=1 + related,
         targets=[{"id": resource_id, "revision": row["revision"]}],
     )
     with write_tx(conn):

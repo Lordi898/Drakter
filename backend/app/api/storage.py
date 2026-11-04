@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import hashlib
 import sqlite3
 from collections.abc import Iterator
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Path, Query, Request, Response
+from fastapi import APIRouter, Depends, Header, Path, Query, Request, Response
+from pydantic import BaseModel
 
 from app.api.storage_confirmation import ConfirmationRoute
 from app.database.connection import connect
@@ -16,7 +18,7 @@ from app.schemas.storage import (
     FolderOut,
     FolderUpdate,
     ReadRequest,
-    ReadResult,
+    ReadEnvelope,
     RefreshResult,
     ResourceCreate,
     ResourceOut,
@@ -35,12 +37,11 @@ from app.schemas.storage import (
     Uuid,
 )
 from app.services import storage_catalog, storage_index, storage_scan
-from app.services.storage_ports import Actor, StorageDeps
+from app.services.storage_ports import Actor, StorageDeps, utc_now
 
 router = APIRouter(prefix="/api/v1", route_class=ConfirmationRoute)
 
 ResourceId = Annotated[Uuid, Path()]
-ConfirmationId = Annotated[str | None, Query(max_length=100)]
 
 
 def get_deps(request: Request) -> StorageDeps:
@@ -67,13 +68,29 @@ def db(request: Request) -> Iterator[sqlite3.Connection]:
 Conn = Annotated[sqlite3.Connection, Depends(db)]
 Deps = Annotated[StorageDeps, Depends(get_deps)]
 Who = Annotated[Actor, Depends(actor)]
+IfMatch = Annotated[int | None, Header(ge=1)]
+
+
+class StorageLocationList(BaseModel):
+    items: list[StorageLocationOut]
+    next_cursor: str | None = None
+
+
+class FolderList(BaseModel):
+    items: list[FolderOut]
+    next_cursor: str | None = None
+
+
+def _with_revision[T: (FolderUpdate, ResourceUpdate)](data: T, if_match: int | None) -> T:
+    """`If-Match` manda; el campo del cuerpo sigue valiendo para las herramientas."""
+    return data if if_match is None else data.model_copy(update={"expected_revision": if_match})
 
 
 # --- ubicaciones ---------------------------------------------------------------------------
 
 @router.get("/storage-locations")
-def list_locations(conn: Conn, deps: Deps, who: Who) -> list[StorageLocationOut]:
-    return storage_catalog.list_locations(conn, deps, who)
+def list_locations(conn: Conn, deps: Deps, who: Who) -> StorageLocationList:
+    return StorageLocationList(items=storage_catalog.list_locations(conn, deps, who))
 
 
 @router.post("/storage-locations", status_code=201)
@@ -90,9 +107,9 @@ def update_location(
 
 @router.delete("/storage-locations/{location_id}", status_code=204)
 def delete_location(
-    location_id: ResourceId, conn: Conn, deps: Deps, who: Who, confirmation_id: ConfirmationId = None
+    location_id: ResourceId, conn: Conn, deps: Deps, who: Who
 ) -> Response:
-    storage_catalog.delete_location(conn, deps, who, location_id, confirmation_id)
+    storage_catalog.delete_location(conn, deps, who, location_id)
     return Response(status_code=204)
 
 
@@ -105,8 +122,8 @@ def list_folders(
     who: Who,
     parent_id: Annotated[Uuid | None, Query()] = None,
     include_archived: bool = False,
-) -> list[FolderOut]:
-    return storage_catalog.list_folders(conn, deps, who, parent_id, include_archived)
+) -> FolderList:
+    return FolderList(items=storage_catalog.list_folders(conn, deps, who, parent_id, include_archived))
 
 
 @router.post("/folders", status_code=201)
@@ -115,15 +132,17 @@ def create_folder(data: FolderCreate, conn: Conn, deps: Deps, who: Who) -> Folde
 
 
 @router.patch("/folders/{folder_id}")
-def update_folder(folder_id: ResourceId, data: FolderUpdate, conn: Conn, deps: Deps, who: Who) -> FolderOut:
-    return storage_catalog.update_folder(conn, deps, who, folder_id, data)
+def update_folder(
+    folder_id: ResourceId, data: FolderUpdate, conn: Conn, deps: Deps, who: Who, if_match: IfMatch = None
+) -> FolderOut:
+    return storage_catalog.update_folder(conn, deps, who, folder_id, _with_revision(data, if_match))
 
 
 @router.delete("/folders/{folder_id}", status_code=204)
 def delete_folder(
-    folder_id: ResourceId, conn: Conn, deps: Deps, who: Who, confirmation_id: ConfirmationId = None
+    folder_id: ResourceId, conn: Conn, deps: Deps, who: Who
 ) -> Response:
-    storage_catalog.delete_folder(conn, deps, who, folder_id, confirmation_id)
+    storage_catalog.delete_folder(conn, deps, who, folder_id)
     return Response(status_code=204)
 
 
@@ -143,15 +162,15 @@ def search_resources(
 
 
 @router.post("/resources/refresh-index")
-def refresh_index(conn: Conn, deps: Deps, who: Who, confirmation_id: ConfirmationId = None) -> RefreshResult:
-    return storage_index.refresh_index(conn, deps, who, confirmation_id)
+def refresh_index(conn: Conn, deps: Deps, who: Who) -> RefreshResult:
+    return storage_index.refresh_index(conn, deps, who)
 
 
 @router.post("/resources/scan")
 def scan_location(
-    data: ScanRequest, conn: Conn, deps: Deps, who: Who, confirmation_id: ConfirmationId = None
+    data: ScanRequest, conn: Conn, deps: Deps, who: Who
 ) -> ScanResult:
-    return storage_scan.scan_location(conn, deps, who, data.location_id, confirmation_id)
+    return storage_scan.scan_location(conn, deps, who, data.location_id)
 
 
 @router.get("/resources")
@@ -186,9 +205,9 @@ def get_resource(resource_id: ResourceId, conn: Conn, deps: Deps, who: Who) -> R
 
 @router.patch("/resources/{resource_id}")
 def update_resource(
-    resource_id: ResourceId, data: ResourceUpdate, conn: Conn, deps: Deps, who: Who
+    resource_id: ResourceId, data: ResourceUpdate, conn: Conn, deps: Deps, who: Who, if_match: IfMatch = None
 ) -> ResourceOut:
-    return storage_catalog.update_resource(conn, deps, who, resource_id, data)
+    return storage_catalog.update_resource(conn, deps, who, resource_id, _with_revision(data, if_match))
 
 
 @router.delete("/resources/{resource_id}", status_code=204)
@@ -197,10 +216,9 @@ def delete_resource(
     conn: Conn,
     deps: Deps,
     who: Who,
-    confirmation_id: ConfirmationId = None,
     detach: bool = False,
 ) -> Response:
-    storage_catalog.delete_resource(conn, deps, who, resource_id, confirmation_id, detach)
+    storage_catalog.delete_resource(conn, deps, who, resource_id, detach)
     return Response(status_code=204)
 
 
@@ -217,8 +235,19 @@ def unarchive_resource(resource_id: ResourceId, conn: Conn, deps: Deps, who: Who
 @router.post("/resources/{resource_id}/read")
 def read_resource(
     resource_id: ResourceId, conn: Conn, deps: Deps, who: Who, data: ReadRequest | None = None
-) -> ReadResult:
-    return storage_catalog.read_resource(conn, deps, who, resource_id, data or ReadRequest())
+) -> ReadEnvelope:
+    result = storage_catalog.read_resource(conn, deps, who, resource_id, data or ReadRequest())
+    return ReadEnvelope(
+        source_type="resource",
+        source_id=result.source.resource_id,
+        retrieved_at=utc_now(),
+        content_hash=hashlib.sha256(result.text.encode("utf-8")).hexdigest(),
+        truncated=result.truncated,
+        content=result.text,
+        title=result.source.title,
+        next_offset=result.next_offset,
+        metadata=result.metadata,
+    )
 
 
 @router.post("/resources/{resource_id}/index")

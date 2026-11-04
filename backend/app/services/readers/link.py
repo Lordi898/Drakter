@@ -180,6 +180,26 @@ def _parse(url: str) -> _Target:
     return _Target(url, ascii_host, port, parts.scheme == "https", target)
 
 
+def validate_url(url: str) -> None:
+    """Rechaza al registrar lo que nunca se podría leer. No resuelve DNS: eso se hace al leer."""
+    host = _parse(url).host
+    lowered = host.rstrip(".").lower()
+    if lowered == "localhost" or lowered.endswith((".localhost", ".local", ".internal")):
+        raise UrlNotAllowed
+    try:
+        packed = socket.inet_aton(lowered)  # también 2130706433 y 0x7f.1
+    except OSError:
+        candidate = lowered.strip("[]")
+    else:
+        candidate = socket.inet_ntoa(packed)
+    try:
+        ipaddress.ip_address(candidate)
+    except ValueError:
+        return
+    if not _ip_allowed(candidate):
+        raise UrlNotAllowed
+
+
 def _system_resolve(host: str, port: int, timeout: float) -> Sequence[str]:
     """`getaddrinfo` no admite timeout: se espera en un hilo que no retiene el proceso."""
     found: list[str] = []

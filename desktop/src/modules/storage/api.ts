@@ -22,7 +22,8 @@ function query(params: Record<string, string | number | boolean | null | undefin
   return text ? `?${text}` : ''
 }
 
-export const listLocations = () => backendRequest<StorageLocation[]>('GET', '/storage-locations')
+export const listLocations = () =>
+  backendRequest<{ items: StorageLocation[] }>('GET', '/storage-locations').then((page) => page.items)
 export const createLocation = (path: string, label: string) =>
   backendRequest<StorageLocation>('POST', '/storage-locations', { path, label, read_only: true, agent_read: false })
 export const updateLocation = (id: string, patch: { agent_read?: boolean; enabled?: boolean }) =>
@@ -33,7 +34,7 @@ export const scanLocation = (locationId: string) =>
 export const refreshIndex = () => backendRequest<RefreshResult>('POST', '/resources/refresh-index', {})
 
 export const listFolders = (parentId: string | null) =>
-  backendRequest<Folder[]>('GET', `/folders${query({ parent_id: parentId })}`)
+  backendRequest<{ items: Folder[] }>('GET', `/folders${query({ parent_id: parentId })}`).then((page) => page.items)
 
 export interface ListFilters {
   readonly folderId: string | null

@@ -163,20 +163,20 @@ def main() -> int:
 
     # Borrado: usuario sin gate, agente con gate cerrado y abierto
     check("agente con gate cerrado no borra", raises(
-        "confirmation_unavailable", lambda: svc.delete_relationship(conn, deps, agent, first.id, None))
+        "confirmation_unavailable", lambda: svc.delete_relationship(conn, deps, agent, first.id))
           and svc.search_relationships(conn, deps, user, RelationshipSearch(source_id=a)).items != [])
     open_deps = StorageDeps(settings=settings, gate=ApprovedByDispatcher())  # type: ignore[arg-type]
-    svc.delete_relationship(conn, open_deps, agent, first.id, None)
-    svc.delete_relationship(conn, deps, user, r2.id, None)
+    svc.delete_relationship(conn, open_deps, agent, first.id)
+    svc.delete_relationship(conn, open_deps, user, r2.id)
     check("borrado agente aprobado y usuario sin gate", raises(
-        "not_found", lambda: svc.delete_relationship(conn, deps, user, r2.id, None)))
+        "not_found", lambda: svc.delete_relationship(conn, open_deps, user, r2.id)))
     n = conn.execute("SELECT COUNT(*) FROM audit_events WHERE action LIKE 'relations.%'").fetchone()[0]
     check("auditoría", n >= 10)
 
     # Herramientas (con sustituto de spec) y REST
     from app.tools import relations as tools  # noqa: PLC0415
     names = {t.name for t in tools.TOOLS}
-    check("5 herramientas, delete CONFIRM", len(names) == 5 and next(
+    check("4 herramientas, delete CONFIRM", len(names) == 4 and next(
         t for t in tools.TOOLS if t.name == "delete_relationship").risk.value == "confirm")
     tools.configure_summary_source(tmp / "drakter.db")
     keep = rel(task, project2, "scheduled_for") if False else rel(task, res_alt(conn, entity), "uses_resource")
@@ -215,7 +215,7 @@ def main() -> int:
         r = client.get(f"/api/v1/entities/{task}/related?direction=out")
         d = client.delete(f"/api/v1/relationships/{keep.id}")
         check("REST types/related/delete", t.status_code == 200 and len(t.json()) == 10
-              and r.status_code == 200 and d.status_code == 204)
+              and r.status_code == 200 and d.status_code == 503)
     except ImportError as exc:
         print(f"NO COMPROBADO REST: {exc}")
     conn.close()

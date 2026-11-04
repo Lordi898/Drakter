@@ -13,7 +13,7 @@ from app.core.errors import AppError
 from app.database.connection import connect
 from app.schemas.relations import (
     Direction, EntityType, RelatedItems, RelationshipCreate, RelationshipOut, RelationshipPage,
-    RelationshipSearch, RelationshipType, RelationshipUpdate,
+    RelationshipSearch, RelationshipType,
 )
 from app.schemas.storage import Cursor, Uuid
 from app.services import relations as svc
@@ -76,16 +76,6 @@ def _create(ctx: ToolContext, args: RelationshipCreate) -> RelationshipOut:
     return _run(ctx, lambda c, d, a: svc.create_relationship(c, d, a, args))
 
 
-class UpdateArgs(Strict):
-    relationship_id: Uuid
-    metadata: dict[str, Any]
-
-
-def _update(ctx: ToolContext, args: UpdateArgs) -> RelationshipOut:
-    data = RelationshipUpdate(metadata=args.metadata)
-    return _run(ctx, lambda c, d, a: svc.update_relationship(c, d, a, args.relationship_id, data))
-
-
 class DeleteArgs(Strict):
     relationship_id: Uuid
 
@@ -96,7 +86,7 @@ class Deleted(BaseModel):
 
 
 def _delete(ctx: ToolContext, args: DeleteArgs) -> Deleted:
-    _run(ctx, lambda c, d, a: svc.delete_relationship(c, d, a, args.relationship_id, None))
+    _run(ctx, lambda c, d, a: svc.delete_relationship(c, d, a, args.relationship_id))
     return Deleted(deleted=True, relationship_id=args.relationship_id)
 
 
@@ -142,17 +132,10 @@ TOOLS: tuple[ToolSpec, ...] = (
         audit=_LOG,
     ),
     ToolSpec(
-        name="update_relationship",
-        description="Replace the metadata of an existing relationship.",
-        domain="relationships", args_model=UpdateArgs, result_model=RelationshipOut,
-        permission="relationships.write", risk=RiskClass.WRITE, handler=_update,
-        errors=("not_found",), idempotent=True, audit=_LOG,
-    ),
-    ToolSpec(
         name="delete_relationship",
         description="Delete a relationship between two entities. Needs user confirmation.",
         domain="relationships", args_model=DeleteArgs, result_model=Deleted,
-        permission="relationships.write", risk=RiskClass.CONFIRM, handler=_delete,
+        permission="relationships.delete", risk=RiskClass.CONFIRM, handler=_delete,
         errors=("not_found", "confirmation_unavailable"), audit=_LOG, summarize=_summarize_delete,
     ),
 )

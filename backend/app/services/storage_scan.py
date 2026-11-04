@@ -18,7 +18,7 @@ _BATCH = 200
 
 
 def scan_location(
-    conn: sqlite3.Connection, deps: StorageDeps, actor: Actor, location_id: str, confirmation_id: str | None
+    conn: sqlite3.Connection, deps: StorageDeps, actor: Actor, location_id: str
 ) -> ScanResult:
     if actor.kind != "user":
         deps.audit.record(conn, actor, action="storage.location.scan", result="denied",
@@ -29,6 +29,14 @@ def scan_location(
         raise AppError("not_found", "Location not found", 404)
     if not loc["enabled"]:
         raise AppError("resource_unavailable", "Location is disabled", 424)
+
+    known = repo.count_location_resources(conn, location_id)
+    deps.gate.require(
+        conn, actor, tool="scan_location", args={"location_id": location_id},
+        summary=f"Vas a escanear la ubicación «{loc['label']}», que tiene {known} recursos catalogados. "
+                "Los archivos no se modifican.",
+        affected_count=known, targets=[{"id": location_id}],
+    )
 
     # 1. E/S fuera de transacción: recorrido y lectura de los archivos nuevos o cambiados.
     root, identity = location_root(loc)

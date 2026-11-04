@@ -75,23 +75,23 @@ Todas las funciones de servicio reciben `(conn, deps, actor, ...)` y devuelven m
 list_locations(conn, deps, actor) -> list[StorageLocationOut]
 create_location(conn, deps, actor, data) -> StorageLocationOut      # solo actor.kind == "user" y origin "rest"
 update_location(conn, deps, actor, location_id, data) -> StorageLocationOut   # igual
-delete_location(conn, deps, actor, location_id, confirmation_id) -> None      # gate; quita catálogo, no archivos
+delete_location(conn, deps, actor, location_id) -> None      # gate; quita catálogo, no archivos
 list_folders(conn, deps, actor, parent_id: str | None, include_archived: bool = False) -> list[FolderOut]
-create_folder / update_folder / delete_folder(conn, deps, actor, ..., confirmation_id)  # update con expected_revision
+create_folder / update_folder / delete_folder(conn, deps, actor, ...)  # update con expected_revision
 list_resources(conn, deps, actor, *, folder_id, resource_type, availability, tag, include_archived, limit, cursor) -> ResourcePage
 get_resource(conn, deps, actor, resource_id) -> ResourceOut
 create_resource(conn, deps, actor, data) -> ResourceOut
 update_resource(conn, deps, actor, resource_id, data) -> ResourceOut
 archive_resource / unarchive_resource(conn, deps, actor, resource_id) -> ResourceOut
-delete_resource(conn, deps, actor, resource_id, confirmation_id, detach: bool = False) -> None
+delete_resource(conn, deps, actor, resource_id, detach: bool = False) -> None
 read_resource(conn, deps, actor, resource_id, request: ReadRequest) -> ReadResult
 # services/storage_index.py
 search_resources(conn, deps, actor, *, q, types, limit, cursor) -> SearchPage
 index_resource(conn, deps, actor, resource_id, include_content: bool | None = None) -> ResourceOut
-refresh_index(conn, deps, actor, confirmation_id: str | None) -> RefreshResult   # gate si el agente lo pide
+refresh_index(conn, deps, actor) -> RefreshResult   # gate si el agente lo pide
 sync_document(conn, resource_row) -> None  # metadatos a search_documents, misma transacción
 # services/storage_scan.py
-scan_location(conn, deps, actor, location_id, confirmation_id: str | None) -> ScanResult
+scan_location(conn, deps, actor, location_id) -> ScanResult
 ```
 
 Permisos: `create_location`, `update_location`, `delete_location` rechazan actores que no sean `user`/`rest` con `permission_denied`. `read_resource` de un archivo con `agent_read = 0` y actor agente da `permission_denied`. Ubicación `enabled = 0`: `resource_unavailable`. `read_resource`: buscar → disponibilidad → permisos → lector → auditar. La disponibilidad se actualiza si el archivo falta. `note_body` se lee por `read_resource`, no por `get_resource`.
@@ -118,7 +118,7 @@ Detección de movidos: en `scan`, un `(dev, ino)` conocido en otra ruta de la mi
 | `GET/POST /relationships`, `PATCH/DELETE /relationships/{id}` | relaciones |
 | `GET /entities/{id}/related?direction=&type=` | relaciones |
 
-`DELETE` y las operaciones con gate aceptan `?confirmation_id=`. Rutas fijas (`search`, `scan`, `refresh-index`, `types`) antes de `/{id}`.
+El cliente nunca manda identificador de confirmación: la ruta responde 409 y `approve` ejecuta los argumentos guardados con `services/storage_confirmed.execute_confirmed`. Rutas fijas (`search`, `scan`, `refresh-index`, `types`) antes de `/{id}`.
 
 ## Relaciones — `app/services/relations.py`
 
@@ -126,7 +126,7 @@ Detección de movidos: en `scan`, un `(dev, ino)` conocido en otra ruta de la mi
 list_types(conn, deps, actor) -> list[RelationshipTypeOut]
 create_relationship(conn, deps, actor, data: RelationshipCreate) -> RelationshipOut
 update_relationship(conn, deps, actor, relationship_id, data: RelationshipUpdate) -> RelationshipOut
-delete_relationship(conn, deps, actor, relationship_id, confirmation_id) -> None
+delete_relationship(conn, deps, actor, relationship_id) -> None
 search_relationships(conn, deps, actor, query: RelationshipSearch) -> RelationshipPage
 get_related_items(conn, deps, actor, entity_id, *, direction="both", relationship_type=None) -> RelatedItems
 count_for_entity(conn, entity_id) -> int
@@ -138,7 +138,7 @@ detach_entity(conn, deps, actor, entity_id) -> int   # dentro de la transacción
 - Reglas `acyclic = 1`: las corta el trigger `trg_relationships_no_cycle`; traducir su `IntegrityError` (mensaje `relationship_cycle`) a `AppError`. Etiquetas `label`/`inverse_label` en español: dict en `services/relations.py`, la tabla no las tiene.
 - Aristas virtuales: tabla `VIRTUAL_EDGES` declarativa (tasks.project_id → `belongs_to`, tasks.subject_id → `belongs_to`, tasks.parent_task_id → `parent_of` invertido, resources.folder_id → `belongs_to`, folders.parent_folder_id → `parent_of` invertido, class_sessions.subject_id → `belongs_to`).
 - Títulos: vista `v_entity_labels`; `v_orphan_entities` queda para la comprobación de arranque.
-- `delete_relationship` con actor `user` no exige gate (una sola fila, reversible); con actor agente, sí.
+- `delete_relationship` pasa siempre por el gate, también desde la GUI (`contracts/api/routes.md`).
 
 ## Herramientas — `app/tools/storage.py`, `app/tools/relations.py`
 
@@ -152,10 +152,10 @@ Handler síncrono: abre `connect(ctx.state.settings.db_path)` con `row_factory`,
 | `create_resource`, `update_resource_metadata`, `index_resource` | storage | `storage.write` | WRITE |
 | `refresh_resource_index` | storage | `storage.write` | CONFIRM, con `summarize` |
 | `get_related_items`, `search_relationships` | relationships | `relationships.read` | READ |
-| `create_relationship`, `update_relationship` | relationships | `relationships.write` | WRITE |
-| `delete_relationship` | relationships | `relationships.write` | CONFIRM, con `summarize` |
+| `create_relationship` | relationships | `relationships.write` | WRITE |
+| `delete_relationship` | relationships | `relationships.delete` | CONFIRM, con `summarize` |
 
-No hay herramienta de ubicaciones, de borrado de recursos ni de escaneo. Ninguna acepta rutas: `create_resource` para agente solo admite enlaces y notas (`args_model` propio, sin `location_id`).
+No hay herramienta de ubicaciones, de borrado de recursos ni de escaneo. Ninguna acepta rutas ni URL: `create_resource` solo crea notas y los enlaces los registra la GUI. Al agente no le llegan `url_not_allowed` ni `link_fetch_failed`: `read_resource` los convierte en `resource_unavailable`.
 
 ## Interfaz
 

@@ -30,6 +30,7 @@ from app.services.storage_ports import Actor, tool_deps
 from app.tools.spec import RiskClass, ToolContext, ToolError, ToolSpec, untrusted_envelope
 
 R = TypeVar("R")
+_HIDDEN_LINK_ERRORS = frozenset({"url_not_allowed", "link_fetch_failed"})
 
 
 class Strict(BaseModel):
@@ -44,6 +45,8 @@ def _run(ctx: ToolContext, fn: Callable[[sqlite3.Connection, Any, Actor], R]) ->
     try:
         return fn(conn, tool_deps(ctx.state), Actor("agent", "mcp", str(ctx.turn_id)))
     except AppError as exc:
+        if exc.code in _HIDDEN_LINK_ERRORS:
+            raise ToolError("resource_unavailable", "The link could not be read") from exc
         raise ToolError(exc.code, exc.message) from exc
     finally:
         conn.close()
@@ -113,30 +116,22 @@ def _folders(ctx: ToolContext, args: ListFoldersArgs) -> FolderList:
         c, d, a, args.parent_folder_id, False)))
 
 
-# --- create_resource (solo enlace o nota) --------------------------------------------------
+# --- create_resource (solo notas: los enlaces los registra la GUI) ---------------------------
 
 class CreateResourceArgs(Strict):
     title: Title
-    url: Annotated[str, StringConstraints(max_length=2048)] | None = None
-    note_body: Annotated[str, StringConstraints(max_length=200_000)] | None = None
+    note_body: Annotated[str, StringConstraints(max_length=200_000)]
     folder_id: Uuid | None = None
     description: Description | None = None
     tags: Annotated[list[TagName], Field(max_length=32)] = []
     index_content: bool = False
 
-    @model_validator(mode="after")
-    def link_xor_note(self) -> CreateResourceArgs:
-        if (self.url is None) == (self.note_body is None):
-            raise ValueError("Provide exactly one of url or note_body")
-        return self
-
 
 def _create(ctx: ToolContext, args: CreateResourceArgs) -> ResourceOut:
     data = ResourceCreate(
         title=args.title,
-        resource_type="link" if args.url is not None else "note",
+        resource_type="note",
         folder_id=args.folder_id,
-        url=args.url,
         note_body=args.note_body,
         description=args.description,
         tags=args.tags,
@@ -181,7 +176,7 @@ class NoArgs(Strict):
 
 
 def _refresh(ctx: ToolContext, args: NoArgs) -> RefreshResult:
-    return _run(ctx, lambda c, d, a: storage_index.refresh_index(c, d, a, None))
+    return _run(ctx, lambda c, d, a: storage_index.refresh_index(c, d, a))
 
 
 def _summarize_refresh(args: BaseModel) -> str:
@@ -242,8 +237,7 @@ TOOLS: tuple[ToolSpec, ...] = (
         domain="storage", args_model=ReadArgs, result_model=ReadToolResult,
         permission="storage.read", risk=RiskClass.READ, handler=_read,
         errors=("not_found", "permission_denied", "resource_unavailable", "file_too_large",
-                "archive_limit_exceeded", "unsupported_media_type", "read_failed", "url_not_allowed",
-                "link_fetch_failed", "path_not_allowed"),
+                "archive_limit_exceeded", "unsupported_media_type", "read_failed", "path_not_allowed"),
         idempotent=True, timeout_s=45.0, returns_untrusted=True,
         audit={**_LOG, "selector": "log", "offset": "log", "max_chars": "log"},
     ),
@@ -257,12 +251,11 @@ TOOLS: tuple[ToolSpec, ...] = (
     ToolSpec(
         name="create_resource",
         description=(
-            "Guarda un recurso nuevo en el almacen: un enlace web (url) o una nota (note_body). "
-            "Indica exactamente uno de los dos. No sirve para archivos."
+            "Guarda una nota nueva en el almacen. No sirve para archivos ni enlaces."
         ),
         domain="storage", args_model=CreateResourceArgs, result_model=ResourceOut,
         permission="storage.write", risk=RiskClass.WRITE, handler=_create,
-        errors=("not_found", "validation_error", "url_not_allowed", "conflict"),
+        errors=("not_found", "validation_error", "conflict"),
         audit=_WRITE_AUDIT,
     ),
     ToolSpec(
@@ -285,7 +278,7 @@ TOOLS: tuple[ToolSpec, ...] = (
         domain="storage", args_model=IndexArgs, result_model=ResourceOut,
         permission="storage.write", risk=RiskClass.WRITE, handler=_index,
         errors=("not_found", "permission_denied", "resource_unavailable", "file_too_large",
-                "unsupported_media_type", "read_failed", "link_fetch_failed", "url_not_allowed"),
+                "unsupported_media_type", "read_failed"),
         idempotent=True, timeout_s=45.0, audit={**_LOG, "include_content": "log"},
     ),
     ToolSpec(

@@ -66,7 +66,6 @@ class ConfirmationGate(Protocol):
         args: Mapping[str, Any],
         summary: str,
         affected_count: int,
-        confirmation_id: str | None,
         targets: Sequence[Mapping[str, Any]] = (),
     ) -> None:
         """Vuelve solo si hay una aprobación válida de la GUI para estos argumentos.
@@ -128,7 +127,6 @@ class ApprovedByDispatcher:
         args: Mapping[str, Any],
         summary: str,
         affected_count: int,
-        confirmation_id: str | None,
         targets: Sequence[Mapping[str, Any]] = (),
     ) -> None:
         return None
@@ -146,7 +144,6 @@ class DenyAllConfirmations:
         args: Mapping[str, Any],
         summary: str,
         affected_count: int,
-        confirmation_id: str | None,
         targets: Sequence[Mapping[str, Any]] = (),
     ) -> None:
         # Nunca `confirmation_required`: ese código exige un objeto `confirmation` con
@@ -172,12 +169,12 @@ def _args_hash(tool: str, canonical_args: str) -> str:
 
 
 class TicketGate:
-    """Crea y canjea filas de `pending_confirmations`; la decisión es siempre de la GUI.
+    """Crea filas de `pending_confirmations` y responde 409; nunca deja pasar.
 
-    Sustituible por el pipeline común. Se llama fuera de `write_tx`: un ticket emitido
-    debe sobrevivir a la excepción que lo comunica. Canjear pasa por
-    `approved -> executing -> executed` con una sola fila afectada, así que un
-    ticket no se ejecuta dos veces.
+    La operación se ejecuta en `POST /confirmations/{id}/approve` con los argumentos
+    guardados (`storage_confirmed.execute_confirmed`). El cliente no manda ningún
+    identificador. Se llama fuera de `write_tx`: el ticket debe sobrevivir a la
+    excepción que lo comunica.
     """
 
     def require(
@@ -189,15 +186,11 @@ class TicketGate:
         args: Mapping[str, Any],
         summary: str,
         affected_count: int,
-        confirmation_id: str | None,
         targets: Sequence[Mapping[str, Any]] = (),
     ) -> None:
         canonical_args = _canonical(dict(args))
         args_hash = _args_hash(tool, canonical_args)
         targets_json = _canonical(list(targets))
-        if confirmation_id is not None:
-            self._redeem(conn, confirmation_id, tool, args_hash, targets_json)
-            return
         now = utc_now()
         conn.execute("BEGIN IMMEDIATE")
         try:
@@ -231,40 +224,6 @@ class TicketGate:
                 "expires_at": expires_at,
                 "params_hash": args_hash,
             }
-        )
-
-    def _redeem(
-        self,
-        conn: sqlite3.Connection,
-        confirmation_id: str,
-        tool: str,
-        args_hash: str,
-        targets_json: str,
-    ) -> None:
-        row = conn.execute(
-            "SELECT status, tool_name, args_hash, targets_json, expires_at"
-            " FROM pending_confirmations WHERE id = ?",
-            (confirmation_id,),
-        ).fetchone()
-        if row is None or row[1] != tool or row[2] != args_hash:
-            raise AppError("not_found", "Confirmation not found", 404)
-        if row[0] == "pending":
-            if row[4] <= utc_now():
-                raise AppError("confirmation_expired", "Confirmation expired", 410)
-            raise AppError("conflict", "Confirmation is still pending", 409)
-        if row[0] != "approved":
-            raise AppError("confirmation_already_resolved", "Confirmation already resolved", 409)
-        if row[3] != targets_json:
-            raise AppError("conflict", "Targets changed since the confirmation", 409)
-        claimed = conn.execute(
-            "UPDATE pending_confirmations SET status = 'executing' WHERE id = ? AND status = 'approved'",
-            (confirmation_id,),
-        )
-        if claimed.rowcount != 1:
-            raise AppError("confirmation_already_resolved", "Confirmation already resolved", 409)
-        conn.execute(
-            "UPDATE pending_confirmations SET status = 'executed', executed_at = ? WHERE id = ?",
-            (utc_now(), confirmation_id),
         )
 
 

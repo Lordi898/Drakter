@@ -70,13 +70,18 @@ export interface SearchPage {
   readonly next_cursor: string | null
 }
 
+/** `UntrustedEnvelope` de contracts, más la paginación de la lectura. */
 export interface ReadResult {
-  readonly text: string
+  readonly trust: 'untrusted'
+  readonly source_type: string
+  readonly source_id: string
+  readonly retrieved_at: string
+  readonly content_hash: string
   readonly truncated: boolean
+  readonly content: string
+  readonly title: string
   readonly next_offset: number | null
   readonly metadata: Readonly<Record<string, string | number | boolean | null>>
-  readonly source: { readonly resource_id: string; readonly title: string }
-  readonly content_trust: 'untrusted'
 }
 
 export interface ScanResult {

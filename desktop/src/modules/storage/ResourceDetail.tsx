@@ -97,7 +97,7 @@ export function ResourceDetail({ id, onChanged, onClose }: Props) {
     try {
       const result = await readResource(resource.id, offset)
       setContent(
-        offset > 0 && content ? { ...result, text: content.text + result.text } : result
+        offset > 0 && content ? { ...result, content: content.content + result.content } : result
       )
     } catch (error) {
       notifyError('No se ha podido leer el contenido', error)
@@ -286,7 +286,7 @@ export function ResourceDetail({ id, onChanged, onClose }: Props) {
           </p>
           {content ? (
             <pre className="max-h-80 overflow-auto whitespace-pre-wrap break-words rounded-md border bg-muted p-3 text-xs">
-              {content.text}
+              {content.content}
             </pre>
           ) : null}
           {reading ? <p role="status" className="text-sm text-muted-foreground">Leyendo…</p> : null}

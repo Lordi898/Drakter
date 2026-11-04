@@ -233,15 +233,15 @@ def search_resources(
 
 
 def refresh_index(
-    conn: sqlite3.Connection, deps: StorageDeps, actor: Actor, confirmation_id: str | None
+    conn: sqlite3.Connection, deps: StorageDeps, actor: Actor
 ) -> RefreshResult:
     targets = repo.list_resource_rows(conn, files_only=True, limit=10**9)
-    if actor.is_agent:
-        deps.gate.require(
-            conn, actor, tool="refresh_resource_index", args={},
-            summary=f"Comprobar {len(targets)} archivos del almacén y reindexar los modificados",
-            affected_count=len(targets), confirmation_id=confirmation_id,
-        )
+    deps.gate.require(
+        conn, actor, tool="refresh_resource_index", args={},
+        summary=f"Vas a revisar {len(targets)} archivos del almacén y reindexar los modificados. "
+                "Se puede repetir sin riesgo.",
+        affected_count=len(targets),
+    )
     locs = {l["id"]: l for l in repo.list_locations(conn)}
     counts = dict(checked=0, available=0, missing=0, moved=0, forbidden=0, reindexed=0, failed=0)
     pending: list[tuple[str, dict[str, Any]]] = []
