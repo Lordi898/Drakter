@@ -21,11 +21,6 @@ export const PRIORITY_LABELS: Readonly<Record<Priority, string>> = {
   urgent: 'Urgente'
 }
 
-export interface Page<T> {
-  readonly items: readonly T[]
-  readonly next_cursor: string | null
-}
-
 export interface Tag {
   readonly id: string
   readonly name: string
