@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sqlite3
+from calendar import monthrange
 from datetime import date, time, timedelta
 from typing import Any
 
@@ -76,6 +77,31 @@ def _parse_time(value: str | None) -> time | None:
 # --- programación -----------------------------------------------------------------------
 
 
+_WEEKDAY_CODES = ("MO", "TU", "WE", "TH", "FR", "SA", "SU")
+
+
+def _selected_by_rule(rule: Rule, day: date) -> bool:
+    """Comprueba BYDAY y BYMONTHDAY en `day`; `rule_matches` da DTSTART por válido siempre."""
+    month_days = monthrange(day.year, day.month)[1]
+    if rule.bymonthday and not any(
+        day.day == (value if value > 0 else month_days + value + 1) for value in rule.bymonthday
+    ):
+        return False
+    if not rule.byday:
+        return True
+    code = _WEEKDAY_CODES[day.weekday()]
+    for entry in rule.byday:
+        if entry[-2:] != code:
+            continue
+        ordinal = int(entry[:-2]) if len(entry) > 2 else 0
+        if ordinal == 0:
+            return True
+        position = (day.day - 1) // 7 + 1 if ordinal > 0 else (month_days - day.day) // 7 + 1
+        if position == abs(ordinal):
+            return True
+    return False
+
+
 class _Schedule:
     """Versiones de frecuencia ya interpretadas, para decidir si un día está programado."""
 
@@ -96,7 +122,8 @@ class _Schedule:
             return False
         for rule, valid_from, valid_until in self.items:
             if valid_from <= day and (valid_until is None or day < valid_until):
-                return rule_matches(rule, valid_from, day)
+                # `valid_from` es solo el ancla: a diferencia de un evento, no es una ocurrencia.
+                return _selected_by_rule(rule, day) and rule_matches(rule, valid_from, day)
         return False
 
 
