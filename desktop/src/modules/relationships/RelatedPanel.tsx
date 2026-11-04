@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Trash2 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { isBackendAvailable } from '@/modules/storage/backend'
+import { isDisconnected } from './api'
 import { DeleteRelationshipDialog } from './DeleteRelationshipDialog'
 import { useRelated } from './hooks'
 import { RelationGraph } from './RelationGraph'
@@ -41,10 +41,10 @@ export function RelatedPanel({ entityId, onSelectEntity, refreshKey = 0, onChang
   const [pendingDelete, setPendingDelete] = useState<RelatedItem | null>(null)
   const result = useRelated(entityId, refreshKey + reload)
 
-  if (!isBackendAvailable()) {
+  if (result.state === 'loading') return <p role="status" className="text-sm text-muted-foreground">Cargando relaciones…</p>
+  if (result.state === 'error' && isDisconnected(result.error)) {
     return <p className="text-sm text-muted-foreground">Las relaciones aparecerán cuando el espacio de trabajo esté conectado.</p>
   }
-  if (result.state === 'loading') return <p role="status" className="text-sm text-muted-foreground">Cargando relaciones…</p>
   if (result.state === 'error') {
     return <p role="alert" className="text-sm text-destructive">No se han podido cargar las relaciones de este elemento.</p>
   }

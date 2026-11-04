@@ -4,8 +4,8 @@ import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle
 } from '@/components/ui/dialog'
 import { notify } from '@/services/notify'
-import { BackendError } from '@/modules/storage/backend'
-import { deleteRelationship, humanError } from './api'
+import { ApiError } from '@/services/api'
+import { confirmationSummary, deleteRelationship, humanError } from './api'
 
 export interface DeleteRelationshipDialogProps {
   /** `null` cierra el diálogo. */
@@ -18,10 +18,10 @@ export interface DeleteRelationshipDialogProps {
 
 export function DeleteRelationshipDialog({ relationshipId, summary, onClose, onDeleted }: DeleteRelationshipDialogProps) {
   const [busy, setBusy] = useState(false)
-  const [waiting, setWaiting] = useState(false)
+  const [waiting, setWaiting] = useState<string | null>(null)
 
   const close = () => {
-    setWaiting(false)
+    setWaiting(null)
     onClose()
   }
 
@@ -34,8 +34,8 @@ export function DeleteRelationshipDialog({ relationshipId, summary, onClose, onD
       close()
       onDeleted()
     } catch (error) {
-      if (error instanceof BackendError && error.code === 'confirmation_required') {
-        setWaiting(true)
+      if (error instanceof ApiError && error.code === 'confirmation_required') {
+        setWaiting(confirmationSummary(error) ?? 'Eliminar una relación')
       } else {
         notify({ tone: 'error', title: 'No se ha podido eliminar la relación', body: humanError(error) })
       }
@@ -53,15 +53,15 @@ export function DeleteRelationshipDialog({ relationshipId, summary, onClose, onD
             Vas a eliminar el vínculo «{summary}». Los dos elementos se conservan; solo desaparece la relación.
           </DialogDescription>
         </DialogHeader>
-        {waiting ? (
+        {waiting !== null ? (
           <p role="status" className="text-sm text-warning">
-            La eliminación espera tu aprobación. Aprúebala en el panel de confirmaciones y vuelve a intentarlo.
+            Espera tu aprobación: {waiting}. Apruébala y vuelve a intentarlo.
           </p>
         ) : null}
         <DialogFooter>
           <Button variant="outline" onClick={close}>Cancelar</Button>
           <Button variant="destructive" disabled={busy} onClick={() => void confirm()}>
-            {waiting ? 'Reintentar' : 'Eliminar'}
+            {waiting !== null ? 'Reintentar' : 'Eliminar'}
           </Button>
         </DialogFooter>
       </DialogContent>

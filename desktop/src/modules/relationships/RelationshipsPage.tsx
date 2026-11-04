@@ -5,7 +5,7 @@ import { PageHeader } from '@/components/PageHeader'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { isBackendAvailable } from '@/modules/storage/backend'
+import { isDisconnected } from './api'
 import { CreateRelationshipDialog } from './CreateRelationshipDialog'
 import { DeleteRelationshipDialog } from './DeleteRelationshipDialog'
 import { useRelationshipList, useRelationshipTypes } from './hooks'
@@ -19,22 +19,6 @@ import {
 const ALL = 'all'
 
 export function RelationshipsPage() {
-  if (!isBackendAvailable()) {
-    return (
-      <>
-        <PageHeader
-          title="Relaciones"
-          summary="Los vínculos entre tareas, proyectos, asignaturas, documentos y otros elementos del espacio de trabajo."
-        />
-        <EmptyState
-          title="Las relaciones aparecerán al conectar el espacio de trabajo"
-          description="Todavía no hay conexión con el backend, así que no se puede leer ni crear ningún vínculo. Cuando esté conectado podrás explorar las relaciones, ver las de cada elemento y crearlas o eliminarlas."
-          drawing={<RelationshipsDrawing />}
-          pendingAction={{ label: 'Nueva relación', reason: 'Disponible cuando el espacio de trabajo esté conectado' }}
-        />
-      </>
-    )
-  }
   return <ConnectedPage />
 }
 
@@ -59,11 +43,28 @@ function ConnectedPage() {
     (types.state === 'ready' ? types.data.find((t) => t.relationship_type === k)?.label : undefined) ??
     RELATIONSHIP_FALLBACK_LABEL[k]
 
+  if (isDisconnected(list.error)) {
+    return (
+      <>
+        <PageHeader
+          title="Relaciones"
+          summary="Los vínculos entre tareas, proyectos, asignaturas, recursos y otros elementos del espacio de trabajo."
+        />
+        <EmptyState
+          title="Las relaciones aparecerán al conectar el espacio de trabajo"
+          description="Todavía no hay conexión con el servicio local, así que no se puede leer ni crear ningún vínculo. Cuando esté conectado podrás explorar las relaciones, ver las de cada elemento y crearlas o eliminarlas."
+          drawing={<RelationshipsDrawing />}
+          pendingAction={{ label: 'Nueva relación', reason: 'Disponible cuando el espacio de trabajo esté conectado' }}
+        />
+      </>
+    )
+  }
+
   return (
     <>
       <PageHeader
         title="Relaciones"
-        summary="Los vínculos entre tareas, proyectos, asignaturas, documentos y otros elementos del espacio de trabajo."
+        summary="Los vínculos entre tareas, proyectos, asignaturas, recursos y otros elementos del espacio de trabajo."
         actions={
           <Button onClick={() => setCreating(true)}>
             <Plus /> Nueva relación
@@ -96,13 +97,13 @@ function ConnectedPage() {
 
       <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_22rem]">
         <section aria-label="Lista de relaciones" className="min-w-0">
-          {list.error ? (
+          {list.error !== null ? (
             <p role="alert" className="text-destructive">No se han podido cargar las relaciones.</p>
           ) : null}
-          {!list.loading && !list.error && list.items.length === 0 ? (
+          {!list.loading && list.error === null && list.items.length === 0 ? (
             <EmptyState
               title="No hay relaciones con estos filtros"
-              description="Crea una con «Nueva relación» o cambia los filtros para ver otras."
+              description="Los vínculos se crean con «Nueva relación», arriba a la derecha, indicando el tipo y el identificador de origen y destino. También puedes cambiar los filtros para ver otros."
               drawing={<RelationshipsDrawing />}
             />
           ) : (
