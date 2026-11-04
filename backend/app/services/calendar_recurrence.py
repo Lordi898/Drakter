@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from app.core.errors import AppError
+from app.core.errors import AppError, ErrorDetail
 
 _FREQS = ("DAILY", "WEEKLY", "MONTHLY", "YEARLY")
 _DAYS = ("MO", "TU", "WE", "TH", "FR", "SA", "SU")
@@ -30,7 +30,12 @@ class Rule:
 
 
 def _bad(message: str) -> AppError:
-    return AppError("invalid_rrule", message, status_code=422)
+    return AppError(
+        "validation_error",
+        "La repetición no es válida.",
+        422,
+        [ErrorDetail(field="rrule", code="invalid_rrule", message=message)],
+    )
 
 
 def _int(value: str, name: str, low: int, high: int) -> int:
@@ -267,7 +272,12 @@ def _zone(tz: str) -> ZoneInfo:
     try:
         return ZoneInfo(tz)
     except (ZoneInfoNotFoundError, ValueError, OSError, TypeError):
-        raise AppError("invalid_timezone", "Zona horaria IANA no válida.", status_code=422) from None
+        raise AppError(
+            "validation_error",
+            "La zona horaria no es válida. Elige una de la lista.",
+            422,
+            [ErrorDetail(field="timezone", code="invalid_timezone", message="Zona desconocida")],
+        ) from None
 
 
 def to_utc(local: datetime, tz: str, *, strict: bool) -> datetime:
@@ -287,13 +297,13 @@ def to_utc(local: datetime, tz: str, *, strict: bool) -> datetime:
 def utc_iso(value: datetime) -> str:
     if value.tzinfo is not None:
         value = value.astimezone(UTC)
-    return value.strftime("%Y-%m-%dT%H:%M:%SZ")
+    return f"{value:%Y-%m-%dT%H:%M:%S}.{value.microsecond // 1000:03d}Z"
 
 
 def to_display(utc: datetime, tz: str) -> str:
     if utc.tzinfo is None:
         utc = utc.replace(tzinfo=UTC)
-    return utc.astimezone(_zone(tz)).strftime("%Y-%m-%dT%H:%M:%S")
+    return utc.astimezone(_zone(tz)).strftime("%Y-%m-%dT%H:%M")
 
 
 def today_in(tz: str) -> date:

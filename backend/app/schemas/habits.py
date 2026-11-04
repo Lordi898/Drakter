@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
-from datetime import date, time
+from datetime import date
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
+
+from app.schemas.calendar import LocalTime
 
 HabitStatus = Literal["active", "paused", "ended"]
 RecordStatus = Literal["done", "skipped", "missed"]
@@ -24,7 +26,7 @@ class HabitCreate(_Input):
     end_date: date | None = None
     goal_note: str | None = Field(default=None, max_length=1000)
     goal_project_id: str | None = None
-    preferred_local_time: time | None = None
+    preferred_local_time: LocalTime | None = None
     reminder_enabled: bool = False
 
 
@@ -42,7 +44,7 @@ class HabitUpdate(_Input):
     status: HabitStatus | None = None
     goal_note: str | None = Field(default=None, max_length=1000)
     goal_project_id: str | None = None
-    preferred_local_time: time | None = None
+    preferred_local_time: LocalTime | None = None
     reminder_enabled: bool | None = None
 
 
@@ -65,7 +67,7 @@ class HabitOut(BaseModel):
     end_date: date | None
     goal_note: str | None
     goal_project_id: str | None
-    preferred_local_time: time | None
+    preferred_local_time: LocalTime | None
     reminder_enabled: bool
     today_scheduled: bool
     today_status: RecordStatus | None

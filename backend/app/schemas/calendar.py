@@ -6,10 +6,32 @@ local más la zona IANA. `*_utc` son derivados para consultar rangos.
 
 from __future__ import annotations
 
+import re
 from datetime import date, datetime
-from typing import Literal, Self
+from typing import Annotated, Literal, Self
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field, model_validator
+
+_LOCAL_DATETIME = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}")
+_LOCAL_TIME = re.compile(r"([01]\d|2[0-3]):[0-5]\d")
+
+
+def _check_local_datetime(value: str) -> str:
+    if not _LOCAL_DATETIME.fullmatch(value):
+        raise ValueError("se esperaba YYYY-MM-DDTHH:MM")
+    datetime.fromisoformat(value)
+    return value
+
+
+def _check_local_time(value: str) -> str:
+    if not _LOCAL_TIME.fullmatch(value):
+        raise ValueError("se esperaba HH:MM")
+    return value
+
+
+# Mismos formatos que drakter_contracts.common; se ordenan bien como texto.
+LocalDateTime = Annotated[str, AfterValidator(_check_local_datetime)]
+LocalTime = Annotated[str, AfterValidator(_check_local_time)]
 
 EventKind = Literal["event", "reminder", "work_session"]
 EventStatus = Literal["tentative", "confirmed", "cancelled"]
@@ -22,28 +44,23 @@ class _Input(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
 
-def _naive(value: datetime | None, field: str) -> None:
-    if value is not None and value.tzinfo is not None:
-        raise ValueError(f"{field} es hora local: sin desfase")
-
-
 class EventCreate(_Input):
     title: str = Field(min_length=1, max_length=300)
     description: str | None = Field(default=None, max_length=8000)
+    location: str | None = Field(default=None, max_length=300)
+    reminder_minutes_before: int | None = Field(default=None, ge=0, le=40320)
     kind: EventKind = "event"
     status: EventStatus = "confirmed"
     timezone: str = Field(max_length=64)
     all_day: bool = False
-    local_start: datetime | None = None
-    local_end: datetime | None = None
+    local_start: LocalDateTime | None = None
+    local_end: LocalDateTime | None = None
     start_date: date | None = None
     end_date_exclusive: date | None = None
     rrule: str | None = Field(default=None, max_length=200)
 
     @model_validator(mode="after")
     def _shape(self) -> Self:
-        _naive(self.local_start, "local_start")
-        _naive(self.local_end, "local_end")
         if self.all_day:
             if self.start_date is None or self.end_date_exclusive is None:
                 raise ValueError("Un evento de día completo exige start_date y end_date_exclusive")
@@ -66,12 +83,14 @@ class EventUpdate(_Input):
 
     title: str | None = Field(default=None, min_length=1, max_length=300)
     description: str | None = Field(default=None, max_length=8000)
+    location: str | None = Field(default=None, max_length=300)
+    reminder_minutes_before: int | None = Field(default=None, ge=0, le=40320)
     kind: EventKind | None = None
     status: EventStatus | None = None
     timezone: str | None = Field(default=None, max_length=64)
     all_day: bool | None = None
-    local_start: datetime | None = None
-    local_end: datetime | None = None
+    local_start: LocalDateTime | None = None
+    local_end: LocalDateTime | None = None
     start_date: date | None = None
     end_date_exclusive: date | None = None
     rrule: str | None = Field(default=None, max_length=200)
@@ -81,12 +100,14 @@ class EventOut(BaseModel):
     id: str
     title: str
     description: str | None
+    location: str | None
+    reminder_minutes_before: int | None
     kind: EventKind
     status: EventStatus
     timezone: str
     all_day: bool
-    local_start: datetime | None
-    local_end: datetime | None
+    local_start: LocalDateTime | None
+    local_end: LocalDateTime | None
     start_date: date | None
     end_date_exclusive: date | None
     starts_at_utc: str | None
@@ -102,15 +123,13 @@ class TimeBlockCreate(_Input):
     title: str = Field(min_length=1, max_length=300)
     description: str | None = Field(default=None, max_length=8000)
     timezone: str = Field(max_length=64)
-    local_start: datetime
-    local_end: datetime
+    local_start: LocalDateTime
+    local_end: LocalDateTime
     status: TimeBlockStatus = "planned"
     task_id: str | None = None
 
     @model_validator(mode="after")
     def _shape(self) -> Self:
-        _naive(self.local_start, "local_start")
-        _naive(self.local_end, "local_end")
         if self.local_end <= self.local_start:
             raise ValueError("local_end debe ser posterior a local_start")
         return self
@@ -120,8 +139,8 @@ class TimeBlockUpdate(_Input):
     title: str | None = Field(default=None, min_length=1, max_length=300)
     description: str | None = Field(default=None, max_length=8000)
     timezone: str | None = Field(default=None, max_length=64)
-    local_start: datetime | None = None
-    local_end: datetime | None = None
+    local_start: LocalDateTime | None = None
+    local_end: LocalDateTime | None = None
     status: TimeBlockStatus | None = None
     task_id: str | None = None
 
@@ -131,8 +150,8 @@ class TimeBlockOut(BaseModel):
     title: str
     description: str | None
     timezone: str
-    local_start: datetime
-    local_end: datetime
+    local_start: LocalDateTime
+    local_end: LocalDateTime
     starts_at_utc: str
     ends_at_utc: str
     status: TimeBlockStatus
@@ -146,14 +165,14 @@ class TimeBlockOut(BaseModel):
 class OccurrenceOverride(_Input):
     title: str | None = Field(default=None, min_length=1, max_length=300)
     description: str | None = Field(default=None, max_length=8000)
-    local_start: datetime | None = None
-    local_end: datetime | None = None
+    local_start: LocalDateTime | None = None
+    local_end: LocalDateTime | None = None
     room: str | None = Field(default=None, max_length=200)
 
 
 class RecurrenceExceptionCreate(_Input):
     occurrence_local_start: str = Field(
-        max_length=19, description="Hora local original de la ocurrencia, o fecha si es de día completo"
+        max_length=16, description="Hora local original de la ocurrencia, o fecha si es de día completo"
     )
     kind: ExceptionKind
     override: OccurrenceOverride | None = None
@@ -198,6 +217,7 @@ class AgendaItem(BaseModel):
     display_end: str | None
     recurring: bool
     modified: bool
+    location: str | None = None
     room: str | None = None
     subject_id: str | None = None
     task_id: str | None = None

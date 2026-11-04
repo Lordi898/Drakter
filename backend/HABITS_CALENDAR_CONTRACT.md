@@ -1,16 +1,19 @@
 # Contrato de hábitos, calendario y asignaturas
 
-Congelado para `drakter/habitos-calendario`. Fuente: `backend/app/schemas/{habits,calendar,subjects}.py`, `backend/app/schemas/ddl_habits_calendar.sql`, `app/services/habits_calendar_support.py` y `app/tools/habits_calendar_toolspec.py`. Los hallazgos C-xx están en el dossier de auditoría.
+**`contracts/` manda sobre este archivo.** Esquema real: `backend/migrations/` (`0002`, `0003`, `0004`, `0006`, `0007`). Esto solo recoge lo propio del módulo.
+
+Congelado para `drakter/habitos-calendario`. Fuente: `backend/app/schemas/{habits,calendar,subjects}.py`, `app/services/habits_calendar_support.py` y `app/tools/habits_calendar_toolspec.py`. Los hallazgos C-xx están en el dossier de auditoría.
 
 ## Reglas comunes
 
 - Capas: `api/<m>.py` (rutas finas) → `services/<m>.py` (reglas, transacción, auditoría) → `repositories/<m>.py` (SQL parametrizado con `sqlite3`, sin reglas). `tools/<m>.py` (autodescubierto, `TOOLS: tuple[ToolSpec, ...]`) llama a servicios, nunca a repositorios ni SQL.
 - Los servicios son síncronos, reciben `(conn, ctx, ...)` y usan `transaction(conn)`. Mutación y `record_audit` van en la misma transacción. Las rutas son `def` (no `async`), con `Depends(get_db)` y `Depends(rest_context)`.
-- Errores con `AppError(code, message, status)`: `not_found` 404, `conflict` 409, `revision_mismatch` 412, `invalid_rrule` 422, `invalid_timezone` 422, `nonexistent_local_time` 422, `window_too_large` 422.
+- Errores solo del catálogo (`contracts/python/drakter_contracts/errors.py`): `not_found` 404, `conflict` 409, `has_dependents` 409 con recuento en `details`, `revision_mismatch` 412, `validation_error` 422 con `details[].field`, `invalid_query` 400 (rango excesivo, fechas de consulta), `nonexistent_local_time` 422. Mensajes en español, sin nombres de campo ni jerga.
 - PATCH: solo `model_fields_set`. `If-Match: <revision>` opcional, se pasa a `touch_entity`. Las salidas exponen `revision`, `archived_at`, `created_at` y `updated_at` de `entities`.
-- Listas: `{"items": [...], "next_cursor": str|null}`, `limit` con `bounded_limit`, cursor con `encode_cursor`. Excluyen archivados salvo `include_archived=true`.
+- Listas: `{"items": [...], "total": n}`, con `limit` (`bounded_limit`) y `offset` (`bounded_offset`). Excluyen archivados salvo `include_archived=true`.
+- Formatos: instantes de 24 caracteres (`now_utc`, `utc_iso`), hora local `HH:MM`, fecha-hora local `AAAA-MM-DDTHH:MM`. `occurrence_id = <source_id>:<AAAA-MM-DDTHH:MM>`.
 - `params` de auditoría: lista blanca de ids, fechas y estados. Nunca títulos, notas ni descripciones.
-- Destructivo: el servicio llama a `request_confirmation(...)` dentro de una transacción y devuelve `ConfirmationRef`; la ruta responde 202 con ese cuerpo. El ejecutor real se registra con `@confirmed_action("<tool>")`, recibe los `args` guardados y audita con `result="success"`. No existe parámetro `force` ni ruta para saltárselo. Aprobar es de `POST /api/v1/confirmations/{id}/approve`, del pipeline común.
+- Destructivo: el servicio llama a `request_confirmation(...)` dentro de una transacción y devuelve `ConfirmationRef`; la ruta devuelve `confirmation_response(ctx, ref)`: siempre HTTP 409, `error.code="confirmation_required"` y `confirmation` al lado. Nunca 2xx. `summary` con `deletion_summary(...)`. El ejecutor real se registra con `@confirmed_action("<tool>")`, recibe los `args` guardados y audita con `result="success"`. No existe parámetro `force` ni ruta para saltárselo. Aprobar es de `POST /api/v1/confirmations/{id}/approve`, del pipeline común.
 - Cada `router = APIRouter(prefix="/api/v1", tags=[...])`. `main.py` no se toca: lo registra el integrador.
 - Texto de terceros (títulos, notas) es dato: nunca se interpreta ni se añade a instrucciones.
 

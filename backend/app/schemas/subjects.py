@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from datetime import date, time
+from datetime import date
 from typing import Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from app.schemas.calendar import ExceptionKind, OccurrenceOverride
+from app.schemas.calendar import ExceptionKind, LocalTime, OccurrenceOverride
 
 
 class _Input(BaseModel):
@@ -46,11 +46,12 @@ class SubjectOut(BaseModel):
 
 class ClassSessionCreate(_Input):
     weekday: int = Field(ge=1, le=7, description="1=lunes .. 7=domingo")
-    starts_local_time: time
-    ends_local_time: time
+    starts_local_time: LocalTime
+    ends_local_time: LocalTime
     timezone: str = Field(max_length=64)
     valid_from: date
     valid_until: date | None = None
+    interval_weeks: int = Field(default=1, ge=1, le=52)
     room: str | None = Field(default=None, max_length=200)
 
     @model_validator(mode="after")
@@ -64,11 +65,12 @@ class ClassSessionCreate(_Input):
 
 class ClassSessionUpdate(_Input):
     weekday: int | None = Field(default=None, ge=1, le=7)
-    starts_local_time: time | None = None
-    ends_local_time: time | None = None
+    starts_local_time: LocalTime | None = None
+    ends_local_time: LocalTime | None = None
     timezone: str | None = Field(default=None, max_length=64)
     valid_from: date | None = None
     valid_until: date | None = None
+    interval_weeks: int | None = Field(default=None, ge=1, le=52)
     room: str | None = Field(default=None, max_length=200)
 
 
@@ -76,11 +78,12 @@ class ClassSessionOut(BaseModel):
     id: str
     subject_id: str
     weekday: int
-    starts_local_time: time
-    ends_local_time: time
+    starts_local_time: LocalTime
+    ends_local_time: LocalTime
     timezone: str
     valid_from: date
     valid_until: date | None
+    interval_weeks: int
     room: str | None
     archived_at: str | None
     revision: int
@@ -109,12 +112,13 @@ class TimetableEntry(BaseModel):
     color: str | None
     teacher: str | None
     weekday: int
-    starts_local_time: time
-    ends_local_time: time
+    starts_local_time: LocalTime
+    ends_local_time: LocalTime
     timezone: str
     room: str | None
     valid_from: date
     valid_until: date | None
+    interval_weeks: int
 
 
 class Timetable(BaseModel):

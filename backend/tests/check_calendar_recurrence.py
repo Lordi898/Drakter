@@ -31,8 +31,8 @@ try:
     raise SystemExit("debía fallar")
 except AppError as e:
     assert e.code == "nonexistent_local_time"
-assert z("2026-03-29T02:30:00") == "2026-03-29T01:30:00Z"
-assert z("2026-10-25T02:30:00", strict=True) == "2026-10-25T00:30:00Z"
+assert z("2026-03-29T02:30:00") == "2026-03-29T01:30:00.000Z"
+assert z("2026-10-25T02:30:00", strict=True) == "2026-10-25T00:30:00.000Z"
 assert to_display(to_utc(datetime(2026, 10, 26, 9), "Europe/Madrid", strict=True), "Europe/Madrid") == "2026-10-26T09:00:00"
 
 # COUNT con ventana tardía (cuenta desde DTSTART)
@@ -64,5 +64,5 @@ for bad in ("FREQ=DAILY;COUNT=2;UNTIL=20260101", "FREQ=DAILY;FOO=1", "FREQ=DAILY
         parse_rrule(bad)
         raise SystemExit(f"debía fallar: {bad}")
     except AppError as e:
-        assert e.code == "invalid_rrule"
+        assert e.details[0].code == "invalid_rrule"
 print("OK")
