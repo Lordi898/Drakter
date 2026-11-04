@@ -251,7 +251,7 @@ Decisiones técnicas, cambios de tecnología y motivos.
 ## [2026-11-04] Interfaz del renderer y confirmación por REST
 - **Contexto:** el orquestador comunica cómo queda el puente Electron frente al borrador. Las referencias D-13 y D-14 solo constan en comentarios de `desktop/electron/shared/` de las ramas `drakter/electron-host` y `drakter/chat-personaje`, no en este archivo.
 - **Decisión:** la interfaz del renderer es `window.api.call(method, path, body)`, en lugar del `api.call(opId, args)` del borrador, y conserva la lista cerrada `ALLOWED_ROUTES` de D-14: main rechaza lo que no esté en ella y el renderer no conoce puerto ni credenciales. Se añaden `getConnection` y los resultados `conflict` y `failed` (D-13). En REST, una operación que necesita confirmación responde 409 con `error.code = "confirmation_required"`, igual que `contracts/python/drakter_contracts/errors.py`, nunca 2xx.
-- **Estado:** el token HMAC de confirmación es PROVISIONAL, pendiente del plan definitivo. `contracts/` no lo define.
+- **Actualización:** el token HMAC de confirmación queda retirado (entrada "Confirmación sin token HMAC").
 - **Alternativas descartadas:** `api.call(opId, args)`, el borrador anterior.
 - **Motivo:** decisión del orquestador; no se han recibido más motivos.
 - **Impacto:** `desktop/electron/`, contrato de rutas. No se ha comprobado en ejecución.
@@ -330,3 +330,19 @@ Decisiones técnicas, cambios de tecnología y motivos.
 - **Alternativas descartadas:** `api.call(opId, args)`.
 - **Motivo:** el proceso principal es el único que conoce token y puerto.
 - **Impacto:** `desktop/electron/`, `contracts/README.md` §1.
+
+## [2026-11-04] Confirmación sin token HMAC
+- **Contexto:** el token HMAC de confirmación estaba anotado como provisional.
+- **Decisión:** se retira. Para aprobar bastan el rol `approver` de D-14 y `params_hash`, con `UPDATE` atómico sobre la fila pendiente.
+- **⚠️ Desajuste con el código:** `drakter/seguridad` (`87f5481`) mantiene `ApprovalSigner` en `backend/app/permissions/credentials.py`, y su `README.md` pide `{params_hash, approval_token}` en `POST /api/v1/confirmations/{id}/approve`. Hay que quitarlo.
+- **Alternativas descartadas:** mantener el HMAC (no aporta nada sobre el rol y el hash).
+- **Motivo:** decisión del orquestador: el rol y el hash con transición atómica son suficientes.
+- **Impacto:** `backend/app/permissions/`, `backend/app/services/actions.py`, `backend/app/api/confirmations.py`.
+
+## [2026-11-04] Ajustes y mensajes: nombres fijados
+- **Contexto:** faltaba fijar tres nombres que comparten backend y GUI.
+- **Decisión:** la clave de zona horaria es `default_timezone`. La tabla `settings` se ajusta en la migración `0011_settings_value.sql`. El cuerpo de `POST /api/v1/chat/sessions/{id}/messages` lleva el texto en `text`, junto a `client_message_id`.
+- **Comprobado por lectura:** `0011_settings_value.sql` está en `drakter/contratos` y `drakter/chat-personaje`, y aún no en `drakter/build`. `text` consta en `contracts/api/routes.md`.
+- **Alternativas descartadas:** ninguna comunicada.
+- **Motivo:** un solo nombre en todo el sistema.
+- **Impacto:** `backend/migrations/`, `contracts/`, `desktop/src/stores/chat.ts`.
