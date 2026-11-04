@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useSyncExternalStore } from 'react'
+import { useEffect, useLayoutEffect, useRef, useSyncExternalStore } from 'react'
 import { PanelRightClose, PanelRightOpen } from 'lucide-react'
 import { toggleContextPanel, useAppShortcuts } from '@/app/useAppShortcuts'
 import { ChatDock } from '@/chat/ChatDock'
@@ -8,6 +8,8 @@ import { NotificationCenter } from '@/components/notifications/NotificationCente
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
+import { startNotificationFeed } from '@/modules/notifications'
+import { SearchPalette } from '@/modules/search'
 import { PAGES } from '@/navigation/pages'
 import { useCurrentSection } from '@/navigation/route'
 import { Sidebar } from '@/navigation/Sidebar'
@@ -62,6 +64,8 @@ export function AppShell() {
 
   useAppShortcuts(wide)
 
+  useEffect(() => startNotificationFeed(), [])
+
   useLayoutEffect(() => {
     scrollerRef.current?.scrollTo({ top: 0 })
   }, [section])
@@ -110,6 +114,8 @@ export function AppShell() {
           <ContextPanel />
         </div>
       </div>
+
+      <SearchPalette />
     </div>
   )
 }

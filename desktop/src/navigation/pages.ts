@@ -7,10 +7,12 @@ import { StoragePage } from '@/modules/storage/StoragePage'
 import { SubjectsPage } from '@/modules/subjects/SubjectsPage'
 import { TasksPage } from '@/modules/tasks/TasksPage'
 import { HomePage } from '@/pages/HomePage'
+import { TodayPage } from '@/pages/today/TodayPage'
 import { SettingsPage } from '@/settings/SettingsPage'
 import type { SectionId } from './sections'
 
 export const PAGES: Readonly<Record<SectionId, ComponentType>> = {
+  today: TodayPage,
   home: HomePage,
   habits: HabitsPage,
   tasks: TasksPage,

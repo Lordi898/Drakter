@@ -3,6 +3,7 @@ import { AlertTriangle, Bell, CheckCircle2, Info, OctagonAlert, type LucideIcon 
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { RemindersNotice } from '@/modules/notifications'
 import {
   clearNotifications,
   markAllNotificationsRead,
@@ -89,6 +90,9 @@ export function NotificationCenter() {
             </ul>
           </ScrollArea>
         )}
+        <div className="border-t border-border p-2">
+          <RemindersNotice compact />
+        </div>
       </PopoverContent>
     </Popover>
   )

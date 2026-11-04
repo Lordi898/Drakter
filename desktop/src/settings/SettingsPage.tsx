@@ -5,6 +5,7 @@ import { ErrorProbe } from '@/components/errors/ErrorProbe'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
+import { RemindersNotice } from '@/modules/notifications'
 import { fetchSettingsStatus } from '@/pages/today/requests'
 import { notify } from '@/services/notify'
 import { updatePreferences, usePreferences, type ThemePreference } from '@/stores/preferences'
@@ -149,6 +150,7 @@ export function SettingsPage() {
       </Section>
 
       <Section title="Notificaciones">
+        <RemindersNotice />
         <Rows>
           <SettingRow
             title="Avisos de escritorio"
