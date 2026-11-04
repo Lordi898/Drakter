@@ -1,17 +1,22 @@
 -- Almacen. Nunca hay ruta absoluta libre: location_id + relative_path. Folder es organizacion, no tipo de recurso.
 -- Nota y apunte son recursos note/study_note con note_body en BD.
+-- agent_read: el agente solo lee una ubicacion con permiso explicito. root_dev/root_ino: identidad de la raiz, comprobada al abrir.
 CREATE TABLE storage_locations (
   id TEXT NOT NULL,
   path TEXT NOT NULL,
   label TEXT NOT NULL,
   read_only INTEGER NOT NULL DEFAULT 1,
   enabled INTEGER NOT NULL DEFAULT 1,
+  agent_read INTEGER NOT NULL DEFAULT 0,
+  root_dev INTEGER,
+  root_ino INTEGER,
   created_at TEXT NOT NULL,
   CONSTRAINT pk_storage_locations PRIMARY KEY (id),
   CONSTRAINT uq_storage_locations_path UNIQUE (path),
   CONSTRAINT ck_storage_locations_path CHECK (substr(path, 1, 1) = '/' OR path GLOB '[A-Za-z]:[\\/]*'),
   CONSTRAINT ck_storage_locations_read_only CHECK (read_only IN (0, 1)),
-  CONSTRAINT ck_storage_locations_enabled CHECK (enabled IN (0, 1))
+  CONSTRAINT ck_storage_locations_enabled CHECK (enabled IN (0, 1)),
+  CONSTRAINT ck_storage_locations_agent_read CHECK (agent_read IN (0, 1))
 );
 
 CREATE TABLE folders (

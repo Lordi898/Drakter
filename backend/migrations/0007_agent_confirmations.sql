@@ -1,3 +1,4 @@
+-- conversations.id es el session_id de /chat/sessions; pending_confirmations.id es el action_id.
 -- Conversacion, turnos, mensajes, confirmaciones impuestas por el backend e idempotencia.
 CREATE TABLE conversations (
   id TEXT NOT NULL,
@@ -34,6 +35,7 @@ CREATE TABLE messages (
   turn_id TEXT,
   role TEXT NOT NULL,
   content TEXT NOT NULL,
+  client_message_id TEXT,
   status TEXT NOT NULL DEFAULT 'complete',
   created_at TEXT NOT NULL,
   CONSTRAINT pk_messages PRIMARY KEY (id),
@@ -43,6 +45,7 @@ CREATE TABLE messages (
   CONSTRAINT fk_messages_turn FOREIGN KEY (turn_id) REFERENCES agent_turns (id) ON DELETE RESTRICT
 );
 CREATE INDEX ix_messages_conversation ON messages (conversation_id, created_at);
+CREATE UNIQUE INDEX ux_messages_client_id ON messages (conversation_id, client_message_id) WHERE client_message_id IS NOT NULL;
 
 -- summary y affected_count los calcula el backend desde los argumentos, nunca el modelo.
 -- targets_json guarda ids y revision resueltos: si difieren al aprobar, se responde conflict.
@@ -59,7 +62,7 @@ CREATE TABLE pending_confirmations (
   summary TEXT NOT NULL,
   affected_count INTEGER,
   risk TEXT NOT NULL,
-  status TEXT NOT NULL DEFAULT 'pending',
+  status TEXT NOT NULL DEFAULT 'pending', -- reclamar = UPDATE ... SET status='executing' WHERE status='approved'
   created_at TEXT NOT NULL,
   expires_at TEXT NOT NULL,
   decided_at TEXT,
@@ -73,11 +76,11 @@ CREATE TABLE pending_confirmations (
   CONSTRAINT ck_pc_args CHECK (json_valid(args_json)),
   CONSTRAINT ck_pc_targets CHECK (json_valid(targets_json)),
   CONSTRAINT ck_pc_result CHECK (result_json IS NULL OR json_valid(result_json)),
-  CONSTRAINT ck_pc_risk CHECK (risk IN ('write','sensitive')),
-  CONSTRAINT ck_pc_status CHECK (status IN ('pending','approved','rejected','expired','executed','failed')),
+  CONSTRAINT ck_pc_risk CHECK (risk IN ('write','confirm')),
+  CONSTRAINT ck_pc_status CHECK (status IN ('pending','approved','rejected','expired','executing','executed','failed')),
   CONSTRAINT ck_pc_decided CHECK (
     (status IN ('pending','expired') AND decided_at IS NULL AND decided_via IS NULL)
-    OR (status IN ('approved','rejected','executed','failed') AND decided_at IS NOT NULL AND decided_via = 'desktop')
+    OR (status IN ('approved','rejected','executing','executed','failed') AND decided_at IS NOT NULL AND decided_via IS 'desktop')
   ),
   CONSTRAINT fk_pc_turn FOREIGN KEY (turn_id) REFERENCES agent_turns (id) ON DELETE SET NULL
 );
@@ -86,7 +89,8 @@ CREATE TRIGGER trg_pc_transition BEFORE UPDATE OF status ON pending_confirmation
 WHEN NOT (
   new.status = old.status
   OR (old.status = 'pending' AND new.status IN ('approved','rejected','expired'))
-  OR (old.status = 'approved' AND new.status IN ('executed','failed'))
+  OR (old.status = 'approved' AND new.status IN ('executing','failed'))
+  OR (old.status = 'executing' AND new.status IN ('executed','failed'))
 ) BEGIN
   SELECT raise(ABORT, 'confirmation_invalid_transition');
 END;
@@ -95,6 +99,11 @@ BEGIN
   SELECT raise(ABORT, 'confirmation_immutable');
 END;
 CREATE TRIGGER trg_pc_no_delete BEFORE DELETE ON pending_confirmations BEGIN
+  SELECT raise(ABORT, 'confirmation_immutable');
+END;
+-- INSERT OR REPLACE sustituiria una fila ya resuelta sin pasar por los triggers de borrado.
+CREATE TRIGGER trg_pc_no_replace BEFORE INSERT ON pending_confirmations
+WHEN EXISTS (SELECT 1 FROM pending_confirmations WHERE id = new.id) BEGIN
   SELECT raise(ABORT, 'confirmation_immutable');
 END;
 

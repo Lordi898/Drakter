@@ -1,34 +1,85 @@
--- Registro de memoria (metadatos y procedencia; el contenido vive en OpenViking o Hermes) y automejora.
--- review_text solo existe mientras un candidato espera revision y se vacia al decidir o borrar.
-CREATE TABLE memory_items (
+-- Memoria gestionada por Drakter (propuesta de drakter-18). Fechas en formato de instante; ids UUID.
+-- memory_fts guarda copia propia del texto: borrar un registro borra sus tokens. Cuenta para copias y borrado.
+CREATE TABLE memory_records (
+  seq INTEGER PRIMARY KEY AUTOINCREMENT,
   id TEXT NOT NULL,
-  provider TEXT NOT NULL,
-  external_uri TEXT,
   kind TEXT NOT NULL,
-  status TEXT NOT NULL DEFAULT 'candidate',
-  provenance_type TEXT NOT NULL,
-  provenance_ref TEXT,
-  confidence REAL,
-  review_text TEXT,
-  supersedes_id TEXT,
-  conversation_id TEXT,
-  expires_at TEXT,
+  category TEXT NOT NULL,
+  subject TEXT NOT NULL DEFAULT '',
+  subject_norm TEXT NOT NULL DEFAULT '',
+  content TEXT NOT NULL,
+  abstract TEXT NOT NULL DEFAULT '',
+  overview TEXT NOT NULL DEFAULT '',
+  source_type TEXT NOT NULL,
+  source_ref TEXT,
+  session_id TEXT,
+  captured_at TEXT NOT NULL,
+  trust TEXT NOT NULL,
+  confidence REAL NOT NULL DEFAULT 0.5,
+  valid_until TEXT,
+  status TEXT NOT NULL,
+  content_hash TEXT NOT NULL,
+  supersedes TEXT,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
-  deleted_at TEXT,
-  CONSTRAINT pk_memory_items PRIMARY KEY (id),
-  CONSTRAINT uq_memory_items_uri UNIQUE (provider, external_uri),
-  CONSTRAINT ck_memory_provider CHECK (provider IN ('openviking','hermes_native')),
-  CONSTRAINT ck_memory_kind CHECK (kind IN ('episodic','semantic','procedural')),
-  CONSTRAINT ck_memory_status CHECK (status IN ('candidate','active','superseded','rejected','deleted')),
-  CONSTRAINT ck_memory_provenance CHECK (provenance_type IN ('conversation','document','tool_result','user_correction','system')),
-  CONSTRAINT ck_memory_confidence CHECK (confidence IS NULL OR confidence BETWEEN 0 AND 1),
-  CONSTRAINT ck_memory_review CHECK (status = 'candidate' OR review_text IS NULL),
-  CONSTRAINT ck_memory_deleted CHECK ((status = 'deleted') = (deleted_at IS NOT NULL)),
-  CONSTRAINT fk_memory_supersedes FOREIGN KEY (supersedes_id) REFERENCES memory_items (id) ON DELETE SET NULL,
-  CONSTRAINT fk_memory_conversation FOREIGN KEY (conversation_id) REFERENCES conversations (id) ON DELETE SET NULL
+  CONSTRAINT uq_memory_records_id UNIQUE (id),
+  CONSTRAINT ck_memory_records_kind CHECK (kind IN ('working','episodic','semantic','procedural')),
+  CONSTRAINT ck_memory_records_category CHECK (category IN ('profile','preferences','entities','events','cases','patterns')),
+  CONSTRAINT ck_memory_records_content CHECK (length(content) > 0),
+  CONSTRAINT ck_memory_records_source CHECK (source_type IN ('user_gui','user_conversation','agent','tool_result','document','import')),
+  CONSTRAINT ck_memory_records_trust CHECK (trust IN ('user_confirmed','user_stated','derived','third_party')),
+  CONSTRAINT ck_memory_records_confidence CHECK (confidence >= 0.0 AND confidence <= 1.0),
+  CONSTRAINT ck_memory_records_status CHECK (status IN ('pending','approved','rejected','superseded'))
 );
-CREATE INDEX ix_memory_items_status ON memory_items (status, kind);
+CREATE INDEX ix_memory_records_status ON memory_records (status);
+CREATE INDEX ix_memory_records_subject ON memory_records (subject_norm);
+CREATE INDEX ix_memory_records_content_hash ON memory_records (content_hash);
+
+CREATE TABLE memory_entity_refs (
+  memory_id TEXT NOT NULL,
+  position INTEGER NOT NULL,
+  entity_type TEXT NOT NULL,
+  entity_id TEXT NOT NULL,
+  CONSTRAINT pk_memory_entity_refs PRIMARY KEY (memory_id, position),
+  CONSTRAINT fk_memory_entity_refs_memory FOREIGN KEY (memory_id) REFERENCES memory_records (id) ON DELETE CASCADE
+);
+CREATE INDEX ix_memory_entity_refs_entity ON memory_entity_refs (entity_type, entity_id);
+
+CREATE TABLE memory_conflicts (
+  id TEXT NOT NULL,
+  memory_a TEXT NOT NULL,
+  memory_b TEXT NOT NULL,
+  reason TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  resolved_at TEXT,
+  kept TEXT,
+  CONSTRAINT pk_memory_conflicts PRIMARY KEY (id),
+  CONSTRAINT ck_memory_conflicts_status CHECK (status IN ('open','resolved')),
+  CONSTRAINT ck_memory_conflicts_pair CHECK (memory_a <> memory_b),
+  CONSTRAINT fk_memory_conflicts_a FOREIGN KEY (memory_a) REFERENCES memory_records (id) ON DELETE CASCADE,
+  CONSTRAINT fk_memory_conflicts_b FOREIGN KEY (memory_b) REFERENCES memory_records (id) ON DELETE CASCADE
+);
+CREATE INDEX ix_memory_conflicts_status ON memory_conflicts (status);
+CREATE INDEX ix_memory_conflicts_a ON memory_conflicts (memory_a);
+CREATE INDEX ix_memory_conflicts_b ON memory_conflicts (memory_b);
+
+CREATE VIRTUAL TABLE memory_fts USING fts5 (
+  subject, abstract, overview, content,
+  tokenize = 'unicode61 remove_diacritics 2'
+);
+CREATE TRIGGER trg_memory_records_ai AFTER INSERT ON memory_records BEGIN
+  INSERT INTO memory_fts (rowid, subject, abstract, overview, content)
+  VALUES (new.seq, new.subject, new.abstract, new.overview, new.content);
+END;
+CREATE TRIGGER trg_memory_records_au AFTER UPDATE OF subject, abstract, overview, content ON memory_records BEGIN
+  DELETE FROM memory_fts WHERE rowid = old.seq;
+  INSERT INTO memory_fts (rowid, subject, abstract, overview, content)
+  VALUES (new.seq, new.subject, new.abstract, new.overview, new.content);
+END;
+CREATE TRIGGER trg_memory_records_ad AFTER DELETE ON memory_records BEGIN
+  DELETE FROM memory_fts WHERE rowid = old.seq;
+END;
 
 CREATE TABLE improvement_feedback (
   id TEXT NOT NULL,
@@ -62,7 +113,7 @@ CREATE TABLE improvement_proposals (
   CONSTRAINT ck_improvement_proposals_status CHECK (status IN ('draft','evaluating','ready','approved','rejected','applied','failed')),
   CONSTRAINT ck_improvement_proposals_creator CHECK (created_by IN ('user','agent','system')),
   CONSTRAINT ck_improvement_proposals_decided CHECK (
-    status NOT IN ('approved','rejected','applied') OR (decided_at IS NOT NULL AND decided_via = 'desktop')
+    status NOT IN ('approved','rejected','applied') OR (decided_at IS NOT NULL AND decided_via IS 'desktop')
   ),
   CONSTRAINT fk_improvement_proposals_feedback FOREIGN KEY (feedback_id) REFERENCES improvement_feedback (id) ON DELETE SET NULL
 );
