@@ -28,7 +28,7 @@ Premisa del plan que es falsa: **32 GB de RAM y 4 GB de VRAM**. Están en `docs/
 
 Incidencias de esta verificación:
 - Un agente ejecutó Python con `-I`, que ignora `PYTHONDONTWRITEBYTECODE`, y dejó hasta 2.698 `.pyc` (35,4 MB) en `/tmp/drakter-3-work`, que debía ser solo lectura. Solo `.pyc`; `git status` de `hermes-src` limpio. Orquestador informado: no se limpia.
-- `hermes doctor` llamó a `GET https://api.anthropic.com/v1/models` con la clave falsa `sk-ant-api03-fake-for-stub`, en contra de lo pedido. URL fija (`hermes_cli/doctor_connectivity.py:165`), ignora `base_url`. Sin clave real ni llamada a Messages. **No ejecutar `hermes doctor` con claves reales salvo que se acepte enviarlas a todos los proveedores configurados.**
+- `hermes doctor` llamó a `GET https://api.anthropic.com/v1/models` con la clave falsa `CLAVE_FALSA`, en contra de lo pedido. URL fija (`hermes_cli/doctor_connectivity.py:165`), ignora `base_url`. Sin clave real ni llamada a Messages. **No ejecutar `hermes doctor` con claves reales salvo que se acepte enviarlas a todos los proveedores configurados.**
 - OpenViking descargó sin avisar un modelo de 47,9 MB de HuggingFace durante una prueba sin embedding (§2.3).
 - El plugin de OpenViking se descargó de GitHub con autorización del líder, fijado por sha y leído antes de ejecutar.
 
