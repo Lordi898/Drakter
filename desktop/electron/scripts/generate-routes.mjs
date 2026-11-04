@@ -30,20 +30,11 @@ function isApproverOnly(method, path) {
   return path.startsWith('/api/v1/storage-locations') && method !== 'GET'
 }
 
-/** Rutas que ya usa un frente y faltan en el contrato. Se quitan al publicarse allí. */
-const NOT_YET_IN_CONTRACT = [
-  ['GET', '/api/v1/tasks/tags'],
-  ['PUT', '/api/v1/tasks/{id}/tags']
-]
-
 // Lo que sigue a este título son desviaciones de los frentes, no rutas válidas.
 const [routes] = readContract().split(/^## Desviaciones/m)
-const rows = [
-  ...[...routes.matchAll(/^\| (GET|POST|PUT|PATCH|DELETE) \| `([^`]+)`(.*)$/gm)]
-    .filter(([, , , rest]) => !rest.includes('(`approver`)'))
-    .map(([, m, p]) => [m, p]),
-  ...NOT_YET_IN_CONTRACT
-]
+const rows = [...routes.matchAll(/^\| (GET|POST|PUT|PATCH|DELETE) \| `([^`]+)`(.*)$/gm)]
+  .filter(([, , , rest]) => !rest.includes('(`approver`)'))
+  .map(([, m, p]) => [m, p])
 const seen = new Set()
 const lines = []
 for (const [method, path] of rows) {
