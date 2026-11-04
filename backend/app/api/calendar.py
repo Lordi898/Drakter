@@ -25,6 +25,7 @@ from app.schemas.calendar import (
     TimeBlockWriteResult,
 )
 from app.services import calendar as service
+from app.services import calendar_reminders  # noqa: F401  (registra las fuentes de recordatorios)
 from app.services.habits_calendar_support import (
     RequestContext,
     confirmation_response,

@@ -275,3 +275,12 @@ def blocks_in_window(conn: sqlite3.Connection, start_utc: str, end_utc: str) -> 
 
 def delete_time_block(conn: sqlite3.Connection, block_id: str) -> None:
     conn.execute("DELETE FROM time_blocks WHERE id=?", (block_id,))
+
+
+def recurring_with_reminder(conn: sqlite3.Connection) -> list[dict[str, Any]]:
+    return _rows(
+        conn.execute(
+            f"{_EVENT_SELECT} WHERE c.rrule IS NOT NULL AND c.reminder_minutes_before IS NOT NULL "
+            "AND c.status<>'cancelled' AND e.archived_at IS NULL"
+        )
+    )

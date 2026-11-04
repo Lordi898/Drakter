@@ -173,3 +173,13 @@ def records_between(
         (habit_id, start, end),
     )
     return _rows(cur)
+
+
+def reminder_candidates(conn: sqlite3.Connection) -> list[dict[str, Any]]:
+    return _rows(
+        conn.execute(
+            "SELECT h.id,h.name,h.timezone,h.preferred_local_time,h.start_date,h.end_date "
+            "FROM habits h JOIN entities e ON e.id=h.id WHERE h.reminder_enabled=1 "
+            "AND h.preferred_local_time IS NOT NULL AND h.status='active' AND e.archived_at IS NULL"
+        )
+    )
