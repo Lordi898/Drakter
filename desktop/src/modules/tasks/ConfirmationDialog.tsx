@@ -8,13 +8,15 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog'
-import { registerConfirmation, reviewConfirmation, type ReviewOutcome } from '@/stores/confirmations'
+import { reviewConfirmation, type ReviewOutcome } from '@/stores/confirmations'
 import type { PendingTicket } from './useTaskRunner'
+
+export type ConfirmationOutcome = ReviewOutcome
 
 export interface ConfirmationDialogProps {
   /** Confirmación que el backend pidió; `null` mantiene el diálogo cerrado. */
   readonly ticket: PendingTicket | null
-  /** `approved` recarga; `rejected` cierra; `dismissed` no hace nada; `expired`/`unavailable` avisan. */
+  /** `approved` y `conflict` recargan; `rejected` y `expired` cierran; `failed` avisa y deja reintentar. */
   readonly onResolved: (outcome: ReviewOutcome) => void
 }
 
@@ -29,10 +31,9 @@ export function ConfirmationDialog({ ticket, onResolved }: ConfirmationDialogPro
     if (ticket === null || busy) return
     const nativeEvent = event.nativeEvent
     setBusy(true)
-    registerConfirmation(ticket)
     reviewConfirmation(ticket.id, nativeEvent)
       .then(onResolved)
-      .catch(() => onResolved('unavailable'))
+      .catch(() => onResolved('failed'))
       .finally(() => setBusy(false))
   }
 
@@ -51,11 +52,13 @@ export function ConfirmationDialog({ ticket, onResolved }: ConfirmationDialogPro
         {ticket !== null ? (
           <div className="flex flex-col gap-2 rounded-md border border-destructive/40 bg-card p-4">
             <p className="text-sm font-medium text-foreground">{ticket.summary}</p>
-            <p className="text-sm text-muted-foreground">
-              {ticket.affected_count === 1
-                ? 'Afecta a 1 elemento.'
-                : `Afecta a ${ticket.affected_count} elementos.`}
-            </p>
+            {ticket.affected_count !== null ? (
+              <p className="text-sm text-muted-foreground">
+                {ticket.affected_count === 1
+                  ? 'Afecta a 1 elemento.'
+                  : `Afecta a ${ticket.affected_count} elementos.`}
+              </p>
+            ) : null}
           </div>
         ) : null}
         <DialogFooter>

@@ -14,8 +14,9 @@ export type TaskListParams = Omit<BaseListParams, 'archived' | 'cursor'> & {
 
 const BASE = '/api/v1/tasks'
 
-export function ifMatch(revision: number): Readonly<Record<string, string>> {
-  return { 'If-Match': `"${revision}"` }
+/** La GUI no puede enviar cabeceras: la revisión esperada va como `?revision=N`. */
+export function withRevision(path: string, revision: number): string {
+  return `${path}${path.includes('?') ? '&' : '?'}revision=${revision}`
 }
 
 function toQuery(params: Readonly<Record<string, unknown>>): string {
@@ -42,31 +43,30 @@ export function createTask(data: TaskCreate): Promise<Task> {
 }
 
 export function updateTask(id: string, patch: TaskUpdate, revision: number): Promise<Task> {
-  return apiRequest<Task>(`${BASE}/${id}`, { method: 'PATCH', body: patch, headers: ifMatch(revision) })
+  return apiRequest<Task>(withRevision(`${BASE}/${id}`, revision), { method: 'PATCH', body: patch })
 }
 
 export function completeTask(id: string, revision: number, completeSubtasks = false): Promise<Task> {
-  return apiRequest<Task>(`${BASE}/${id}/complete`, {
+  return apiRequest<Task>(withRevision(`${BASE}/${id}/complete`, revision), {
     method: 'POST',
-    body: { complete_subtasks: completeSubtasks },
-    headers: ifMatch(revision)
+    body: { complete_subtasks: completeSubtasks }
   })
 }
 
 export function reopenTask(id: string, revision: number): Promise<Task> {
-  return apiRequest<Task>(`${BASE}/${id}/reopen`, { method: 'POST', headers: ifMatch(revision) })
+  return apiRequest<Task>(withRevision(`${BASE}/${id}/reopen`, revision), { method: 'POST' })
 }
 
 export function archiveTask(id: string, revision: number): Promise<Task> {
-  return apiRequest<Task>(`${BASE}/${id}/archive`, { method: 'POST', headers: ifMatch(revision) })
+  return apiRequest<Task>(withRevision(`${BASE}/${id}/archive`, revision), { method: 'POST' })
 }
 
 export function unarchiveTask(id: string, revision: number): Promise<Task> {
-  return apiRequest<Task>(`${BASE}/${id}/unarchive`, { method: 'POST', headers: ifMatch(revision) })
+  return apiRequest<Task>(withRevision(`${BASE}/${id}/unarchive`, revision), { method: 'POST' })
 }
 
 export function deleteTask(id: string, revision: number): Promise<void> {
-  return apiRequest<void>(`${BASE}/${id}`, { method: 'DELETE', headers: ifMatch(revision) })
+  return apiRequest<void>(withRevision(`${BASE}/${id}`, revision), { method: 'DELETE' })
 }
 
 export function createSubtask(parentId: string, data: Omit<TaskCreate, 'parent_task_id'>): Promise<Task> {

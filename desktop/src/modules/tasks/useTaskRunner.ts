@@ -1,11 +1,11 @@
 import { useCallback, useState } from 'react'
-import { ApiError } from '@/services/api'
+import { ApiError, type ConfirmationTicket } from '@/services/api'
 import type { ApiErrorDetail } from '@/services/protocol'
 import { notify } from '@/services/notify'
 import type { ReviewOutcome } from '@/stores/confirmations'
 import { errorMessage } from './useTasks'
 
-export type PendingTicket = NonNullable<ApiError['confirmation']>
+export type PendingTicket = ConfirmationTicket
 
 /**
  * Ejecuta una operación y traduce sus fallos. Devuelve `undefined` si no se llegó a completar.
@@ -72,17 +72,31 @@ export function useTaskRunner(onChanged: () => void): TaskRunner {
 
   const resolveConfirmation = useCallback(
     (outcome: ReviewOutcome) => {
-      if (outcome === 'dismissed') return
+      if (outcome === 'failed') {
+        notify({
+          tone: 'error',
+          title: 'No se pudo revisar la confirmación',
+          body: 'No se ha hecho ningún cambio. Puedes intentarlo de nuevo.'
+        })
+        return
+      }
       setTicket(null)
       if (outcome === 'approved') {
         notify({ tone: 'success', title: 'Acción confirmada' })
         onChanged()
-      } else if (outcome === 'expired' || outcome === 'unavailable') {
+      } else if (outcome === 'expired') {
         notify({
           tone: 'warning',
-          title: outcome === 'expired' ? 'La confirmación ha caducado' : 'No se pudo revisar la confirmación',
+          title: 'La confirmación ha caducado',
           body: 'No se ha hecho ningún cambio. Vuelve a intentarlo.'
         })
+      } else if (outcome === 'conflict') {
+        notify({
+          tone: 'warning',
+          title: 'Los datos habían cambiado',
+          body: 'No se ha ejecutado la acción. He recargado para que veas el estado actual.'
+        })
+        onChanged()
       }
     },
     [onChanged]
