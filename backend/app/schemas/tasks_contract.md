@@ -32,6 +32,7 @@ Las respuestas `*Out` se construyen con `model_validate` de dicts; `id` y fechas
 
 - Una tarea `completed` no admite subtareas abiertas: crear bajo ella, o pasar a un estado abierto una subtarea suya por `update_task`, da `conflict`.
 - Borrar una tarea de la que dependen otras fuera del subárbol: cada una sube `revision` y audita `task.dependency_remove`; entran en `targets` y el `summary` indica `y {m} dependientes`.
+- `changes` de auditoría: descripción, objetivo y metadatos se anotan como `{"changed": true}`, sin su texto.
 - `params` de auditoría: solo ids, booleanos y nombres de campos, nunca títulos, descripciones ni metadatos (lista blanca).
 - Toda escritura pública lleva `@audits_failure(action, entity_type)` de `tasks_shared`.
 

@@ -25,6 +25,7 @@ logger = logging.getLogger("drakter.workspace")
 _SENSITIVE_KEYS = (
     "token", "secret", "password", "api_key", "apikey", "authorization", "credential", "cookie",
 )
+_FREE_TEXT_KEYS = ("description", "metadata", "objective")  # Se anota que cambió, no qué dice.
 _MAX_AUDIT_VALUE = 500
 
 
@@ -192,6 +193,8 @@ def dependents_of(conn: sqlite3.Connection, task_id: str) -> list[str]:
 def _redact(value: Any, key: str = "") -> Any:
     if any(mark in key.lower() for mark in _SENSITIVE_KEYS):
         return "[REDACTED]"
+    if key in _FREE_TEXT_KEYS:
+        return {"changed": True}
     if isinstance(value, Mapping):
         return {str(k): _redact(v, str(k)) for k, v in value.items()}
     if isinstance(value, list | tuple):
