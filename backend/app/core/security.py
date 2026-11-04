@@ -1,47 +1,47 @@
-"""Token de sesión, archivo de sesión y guardia ASGI de la API local."""
+"""Tokens de arranque y guardia ASGI del puerto de la GUI (D-14)."""
+
+from __future__ import annotations
 
 import hmac
-import json
 import logging
-import os
-import secrets
-from datetime import UTC, datetime
-from pathlib import Path
-from typing import Final, NamedTuple
+import re
+from dataclasses import dataclass
+from enum import StrEnum
+from typing import TYPE_CHECKING, Final, NamedTuple
 from uuid import uuid4
 
-from starlette.types import ASGIApp, Receive, Scope, Send
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from app.core.config import BIND_HOST
-from app.core.errors import CORS_ORIGIN_STATE_KEY, cors_headers, error_body_bytes
+from app.core.errors import error_body_bytes
 from app.core.logging import register_secret
 
-PUBLIC_PATHS: Final = frozenset({"/health"})
+if TYPE_CHECKING:
+    from app.core.bootstrap import Credentials
+
 WS_SUBPROTOCOL: Final = "drakter.v1"
-WS_AUTH_PREFIX: Final = "drakter.auth."
+MAX_BODY_BYTES: Final = 1_048_576
 
 logger = logging.getLogger("drakter.security")
 
-_WS_AUTH_PREFIX_BYTES: Final = WS_AUTH_PREFIX.encode("ascii")
 _WS_POLICY_VIOLATION: Final = 1008
-# O_NOFOLLOW no existe en Windows.
-_O_NOFOLLOW: Final = getattr(os, "O_NOFOLLOW", 0)
+_MAX_LOGGED_PATH: Final = 256
+_APPROVAL_PATH: Final = re.compile(r"/api/v1/confirmations/[^/]+/(?:approve|reject)/*")
+_APPROVER_WRITE_PATHS: Final = ("/api/v1/storage-locations", "/api/v1/permissions")
+_SAFE_METHODS: Final = frozenset({"GET", "HEAD"})
 
 
 class SessionToken:
     __slots__ = ("_value",)
 
-    def __init__(self) -> None:
-        self._value = secrets.token_urlsafe(32)
-        register_secret(self._value)
+    def __init__(self, value: str) -> None:
+        self._value = value.encode("ascii")
+        register_secret(value)
 
     def matches(self, candidate: bytes) -> bool:
         if not isinstance(candidate, bytes):
             return False
-        return hmac.compare_digest(self._value.encode("ascii"), candidate)
-
-    def reveal(self) -> str:
-        return self._value
+        return hmac.compare_digest(self._value, candidate)
 
     def __repr__(self) -> str:
         return "SessionToken(<redacted>)"
@@ -49,45 +49,19 @@ class SessionToken:
     __str__ = __repr__
 
 
-def write_session_file(path: Path, token: SessionToken, port: int) -> None:
-    payload = json.dumps(
-        {
-            "token": token.reveal(),
-            "port": port,
-            "pid": os.getpid(),
-            "started_at": datetime.now(UTC).isoformat(),
-        }
-    ).encode("utf-8")
-    temporary = path.with_name(f".{path.name}.{secrets.token_hex(8)}.tmp")
-    descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | _O_NOFOLLOW, 0o600)
-    try:
-        with os.fdopen(descriptor, "wb") as stream:
-            stream.write(payload)
-            stream.flush()
-            os.fsync(stream.fileno())
-        os.replace(temporary, path)
-    except BaseException:
-        temporary.unlink(missing_ok=True)
-        raise
+class Role(StrEnum):
+    UI = "ui"
+    APPROVER = "approver"
 
 
-def remove_session_file(path: Path) -> None:
-    try:
-        descriptor = os.open(path, os.O_RDONLY | _O_NOFOLLOW)
-    except FileNotFoundError:
-        return
-    except OSError:
-        # Un symlink u otra cosa que no abrimos no es nuestro archivo.
-        logger.warning("Session file not removed", extra={"event": "session_file_not_removed"})
-        return
-    try:
-        with os.fdopen(descriptor, "rb") as stream:
-            owner = json.loads(stream.read()).get("pid")
-    except (OSError, ValueError, AttributeError):
-        logger.warning("Session file not removed", extra={"event": "session_file_not_removed"})
-        return
-    if owner == os.getpid():
-        path.unlink(missing_ok=True)
+def required_role(method: str | None, path: str) -> Role:
+    if _APPROVAL_PATH.fullmatch(path):
+        return Role.APPROVER
+    if method not in _SAFE_METHODS and method is not None:
+        for protected in _APPROVER_WRITE_PATHS:
+            if path == protected or path.startswith(f"{protected}/"):
+                return Role.APPROVER
+    return Role.UI
 
 
 class _Rejection(NamedTuple):
@@ -100,6 +74,8 @@ _FORBIDDEN_CLIENT: Final = _Rejection(403, "forbidden_client", "Client not allow
 _FORBIDDEN_HOST: Final = _Rejection(403, "forbidden_host", "Host not allowed")
 _FORBIDDEN_ORIGIN: Final = _Rejection(403, "forbidden_origin", "Origin not allowed")
 _UNAUTHORIZED: Final = _Rejection(401, "unauthorized", "Authentication required")
+_PERMISSION_DENIED: Final = _Rejection(403, "permission_denied", "Permission denied")
+_BODY_TOO_LARGE: Final = _Rejection(413, "file_too_large", "Request body too large")
 
 
 def _headers_by_name(scope: Scope) -> dict[bytes, list[bytes]]:
@@ -110,19 +86,25 @@ def _headers_by_name(scope: Scope) -> dict[bytes, list[bytes]]:
     return headers
 
 
+def _declares_oversized_body(headers: dict[bytes, list[bytes]]) -> bool:
+    return any(
+        value.isdigit() and int(value) > MAX_BODY_BYTES
+        for value in headers.get(b"content-length", ())
+    )
+
+
+@dataclass(slots=True)
+class _BodyLimit:
+    seen: int = 0
+    response_started: bool = False
+    blocked: bool = False
+
+
 class SecurityGuardMiddleware:
-    def __init__(
-        self,
-        app: ASGIApp,
-        *,
-        token: SessionToken,
-        port: int,
-        allowed_origins: tuple[str, ...],
-    ) -> None:
+    def __init__(self, app: ASGIApp, *, credentials: Credentials, port: int) -> None:
         self.app = app
-        self._token = token
-        self._hosts = frozenset({f"127.0.0.1:{port}".encode(), f"localhost:{port}".encode()})
-        self._origins = frozenset(origin.encode("utf-8") for origin in allowed_origins)
+        self._credentials = credentials
+        self._host = f"{BIND_HOST}:{port}".encode("ascii")
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] == "lifespan":
@@ -130,106 +112,107 @@ class SecurityGuardMiddleware:
             return
 
         scope.setdefault("state", {})["request_id"] = str(uuid4())
-        rejection = self._evaluate(scope, _headers_by_name(scope))
+        headers = _headers_by_name(scope)
+        rejection = self._evaluate(scope, headers)
         if rejection is not None:
             await self._reject(scope, receive, send, rejection)
-            return
-
-        if "subprotocols" in scope:
-            # El subprotocolo con el token ya cumplió: que no llegue a los handlers.
-            scope["subprotocols"] = [
-                protocol
-                for protocol in scope["subprotocols"]
-                if not protocol.startswith(WS_AUTH_PREFIX)
-            ]
-        await self.app(scope, receive, send)
+        elif scope["type"] == "http":
+            await self._forward_with_body_limit(scope, receive, send)
+        else:
+            await self.app(scope, receive, send)
 
     def _evaluate(self, scope: Scope, headers: dict[bytes, list[bytes]]) -> _Rejection | None:
         client = scope.get("client")
         if not client or client[0] != BIND_HOST:
             return _FORBIDDEN_CLIENT
-
-        hosts = headers.get(b"host", [])
-        if len(hosts) != 1 or hosts[0].lower() not in self._hosts:
+        if headers.get(b"host") != [self._host]:
             return _FORBIDDEN_HOST
-
-        origins = headers.get(b"origin", [])
-        if origins and (len(origins) != 1 or origins[0] not in self._origins):
+        if b"origin" in headers:
             return _FORBIDDEN_ORIGIN
-        if origins:
-            # Los errores que nacen fuera de CORS deben seguir siendo legibles para este origen.
-            scope["state"][CORS_ORIGIN_STATE_KEY] = origins[0].decode("ascii")
 
-        if scope["type"] == "http":
-            if scope["path"] in PUBLIC_PATHS:
-                return None
-            is_preflight = (
-                scope["method"] == "OPTIONS"
-                and origins
-                and b"access-control-request-method" in headers
-            )
-            if is_preflight:
-                return None
+        caller = self._identify(headers)
+        if caller is None:
+            return _UNAUTHORIZED
+        if caller is not required_role(scope.get("method"), scope["path"]):
+            return _PERMISSION_DENIED
+        if scope["type"] == "http" and _declares_oversized_body(headers):
+            return _BODY_TOO_LARGE
+        return None
 
-        return None if self._is_authenticated(scope, headers) else _UNAUTHORIZED
-
-    def _is_authenticated(self, scope: Scope, headers: dict[bytes, list[bytes]]) -> bool:
+    def _identify(self, headers: dict[bytes, list[bytes]]) -> Role | None:
         authorization = headers.get(b"authorization", [])
-        if len(authorization) > 1:
-            return False
-        if authorization:
-            scheme, _, credential = authorization[0].partition(b" ")
-            if scheme.lower() == b"bearer" and self._token.matches(credential):
-                return True
+        if len(authorization) != 1:
+            return None
+        scheme, _, credential = authorization[0].partition(b" ")
+        if scheme.lower() != b"bearer":
+            return None
+        # Ambas comparaciones siempre: el tiempo no debe revelar cuál estuvo cerca.
+        is_ui = self._credentials.ui.matches(credential)
+        is_approver = self._credentials.approver.matches(credential)
+        if is_ui:
+            return Role.UI
+        return Role.APPROVER if is_approver else None
 
-        if scope["type"] != "websocket":
-            return False
-        offered = [
-            protocol.strip(b" \t")
-            for value in headers.get(b"sec-websocket-protocol", [])
-            for protocol in value.split(b",")
-        ]
-        credentials = [
-            protocol.removeprefix(_WS_AUTH_PREFIX_BYTES)
-            for protocol in offered
-            if protocol.startswith(_WS_AUTH_PREFIX_BYTES)
-        ]
-        return len(credentials) == 1 and self._token.matches(credentials[0])
+    async def _forward_with_body_limit(self, scope: Scope, receive: Receive, send: Send) -> None:
+        limit = _BodyLimit()
+
+        async def limited_receive() -> Message:
+            message = await receive()
+            if message["type"] != "http.request":
+                return message
+            limit.seen += len(message.get("body", b""))
+            if limit.seen <= MAX_BODY_BYTES:
+                return message
+            if not limit.response_started and not limit.blocked:
+                await self._send_rejection(scope, send, _BODY_TOO_LARGE)
+            limit.blocked = True
+            return {"type": "http.disconnect"}
+
+        async def guarded_send(message: Message) -> None:
+            if limit.blocked:
+                return
+            if message["type"] == "http.response.start":
+                limit.response_started = True
+            await send(message)
+
+        await self.app(scope, limited_receive, guarded_send)
 
     async def _reject(
         self, scope: Scope, receive: Receive, send: Send, rejection: _Rejection
     ) -> None:
-        request_id = scope["state"]["request_id"]
-        is_websocket = scope["type"] == "websocket"
-        logger.warning(
-            "Request rejected",
-            extra={
-                "event": rejection.code,
-                "method": "WEBSOCKET" if is_websocket else scope.get("method"),
-                "path": str(scope.get("path", ""))[:256],
-                "status": rejection.status,
-                "request_id": request_id,
-            },
-        )
-
-        if is_websocket:
+        if scope["type"] == "websocket":
+            self._log_rejection(scope, rejection)
             message = await receive()
             if message["type"] == "websocket.connect":
                 await send({"type": "websocket.close", "code": _WS_POLICY_VIOLATION})
             return
+        await self._send_rejection(scope, send, rejection)
 
-        body = error_body_bytes(rejection.code, rejection.message, request_id)
+    async def _send_rejection(self, scope: Scope, send: Send, rejection: _Rejection) -> None:
+        self._log_rejection(scope, rejection)
+        body = error_body_bytes(rejection.code, rejection.message, scope["state"]["request_id"])
         response_headers = [
             (b"content-type", b"application/json"),
             (b"content-length", str(len(body)).encode("ascii")),
         ]
         if rejection is _UNAUTHORIZED:
             response_headers.append((b"www-authenticate", b"Bearer"))
-        response_headers.extend(
-            (name.encode("ascii"), value.encode("ascii"))
-            for name, value in cors_headers(scope["state"].get(CORS_ORIGIN_STATE_KEY)).items()
-        )
+        if rejection is _BODY_TOO_LARGE:
+            # El resto del cuerpo queda sin leer: la conexión no se puede reutilizar.
+            response_headers.append((b"connection", b"close"))
         await send(
             {"type": "http.response.start", "status": rejection.status, "headers": response_headers}
         )
         await send({"type": "http.response.body", "body": body})
+
+    def _log_rejection(self, scope: Scope, rejection: _Rejection) -> None:
+        logger.warning(
+            "Request rejected",
+            extra={
+                "event": rejection.code,
+                "method": "WEBSOCKET" if scope["type"] == "websocket" else scope.get("method"),
+                "path": str(scope.get("path"))[:_MAX_LOGGED_PATH],
+                "status": rejection.status,
+                "request_id": scope["state"]["request_id"],
+            },
+        )

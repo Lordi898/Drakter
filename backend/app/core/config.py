@@ -3,36 +3,21 @@
 from __future__ import annotations
 
 import os
-import re
 import stat
 from pathlib import Path
-from typing import Annotated, Any, Final, Literal
+from typing import Final, Literal
 
-from platformdirs import user_config_dir, user_data_dir, user_runtime_dir
+from platformdirs import user_config_dir, user_data_dir
 from pydantic import Field, field_validator
-from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BIND_HOST: Final = "127.0.0.1"
 
 _APP_NAME: Final = "drakter"
-_ORIGIN_RE: Final = re.compile(r"^[a-z][a-z0-9+.\-]*://[a-z0-9._\-]+(?::([0-9]{1,5}))?$")
 
 
 def _env_file() -> Path:
     return Path(user_config_dir(_APP_NAME)) / ".env"
-
-
-def _normalize_origin(raw: str) -> str:
-    origin = raw.strip().lower()
-    if origin in ("*", "null"):
-        raise ValueError(f"origin not allowed: {origin!r}")
-    match = _ORIGIN_RE.fullmatch(origin)
-    if match is None:
-        raise ValueError(f"origin must be exactly scheme://host[:port]: {raw!r}")
-    port = match.group(1)
-    if port is not None and not 1 <= int(port) <= 65535:
-        raise ValueError(f"invalid port in origin: {raw!r}")
-    return origin
 
 
 class Settings(BaseSettings):
@@ -44,37 +29,16 @@ class Settings(BaseSettings):
         frozen=True,
     )
 
-    port: int = Field(default=8765, ge=1024, le=65535)
     data_dir: Path = Field(default_factory=lambda: Path(user_data_dir(_APP_NAME)))
-    runtime_dir: Path = Field(default_factory=lambda: Path(user_runtime_dir(_APP_NAME)))
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
-    allowed_origins: Annotated[tuple[str, ...], NoDecode] = ("app://drakter",)
 
-    @field_validator("data_dir", "runtime_dir", mode="after")
+    @field_validator("data_dir", mode="after")
     @classmethod
     def _absolute_dir(cls, value: Path) -> Path:
         value = value.expanduser()
         if not value.is_absolute():
             raise ValueError("directory must be an absolute path")
         return value
-
-    @field_validator("allowed_origins", mode="before")
-    @classmethod
-    def _parse_origins(cls, value: Any) -> Any:
-        if isinstance(value, str):
-            items: list[Any] = [part for part in value.split(",") if part.strip()]
-        elif isinstance(value, (list, tuple)):
-            items = list(value)
-        else:
-            raise ValueError("allowed_origins must be a comma-separated string")
-        normalized: list[str] = []
-        for item in items:
-            if not isinstance(item, str):
-                raise ValueError("origins must be strings")
-            origin = _normalize_origin(item)
-            if origin not in normalized:
-                normalized.append(origin)
-        return tuple(normalized)
 
     @property
     def db_path(self) -> Path:
@@ -87,10 +51,6 @@ class Settings(BaseSettings):
     @property
     def logs_dir(self) -> Path:
         return self.data_dir / "logs"
-
-    @property
-    def session_file(self) -> Path:
-        return self.runtime_dir / "session.json"
 
 
 def ensure_private_dir(path: Path) -> None:

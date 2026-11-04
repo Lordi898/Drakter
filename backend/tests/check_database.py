@@ -8,8 +8,10 @@ Sale con codigo != 0 si algun caso falla.
 from __future__ import annotations
 
 import http.client
+import json
 import os
 import re
+import secrets
 import shutil
 import sqlite3
 import stat
@@ -20,7 +22,6 @@ import time
 from pathlib import Path
 
 BACKEND = Path(__file__).resolve().parents[1]
-HEALTH_PORT = 18766
 sys.path.insert(0, str(BACKEND))
 
 from app.database.backup import BackupError, create_backup, restore_backup, verify_backup  # noqa: E402
@@ -462,22 +463,13 @@ def case_row_damage(root: Path) -> None:
     check("control 5: con el sidecar devuelto vuelve a verificar", not _fails(verify_backup, bk))
 
 
-def get_health() -> int:
-    conn = http.client.HTTPConnection("127.0.0.1", HEALTH_PORT, timeout=5)
+def get_health(port: int, token: str) -> int:
+    conn = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
     try:
-        conn.request("GET", "/health")
+        conn.request("GET", "/health", headers={"Authorization": f"Bearer {token}"})
         return conn.getresponse().status
     finally:
         conn.close()
-
-
-def wait_for_health() -> int:
-    for _ in range(100):
-        try:
-            return get_health()
-        except OSError:
-            time.sleep(0.1)
-    return 0
 
 
 def case_no_create(root: Path) -> None:
@@ -490,19 +482,23 @@ def case_no_create(root: Path) -> None:
 
     home = root / "health"
     env = {**os.environ, "XDG_CONFIG_HOME": str(home / "c"), "XDG_DATA_HOME": str(home / "d"),
-           "XDG_RUNTIME_DIR": str(home / "r"), "DRAKTER_PORT": str(HEALTH_PORT),
            "PYTHONDONTWRITEBYTECODE": "1"}
-    (home / "r").mkdir(mode=0o700, parents=True)
     db = home / "d" / "drakter" / "drakter.db"
+    token = secrets.token_urlsafe(32)
     server = subprocess.Popen([sys.executable, "-m", "app"], env=env, cwd=BACKEND,
-                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                              stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                              stderr=subprocess.DEVNULL)
     try:
-        alive = wait_for_health()
+        handshake = {"v": 1, "ui": token, "approver": secrets.token_urlsafe(32)}
+        server.stdin.write(json.dumps(handshake).encode() + b"\n")
+        server.stdin.flush()
+        port = json.loads(server.stdout.readline())["port"]
+        alive = get_health(port, token)
         for suffix in ("", "-wal", "-shm"):
             Path(f"{db}{suffix}").unlink(missing_ok=True)
-        gone = get_health()
+        gone = get_health(port, token)
     finally:
-        server.terminate()
+        server.stdin.close()
         server.wait(timeout=10)
     check("control 6: /health da 200 con la base presente", alive == 200, str(alive))
     check("6: /health da 503 con la base desaparecida y no la recrea",
