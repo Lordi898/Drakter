@@ -136,9 +136,10 @@ Decisiones técnicas, cambios de tecnología y motivos.
 
 ## [2026-11-04] Los 14 archivos de identidad viven en agent/identity/
 - **Contexto:** `MASTER_PLAN` y `ROADMAP` los repartían en `identity/`, `context/` y `knowledge/`. `PLAN_DISEÑO` los ponía en `~/.hermes/` y `config/`, y `CLAUDE.md` §8 solo cita `agent/identity/`. El commit `c487985` de `drakter/identidad-personaje` los creó los 14 en `agent/identity/` (C-14).
-- **Decisión:** los 14 archivos están en `agent/identity/`: `SOUL`, `PERSONALITY`, `BEHAVIOR`, `COMMUNICATION`, `EMOTIONAL_STYLE`, `VALUES`, `USER`, `ENVIRONMENT`, `PREFERENCES`, `CURRENT_CONTEXT`, `CAPABILITIES`, `WORKSPACE_GUIDE`, `TOOL_GUIDE` y `SYSTEM_GUIDE`, todos `.md`. `agent/context/` y `agent/knowledge/` no existen. La fuente es el repositorio: un cargador compone esos archivos y los publica en el `HERMES_HOME` de un perfil propio, y comprueba el tope de 20.000 caracteres de los archivos de contexto de Hermes, porque un recorte podría eliminar reglas del centro.
+- **Decisión:** los 14 archivos están en `agent/identity/`: `SOUL`, `PERSONALITY`, `BEHAVIOR`, `COMMUNICATION`, `EMOTIONAL_STYLE`, `VALUES`, `USER`, `ENVIRONMENT`, `PREFERENCES`, `CURRENT_CONTEXT`, `CAPABILITIES`, `WORKSPACE_GUIDE`, `TOOL_GUIDE` y `SYSTEM_GUIDE`, todos `.md`. `agent/context/` y `agent/knowledge/` no forman parte de la estructura vigente (ver la nota ⚠️ de esta entrada). La fuente es el repositorio: un cargador compone esos archivos y los publica en el `HERMES_HOME` de un perfil propio, y comprueba el tope de 20.000 caracteres de los archivos de contexto de Hermes, porque un recorte podría eliminar reglas del centro.
 - **Sin comprobar:** la carga real en Hermes.
 - **Alternativas descartadas:** mantener tres carpetas (rompería lo ya escrito sin beneficio); `~/.hermes/` como fuente (dejaría la personalidad fuera del repositorio).
+- **⚠️ Desajuste con el código:** `d88fb4e`, de `drakter/memoria-contexto`, movió 8 archivos a `agent/context/` y `agent/knowledge/`, y al fusionar en `drakter/build` quedaron duplicados con `agent/identity/` (22 archivos; los 8 pares son idénticos). `backend/app/integrations/memory/context/rules.py` lee esas dos carpetas. Esta decisión sigue vigente, pero sin cumplirse: hay que cambiar esas rutas y borrar los duplicados, o revocarla con entrada nueva. Lo decide el orquestador.
 - **Motivo:** `CLAUDE.md` §8 y el código ya existente.
 - **Impacto:** `MASTER_PLAN` §8.1 y Parte XII, `ROADMAP` Fase 5 y árboles, `PLAN_DISEÑO` §5, `drakter-orquestator`.
 
@@ -189,6 +190,7 @@ Decisiones técnicas, cambios de tecnología y motivos.
 ## [2026-11-04] Puente Hermes-backend y flujo de una petición
 - **Contexto:** `PLAN_DISEÑO` fijaba MCP, `MASTER_PLAN` describía Skills que llaman a la API, y `CLAUDE.md` lo dejaba por investigar (C-08, C-13, C-42, C-48). El flujo de `MASTER_PLAN` §28 recuperaba memoria antes de Hermes, pero las herramientas `viking_*` se usan dentro de su bucle.
 - **Decisión:** Hermes corre como proceso aparte, supervisado por FastAPI: `hermes gateway run` con API server en loopback, venv y `HERMES_HOME` propios, versión fijada (tag v0.22.7, `b200f5bc`, desde git, nunca PyPI) y un `AgentProvider` por encima para que el proveedor siga siendo intercambiable. Las herramientas las sirve el backend por MCP en loopback, en un servidor delgado sin lógica de negocio que usa los mismos servicios que la API; Hermes es solo cliente. El perfil lleva lista de permitidos. El backend entrega mensaje y contexto de sesión, y la recuperación de memoria ocurre dentro de Hermes. Skills e identidad tienen su fuente en `agent/` y se publican al perfil. Sigue sin importarse `AIAgent` en FastAPI.
+- **Actualización:** el mecanismo `hermes gateway run` queda sustituido por la entrada "Hermes sin gateway: runner propio sobre AIAgent". El resto de esta entrada sigue vigente.
 - **Sin comprobar:** nada de esto se ha ejecutado; proviene de leer el código de v0.22.7. Quedan por probar la lista de permitidos real, el nombre visible de las herramientas MCP, si puede bloquearse del todo la escritura de Skills y la RAM consumida.
 - **Alternativas descartadas:** importar `AIAgent` en FastAPI (rompe la separación de procesos y mezcla dependencias); Skills que llaman a la API (no valen como frontera de herramientas).
 - **Motivo:** el modelo y Hermes se tratan como no confiables; la frontera real es el backend. Esto invierte `MASTER_PLAN` §28.
@@ -221,7 +223,7 @@ Decisiones técnicas, cambios de tecnología y motivos.
   - **Sin clave:** el paso 5 queda con ⚠️, el adaptador se construye con un doble identificado como mock, y ninguna casilla de conversación, personalidad, selección de herramientas o memoria se marca hasta probarla con clave.
   - **Automejora:** lo publicado al agente en uso cuenta como producción. Todo cambio pasa por propuesta y autorización, también en Skills.
   - **Copias:** incluyen SQLite, configuración, identidad, Skills, datos de OpenViking y home de Hermes, sin secretos.
-  - **Alcance v1:** paneles y automatizaciones avanzadas quedan fuera, con un mínimo local que dispara recordatorios. Sin Recharts ni Docker hasta necesitarlos. SQLAlchemy + Alembic para el modelo de datos.
+  - **Alcance v1:** paneles y automatizaciones avanzadas quedan fuera, con un mínimo local que dispara recordatorios. Sin Recharts ni Docker hasta necesitarlos. SQL propio para el modelo de datos (entrada "SQL propio sin Alembic").
   - **Credenciales:** un único origen, `~/.config/drakter/.env`.
   - **Rive:** el personaje provisional cubre el trabajo por código, y las casillas del `.riv` llevan ⚠️ hasta que el usuario lo diseñe.
 - **Alternativas descartadas:** marcar el paso 5 como hecho con el mock (`ROADMAP` lo prohíbe y `CLAUDE.md` §2 también).
@@ -240,7 +242,7 @@ Decisiones técnicas, cambios de tecnología y motivos.
 - **Contexto:** `drakter/contratos` publicó el commit `061975a` con `contracts/README.md`, `contracts/python/drakter_contracts/events.py` y las migraciones `0001` a `0010`. Cierra la entrada de eventos pendiente y parte de los contratos de datos.
 - **Decisión:** el catálogo de eventos es `contracts/python/drakter_contracts/events.py`, con 32 tipos, y sustituye a las listas de `MASTER_PLAN` §6.5, `PLAN_DISEÑO` §6.4 y `ROADMAP` §5.4. Hay un único flujo, `WS /api/v1/events`, solo de servidor a cliente. `agent.status_changed` lleva `state` con los 9 estados; `offline` lo deriva la GUI si cae el socket o llega por `system.health_changed`. `agent.confirmation_required` pasa a ser `confirmation.requested`. Esquema, formatos, errores, reglas de datos, confirmaciones y migraciones siguen `contracts/README.md` y `backend/migrations/`. Si contradicen esta bitácora, manda la bitácora, como dice ese README.
 - **Expresiones:** el objeto que genera el modelo sigue sin campo `expression` y la elige en `animation`. El evento `agent.expression_changed` la transporta en `expression`, de modo que el backend hace esa traducción.
-- **Pendiente:** a fecha de `061975a` no existen `contracts/tools/catalog.json`, `contracts/api/routes.md`, `contracts/python/drakter_contracts/models/` ni `contracts/ts/`, que el README anuncia. El catálogo de herramientas y Skills sigue abierto, y con él los huecos de `MASTER_PLAN` §19.
+- **Actualización:** lo que aquí constaba como pendiente ya está publicado en `drakter/build`: `contracts/tools/catalog.json` (78 herramientas), `contracts/api/routes.md`, `contracts/python/drakter_contracts/models/` y `contracts/ts/`. El catálogo incluye `list_habits` y no tiene herramienta para eliminar o mover recursos, como decidió la entrada de los huecos de §19.
 - **Sin comprobar:** `contracts/` no está fusionado en `drakter/docs`, y esta entrada procede de leer la rama. `expression` es `str` y no un enumerado, así que el catálogo cerrado de 7 aún no lo impone el contrato. La traducción de `animation` a `expression` no se ha visto implementada.
 - **Alternativas descartadas:** copiar el catálogo a los planes (crearía una segunda fuente).
 - **Motivo:** un solo contrato.
@@ -262,3 +264,69 @@ Decisiones técnicas, cambios de tecnología y motivos.
 - **Coste:** un servidor más en el proceso.
 - **Impacto:** backend, integración con Hermes. No se ha comprobado en ejecución en esta rama.
 
+## [2026-11-04] Hermes sin gateway: runner propio sobre AIAgent
+- **Contexto:** el gateway de Hermes arranca además cron y kanban. Los jobs de cron usan `platform_toolsets.cron`, cuyo valor por defecto `hermes-cron` incluye terminal, de modo que la lista blanca de `api_server` no los cubre (hallazgo H-20 del dossier). Esto se desvía de D-06, que solo consta en mensajes del orquestador.
+- **Decisión:** no se usa el gateway. Un runner propio (`backend/app/integrations/hermes/runner/drakter_runner.py`) crea `AIAgent` en un proceso separado, con el venv de Hermes, y habla con el backend por JSONL en stdin y stdout. Solo usa stdlib y Hermes, sin scheduler ni cron. El runner termina con EOF en stdin. Salen `aiohttp` y `API_SERVER_KEY`. `AIAgent` sigue sin importarse en FastAPI.
+- **Alternativas descartadas:** mantener el gateway con `platform_toolsets.cron: [no_mcp]` (cierra los jobs, pero `/api/jobs` y las tareas de fondo siguen vivas, sin interruptor para quitar esas rutas); importar `AIAgent` en FastAPI (mezcla procesos y dependencias).
+- **Motivo:** el cron del gateway salta la lista blanca.
+- **⚠️ Desajuste con el código:** `backend/app/integrations/hermes/CONTRACT.md` ya describe el runner, pero en `drakter/agente-hermes` (`8f56f4b`) no hay runner commiteado, `supervisor.py` lanza aún `hermes gateway run` y `preflight.py` comprueba `aiohttp`. `contracts/README.md` §1 sigue citando `API_SERVER_KEY`. La rama no está fusionada en `drakter/build`.
+- **Sin comprobar:** el runner no se ha ejecutado, ni la salida por EOF.
+- **Impacto:** `CLAUDE.md` §2, `MASTER_PLAN` §28, `ROADMAP` Fase 4, `PLAN_DISEÑO` §18 y flujo de arranque, `contracts/README.md` §1.
+
+## [2026-11-04] SQL propio sin Alembic
+- **Contexto:** los planes citaban SQLAlchemy y Alembic. El dossier comprobó que un rebuild de Alembic sobre SQLite con FK activas perdía filas hijas y triggers.
+- **Decisión:** migraciones `NNNN_*.sql` en `backend/migrations/`, aplicadas por `backend/app/database/migrator.py`, con las reglas de `contracts/README.md` §8. Acceso con `sqlite3` y SQL propio. Sin Alembic ni SQLAlchemy.
+- **Alternativas descartadas:** Alembic (por lo anterior) y ORM (el esquema depende de triggers y CHECK con nombre).
+- **Motivo:** control total sobre triggers, auditoría y migraciones.
+- **Impacto:** sustituye a lo dicho en la entrada "Trabajo sin clave y alcance de automejora, copias y v1". `ROADMAP` §2, `PLAN_DISEÑO` §1 y §11.
+
+## [2026-11-04] Búsqueda con reconcile_structured
+- **Contexto:** el índice `search_documents` es un dato derivado y puede quedarse atrás respecto a los módulos.
+- **Decisión:** `reconcile_structured` (`backend/app/services/search_index.py`, rama `drakter/busqueda`) lleva al índice lo que cambió. Los borrados los resuelven `ON DELETE CASCADE` y los triggers. Si otra escritura retiene la base, la búsqueda continúa con el índice anterior.
+- **Alternativas descartadas:** escribir el índice solo en la transacción de cada módulo, como dice `contracts/README.md` §4 (obliga a tocar cada módulo y cualquier olvido deja el índice mal sin aviso). Esta entrada prevalece sobre ese punto del README.
+- **Motivo:** un solo punto de escritura del índice.
+- **Impacto:** `backend/app/services/`, `contracts/README.md` §4.
+
+## [2026-11-04] Recordatorios locales
+- **Contexto:** el alcance v1 pide un mínimo local que dispare recordatorios.
+- **Decisión:** al abrir se recupera lo vencido en las últimas 6 horas (`CATCH_UP`). Lo que solo tiene fecha avisa a las 09:00 (`MORNING`). Máximo 20 por tick (`MAX_PER_TICK`), los más antiguos primero, y el resto sale en el siguiente. `read_at` significa "ya entregada a la GUI". No hay borrado de notificaciones.
+- **Alternativas descartadas:** recuperar todo lo vencido (una avalancha tras días sin abrir).
+- **Motivo:** avisar de lo útil sin saturar.
+- **Impacto:** `backend/app/services/reminders.py`, `backend/app/repositories/notifications.py` (rama `drakter/recordatorios`).
+
+## [2026-11-04] Pantalla Hoy y ajustes
+- **Contexto:** Hoy necesitaba criterios fijos para vencimientos, zona horaria y estado de la clave.
+- **Decisión:** una tarea está vencida si está abierta y su `due_at` ya pasó o su `due_date` es anterior a hoy; con hora ya pasada hoy está vencida, no "de hoy". `GET /api/v1/today` exige `timezone`, y lo inválido da 422 `invalid_timezone`. Los ajustes se guardan por `POST /api/v1/settings/{key}`. Si la clave no está en el entorno y `.env` existe, el estado es `unknown`: el backend no abre `.env`, solo mira si existe.
+- **Alternativas descartadas:** leer `.env` para informar (toca secretos sin necesidad); una zona horaria implícita (`CLAUDE.md` §9 las exige explícitas).
+- **Motivo:** `CLAUDE.md` §8 y §9.
+- **Impacto:** `backend/app/api/today.py`, `backend/app/api/settings.py`, `backend/app/services/settings_status.py` (rama `drakter/hoy-ajustes`).
+
+## [2026-11-04] Límites de la memoria
+- **Contexto:** al borrar un recuerdo no todo se alcanza, y el contexto de usuario no cabía en el presupuesto previsto (hallazgo N3).
+- **Decisión:** `forget` borra de `memory_records` y `memory_fts`, y su `ForgetReport` declara `hermes_sessions` como no alcanzado: el texto enviado queda como residuo en la base de sesiones de Hermes. El nivel 4 (contexto del usuario) tiene un tope de 6.000 caracteres. `memory_records` vive en la base de datos del Workspace.
+- **Sin comprobar:** el borrado del residuo no existe. Afecta a lo que el usuario cree haber olvidado.
+- **Alternativas descartadas:** 4.000 caracteres en el nivel 4 (cortaría `CURRENT_CONTEXT`); una base aparte para memoria (otra copia de seguridad y otra fuente).
+- **Motivo:** decir la verdad sobre el alcance de `forget` y no recortar el contexto.
+- **Impacto:** `backend/app/integrations/memory/`, `backend/migrations/0010_memory_improvement.sql`.
+
+## [2026-11-04] Provider custom con anthropic_messages para el stub
+- **Contexto:** sin clave, las pruebas apuntan Hermes a un stub local.
+- **Decisión:** con `model_provider = dev_stub`, la configuración usa `provider: custom` y `api_mode: anthropic_messages` (`backend/app/integrations/hermes/home.py`).
+- **Alternativas descartadas:** `provider: anthropic` con `base_url` local: según el orquestador, iría a `api.anthropic.com`. No se ha comprobado en ejecución.
+- **Motivo:** que una prueba sin clave no salga a la red.
+- **Impacto:** `home.py`, herramienta `dev-llm-stub`.
+
+## [2026-11-04] El composer aloja la transcripción
+- **Contexto:** hacía falta decidir dónde se monta la conversación en el chat.
+- **Decisión:** `ChatComposer` aloja `ChatTranscript` (`desktop/src/chat/ChatComposer.tsx`, rama `drakter/chat-personaje`).
+- **Alternativas descartadas:** ninguna comunicada.
+- **Motivo:** no se ha recibido ninguno.
+- **Impacto:** `desktop/src/chat/`.
+
+## [2026-11-04] Host de Electron: interfaz, aprobaciones y arranque
+- **Contexto:** `drakter-24` comunica por el orquestador cómo queda el host. Completa la entrada "Interfaz del renderer y confirmación por REST".
+- **Decisión:** la firma es `call(method, path, body, options)`, con `options` limitado a `ifMatch` e `idempotencyKey` y lista cerrada de rutas. `ALLOWED_ROUTES` lo genera `desktop/electron/scripts/generate-routes.mjs`. `ApprovalOutcome` incluye `conflict` y `failed`. Cancelar en el diálogo de aprobación rechaza. El handshake con el backend espera 120 s por las migraciones. El WebSocket no usa ping de texto. D-14 prevalece sobre `contracts/README.md` §1.
+- **⚠️ Desajuste con el código:** en `drakter/electron-host` (`3ebb99a`) `call` sigue teniendo tres parámetros, sin `options`, `ifMatch` ni `idempotencyKey`. Sí están `generate-routes.mjs`, `ApprovalOutcome`, `HANDSHAKE_TIMEOUT_MS = 120_000` y el botón Cancelar con `cancelId: 0`. D-14 no consta en este archivo: solo en comentarios de código y mensajes.
+- **Alternativas descartadas:** `api.call(opId, args)`.
+- **Motivo:** el proceso principal es el único que conoce token y puerto.
+- **Impacto:** `desktop/electron/`, `contracts/README.md` §1.

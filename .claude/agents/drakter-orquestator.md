@@ -23,7 +23,7 @@ Claude Code permite **hasta tres niveles de subagentes bajo el hilo principal** 
 | Nivel | Quién | Qué hace |
 |---|---|---|
 | 0 | Tú | Planifica, congela contratos, despliega sublíderes, integra, informa |
-| 1 | `drakter-lider` | Dirige un frente completo (`desktop/`, `backend/`, `agent/`, `memory/`, `voice/`, `workspace/`) |
+| 1 | `drakter-lider` | Dirige un frente completo (`desktop/`, `backend/`, `agent/`, `memory/`, `voice/`) |
 | 2 | Especialistas | Construyen una pieza; pueden lanzar ayudantes si les das `Agent` |
 | 3 | Ayudantes | Tareas hoja. En este nivel Claude Code retira la herramienta `Agent` |
 
