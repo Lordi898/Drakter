@@ -1,43 +1,33 @@
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle
-} from '@/components/ui/dialog'
-import {
-  approveConfirmation,
-  errorText,
-  rejectConfirmation,
-  type ConfirmationRequired
-} from './workspaceClient'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { reviewConfirmation, type ConfirmationTicket } from './workspaceApi'
 
 export interface ConfirmationDialogProps {
-  readonly confirmation: ConfirmationRequired | null
-  /** `true` si se aprobó y el backend ejecutó la acción; `false` si se rechazó. */
+  readonly confirmation: ConfirmationTicket | null
+  /** `true` si se aprobó (main ejecutó la acción); `false` en cualquier otro caso. */
   readonly onResolved: (approved: boolean) => void
 }
 
-/** Paso obligatorio antes de cualquier acción destructiva: el backend solo ejecuta tras aprobar aquí. */
+/** Paso obligatorio antes de borrar: la aprobación la decide el diálogo nativo de main, no este componente. */
 export function ConfirmationDialog({ confirmation, onResolved }: ConfirmationDialogProps) {
-  const [busy, setBusy] = useState<'approve' | 'reject' | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [message, setMessage] = useState<string | null>(null)
 
-  async function resolve(approved: boolean): Promise<void> {
+  async function review(): Promise<void> {
     if (!confirmation) return
-    setBusy(approved ? 'approve' : 'reject')
-    setError(null)
+    setBusy(true)
+    setMessage(null)
     try {
-      if (approved) await approveConfirmation(confirmation.confirmation_id)
-      else await rejectConfirmation(confirmation.confirmation_id)
-      onResolved(approved)
-    } catch (caught) {
-      setError(errorText(caught))
+      const outcome = await reviewConfirmation(confirmation.id)
+      if (outcome === 'approved') onResolved(true)
+      else if (outcome === 'rejected' || outcome === 'dismissed') onResolved(false)
+      else if (outcome === 'expired') setMessage('La confirmación ha caducado. Inténtalo de nuevo.')
+      else setMessage('Las confirmaciones aún no están disponibles; no se ha borrado nada.')
+    } catch {
+      setMessage('No se pudo revisar la confirmación; no se ha borrado nada.')
     } finally {
-      setBusy(null)
+      setBusy(false)
     }
   }
 
@@ -45,10 +35,13 @@ export function ConfirmationDialog({ confirmation, onResolved }: ConfirmationDia
     <Dialog
       open={confirmation !== null}
       onOpenChange={(open) => {
-        if (!open && busy === null) void resolve(false)
+        if (!open) {
+          setMessage(null)
+          onResolved(false)
+        }
       }}
     >
-      <DialogContent showCloseButton={false} aria-describedby="confirmation-summary">
+      <DialogContent aria-describedby="confirmation-summary">
         <DialogHeader>
           <DialogTitle>Confirmar acción</DialogTitle>
           <DialogDescription id="confirmation-summary">{confirmation?.summary}</DialogDescription>
@@ -56,17 +49,17 @@ export function ConfirmationDialog({ confirmation, onResolved }: ConfirmationDia
         {confirmation?.affected_count != null ? (
           <p className="text-sm text-muted-foreground">Elementos afectados: {confirmation.affected_count}</p>
         ) : null}
-        {error ? (
+        {message ? (
           <p role="alert" className="text-sm text-destructive">
-            {error}
+            {message}
           </p>
         ) : null}
         <DialogFooter>
-          <Button variant="outline" disabled={busy !== null} onClick={() => void resolve(false)}>
-            {busy === 'reject' ? 'Rechazando…' : 'Rechazar'}
+          <Button variant="outline" disabled={busy} onClick={() => onResolved(false)}>
+            Cerrar
           </Button>
-          <Button variant="destructive" disabled={busy !== null} onClick={() => void resolve(true)}>
-            {busy === 'approve' ? 'Aprobando…' : 'Aprobar'}
+          <Button disabled={busy} onClick={() => void review()}>
+            {busy ? 'Revisando…' : 'Revisar'}
           </Button>
         </DialogFooter>
       </DialogContent>

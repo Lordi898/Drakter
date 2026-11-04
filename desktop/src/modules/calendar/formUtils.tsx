@@ -2,7 +2,7 @@ import type { ReactNode } from 'react'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
 import { addDays, minutesToText } from './dateUtils'
-import { ApiError, BackendUnavailableError, errorText } from './workspaceClient'
+import { ApiError, errorText, isBackendUnavailable } from './workspaceApi'
 
 export const inputClass =
   'h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-xs outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive dark:bg-input/30'
@@ -47,7 +47,7 @@ export function defaultRange(day: string, minutes: number): DraftRange {
   }
 }
 
-export const localIso = (date: string, time: string): string => `${date}T${time.length === 5 ? `${time}:00` : time}`
+export const localIso = (date: string, time: string): string => `${date}T${time.slice(0, 5)}`
 
 export interface FormFailure {
   readonly message: string
@@ -62,7 +62,7 @@ export function describeFailure(error: unknown, timezone: string): FormFailure {
       message: `Esa hora local no existe en ${timezone} (cambio de horario). Elige otra hora.`
     }
   }
-  if (error instanceof BackendUnavailableError) {
+  if (isBackendUnavailable(error)) {
     return { nonexistentTime: false, message: 'El espacio de trabajo no está conectado. No se ha guardado nada.' }
   }
   return { nonexistentTime: false, message: errorText(error) }

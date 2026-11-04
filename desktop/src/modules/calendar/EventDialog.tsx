@@ -40,6 +40,8 @@ export function EventDialog({ target, timezone, onClose, onSaved }: EventDialogP
   const [revision, setRevision] = useState<number | null>(null)
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
+  const [location, setLocation] = useState('')
+  const [reminder, setReminder] = useState('')
   const [kind, setKind] = useState<EventKind>('event')
   const [status, setStatus] = useState<EventStatus>('confirmed')
   const [tz, setTz] = useState(timezone)
@@ -61,6 +63,8 @@ export function EventDialog({ target, timezone, onClose, onSaved }: EventDialogP
       const range = defaultRange(target.day, target.minutes)
       setTitle('')
       setDescription('')
+      setLocation('')
+      setReminder('')
       setKind('event')
       setStatus('confirmed')
       setTz(timezone || systemTimeZone())
@@ -82,6 +86,8 @@ export function EventDialog({ target, timezone, onClose, onSaved }: EventDialogP
         setRevision(event.revision)
         setTitle(event.title)
         setDescription(event.description ?? '')
+        setLocation(event.location ?? '')
+        setReminder(event.reminder_minutes_before === null ? '' : String(event.reminder_minutes_before))
         setKind(event.kind)
         setStatus(event.status === 'cancelled' ? 'confirmed' : event.status)
         setTz(event.timezone)
@@ -138,6 +144,8 @@ export function EventDialog({ target, timezone, onClose, onSaved }: EventDialogP
     const payload: EventPayload = {
       title: cleanTitle,
       description: description.trim() || null,
+      location: location.trim() || null,
+      reminder_minutes_before: reminder === '' ? null : Math.max(0, Math.round(Number(reminder) || 0)),
       kind,
       status,
       timezone: tz,
@@ -290,6 +298,14 @@ export function EventDialog({ target, timezone, onClose, onSaved }: EventDialogP
             )}
           </fieldset>
 
+          <div className="grid grid-cols-2 gap-3">
+            <Field id={`${uid}-loc`} label="Lugar (opcional)">
+              <input id={`${uid}-loc`} className={inputClass} value={location} onChange={(e) => setLocation(e.target.value)} maxLength={300} disabled={loading} />
+            </Field>
+            <Field id={`${uid}-rem`} label="Aviso previo (opcional)" hint="Minutos antes del inicio.">
+              <input id={`${uid}-rem`} type="number" min={0} max={40320} className={inputClass} value={reminder} onChange={(e) => setReminder(e.target.value)} disabled={loading} />
+            </Field>
+          </div>
           <Field id={`${uid}-desc`} label="Descripción">
             <Textarea id={`${uid}-desc`} value={description} onChange={(e) => setDescription(e.target.value)} maxLength={8000} rows={3} disabled={loading} />
           </Field>

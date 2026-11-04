@@ -17,8 +17,8 @@ export function allDayOn(items: readonly AgendaItem[], day: string): AgendaItem[
 
 /** Ocurrencias con hora recortadas al día, en carriles lado a lado cuando se pisan. */
 export function placeTimed(items: readonly AgendaItem[], day: string): Placed[] {
-  const dayStart = `${day}T00:00:00`
-  const dayEnd = `${addDays(day, 1)}T00:00:00`
+  const dayStart = `${day}T00:00`
+  const dayEnd = `${addDays(day, 1)}T00:00`
   const clipped = items
     .filter((i) => !i.all_day && i.display_start !== null && i.display_end !== null)
     .filter((i) => (i.display_start as string) < dayEnd && (i.display_end as string) > dayStart)
@@ -59,8 +59,8 @@ export function placeTimed(items: readonly AgendaItem[], day: string): Placed[] 
 
 /** Todas las ocurrencias (con o sin hora) que caen en `day`, para la vista mensual. */
 export function itemsOn(items: readonly AgendaItem[], day: string): AgendaItem[] {
-  const dayStart = `${day}T00:00:00`
-  const dayEnd = `${addDays(day, 1)}T00:00:00`
+  const dayStart = `${day}T00:00`
+  const dayEnd = `${addDays(day, 1)}T00:00`
   return items
     .filter((i) =>
       i.all_day

@@ -2,12 +2,12 @@ import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { cancelOccurrence, requestEventDeletion, requestTimeBlockDeletion } from './api'
-import { dateTimeLabel, shortDayLabel } from './dateUtils'
+import { dateTimeLabel, shortDayLabel, systemTimeZone } from './dateUtils'
 import { describeFailure } from './formUtils'
 import { KIND_STYLES, STATUS_LABELS } from './kinds'
 import { describeRrule } from './recurrence'
 import { normalizeKind, type AgendaItem } from './types'
-import type { ConfirmationRequired } from './workspaceClient'
+import type { ConfirmationTicket } from './workspaceApi'
 
 export interface OccurrenceDialogProps {
   readonly item: AgendaItem | null
@@ -16,7 +16,7 @@ export interface OccurrenceDialogProps {
   readonly onEdit: (item: AgendaItem) => void
   /** Se canceló una ocurrencia: hay que recargar la agenda. */
   readonly onChanged: () => void
-  readonly onConfirmationRequired: (confirmation: ConfirmationRequired) => void
+  readonly onConfirmationRequired: (confirmation: ConfirmationTicket) => void
 }
 
 function whenText(item: AgendaItem): string {
@@ -69,8 +69,18 @@ export function OccurrenceDialog({ item, overlapping, onClose, onEdit, onChanged
         <dl className="grid grid-cols-[6rem_1fr] gap-x-3 gap-y-2 text-sm">
           <dt className="text-muted-foreground">Cuándo</dt>
           <dd>{whenText(item)}</dd>
-          <dt className="text-muted-foreground">Zona horaria</dt>
-          <dd>{item.timezone}</dd>
+          {item.timezone !== systemTimeZone() ? (
+            <>
+              <dt className="text-muted-foreground">Zona horaria</dt>
+              <dd>{item.timezone}</dd>
+            </>
+          ) : null}
+          {item.location ? (
+            <>
+              <dt className="text-muted-foreground">Lugar</dt>
+              <dd>{item.location}</dd>
+            </>
+          ) : null}
           {item.recurring ? (
             <>
               <dt className="text-muted-foreground">Repetición</dt>

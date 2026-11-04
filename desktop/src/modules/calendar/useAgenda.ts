@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { fetchAgenda, fetchOverlaps } from './api'
 import type { AgendaItem, OverlapGroup } from './types'
-import { BackendUnavailableError, errorText } from './workspaceClient'
+import { errorText, isBackendUnavailable } from './workspaceApi'
 
 export type AgendaState =
   | { readonly status: 'loading' }
@@ -27,7 +27,7 @@ export function useAgenda(from: string, to: string, timezone: string): { state: 
       })
       .catch((error: unknown) => {
         if (!active) return
-        setState(error instanceof BackendUnavailableError ? { status: 'unavailable' } : { status: 'error', message: errorText(error) })
+        setState(isBackendUnavailable(error) ? { status: 'unavailable' } : { status: 'error', message: errorText(error) })
       })
     return () => {
       active = false

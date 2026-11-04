@@ -15,7 +15,7 @@ import { WeekView } from './WeekView'
 import { addDays, addMonths, dateTimeLabel, dayLabel, isValidTimeZone, monthLabel, startOfWeek, systemTimeZone, todayIn, weekLabel } from './dateUtils'
 import { normalizeKind, type AgendaItem, type CalendarView, type OccurrenceKind } from './types'
 import { useAgenda } from './useAgenda'
-import type { ConfirmationRequired } from './workspaceClient'
+import type { ConfirmationTicket } from './workspaceApi'
 
 function rangeFor(view: CalendarView, day: string): { from: string; to: string } {
   if (view === 'day') return { from: day, to: addDays(day, 1) }
@@ -37,7 +37,7 @@ export function CalendarPage() {
   const [eventTarget, setEventTarget] = useState<EventDialogTarget | null>(null)
   const [blockTarget, setBlockTarget] = useState<TimeBlockDialogTarget | null>(null)
   const [conflicts, setConflicts] = useState<readonly AgendaItem[]>([])
-  const [confirmation, setConfirmation] = useState<ConfirmationRequired | null>(null)
+  const [confirmation, setConfirmation] = useState<ConfirmationTicket | null>(null)
 
   const { from, to } = rangeFor(view, day)
   const { state, reload } = useAgenda(from, to, timezone)

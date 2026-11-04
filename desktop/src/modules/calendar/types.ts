@@ -9,6 +9,8 @@ export interface EventOut {
   readonly id: string
   readonly title: string
   readonly description: string | null
+  readonly location: string | null
+  readonly reminder_minutes_before: number | null
   readonly kind: EventKind
   readonly status: EventStatus
   readonly timezone: string
@@ -24,6 +26,8 @@ export interface EventOut {
 export interface EventPayload {
   title: string
   description: string | null
+  location: string | null
+  reminder_minutes_before: number | null
   kind: EventKind
   status: EventStatus
   timezone: string
@@ -76,6 +80,7 @@ export interface AgendaItem {
   readonly display_end: string | null
   readonly recurring: boolean
   readonly modified: boolean
+  readonly location: string | null
   readonly room: string | null
   readonly subject_id: string | null
   readonly task_id: string | null
@@ -88,6 +93,11 @@ export interface AgendaResponse {
   readonly to_date: string
   readonly items: readonly AgendaItem[]
   readonly truncated: boolean
+}
+
+export interface OverlapsResponse {
+  readonly timezone: string
+  readonly items: readonly OverlapGroup[]
 }
 
 export interface OverlapGroup {

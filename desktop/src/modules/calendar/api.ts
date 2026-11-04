@@ -1,10 +1,11 @@
-import { api, ApiError, isConfirmationRequired, type ConfirmationRequired, type Page } from './workspaceClient'
+import { api, ApiError, confirmationOf, type ConfirmationTicket } from './workspaceApi'
 import type {
   AgendaResponse,
   EventOut,
   EventPayload,
   EventWriteResult,
   OverlapGroup,
+  OverlapsResponse,
   TimeBlockOut,
   TimeBlockPayload,
   TimeBlockWriteResult
@@ -16,10 +17,8 @@ export function fetchAgenda(from: string, to: string, timezone: string): Promise
 }
 
 export async function fetchOverlaps(from: string, to: string, timezone: string): Promise<OverlapGroup[]> {
-  const result = await api<readonly OverlapGroup[] | Page<OverlapGroup>>('GET', '/calendar/overlaps', {
-    query: { from, to, timezone }
-  })
-  return [...(Array.isArray(result) ? result : (result as Page<OverlapGroup>).items)]
+  const result = await api<OverlapsResponse>('GET', '/calendar/overlaps', { query: { from, to, timezone } })
+  return [...result.items]
 }
 
 export const getEvent = (id: string): Promise<EventOut> => api<EventOut>('GET', `/calendar/events/${id}`)
@@ -38,17 +37,20 @@ export const createTimeBlock = (body: TimeBlockPayload): Promise<TimeBlockWriteR
 export const updateTimeBlock = (id: string, body: TimeBlockPayload, revision: number): Promise<TimeBlockWriteResult> =>
   api<TimeBlockWriteResult>('PATCH', `/calendar/time-blocks/${id}`, { body, revision })
 
-async function requestDeletion(path: string): Promise<ConfirmationRequired> {
-  const result = await api<unknown>('DELETE', path)
-  if (!isConfirmationRequired(result)) {
-    throw new ApiError(500, 'unexpected_response', 'El borrado no devolvió una confirmación.')
+/** El backend responde 409 `confirmation_required`: se devuelve el ticket que hay que revisar. */
+async function requestDeletion(path: string): Promise<ConfirmationTicket> {
+  try {
+    await api<unknown>('DELETE', path)
+  } catch (error) {
+    const ticket = confirmationOf(error)
+    if (ticket) return ticket
+    throw error
   }
-  return result
+  throw new ApiError(500, 'unexpected_response', 'El borrado no pidió confirmación.')
 }
 
-/** Nunca borra: devuelve la confirmación que la GUI debe aprobar. */
-export const requestEventDeletion = (id: string): Promise<ConfirmationRequired> => requestDeletion(`/calendar/events/${id}`)
-export const requestTimeBlockDeletion = (id: string): Promise<ConfirmationRequired> =>
+export const requestEventDeletion = (id: string): Promise<ConfirmationTicket> => requestDeletion(`/calendar/events/${id}`)
+export const requestTimeBlockDeletion = (id: string): Promise<ConfirmationTicket> =>
   requestDeletion(`/calendar/time-blocks/${id}`)
 
 /** Cancela una sola ocurrencia (reversible, sin confirmación). */
