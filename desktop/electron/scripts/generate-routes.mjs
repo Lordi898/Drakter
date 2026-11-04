@@ -23,9 +23,9 @@ function readContract() {
   })
 }
 
-/** Exigen el token `approver` (D-14): solo los usa main. */
+/** Defensa por si una fila pierde su marca `(`approver`)`. */
 function isApproverOnly(method, path) {
-  if (/^\/api\/v1\/confirmations\/[^/]+\/(approve|reject)$/.test(path)) return true
+  if (/^\/api\/v1\/confirmations\/[^/]+\/(approve|reject|approval-token)$/.test(path)) return true
   if (path.startsWith('/api/v1/permissions')) return true
   return path.startsWith('/api/v1/storage-locations') && method !== 'GET'
 }
@@ -39,7 +39,9 @@ const NOT_YET_IN_CONTRACT = [
 // Lo que sigue a este título son desviaciones de los frentes, no rutas válidas.
 const [routes] = readContract().split(/^## Desviaciones/m)
 const rows = [
-  ...[...routes.matchAll(/^\| (GET|POST|PUT|PATCH|DELETE) \| `([^`]+)`/gm)].map(([, m, p]) => [m, p]),
+  ...[...routes.matchAll(/^\| (GET|POST|PUT|PATCH|DELETE) \| `([^`]+)`(.*)$/gm)]
+    .filter(([, , , rest]) => !rest.includes('(`approver`)'))
+    .map(([, m, p]) => [m, p]),
   ...NOT_YET_IN_CONTRACT
 ]
 const seen = new Set()

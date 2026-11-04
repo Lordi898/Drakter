@@ -13,6 +13,7 @@ import type { BackendHost, EventsBridge } from './host-types'
 import { logError } from './log'
 import { isTrustedRendererUrl } from './renderer-url'
 import { isSandboxDisabled } from './sandbox'
+import { addStorageLocation, deleteStorageLocation, updateStorageLocation } from './storageRoots'
 import { getMainWindow } from './window'
 
 function assertTrustedSender(event: IpcMainInvokeEvent): void {
@@ -103,6 +104,9 @@ export function registerIpcHandlers(backend: BackendHost, events: EventsBridge):
   handle(IPC_CHANNELS.apiCall, (payload) => callOperation(backend, payload))
   handle(IPC_CHANNELS.requestApproval, (payload) => requestApproval(backend, payload))
   handle(IPC_CHANNELS.getConnection, () => backend.getConnection())
+  handle(IPC_CHANNELS.addStorageLocation, (payload) => addStorageLocation(backend, payload))
+  handle(IPC_CHANNELS.updateStorageLocation, (payload) => updateStorageLocation(backend, payload))
+  handle(IPC_CHANNELS.deleteStorageLocation, (payload) => deleteStorageLocation(backend, payload))
   handle(IPC_CHANNELS.openEvents, (_payload, sender) => events.attach(sender))
   backend.onConnection((connection) => {
     getMainWindow()?.webContents.send(IPC_CHANNELS.connectionChanged, connection)
