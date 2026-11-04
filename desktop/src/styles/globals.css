@@ -60,23 +60,23 @@
 }
 
 .dark {
-  --background: #10243f;
+  --background: #06152a;
   --foreground: #e6eef5;
-  --card: #16304f;
+  --card: #0d2340;
   --card-foreground: #e6eef5;
-  --popover: #16304f;
+  --popover: #0d2340;
   --popover-foreground: #e6eef5;
   --primary: #cfe0ee;
   --primary-foreground: #0c2747;
-  --secondary: #1d3d63;
+  --secondary: #14304f;
   --secondary-foreground: #e6eef5;
-  --muted: #1d3d63;
+  --muted: #14304f;
   --muted-foreground: #9dbbd8;
-  --accent: #234a75;
+  --accent: #1b3d63;
   --accent-foreground: #e6eef5;
   --destructive: #e0596f;
   --destructive-foreground: #1b0a10;
-  --border: #2a4d78;
+  --border: #24466f;
   --input: #35608f;
   --success: #57b9a2;
   --warning: #f2ad2e;
@@ -144,6 +144,11 @@
     font-size: 15px;
     line-height: 1.5;
     -webkit-font-smoothing: antialiased;
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
   }
 
   :focus-visible {

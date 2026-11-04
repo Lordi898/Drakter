@@ -1,3 +1,9 @@
+import { ChatComposer } from '@/chat/ChatComposer'
+
 export function ChatDock() {
-  return <div>Chat</div>
+  return (
+    <div className="border-t border-border bg-background px-4 py-3">
+      <ChatComposer />
+    </div>
+  )
 }

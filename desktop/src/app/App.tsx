@@ -1,8 +1,21 @@
-import { useCurrentSection } from '@/navigation/route'
-import { PAGES } from '@/navigation/pages'
+import { AppShell } from '@/app/AppShell'
+import { useDocumentPreferences } from '@/app/useDocumentPreferences'
+import { ErrorBoundary } from '@/components/errors/ErrorBoundary'
+import { Toaster } from '@/components/ui/sonner'
+import { TooltipProvider } from '@/components/ui/tooltip'
+import { installGlobalErrorHandlers } from '@/services/errors'
 
-// Stub: lo sustituye la pieza del shell.
+installGlobalErrorHandlers()
+
 export function App() {
-  const Page = PAGES[useCurrentSection()]
-  return <Page />
+  useDocumentPreferences()
+
+  return (
+    <ErrorBoundary scope="aplicación">
+      <TooltipProvider delayDuration={500}>
+        <AppShell />
+        <Toaster position="bottom-right" />
+      </TooltipProvider>
+    </ErrorBoundary>
+  )
 }
