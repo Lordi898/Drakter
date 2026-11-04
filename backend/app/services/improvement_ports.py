@@ -50,7 +50,7 @@ class AuditEvent:
     action: str
     entity_type: str
     entity_id: str
-    result: Literal["ok", "denied", "failed"]
+    result: Literal["attempted", "ok", "denied", "failed"]
     correlation_id: str | None = None
     detail: dict[str, str | int | bool | None] = field(default_factory=dict)
 
@@ -72,7 +72,9 @@ class ConfirmationGate(Protocol):
 
 
 class AuditSink(Protocol):
-    def record(self, event: AuditEvent) -> None: ...
+    def record(self, event: AuditEvent) -> None:
+        """Persist the event. If an ``attempted`` record raises, the act must not run."""
+        ...
 
 
 class DenyAllGate:
