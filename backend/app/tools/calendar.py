@@ -23,7 +23,7 @@ from app.schemas.calendar import (
 )
 from app.services import calendar as service
 from app.services.habits_calendar_support import RequestContext
-from app.tools.habits_calendar_toolspec import RiskClass, ToolSpec, service_handler
+from app.tools.habits_calendar_toolspec import RiskClass, ToolSpec, deny_direct, service_handler
 
 
 class _Args(BaseModel):
@@ -32,6 +32,16 @@ class _Args(BaseModel):
 
 class EventIdArgs(_Args):
     event_id: str = Field(description="UUID del evento")
+
+
+class DeleteEventArgs(_Args):
+    """Igual que `calendar_actions.DeleteEventArgs` (ese módulo importa asignaturas)."""
+
+    event_id: str = Field(description="UUID del evento")
+
+
+class DeleteTimeBlockArgs(_Args):
+    time_block_id: str = Field(description="UUID del bloque de tiempo")
 
 
 class UpdateEventArgs(EventUpdate):
@@ -50,10 +60,6 @@ class MoveTimeBlockArgs(_Args):
     block_id: str = Field(description="UUID del bloque de tiempo")
     local_start: LocalDateTime = Field(description="Nuevo inicio, hora local sin desfase")
     local_end: LocalDateTime = Field(description="Nuevo fin, hora local sin desfase")
-
-
-class DeleteTimeBlockArgs(_Args):
-    block_id: str = Field(description="UUID del bloque de tiempo")
 
 
 class GetScheduleArgs(_Args):
@@ -84,11 +90,6 @@ def _update_event(conn: sqlite3.Connection, ctx: RequestContext, args: UpdateEve
     return service.update_event(conn, ctx, args.event_id, data)
 
 
-def _delete_event(conn: sqlite3.Connection, ctx: RequestContext, args: EventIdArgs) -> service.DeleteResult:
-    # ToolGate ya impuso la confirmación (RiskClass.CONFIRM): se ejecuta el ejecutor registrado.
-    return service.DeleteResult(**service.execute_delete_event(conn, ctx, {"event_id": args.event_id}))
-
-
 def _create_exception(
     conn: sqlite3.Connection, ctx: RequestContext, args: CreateExceptionArgs
 ) -> RecurrenceExceptionOut:
@@ -113,14 +114,6 @@ def _move_block(
     conn: sqlite3.Connection, ctx: RequestContext, args: MoveTimeBlockArgs
 ) -> TimeBlockWriteResult:
     return service.move_time_block(conn, ctx, args.block_id, args.local_start, args.local_end)
-
-
-def _delete_block(
-    conn: sqlite3.Connection, ctx: RequestContext, args: DeleteTimeBlockArgs
-) -> service.DeleteResult:
-    return service.DeleteResult(
-        **service.execute_delete_time_block(conn, ctx, {"time_block_id": args.block_id})
-    )
 
 
 def _schedule(conn: sqlite3.Connection, ctx: RequestContext, args: GetScheduleArgs) -> AgendaResponse:
@@ -193,11 +186,11 @@ TOOLS: tuple[ToolSpec, ...] = (
             "sola ocurrencia de una serie usa create_event_exception con kind=cancelled."
         ),
         domain="calendar",
-        args_model=EventIdArgs,
+        args_model=DeleteEventArgs,
         result_model=service.DeleteResult,
-        permission="calendar.write",
+        permission="calendar.delete",
         risk=RiskClass.CONFIRM,
-        handler=service_handler("delete_event", _delete_event),
+        handler=deny_direct,
         errors=(*_NOT_FOUND, "has_dependents"),
         audit={"event_id": "log"},
         summarize=lambda args: f"Eliminar el evento {args.event_id} y sus excepciones",  # type: ignore[attr-defined]
@@ -265,12 +258,12 @@ TOOLS: tuple[ToolSpec, ...] = (
         domain="calendar",
         args_model=DeleteTimeBlockArgs,
         result_model=service.DeleteResult,
-        permission="calendar.write",
+        permission="calendar.delete",
         risk=RiskClass.CONFIRM,
-        handler=service_handler("delete_time_block", _delete_block),
+        handler=deny_direct,
         errors=(*_NOT_FOUND, "has_dependents"),
-        audit={"block_id": "log"},
-        summarize=lambda args: f"Eliminar el bloque de tiempo {args.block_id}",  # type: ignore[attr-defined]
+        audit={"time_block_id": "log"},
+        summarize=lambda args: f"Eliminar el bloque de tiempo {args.time_block_id}",  # type: ignore[attr-defined]
     ),
     ToolSpec(
         name="get_schedule",
