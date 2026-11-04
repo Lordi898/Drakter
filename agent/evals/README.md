@@ -68,3 +68,27 @@ Un caso guionizado acierta por construcción, así que su `ok` no demuestra nada
 - `expect_rule`: reglas que deben saltar en ese control. Lista en `RULES` de `grader.py`.
 - Los identificadores en resultados son UUID ficticios; se usan tal cual en el guion, porque `tool.invented_id` comprueba que vinieran de un resultado o del usuario.
 - El reloj es fijo: lunes 9 de noviembre de 2026, 10:00, Europe/Madrid.
+
+## Límites
+
+- **No pasa por Hermes ni por MCP.** Es un bucle directo sobre la API de Messages con el mismo `system` y los mismos esquemas. Mide la decisión del modelo, no `mcp_bridge.py`, el `drakter_guard` ni el backend real. Hermes expone los nombres con prefijo `mcp__drakter__`, y aquí son canónicos.
+- **El backend es falso.** Devuelve resultados guionizados y solo valida campos obligatorios y desconocidos del primer nivel. La puerta de confirmación que simula no prueba la real; eso se comprueba en `backend/tests/critical/`.
+- **Prompt compuesto.** Imita `compose_soul` de `home.py`, más el reloj fijo. Sin `CURRENT_CONTEXT` real, memoria ni contexto por turno. Cuando exista captura del prompt real, úsala con `--system-file`.
+- **Sin voz.** No hay aún forma de señalar el canal, así que las reglas de voz de `COMMUNICATION.md` no se evalúan.
+- **Consistencia.** Con `--repeat N` cada caso corre en N sesiones nuevas y el informe da los caminos de herramientas distintos. Con el stub siempre sale 1: no significa nada.
+- **Reglas de texto.** `style.*` y `must_not_match` son búsquedas de texto: detectan lo prohibido, no prueban que la voz sea buena. Un aprobado mecánico en personalidad no sustituye a leer las respuestas.
+- **Esquemas.** 71 de 78 herramientas: las 7 sin código no se ofrecen. `generated_from` indica de qué commits salieron; algunos worktrees estaban sin commitear, así que hay que regenerar tras la integración.
+
+## Coste con clave
+
+Cada turno envía el prompt completo y 71 esquemas. El `system` lleva `cache_control`; el informe da tokens de entrada, salida y caché. Haz antes una pasada con `--suite` y `--case`. Sin cifras hasta medir.
+
+## Estado
+
+| Qué | Estado |
+|---|---|
+| Tubería con stub | Ver el último `run.py` |
+| Selección de herramientas con Haiku 5.5 | ⚠️ pendiente de clave |
+| Operaciones encadenadas con Haiku 5.5 | ⚠️ pendiente de clave |
+| Consistencia de personalidad con Haiku 5.5 | ⚠️ pendiente de clave y de lectura humana de las rúbricas |
+| Paso real por Hermes y MCP | ⚠️ fuera de este arnés |

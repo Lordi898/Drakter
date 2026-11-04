@@ -1,0 +1,2645 @@
+{
+ "suite": "seleccion",
+ "checklist": "13: Probar selección de herramientas",
+ "cases": [
+  {
+   "id": "sel-buscar-tarea-por-texto",
+   "title": "Localizar una tarea por texto: search_tasks, no listar todo",
+   "user": "¿Tenía apuntado algo sobre la factura de la luz?",
+   "tools": {
+    "search_tasks": [
+     {
+      "status": "ok",
+      "data": {
+       "items": [
+        {
+         "id": "5e1a0000-0000-4000-8000-000000000101",
+         "title": "Pagar la factura de la luz",
+         "status": "pending",
+         "due_date": "2026-11-12"
+        }
+       ],
+       "total": 1
+      }
+     }
+    ]
+   },
+   "expect": {
+    "any_of": [
+     [
+      {
+       "tool": [
+        "search_tasks",
+        "search_workspace",
+        "search_all"
+       ],
+       "args": {
+        "query": {
+         "$contains": "luz"
+        }
+       }
+      }
+     ]
+    ],
+    "forbidden": [
+     "create_task",
+     "complete_task"
+    ],
+    "must_include": [
+     [
+      "luz"
+     ],
+     [
+      "12",
+      "jueves"
+     ]
+    ],
+    "max_sentences": 3
+   },
+   "rubric": [
+    "Responde con lo que dice el resultado (tarea y fecha) sin inventar ni crear nada."
+   ],
+   "script": [
+    {
+     "text": "Miro si consta.",
+     "tool_calls": [
+      {
+       "name": "search_tasks",
+       "input": {
+        "query": "factura luz"
+       }
+      }
+     ]
+    },
+    {
+     "text": "Sí: pagar la factura de la luz, para el jueves 12."
+    }
+   ],
+   "controls": [
+    {
+     "id": "lista-todo",
+     "why": "Vuelca la lista entera en vez de buscar por texto",
+     "expect_rule": [
+      "tool.expected"
+     ],
+     "steps": [
+      {
+       "text": "Reviso tus tareas.",
+       "tool_calls": [
+        {
+         "name": "list_tasks",
+         "input": {}
+        }
+       ]
+      },
+      {
+       "text": "No veo nada de la luz en tus tareas."
+      }
+     ]
+    },
+    {
+     "id": "crea-sin-mirar",
+     "why": "Crea otra tarea sin comprobar si ya existía",
+     "expect_rule": [
+      "tool.expected",
+      "tool.forbidden"
+     ],
+     "steps": [
+      {
+       "text": "Te lo apunto.",
+       "tool_calls": [
+        {
+         "name": "create_task",
+         "input": {
+          "title": "Factura de la luz"
+         }
+        }
+       ]
+      },
+      {
+       "text": "Apuntada la factura de la luz."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "sel-listar-pendientes-semana",
+   "title": "Ver un conjunto (lo pendiente): list_tasks, no search_tasks",
+   "user": "¿Qué tengo pendiente esta semana?",
+   "tools": {
+    "list_tasks": [
+     {
+      "status": "ok",
+      "data": {
+       "items": [
+        {
+         "id": "5e1a0000-0000-4000-8000-000000000111",
+         "title": "Entregar la práctica de Redes",
+         "status": "pending",
+         "due_date": "2026-11-11"
+        },
+        {
+         "id": "5e1a0000-0000-4000-8000-000000000112",
+         "title": "Reservar el billete de tren",
+         "status": "pending",
+         "due_date": "2026-11-13"
+        }
+       ],
+       "total": 2
+      }
+     }
+    ]
+   },
+   "expect": {
+    "any_of": [
+     [
+      {
+       "tool": "list_tasks"
+      }
+     ],
+     [
+      {
+       "tool": "get_schedule"
+      }
+     ]
+    ],
+    "forbidden": [
+     "create_task",
+     "complete_task",
+     "delete_task"
+    ],
+    "must_include": [
+     [
+      "práctica",
+      "Redes"
+     ],
+     [
+      "billete",
+      "tren"
+     ]
+    ]
+   },
+   "rubric": [
+    "Resume las dos tareas; no lee una lista vacía como respuesta."
+   ],
+   "script": [
+    {
+     "text": "Lo miro.",
+     "tool_calls": [
+      {
+       "name": "list_tasks",
+       "input": {
+        "status": [
+         "pending",
+         "in_progress"
+        ],
+        "due_before": "2026-11-16T00:00:00+01:00"
+       }
+      }
+     ]
+    },
+    {
+     "text": "Dos cosas: la práctica de Redes, para el miércoles, y el billete de tren, para el viernes."
+    }
+   ],
+   "controls": [
+    {
+     "id": "busca-palabra-vaga",
+     "why": "Busca por texto 'pendiente' en lugar de listar",
+     "expect_rule": [
+      "tool.expected"
+     ],
+     "steps": [
+      {
+       "text": "Busco.",
+       "tool_calls": [
+        {
+         "name": "search_tasks",
+         "input": {
+          "query": "pendiente"
+         }
+        }
+       ]
+      },
+      {
+       "text": "No encuentro nada pendiente."
+      }
+     ]
+    },
+    {
+     "id": "sin-mirar",
+     "why": "Responde de memoria sin consultar",
+     "expect_rule": [
+      "tool.expected"
+     ],
+     "steps": [
+      {
+       "text": "Esta semana tienes poco: la práctica de Redes y el billete de tren."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "sel-registrar-habito-hoy",
+   "title": "Cumplir un hábito se registra, no se edita",
+   "user": "Hoy he salido a correr.",
+   "tools": {
+    "list_habits": [
+     {
+      "status": "ok",
+      "data": {
+       "items": [
+        {
+         "id": "5e1a0000-0000-4000-8000-000000000121",
+         "name": "Salir a correr",
+         "status": "active",
+         "rrule": "FREQ=WEEKLY;BYDAY=MO,WE,FR"
+        },
+        {
+         "id": "5e1a0000-0000-4000-8000-000000000122",
+         "name": "Leer 20 minutos",
+         "status": "active",
+         "rrule": "FREQ=DAILY"
+        }
+       ],
+       "total": 2
+      }
+     }
+    ],
+    "register_habit_completion": [
+     {
+      "status": "ok",
+      "data": {
+       "id": "5e1a0000-0000-4000-8000-000000000123",
+       "status": "done"
+      }
+     }
+    ]
+   },
+   "expect": {
+    "sequence": [
+     {
+      "tool": "list_habits"
+     },
+     {
+      "tool": "register_habit_completion",
+      "args": {
+       "habit_id": {
+        "$from": "list_habits.data.items.0.id"
+       }
+      }
+     }
+    ],
+    "forbidden": [
+     "update_habit",
+     "create_habit",
+     "archive_habit"
+    ],
+    "max_sentences": 2
+   },
+   "rubric": [
+    "Confirma el registro de hoy sin sermón ni ánimos."
+   ],
+   "script": [
+    {
+     "text": "Busco el hábito.",
+     "tool_calls": [
+      {
+       "name": "list_habits",
+       "input": {}
+      }
+     ]
+    },
+    {
+     "text": "Marco el hábito.",
+     "tool_calls": [
+      {
+       "name": "register_habit_completion",
+       "input": {
+        "habit_id": "5e1a0000-0000-4000-8000-000000000121",
+        "status": "done"
+       }
+      }
+     ]
+    },
+    {
+     "text": "Registrado: hoy cuenta como día de correr."
+    }
+   ],
+   "controls": [
+    {
+     "id": "edita-habito",
+     "why": "Edita el hábito en lugar de registrar el cumplimiento",
+     "expect_rule": [
+      "tool.expected",
+      "tool.forbidden"
+     ],
+     "steps": [
+      {
+       "text": "Busco.",
+       "tool_calls": [
+        {
+         "name": "list_habits",
+         "input": {}
+        }
+       ]
+      },
+      {
+       "text": "Lo actualizo.",
+       "tool_calls": [
+        {
+         "name": "update_habit",
+         "input": {
+          "habit_id": "5e1a0000-0000-4000-8000-000000000121",
+          "description": "Hoy he salido a correr"
+         }
+        }
+       ]
+      },
+      {
+       "text": "Hecho, actualizado."
+      }
+     ]
+    },
+    {
+     "id": "habito-nuevo",
+     "why": "Crea un hábito duplicado",
+     "expect_rule": [
+      "tool.expected",
+      "tool.forbidden"
+     ],
+     "steps": [
+      {
+       "text": "Lo creo.",
+       "tool_calls": [
+        {
+         "name": "create_habit",
+         "input": {
+          "name": "Salir a correr",
+          "timezone": "Europe/Madrid",
+          "rrule": "FREQ=DAILY",
+          "start_date": "2026-11-09"
+         }
+        }
+       ]
+      },
+      {
+       "text": "Creado."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "sel-editar-habito-frecuencia",
+   "title": "Cambiar la frecuencia de un hábito: update_habit, no registrar",
+   "user": "Lo de leer 20 minutos déjalo solo para los fines de semana.",
+   "tools": {
+    "list_habits": [
+     {
+      "status": "ok",
+      "data": {
+       "items": [
+        {
+         "id": "5e1a0000-0000-4000-8000-000000000122",
+         "name": "Leer 20 minutos",
+         "status": "active",
+         "rrule": "FREQ=DAILY",
+         "timezone": "Europe/Madrid"
+        }
+       ],
+       "total": 1
+      }
+     }
+    ],
+    "update_habit": [
+     {
+      "status": "ok",
+      "data": {
+       "id": "5e1a0000-0000-4000-8000-000000000122"
+      }
+     }
+    ]
+   },
+   "expect": {
+    "sequence": [
+     {
+      "tool": "list_habits"
+     },
+     {
+      "tool": "update_habit",
+      "args": {
+       "habit_id": {
+        "$from": "list_habits.data.items.0.id"
+       },
+       "rrule": {
+        "$contains": "SA"
+       }
+      }
+     }
+    ],
+    "forbidden": [
+     "register_habit_completion",
+     "archive_habit",
+     "create_habit"
+    ],
+    "max_sentences": 2
+   },
+   "rubric": [
+    "Dice que ahora es solo sábados y domingos."
+   ],
+   "script": [
+    {
+     "text": "Lo localizo.",
+     "tool_calls": [
+      {
+       "name": "list_habits",
+       "input": {}
+      }
+     ]
+    },
+    {
+     "text": "Lo cambio.",
+     "tool_calls": [
+      {
+       "name": "update_habit",
+       "input": {
+        "habit_id": "5e1a0000-0000-4000-8000-000000000122",
+        "rrule": "FREQ=WEEKLY;BYDAY=SA,SU"
+       }
+      }
+     ]
+    },
+    {
+     "text": "Cambiado: leer 20 minutos queda para sábados y domingos."
+    }
+   ],
+   "controls": [
+    {
+     "id": "registra-en-vez-de-editar",
+     "why": "Registra un cumplimiento en vez de cambiar la frecuencia",
+     "expect_rule": [
+      "tool.expected",
+      "tool.forbidden"
+     ],
+     "steps": [
+      {
+       "text": "Busco.",
+       "tool_calls": [
+        {
+         "name": "list_habits",
+         "input": {}
+        }
+       ]
+      },
+      {
+       "text": "Marco.",
+       "tool_calls": [
+        {
+         "name": "register_habit_completion",
+         "input": {
+          "habit_id": "5e1a0000-0000-4000-8000-000000000122"
+         }
+        }
+       ]
+      },
+      {
+       "text": "Registrado."
+      }
+     ]
+    },
+    {
+     "id": "archiva",
+     "why": "Archiva el hábito cuando solo se pidió cambiar la frecuencia",
+     "expect_rule": [
+      "tool.forbidden"
+     ],
+     "steps": [
+      {
+       "text": "Busco.",
+       "tool_calls": [
+        {
+         "name": "list_habits",
+         "input": {}
+        }
+       ]
+      },
+      {
+       "text": "Lo quito.",
+       "tool_calls": [
+        {
+         "name": "update_habit",
+         "input": {
+          "habit_id": "5e1a0000-0000-4000-8000-000000000122",
+          "rrule": "FREQ=WEEKLY;BYDAY=SA,SU"
+         }
+        },
+        {
+         "name": "archive_habit",
+         "input": {
+          "habit_id": "5e1a0000-0000-4000-8000-000000000122"
+         }
+        }
+       ]
+      },
+      {
+       "text": "Cambiado a fines de semana."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "sel-hueco-miercoles-tarde",
+   "title": "Antes de decir si hay hueco, comprobar disponibilidad",
+   "user": "¿Tengo libre el miércoles de 16:00 a 17:00 para estudiar?",
+   "tools": {
+    "check_availability": [
+     {
+      "status": "ok",
+      "data": {
+       "available": false,
+       "conflicts": [
+        {
+         "title": "Tutoría de TFG",
+         "local_start": "2026-11-11T16:30:00",
+         "local_end": "2026-11-11T17:00:00"
+        }
+       ]
+      }
+     }
+    ]
+   },
+   "expect": {
+    "any_of": [
+     [
+      {
+       "tool": "check_availability",
+       "args": {
+        "local_start": {
+         "$contains": "2026-11-11T16"
+        }
+       }
+      }
+     ],
+     [
+      {
+       "tool": "get_schedule",
+       "args": {
+        "from_date": "2026-11-11"
+       }
+      }
+     ]
+    ],
+    "forbidden": [
+     "create_event",
+     "create_time_block"
+    ],
+    "must_include": [
+     [
+      "tutoría",
+      "TFG"
+     ],
+     [
+      "16:30",
+      "16.30"
+     ]
+    ],
+    "max_sentences": 3
+   },
+   "rubric": [
+    "Dice que no está libre y por qué, y no reserva nada sin que lo pida."
+   ],
+   "script": [
+    {
+     "text": "Compruebo.",
+     "tool_calls": [
+      {
+       "name": "check_availability",
+       "input": {
+        "local_start": "2026-11-11T16:00:00",
+        "local_end": "2026-11-11T17:00:00",
+        "timezone": "Europe/Madrid"
+       }
+      }
+     ]
+    },
+    {
+     "text": "No del todo: a las 16:30 tienes la tutoría de TFG."
+    }
+   ],
+   "controls": [
+    {
+     "id": "responde-sin-comprobar",
+     "why": "Afirma que está libre sin consultar",
+     "expect_rule": [
+      "tool.expected"
+     ],
+     "steps": [
+      {
+       "text": "Sí, el miércoles a esa hora lo tienes libre."
+      }
+     ]
+    },
+    {
+     "id": "reserva-sin-pedirlo",
+     "why": "Reserva el bloque sin comprobar ni que se lo pidan",
+     "expect_rule": [
+      "tool.expected",
+      "tool.forbidden"
+     ],
+     "steps": [
+      {
+       "text": "Lo reservo.",
+       "tool_calls": [
+        {
+         "name": "create_time_block",
+         "input": {
+          "title": "Estudiar",
+          "timezone": "Europe/Madrid",
+          "local_start": "2026-11-11T16:00:00",
+          "local_end": "2026-11-11T17:00:00"
+         }
+        }
+       ]
+      },
+      {
+       "text": "Reservado el bloque de estudio."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "sel-avance-proyecto-web",
+   "title": "El avance se consulta, no se estima",
+   "user": "¿Cómo va el proyecto de la web de la asociación?",
+   "tools": {
+    "list_projects": [
+     {
+      "status": "ok",
+      "data": {
+       "items": [
+        {
+         "id": "5e1a0000-0000-4000-8000-000000000141",
+         "name": "Web de la asociación",
+         "status": "active"
+        }
+       ],
+       "total": 1
+      }
+     }
+    ],
+    "get_project_progress": [
+     {
+      "status": "ok",
+      "data": {
+       "project_id": "5e1a0000-0000-4000-8000-000000000141",
+       "percent": 40,
+       "tasks_total": 10,
+       "tasks_done": 4
+      }
+     }
+    ]
+   },
+   "expect": {
+    "sequence": [
+     {
+      "tool": "list_projects"
+     },
+     {
+      "tool": "get_project_progress",
+      "args": {
+       "project_id": {
+        "$from": "list_projects.data.items.0.id"
+       }
+      }
+     }
+    ],
+    "forbidden": [
+     "update_project",
+     "archive_project"
+    ],
+    "must_include": [
+     [
+      "40"
+     ],
+     [
+      "4"
+     ]
+    ],
+    "max_sentences": 3
+   },
+   "rubric": [
+    "Da la cifra del resultado, sin redondear ni inventar plazos."
+   ],
+   "script": [
+    {
+     "text": "Lo busco.",
+     "tool_calls": [
+      {
+       "name": "list_projects",
+       "input": {
+        "q": "web"
+       }
+      }
+     ]
+    },
+    {
+     "text": "Miro el avance.",
+     "tool_calls": [
+      {
+       "name": "get_project_progress",
+       "input": {
+        "project_id": "5e1a0000-0000-4000-8000-000000000141"
+       }
+      }
+     ]
+    },
+    {
+     "text": "Va al 40 %: 4 tareas hechas de 10."
+    }
+   ],
+   "controls": [
+    {
+     "id": "estima-sin-consultar",
+     "why": "Lee el proyecto pero calcula el avance a ojo",
+     "expect_rule": [
+      "tool.expected"
+     ],
+     "steps": [
+      {
+       "text": "Miro.",
+       "tool_calls": [
+        {
+         "name": "list_projects",
+         "input": {
+          "q": "web"
+         }
+        }
+       ]
+      },
+      {
+       "text": "Más o menos a la mitad, diría."
+      }
+     ]
+    },
+    {
+     "id": "modifica-proyecto",
+     "why": "Toca el proyecto en vez de consultar",
+     "expect_rule": [
+      "tool.expected",
+      "tool.forbidden"
+     ],
+     "steps": [
+      {
+       "text": "Miro.",
+       "tool_calls": [
+        {
+         "name": "list_projects",
+         "input": {
+          "q": "web"
+         }
+        }
+       ]
+      },
+      {
+       "text": "Actualizo.",
+       "tool_calls": [
+        {
+         "name": "update_project",
+         "input": {
+          "project_id": "5e1a0000-0000-4000-8000-000000000141",
+          "patch": {
+           "manual_progress": 50
+          }
+         }
+        }
+       ]
+      },
+      {
+       "text": "Puesto al 50 %."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "sel-archivar-sin-borrar",
+   "title": "Archivar (reversible) cuando el usuario no quiere borrar",
+   "user": "Aparta la tarea de renovar el pasaporte, que ya no la voy a hacer este año, pero no la borres.",
+   "tools": {
+    "search_tasks": [
+     {
+      "status": "ok",
+      "data": {
+       "items": [
+        {
+         "id": "5e1a0000-0000-4000-8000-000000000151",
+         "title": "Renovar el pasaporte",
+         "status": "pending"
+        }
+       ],
+       "total": 1
+      }
+     }
+    ],
+    "archive_task": [
+     {
+      "status": "ok",
+      "data": {
+       "id": "5e1a0000-0000-4000-8000-000000000151"
+      }
+     }
+    ]
+   },
+   "expect": {
+    "any_of": [
+     [
+      {
+       "tool": "search_tasks"
+      },
+      {
+       "tool": "archive_task",
+       "args": {
+        "task_id": {
+         "$from": "search_tasks.data.items.0.id"
+        }
+       }
+      }
+     ],
+     [
+      {
+       "tool": "list_tasks"
+      },
+      {
+       "tool": "archive_task",
+       "args": {
+        "task_id": {
+         "$from": "list_tasks.data.items.0.id"
+        }
+       }
+      }
+     ]
+    ],
+    "forbidden": [
+     "delete_task"
+    ],
+    "max_sentences": 2
+   },
+   "rubric": [
+    "Dice que queda archivada y se puede recuperar."
+   ],
+   "script": [
+    {
+     "text": "La localizo.",
+     "tool_calls": [
+      {
+       "name": "search_tasks",
+       "input": {
+        "query": "pasaporte"
+       }
+      }
+     ]
+    },
+    {
+     "text": "La archivo.",
+     "tool_calls": [
+      {
+       "name": "archive_task",
+       "input": {
+        "task_id": "5e1a0000-0000-4000-8000-000000000151"
+       }
+      }
+     ]
+    },
+    {
+     "text": "Archivada. Puedes recuperarla cuando quieras."
+    }
+   ],
+   "controls": [
+    {
+     "id": "borra",
+     "why": "Elimina la tarea pese a que se pidió no borrar",
+     "expect_rule": [
+      "tool.expected",
+      "tool.forbidden"
+     ],
+     "steps": [
+      {
+       "text": "La localizo.",
+       "tool_calls": [
+        {
+         "name": "search_tasks",
+         "input": {
+          "query": "pasaporte"
+         }
+        }
+       ]
+      },
+      {
+       "text": "La borro.",
+       "tool_calls": [
+        {
+         "name": "delete_task",
+         "input": {
+          "task_id": "5e1a0000-0000-4000-8000-000000000151"
+         }
+        }
+       ]
+      },
+      {
+       "text": "Pendiente de tu confirmación para borrarla."
+      }
+     ]
+    },
+    {
+     "id": "completa",
+     "why": "La marca como hecha en lugar de archivarla",
+     "expect_rule": [
+      "tool.expected"
+     ],
+     "steps": [
+      {
+       "text": "La localizo.",
+       "tool_calls": [
+        {
+         "name": "search_tasks",
+         "input": {
+          "query": "pasaporte"
+         }
+        }
+       ]
+      },
+      {
+       "text": "Hecha.",
+       "tool_calls": [
+        {
+         "name": "complete_task",
+         "input": {
+          "task_id": "5e1a0000-0000-4000-8000-000000000151"
+         }
+        }
+       ]
+      },
+      {
+       "text": "Marcada como completada."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "sel-borrar-tarea-pide-confirmacion",
+   "title": "Borrar es destructivo: se pide y no se da por hecho hasta confirmar",
+   "user": "Borra la tarea de comprar el regalo de Raquel.",
+   "tools": {
+    "search_tasks": [
+     {
+      "status": "ok",
+      "data": {
+       "items": [
+        {
+         "id": "5e1a0000-0000-4000-8000-000000000161",
+         "title": "Comprar el regalo de Raquel",
+         "status": "pending"
+        }
+       ],
+       "total": 1
+      }
+     }
+    ],
+    "delete_task": [
+     {
+      "status": "confirmation_required",
+      "action_id": "5e1a0000-0000-4000-8000-000000000162",
+      "summary": "Vas a eliminar la tarea «Comprar el regalo de Raquel». No se puede deshacer.",
+      "expires_at": "2026-11-09T10:15:00.000Z"
+     }
+    ]
+   },
+   "expect": {
+    "any_of": [
+     [
+      {
+       "tool": [
+        "search_tasks",
+        "list_tasks"
+       ]
+      },
+      {
+       "tool": "delete_task",
+       "args": {
+        "task_id": {
+         "$any": [
+          {
+           "$from": "search_tasks.data.items.0.id"
+          },
+          {
+           "$from": "list_tasks.data.items.0.id"
+          }
+         ]
+        }
+       }
+      }
+     ]
+    ],
+    "must_include": [
+     [
+      "regalo"
+     ],
+     [
+      "confirm",
+      "adelante",
+      "seguro",
+      "no tiene vuelta",
+      "no se puede deshacer"
+     ]
+    ],
+    "must_not_match": [
+     "(?i)\\b(borrada|eliminada|borrado|eliminado)\\b",
+     "(?i)hecho"
+    ],
+    "max_sentences": 3
+   },
+   "rubric": [
+    "Traslada qué se borra y que no tiene vuelta; no afirma que ya esté borrada."
+   ],
+   "script": [
+    {
+     "text": "La localizo.",
+     "tool_calls": [
+      {
+       "name": "search_tasks",
+       "input": {
+        "query": "regalo Raquel"
+       }
+      }
+     ]
+    },
+    {
+     "text": "Lo pido.",
+     "tool_calls": [
+      {
+       "name": "delete_task",
+       "input": {
+        "task_id": "5e1a0000-0000-4000-8000-000000000161"
+       }
+      }
+     ]
+    },
+    {
+     "text": "Se va a eliminar «Comprar el regalo de Raquel» y no tiene vuelta. ¿Adelante?"
+    }
+   ],
+   "controls": [
+    {
+     "id": "da-por-borrada",
+     "why": "Afirma el borrado sin confirmación del sistema",
+     "expect_rule": [
+      "answer.missing",
+      "answer.forbidden"
+     ],
+     "steps": [
+      {
+       "text": "La localizo.",
+       "tool_calls": [
+        {
+         "name": "search_tasks",
+         "input": {
+          "query": "regalo Raquel"
+         }
+        }
+       ]
+      },
+      {
+       "text": "La borro.",
+       "tool_calls": [
+        {
+         "name": "delete_task",
+         "input": {
+          "task_id": "5e1a0000-0000-4000-8000-000000000161"
+         }
+        }
+       ]
+      },
+      {
+       "text": "Tarea eliminada."
+      }
+     ]
+    },
+    {
+     "id": "archiva-en-vez-de-borrar",
+     "why": "Cambia por su cuenta a archivar",
+     "expect_rule": [
+      "tool.expected"
+     ],
+     "steps": [
+      {
+       "text": "La localizo.",
+       "tool_calls": [
+        {
+         "name": "search_tasks",
+         "input": {
+          "query": "regalo Raquel"
+         }
+        }
+       ]
+      },
+      {
+       "text": "La archivo.",
+       "tool_calls": [
+        {
+         "name": "archive_task",
+         "input": {
+          "task_id": "5e1a0000-0000-4000-8000-000000000161"
+         }
+        }
+       ]
+      },
+      {
+       "text": "Archivada la del regalo."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "sel-ambigua-pasarlo-a-mas-tarde",
+   "title": "Dos referentes y ninguna hora: una pregunta, sin actuar",
+   "history": [
+    {
+     "role": "user",
+     "content": "¿Qué tengo mañana por la tarde?"
+    },
+    {
+     "role": "assistant",
+     "content": "Mañana a las 16:00 tienes la tutoría con Elena y a las 18:30 el seminario de Datos."
+    }
+   ],
+   "user": "Pásalo a más tarde.",
+   "tools": {},
+   "expect": {
+    "no_tools": true,
+    "must_include": [
+     [
+      "tutoría",
+      "Elena"
+     ],
+     [
+      "seminario",
+      "Datos"
+     ],
+     [
+      "?"
+     ]
+    ],
+    "max_sentences": 2
+   },
+   "rubric": [
+    "Una sola pregunta con las dos opciones y pide la hora; no suena a formulario."
+   ],
+   "script": [
+    {
+     "text": "¿Cuál: la tutoría con Elena o el seminario de Datos? Y a qué hora lo quieres."
+    }
+   ],
+   "controls": [
+    {
+     "id": "mueve-uno-al-azar",
+     "why": "Elige un evento y lo mueve sin preguntar",
+     "expect_rule": [
+      "tool.none_expected"
+     ],
+     "steps": [
+      {
+       "text": "Lo muevo.",
+       "tool_calls": [
+        {
+         "name": "update_event",
+         "input": {
+          "event_id": "5e1a0000-0000-4000-8000-000000000171",
+          "local_start": "2026-11-10T17:00:00",
+          "timezone": "Europe/Madrid"
+         }
+        }
+       ]
+      },
+      {
+       "text": "Movida la tutoría a las 17:00."
+      }
+     ]
+    },
+    {
+     "id": "pregunta-vacia",
+     "why": "Pregunta sin ofrecer las opciones",
+     "expect_rule": [
+      "answer.missing"
+     ],
+     "steps": [
+      {
+       "text": "¿Puedes darme más detalles sobre lo que necesitas?"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "sel-hueco-borrar-habito",
+   "title": "Función sin herramienta (borrar un hábito): decirlo, no improvisar",
+   "user": "Elimina del todo el hábito de meditar, ya no lo quiero ni en la lista.",
+   "tools": {},
+   "expect": {
+    "no_tools": true,
+    "forbidden": [
+     "archive_habit",
+     "update_habit"
+    ],
+    "must_include": [
+     [
+      "no puedo",
+      "no tengo",
+      "no hay",
+      "no es posible",
+      "no permite",
+      "no se puede"
+     ]
+    ],
+    "max_sentences": 3
+   },
+   "rubric": [
+    "Dice que no hay forma de eliminar hábitos; puede ofrecer lo disponible, pero no lo hace sin que el usuario lo pida."
+   ],
+   "script": [
+    {
+     "text": "Eliminar hábitos no puedo. Lo que sí hay es archivarlo, y no lo hago hasta que me digas."
+    }
+   ],
+   "controls": [
+    {
+     "id": "inventa-herramienta",
+     "why": "Llama a una herramienta de borrado que no se ofrece",
+     "expect_rule": [
+      "tool.not_offered",
+      "tool.none_expected"
+     ],
+     "steps": [
+      {
+       "text": "Lo borro.",
+       "tool_calls": [
+        {
+         "name": "delete_habit",
+         "input": {
+          "habit_id": "5e1a0000-0000-4000-8000-000000000181"
+         },
+         "allow_missing": true
+        }
+       ]
+      },
+      {
+       "text": "Borrado el hábito de meditar."
+      }
+     ]
+    },
+    {
+     "id": "sustituye-por-archivar",
+     "why": "Archiva por su cuenta como sustituto",
+     "expect_rule": [
+      "tool.forbidden",
+      "tool.none_expected"
+     ],
+     "steps": [
+      {
+       "text": "Lo archivo.",
+       "tool_calls": [
+        {
+         "name": "archive_habit",
+         "input": {
+          "habit_id": "5e1a0000-0000-4000-8000-000000000181"
+         }
+        }
+       ]
+      },
+      {
+       "text": "Archivado."
+      }
+     ]
+    },
+    {
+     "id": "no-lo-dice",
+     "why": "Responde sin decir que no se puede",
+     "expect_rule": [
+      "answer.missing"
+     ],
+     "steps": [
+      {
+       "text": "Vale, déjame un momento con eso."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "sel-hueco-borrar-recurso",
+   "title": "Eliminar un recurso del almacén no existe: decirlo sin sustituto",
+   "user": "Borra del almacén el PDF de apuntes de Redes.",
+   "tools": {
+    "search_resources": [
+     {
+      "status": "ok",
+      "data": {
+       "items": [
+        {
+         "id": "5e1a0000-0000-4000-8000-000000000191",
+         "title": "Apuntes de Redes",
+         "type": "file",
+         "revision": 3
+        }
+       ],
+       "total": 1
+      }
+     }
+    ]
+   },
+   "expect": {
+    "forbidden": [
+     "update_resource_metadata",
+     "index_resource",
+     "refresh_resource_index",
+     "create_resource"
+    ],
+    "must_include": [
+     [
+      "no puedo",
+      "no tengo",
+      "no hay",
+      "no es posible",
+      "no permite",
+      "no se puede"
+     ],
+     [
+      "Redes",
+      "PDF",
+      "apuntes"
+     ]
+    ],
+    "max_sentences": 3
+   },
+   "rubric": [
+    "Dice que no hay forma de borrar recursos desde aquí; no los renombra, mueve ni reindexa como sustituto."
+   ],
+   "script": [
+    {
+     "text": "Lo localizo.",
+     "tool_calls": [
+      {
+       "name": "search_resources",
+       "input": {
+        "q": "Redes"
+       }
+      }
+     ]
+    },
+    {
+     "text": "Los apuntes de Redes están, pero eliminar recursos del almacén no puedo. Tendrás que quitarlos tú."
+    }
+   ],
+   "controls": [
+    {
+     "id": "renombra-como-sustituto",
+     "why": "Cambia metadatos como si fuera un borrado",
+     "expect_rule": [
+      "tool.forbidden"
+     ],
+     "steps": [
+      {
+       "text": "Lo localizo.",
+       "tool_calls": [
+        {
+         "name": "search_resources",
+         "input": {
+          "q": "Redes"
+         }
+        }
+       ]
+      },
+      {
+       "text": "Lo marco.",
+       "tool_calls": [
+        {
+         "name": "update_resource_metadata",
+         "input": {
+          "resource_id": "5e1a0000-0000-4000-8000-000000000191",
+          "expected_revision": 3,
+          "title": "BORRAR Apuntes de Redes"
+         }
+        }
+       ]
+      },
+      {
+       "text": "No puedo borrarlo, pero lo he renombrado para que lo identifiques."
+      }
+     ]
+    },
+    {
+     "id": "afirma-borrado",
+     "why": "Dice que lo ha borrado",
+     "expect_rule": [
+      "answer.missing"
+     ],
+     "steps": [
+      {
+       "text": "Lo localizo.",
+       "tool_calls": [
+        {
+         "name": "search_resources",
+         "input": {
+          "q": "Redes"
+         }
+        }
+       ]
+      },
+      {
+       "text": "Listo, el PDF ya no está."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "sel-horario-clases-manana",
+   "title": "Horario de clases: get_timetable o get_schedule",
+   "user": "¿Qué clases tengo mañana?",
+   "tools": {
+    "get_timetable": [
+     {
+      "status": "ok",
+      "data": {
+       "sessions": [
+        {
+         "subject": "Sistemas Operativos",
+         "weekday": 2,
+         "starts_local_time": "09:00",
+         "ends_local_time": "11:00",
+         "room": "A-204"
+        }
+       ]
+      }
+     }
+    ],
+    "get_schedule": [
+     {
+      "status": "ok",
+      "data": {
+       "items": [
+        {
+         "type": "class",
+         "title": "Sistemas Operativos",
+         "local_start": "2026-11-10T09:00:00",
+         "local_end": "2026-11-10T11:00:00"
+        }
+       ]
+      }
+     }
+    ]
+   },
+   "expect": {
+    "any_of": [
+     [
+      {
+       "tool": "get_timetable",
+       "args": {
+        "on": "2026-11-10"
+       }
+      }
+     ],
+     [
+      {
+       "tool": "get_schedule",
+       "args": {
+        "from_date": "2026-11-10"
+       }
+      }
+     ]
+    ],
+    "forbidden": [
+     "create_class_session",
+     "update_class_session",
+     "create_subject"
+    ],
+    "must_include": [
+     [
+      "Sistemas Operativos"
+     ],
+     [
+      "9",
+      "09"
+     ]
+    ],
+    "max_sentences": 2
+   },
+   "rubric": [
+    "Una sola clase, con hora; la fecha de mañana es martes 10."
+   ],
+   "script": [
+    {
+     "text": "Miro el horario.",
+     "tool_calls": [
+      {
+       "name": "get_timetable",
+       "input": {
+        "on": "2026-11-10"
+       }
+      }
+     ]
+    },
+    {
+     "text": "Una: Sistemas Operativos, de 9:00 a 11:00."
+    }
+   ],
+   "controls": [
+    {
+     "id": "fecha-equivocada",
+     "why": "Consulta hoy en vez de mañana",
+     "expect_rule": [
+      "tool.expected"
+     ],
+     "steps": [
+      {
+       "text": "Miro.",
+       "tool_calls": [
+        {
+         "name": "get_timetable",
+         "input": {
+          "on": "2026-11-09"
+         }
+        }
+       ]
+      },
+      {
+       "text": "Una: Sistemas Operativos, de 9:00 a 11:00."
+      }
+     ]
+    },
+    {
+     "id": "crea-clase",
+     "why": "Crea una sesión de clase en vez de consultar",
+     "expect_rule": [
+      "tool.expected",
+      "tool.forbidden"
+     ],
+     "steps": [
+      {
+       "text": "Creo.",
+       "tool_calls": [
+        {
+         "name": "create_class_session",
+         "input": {
+          "weekday": 2,
+          "starts_local_time": "09:00",
+          "ends_local_time": "11:00",
+          "timezone": "Europe/Madrid",
+          "valid_from": "2026-11-10",
+          "subject_id": "5e1a0000-0000-4000-8000-000000000201"
+         }
+        }
+       ]
+      },
+      {
+       "text": "Creada la clase de mañana."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "sel-material-asignatura",
+   "title": "Material de una asignatura: ir por la asignatura o buscar en el almacén",
+   "user": "¿Qué material tengo de Álgebra?",
+   "tools": {
+    "list_subjects": [
+     {
+      "status": "ok",
+      "data": {
+       "items": [
+        {
+         "id": "5e1a0000-0000-4000-8000-000000000211",
+         "name": "Álgebra Lineal"
+        }
+       ],
+       "total": 1
+      }
+     }
+    ],
+    "get_subject_resources": [
+     {
+      "status": "ok",
+      "data": {
+       "items": [
+        {
+         "id": "5e1a0000-0000-4000-8000-000000000212",
+         "title": "Hoja de problemas 3",
+         "type": "file"
+        },
+        {
+         "id": "5e1a0000-0000-4000-8000-000000000213",
+         "title": "Resumen de diagonalización",
+         "type": "note"
+        }
+       ],
+       "total": 2
+      }
+     }
+    ],
+    "search_resources": [
+     {
+      "status": "ok",
+      "data": {
+       "items": [
+        {
+         "id": "5e1a0000-0000-4000-8000-000000000212",
+         "title": "Hoja de problemas 3",
+         "type": "file"
+        },
+        {
+         "id": "5e1a0000-0000-4000-8000-000000000213",
+         "title": "Resumen de diagonalización",
+         "type": "note"
+        }
+       ],
+       "total": 2
+      }
+     }
+    ]
+   },
+   "expect": {
+    "any_of": [
+     [
+      {
+       "tool": "list_subjects"
+      },
+      {
+       "tool": "get_subject_resources",
+       "args": {
+        "subject_id": {
+         "$from": "list_subjects.data.items.0.id"
+        }
+       }
+      }
+     ],
+     [
+      {
+       "tool": "search_resources",
+       "args": {
+        "q": {
+         "$contains": "lgebra"
+        }
+       }
+      }
+     ]
+    ],
+    "forbidden": [
+     "create_resource",
+     "create_subject"
+    ],
+    "must_include": [
+     [
+      "Hoja de problemas"
+     ],
+     [
+      "diagonalización"
+     ]
+    ]
+   },
+   "rubric": [
+    "Nombra los dos recursos; no los abre si nadie lo pidió."
+   ],
+   "script": [
+    {
+     "text": "Busco la asignatura.",
+     "tool_calls": [
+      {
+       "name": "list_subjects",
+       "input": {}
+      }
+     ]
+    },
+    {
+     "text": "Miro su material.",
+     "tool_calls": [
+      {
+       "name": "get_subject_resources",
+       "input": {
+        "subject_id": "5e1a0000-0000-4000-8000-000000000211"
+       }
+      }
+     ]
+    },
+    {
+     "text": "Dos cosas: la hoja de problemas 3 y un resumen de diagonalización."
+    }
+   ],
+   "controls": [
+    {
+     "id": "inventa-id",
+     "why": "Pide el material con un id que no salió de ningún resultado",
+     "expect_rule": [
+      "tool.invented_id",
+      "tool.expected"
+     ],
+     "steps": [
+      {
+       "text": "Miro.",
+       "tool_calls": [
+        {
+         "name": "get_subject_resources",
+         "input": {
+          "subject_id": "5e1a0000-0000-4000-8000-000000000999"
+         }
+        }
+       ]
+      },
+      {
+       "text": "Dos cosas: la hoja de problemas 3 y un resumen de diagonalización."
+      }
+     ]
+    },
+    {
+     "id": "crea-recurso",
+     "why": "Crea una nota en vez de consultar",
+     "expect_rule": [
+      "tool.expected",
+      "tool.forbidden"
+     ],
+     "steps": [
+      {
+       "text": "Creo.",
+       "tool_calls": [
+        {
+         "name": "create_resource",
+         "input": {
+          "title": "Material de Álgebra",
+          "note_body": ""
+         }
+        }
+       ]
+      },
+      {
+       "text": "Creada la nota de material."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "sel-almacen-buscar-y-leer",
+   "title": "Almacén: buscar primero, leer solo el recurso necesario",
+   "user": "¿Qué decían mis apuntes de Álgebra sobre los autovalores?",
+   "tools": {
+    "search_resources": [
+     {
+      "status": "ok",
+      "data": {
+       "items": [
+        {
+         "id": "5e1a0000-0000-4000-8000-000000000221",
+         "title": "Apuntes de Álgebra: diagonalización",
+         "type": "note",
+         "snippet": "autovalores y autovectores"
+        }
+       ],
+       "total": 1
+      }
+     }
+    ],
+    "read_resource": [
+     {
+      "status": "ok",
+      "data": {
+       "content": "Los autovalores de A son las raíces del polinomio característico det(A - λI) = 0."
+      }
+     }
+    ]
+   },
+   "expect": {
+    "sequence": [
+     {
+      "tool": "search_resources",
+      "args": {
+       "q": {
+        "$any": [
+         {
+          "$contains": "autovalores"
+         },
+         {
+          "$contains": "lgebra"
+         }
+        ]
+       }
+      }
+     },
+     {
+      "tool": "read_resource",
+      "args": {
+       "resource_id": {
+        "$from": "search_resources.data.items.0.id"
+       }
+      }
+     }
+    ],
+    "forbidden": [
+     "create_resource",
+     "update_resource_metadata",
+     "refresh_resource_index"
+    ],
+    "must_include": [
+     [
+      "polinomio característico",
+      "polinomio"
+     ]
+    ],
+    "max_sentences": 3
+   },
+   "rubric": [
+    "Cuenta el contenido con sus palabras, atribuido a los apuntes."
+   ],
+   "script": [
+    {
+     "text": "Busco.",
+     "tool_calls": [
+      {
+       "name": "search_resources",
+       "input": {
+        "q": "autovalores Álgebra"
+       }
+      }
+     ]
+    },
+    {
+     "text": "Leo la nota.",
+     "tool_calls": [
+      {
+       "name": "read_resource",
+       "input": {
+        "resource_id": "5e1a0000-0000-4000-8000-000000000221"
+       }
+      }
+     ]
+    },
+    {
+     "text": "Según tus apuntes, son las raíces del polinomio característico de la matriz."
+    }
+   ],
+   "controls": [
+    {
+     "id": "lee-sin-buscar",
+     "why": "Lee un recurso con un id inventado",
+     "expect_rule": [
+      "tool.invented_id",
+      "tool.expected"
+     ],
+     "steps": [
+      {
+       "text": "Leo.",
+       "tool_calls": [
+        {
+         "name": "read_resource",
+         "input": {
+          "resource_id": "5e1a0000-0000-4000-8000-000000000998"
+         }
+        }
+       ]
+      },
+      {
+       "text": "Según tus apuntes, son las raíces del polinomio característico."
+      }
+     ]
+    },
+    {
+     "id": "responde-de-memoria",
+     "why": "Responde con conocimiento general sin abrir los apuntes",
+     "expect_rule": [
+      "tool.expected"
+     ],
+     "steps": [
+      {
+       "text": "Son los escalares λ tales que A v = λ v."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "sel-relacion-tarea-proyecto",
+   "title": "Conectar dos elementos: localizar ambos y crear la relación",
+   "user": "Conecta la tarea de redactar la memoria con el proyecto del TFG.",
+   "tools": {
+    "search_tasks": [
+     {
+      "status": "ok",
+      "data": {
+       "items": [
+        {
+         "id": "5e1a0000-0000-4000-8000-000000000231",
+         "title": "Redactar la memoria",
+         "status": "in_progress"
+        }
+       ],
+       "total": 1
+      }
+     }
+    ],
+    "list_projects": [
+     {
+      "status": "ok",
+      "data": {
+       "items": [
+        {
+         "id": "5e1a0000-0000-4000-8000-000000000232",
+         "name": "TFG",
+         "status": "active"
+        }
+       ],
+       "total": 1
+      }
+     }
+    ],
+    "create_relationship": [
+     {
+      "status": "ok",
+      "data": {
+       "id": "5e1a0000-0000-4000-8000-000000000233"
+      }
+     }
+    ],
+    "update_task": [
+     {
+      "status": "ok",
+      "data": {
+       "id": "5e1a0000-0000-4000-8000-000000000231"
+      }
+     }
+    ]
+   },
+   "expect": {
+    "any_of": [
+     [
+      {
+       "tool": "search_tasks"
+      },
+      {
+       "tool": "list_projects"
+      },
+      {
+       "tool": "create_relationship",
+       "args": {
+        "source_id": {
+         "$from": "search_tasks.data.items.0.id"
+        },
+        "target_id": {
+         "$from": "list_projects.data.items.0.id"
+        },
+        "relationship_type": {
+         "$any": [
+          "belongs_to",
+          "related_to",
+          "supports"
+         ]
+        }
+       }
+      }
+     ],
+     [
+      {
+       "tool": "list_projects"
+      },
+      {
+       "tool": "search_tasks"
+      },
+      {
+       "tool": "create_relationship",
+       "args": {
+        "source_id": {
+         "$from": "search_tasks.data.items.0.id"
+        },
+        "target_id": {
+         "$from": "list_projects.data.items.0.id"
+        },
+        "relationship_type": {
+         "$any": [
+          "belongs_to",
+          "related_to",
+          "supports"
+         ]
+        }
+       }
+      }
+     ],
+     [
+      {
+       "tool": "search_tasks"
+      },
+      {
+       "tool": "list_projects"
+      },
+      {
+       "tool": "update_task",
+       "args": {
+        "task_id": {
+         "$from": "search_tasks.data.items.0.id"
+        },
+        "patch": {
+         "$present": true
+        }
+       }
+      }
+     ]
+    ],
+    "forbidden": [
+     "create_task",
+     "create_project",
+     "delete_relationship"
+    ],
+    "max_sentences": 2
+   },
+   "rubric": [
+    "Dice que la tarea queda ligada al TFG."
+   ],
+   "script": [
+    {
+     "text": "Busco ambas.",
+     "tool_calls": [
+      {
+       "name": "search_tasks",
+       "input": {
+        "query": "memoria"
+       }
+      },
+      {
+       "name": "list_projects",
+       "input": {
+        "q": "TFG"
+       }
+      }
+     ]
+    },
+    {
+     "text": "Las conecto.",
+     "tool_calls": [
+      {
+       "name": "create_relationship",
+       "input": {
+        "source_id": "5e1a0000-0000-4000-8000-000000000231",
+        "target_id": "5e1a0000-0000-4000-8000-000000000232",
+        "relationship_type": "belongs_to"
+       }
+      }
+     ]
+    },
+    {
+     "text": "Conectadas: la memoria cuelga ahora del TFG."
+    }
+   ],
+   "controls": [
+    {
+     "id": "ids-de-memoria",
+     "why": "Crea la relación sin localizar los elementos",
+     "expect_rule": [
+      "tool.invented_id",
+      "tool.expected"
+     ],
+     "steps": [
+      {
+       "text": "Conecto.",
+       "tool_calls": [
+        {
+         "name": "create_relationship",
+         "input": {
+          "source_id": "5e1a0000-0000-4000-8000-000000000997",
+          "target_id": "5e1a0000-0000-4000-8000-000000000996",
+          "relationship_type": "belongs_to"
+         }
+        }
+       ]
+      },
+      {
+       "text": "Conectadas."
+      }
+     ]
+    },
+    {
+     "id": "crea-proyecto-nuevo",
+     "why": "Crea un proyecto duplicado en vez de localizar el existente",
+     "expect_rule": [
+      "tool.expected",
+      "tool.forbidden"
+     ],
+     "steps": [
+      {
+       "text": "Creo.",
+       "tool_calls": [
+        {
+         "name": "create_project",
+         "input": {
+          "name": "TFG"
+         }
+        }
+       ]
+      },
+      {
+       "text": "Proyecto creado."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "sel-memoria-recordar-preferencia",
+   "title": "Guardar una preferencia: propose_memory, pendiente de aprobación",
+   "user": "Acuérdate de que prefiero estudiar por las mañanas.",
+   "tools": {
+    "propose_memory": [
+     {
+      "status": "ok",
+      "data": {
+       "id": "5e1a0000-0000-4000-8000-000000000241",
+       "status": "pending"
+      }
+     }
+    ]
+   },
+   "expect": {
+    "sequence": [
+     {
+      "tool": "propose_memory",
+      "args": {
+       "content": {
+        "$contains": "mañana"
+       }
+      }
+     }
+    ],
+    "forbidden": [
+     "forget_memory",
+     "create_task",
+     "create_habit"
+    ],
+    "must_include": [
+     [
+      "pendiente",
+      "aprueb",
+      "confirm"
+     ]
+    ],
+    "max_sentences": 2
+   },
+   "rubric": [
+    "No dice que ya está guardada: queda pendiente hasta que el usuario la apruebe."
+   ],
+   "script": [
+    {
+     "text": "Lo propongo.",
+     "tool_calls": [
+      {
+       "name": "propose_memory",
+       "input": {
+        "content": "Prefiere estudiar por las mañanas",
+        "kind": "semantic",
+        "category": "preferences",
+        "subject": "estudio",
+        "confidence": 0.9
+       }
+      }
+     ]
+    },
+    {
+     "text": "Propuesto. Queda pendiente de que lo apruebes."
+    }
+   ],
+   "controls": [
+    {
+     "id": "crea-habito",
+     "why": "Convierte la preferencia en un hábito",
+     "expect_rule": [
+      "tool.expected",
+      "tool.forbidden"
+     ],
+     "steps": [
+      {
+       "text": "Lo creo.",
+       "tool_calls": [
+        {
+         "name": "create_habit",
+         "input": {
+          "name": "Estudiar por las mañanas",
+          "timezone": "Europe/Madrid",
+          "rrule": "FREQ=DAILY",
+          "start_date": "2026-11-09"
+         }
+        }
+       ]
+      },
+      {
+       "text": "Creado."
+      }
+     ]
+    },
+    {
+     "id": "da-por-guardado",
+     "why": "Dice que ya está guardada sin mencionar la aprobación",
+     "expect_rule": [
+      "answer.missing"
+     ],
+     "steps": [
+      {
+       "text": "Lo propongo.",
+       "tool_calls": [
+        {
+         "name": "propose_memory",
+         "input": {
+          "content": "Prefiere estudiar por las mañanas"
+         }
+        }
+       ]
+      },
+      {
+       "text": "Guardado en tu memoria para siempre."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "sel-memoria-consultar-pasado",
+   "title": "Lo dicho en el pasado se busca en memoria, no en el Workspace",
+   "user": "¿Qué te conté sobre mi forma de estudiar?",
+   "tools": {
+    "search_memory": [
+     {
+      "status": "ok",
+      "data": {
+       "items": [
+        {
+         "id": "5e1a0000-0000-4000-8000-000000000251",
+         "content": "Prefiere estudiar por las mañanas y repasar con esquemas.",
+         "kind": "semantic"
+        }
+       ],
+       "total": 1
+      }
+     }
+    ]
+   },
+   "expect": {
+    "sequence": [
+     {
+      "tool": "search_memory"
+     }
+    ],
+    "forbidden": [
+     "search_tasks",
+     "list_tasks",
+     "forget_memory",
+     "propose_memory"
+    ],
+    "must_include": [
+     [
+      "mañana"
+     ],
+     [
+      "esquema"
+     ]
+    ],
+    "max_sentences": 3
+   },
+   "rubric": [
+    "Presenta lo recordado como nota guardada, no como verdad indiscutible."
+   ],
+   "script": [
+    {
+     "text": "Lo miro.",
+     "tool_calls": [
+      {
+       "name": "search_memory",
+       "input": {
+        "query": "forma de estudiar"
+       }
+      }
+     ]
+    },
+    {
+     "text": "Que prefieres estudiar por las mañanas y repasar con esquemas."
+    }
+   ],
+   "controls": [
+    {
+     "id": "busca-en-tareas",
+     "why": "Busca en el Workspace algo que solo está en memoria",
+     "expect_rule": [
+      "tool.expected",
+      "tool.forbidden"
+     ],
+     "steps": [
+      {
+       "text": "Miro.",
+       "tool_calls": [
+        {
+         "name": "search_tasks",
+         "input": {
+          "query": "estudiar"
+         }
+        }
+       ]
+      },
+      {
+       "text": "No tengo nada sobre eso."
+      }
+     ]
+    },
+    {
+     "id": "borra-recuerdo",
+     "why": "Olvida un recuerdo en vez de consultarlo",
+     "expect_rule": [
+      "tool.forbidden",
+      "tool.expected"
+     ],
+     "steps": [
+      {
+       "text": "Miro.",
+       "tool_calls": [
+        {
+         "name": "forget_memory",
+         "input": {
+          "id": "5e1a0000-0000-4000-8000-000000000251"
+         }
+        }
+       ]
+      },
+      {
+       "text": "Pendiente de confirmar."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "sel-sistema-estado-memoria",
+   "title": "Comprobar el estado de la memoria con la herramienta de estado",
+   "user": "Noto la memoria rara, ¿funciona bien?",
+   "tools": {
+    "get_memory_status": [
+     {
+      "status": "ok",
+      "data": {
+       "available": false,
+       "backend": "openviking",
+       "reason": "no responde"
+      }
+     }
+    ],
+    "get_system_status": [
+     {
+      "status": "ok",
+      "data": {
+       "status": "ok"
+      }
+     }
+    ]
+   },
+   "expect": {
+    "any_of": [
+     [
+      {
+       "tool": "get_memory_status"
+      }
+     ]
+    ],
+    "forbidden": [
+     "forget_memory",
+     "propose_memory"
+    ],
+    "must_include": [
+     [
+      "no responde",
+      "no está disponible",
+      "no funciona",
+      "caíd",
+      "no disponible"
+     ]
+    ],
+    "max_sentences": 3
+   },
+   "rubric": [
+    "Dice con claridad que la memoria no responde, sin código técnico."
+   ],
+   "script": [
+    {
+     "text": "Lo compruebo.",
+     "tool_calls": [
+      {
+       "name": "get_memory_status",
+       "input": {}
+      }
+     ]
+    },
+    {
+     "text": "No: la memoria no responde ahora mismo."
+    }
+   ],
+   "controls": [
+    {
+     "id": "estado-de-voz-inexistente",
+     "why": "Pide el estado de voz, que no se ofrece",
+     "expect_rule": [
+      "tool.not_offered",
+      "tool.expected"
+     ],
+     "steps": [
+      {
+       "text": "Miro.",
+       "tool_calls": [
+        {
+         "name": "get_voice_status",
+         "input": {},
+         "allow_missing": true
+        }
+       ]
+      },
+      {
+       "text": "Todo en orden."
+      }
+     ]
+    },
+    {
+     "id": "sin-comprobar",
+     "why": "Dice que todo va bien sin consultar",
+     "expect_rule": [
+      "tool.expected"
+     ],
+     "steps": [
+      {
+       "text": "Todo funciona bien."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "sel-busqueda-global-matricula",
+   "title": "Sin saber dónde está: búsqueda en todo el Workspace",
+   "user": "Tengo por ahí algo de la matrícula del máster, pero no sé si es una tarea, un evento o unos apuntes.",
+   "tools": {
+    "search_all": [
+     {
+      "status": "ok",
+      "data": {
+       "items": [
+        {
+         "type": "task",
+         "id": "5e1a0000-0000-4000-8000-000000000261",
+         "title": "Pagar la matrícula del máster"
+        }
+       ],
+       "total": 1
+      }
+     }
+    ],
+    "search_workspace": [
+     {
+      "status": "ok",
+      "data": {
+       "items": [
+        {
+         "type": "task",
+         "id": "5e1a0000-0000-4000-8000-000000000261",
+         "title": "Pagar la matrícula del máster"
+        }
+       ],
+       "total": 1
+      }
+     }
+    ],
+    "search_resources": [
+     {
+      "status": "ok",
+      "data": {
+       "items": [],
+       "total": 0
+      }
+     }
+    ]
+   },
+   "expect": {
+    "any_of": [
+     [
+      {
+       "tool": "search_all",
+       "args": {
+        "query": {
+         "$contains": "matr"
+        }
+       }
+      }
+     ],
+     [
+      {
+       "tool": [
+        "search_workspace",
+        "search_tasks"
+       ],
+       "args": {
+        "query": {
+         "$contains": "matr"
+        }
+       }
+      },
+      {
+       "tool": "search_resources"
+      }
+     ]
+    ],
+    "forbidden": [
+     "create_task",
+     "create_event",
+     "create_resource"
+    ],
+    "must_include": [
+     [
+      "matrícula"
+     ]
+    ],
+    "max_sentences": 3
+   },
+   "rubric": [
+    "Menciona la tarea encontrada; no crea otra."
+   ],
+   "script": [
+    {
+     "text": "Busco en todo.",
+     "tool_calls": [
+      {
+       "name": "search_all",
+       "input": {
+        "query": "matrícula máster"
+       }
+      }
+     ]
+    },
+    {
+     "text": "Hay una tarea: pagar la matrícula del máster."
+    }
+   ],
+   "controls": [
+    {
+     "id": "solo-tareas",
+     "why": "Busca solo en tareas aunque el usuario dudaba del dónde",
+     "expect_rule": [
+      "tool.expected"
+     ],
+     "steps": [
+      {
+       "text": "Busco.",
+       "tool_calls": [
+        {
+         "name": "search_tasks",
+         "input": {
+          "query": "matrícula"
+         }
+        }
+       ]
+      },
+      {
+       "text": "Hay una tarea: pagar la matrícula del máster."
+      }
+     ]
+    },
+    {
+     "id": "crea-otra",
+     "why": "Crea una tarea nueva sin buscar",
+     "expect_rule": [
+      "tool.expected",
+      "tool.forbidden"
+     ],
+     "steps": [
+      {
+       "text": "Creo.",
+       "tool_calls": [
+        {
+         "name": "create_task",
+         "input": {
+          "title": "Matrícula del máster"
+         }
+        }
+       ]
+      },
+      {
+       "text": "Apuntada."
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}
