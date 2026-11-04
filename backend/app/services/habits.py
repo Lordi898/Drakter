@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import sqlite3
 from calendar import monthrange
-from datetime import date, time, timedelta
+from datetime import date, timedelta
 from typing import Any
 
 from pydantic import BaseModel
 
-from app.core.errors import AppError
+from app.core.errors import AppError, ErrorDetail
 from app.repositories import habits as repo
 from app.schemas.habits import (
     HabitCreate,
@@ -33,8 +33,7 @@ from app.services.calendar_recurrence import (
 from app.services.habits_calendar_support import (
     RequestContext,
     bounded_limit,
-    decode_cursor,
-    encode_cursor,
+    bounded_offset,
     ensure_timezone,
     insert_entity,
     new_id,
@@ -54,24 +53,17 @@ _NOT_NULL_FIELDS = ("name", "timezone", "rrule", "status", "reminder_enabled")
 
 class HabitPage(BaseModel):
     items: list[HabitOut]
-    next_cursor: str | None = None
+    total: int
 
 
 class RecordPage(BaseModel):
     items: list[HabitRecordOut]
-    next_cursor: str | None = None
+    total: int
 
 
-def _invalid(message: str) -> AppError:
-    return AppError("validation_error", message, 422)
-
-
-def _iso_time(value: time | None) -> str | None:
-    return None if value is None else value.isoformat(timespec="minutes")
-
-
-def _parse_time(value: str | None) -> time | None:
-    return None if value is None else time.fromisoformat(value)
+def _invalid(message: str, field: str | None = None) -> AppError:
+    detail = ErrorDetail(field=field, code="invalid", message=message)
+    return AppError("validation_error", message, 422, [detail])
 
 
 # --- programación -----------------------------------------------------------------------
@@ -162,7 +154,7 @@ def _present(
                 end_date=row["end_date"],
                 goal_note=row["target_note"],
                 goal_project_id=row["goal_project_id"],
-                preferred_local_time=_parse_time(row["preferred_local_time"]),
+                preferred_local_time=row["preferred_local_time"],
                 reminder_enabled=bool(row["reminder_enabled"]),
                 today_scheduled=schedule.scheduled(today),
                 today_status=by_day[key].get(row["id"]),
@@ -198,7 +190,7 @@ def create_habit(conn: sqlite3.Connection, ctx: RequestContext, data: HabitCreat
     ensure_timezone(data.timezone)
     rrule = normalize_rrule(data.rrule)
     if data.end_date is not None and data.end_date < data.start_date:
-        raise _invalid("end_date no puede ser anterior a start_date")
+        raise _invalid("La fecha de fin no puede ser anterior a la de inicio", "end_date")
     habit_id = new_id()
     with transaction(conn):
         _check_project(conn, data.goal_project_id)
@@ -211,8 +203,7 @@ def create_habit(conn: sqlite3.Connection, ctx: RequestContext, data: HabitCreat
                 "description": data.description,
                 "timezone": data.timezone,
                 "target_note": data.goal_note,
-                "preferred_local_time": _iso_time(data.preferred_local_time),
-                "goal_project_id": data.goal_project_id,
+                "preferred_local_time": data.preferred_local_time,
                 "reminder_enabled": int(data.reminder_enabled),
                 "status": "active",
                 "start_date": data.start_date.isoformat(),
@@ -220,6 +211,8 @@ def create_habit(conn: sqlite3.Connection, ctx: RequestContext, data: HabitCreat
             },
         )
         repo.insert_version(conn, new_id(), habit_id, rrule, data.start_date.isoformat(), now_utc())
+        if data.goal_project_id is not None:
+            repo.set_goal_project(conn, habit_id, data.goal_project_id, new_id(), now_utc())
         record_audit(
             conn,
             ctx,
@@ -247,24 +240,16 @@ def list_habits(
     include_archived: bool = False,
     status: str | None = None,
     limit: int | None = None,
-    cursor: str | None = None,
+    offset: int | None = None,
 ) -> HabitPage:
-    size = bounded_limit(limit)
-    after = None
-    if cursor:
-        decoded = decode_cursor(cursor)
-        try:
-            after = (str(decoded["c"]), str(decoded["i"]))
-        except KeyError:
-            raise AppError("invalid_cursor", "Cursor no válido", 422) from None
-    rows = repo.list_habits(
-        conn, include_archived=include_archived, status=status, after=after, limit=size + 1
+    rows, total = repo.list_habits(
+        conn,
+        include_archived=include_archived,
+        status=status,
+        limit=bounded_limit(limit),
+        offset=bounded_offset(offset),
     )
-    next_cursor = None
-    if len(rows) > size:
-        rows = rows[:size]
-        next_cursor = encode_cursor({"c": rows[-1]["created_at"], "i": rows[-1]["id"]})
-    return HabitPage(items=_present(conn, rows), next_cursor=next_cursor)
+    return HabitPage(items=_present(conn, rows), total=total)
 
 
 def update_habit(
@@ -277,7 +262,7 @@ def update_habit(
     sent = data.model_fields_set
     for name in _NOT_NULL_FIELDS:
         if name in sent and getattr(data, name) is None:
-            raise _invalid(f"{name} no admite null")
+            raise _invalid("Este dato no puede quedar vacío", name)
     if "timezone" in sent and data.timezone is not None:
         ensure_timezone(data.timezone)
     new_rrule = normalize_rrule(data.rrule) if "rrule" in sent and data.rrule else None
@@ -292,17 +277,18 @@ def update_habit(
         if "end_date" in sent:
             columns["end_date"] = data.end_date.isoformat() if data.end_date else None
             if data.end_date and data.end_date.isoformat() < habit["start_date"]:
-                raise _invalid("end_date no puede ser anterior a start_date")
+                raise _invalid("La fecha de fin no puede ser anterior a la de inicio", "end_date")
         if "goal_project_id" in sent:
             _check_project(conn, data.goal_project_id)
-            columns["goal_project_id"] = data.goal_project_id
         if "preferred_local_time" in sent:
-            columns["preferred_local_time"] = _iso_time(data.preferred_local_time)
+            columns["preferred_local_time"] = data.preferred_local_time
         if "reminder_enabled" in sent:
             columns["reminder_enabled"] = int(bool(data.reminder_enabled))
 
         touch_entity(conn, habit_id, expected_revision)
         repo.update_habit(conn, habit_id, columns)
+        if "goal_project_id" in sent:
+            repo.set_goal_project(conn, habit_id, data.goal_project_id, new_id(), now_utc())
 
         effective: date | None = None
         if new_rrule is not None:
@@ -402,10 +388,10 @@ def _range(
     end = to_date or today_in(tz)
     start = from_date or end - timedelta(days=DEFAULT_RANGE_DAYS - 1)
     if start > end:
-        raise _invalid("from no puede ser posterior a to")
+        raise AppError("invalid_query", "El rango de fechas es incorrecto: el inicio es posterior al fin", 400)
     if (end - start).days + 1 > MAX_RANGE_DAYS:
         raise AppError(
-            "window_too_large", f"El rango máximo es de {MAX_RANGE_DAYS} días", 422
+            "invalid_query", f"El rango máximo es de {MAX_RANGE_DAYS} días", 400
         )
     return start, end
 
@@ -420,7 +406,7 @@ def list_records(
     habit = _load(conn, habit_id)
     start, end = _range(habit["timezone"], from_date, to_date)
     rows = repo.records_between(conn, habit_id, start.isoformat(), end.isoformat())
-    return RecordPage(items=[HabitRecordOut(**row) for row in rows])
+    return RecordPage(items=[HabitRecordOut(**row) for row in rows], total=len(rows))
 
 
 def history(

@@ -7,7 +7,8 @@ from typing import Any
 
 _HABIT_SELECT = (
     "SELECT h.id,h.name,h.description,h.timezone,h.target_note,h.preferred_local_time,"
-    "h.goal_project_id,h.reminder_enabled,h.status,h.start_date,h.end_date,"
+    "(SELECT r.target_id FROM relationships r WHERE r.source_id=h.id AND r.source_type='habit' "
+    "AND r.target_type='project' AND r.relationship_type='supports') AS goal_project_id,h.reminder_enabled,h.status,h.start_date,h.end_date,"
     "e.archived_at,e.revision,e.created_at,e.updated_at "
     "FROM habits h JOIN entities e ON e.id=h.id"
 )
@@ -15,7 +16,7 @@ _HABIT_SELECT = (
 UPDATABLE_COLUMNS = frozenset(
     {
         "name", "description", "timezone", "target_note", "preferred_local_time",
-        "goal_project_id", "reminder_enabled", "status", "end_date",
+        "reminder_enabled", "status", "end_date",
     }
 )  # fmt: skip
 
@@ -26,16 +27,36 @@ def _rows(cur: sqlite3.Cursor) -> list[dict[str, Any]]:
 
 
 def project_exists(conn: sqlite3.Connection, project_id: str) -> bool:
-    return conn.execute("SELECT 1 FROM projects WHERE id=?", (project_id,)).fetchone() is not None
+    row = conn.execute(
+        "SELECT 1 FROM entities WHERE id=? AND entity_type='project'", (project_id,)
+    ).fetchone()
+    return row is not None
+
+
+def set_goal_project(
+    conn: sqlite3.Connection, habit_id: str, project_id: str | None, relationship_id: str, created_at: str
+) -> None:
+    """Meta del hábito = relación `supports` hábito -> proyecto (como mucho una)."""
+    conn.execute(
+        "DELETE FROM relationships WHERE source_id=? AND source_type='habit' "
+        "AND target_type='project' AND relationship_type='supports'",
+        (habit_id,),
+    )
+    if project_id is not None:
+        conn.execute(
+            "INSERT INTO relationships(id,source_id,source_type,target_id,target_type,"
+            "relationship_type,created_at) VALUES(?,?,'habit',?,'project','supports',?)",
+            (relationship_id, habit_id, project_id, created_at),
+        )
 
 
 def insert_habit(conn: sqlite3.Connection, values: dict[str, Any]) -> None:
     conn.execute(
         "INSERT INTO habits(id,name,description,timezone,target_note,preferred_local_time,"
-        "goal_project_id,reminder_enabled,status,start_date,end_date) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+        "reminder_enabled,status,start_date,end_date) VALUES(?,?,?,?,?,?,?,?,?,?)",
         (
             values["id"], values["name"], values["description"], values["timezone"],
-            values["target_note"], values["preferred_local_time"], values["goal_project_id"],
+            values["target_note"], values["preferred_local_time"],
             values["reminder_enabled"], values["status"], values["start_date"], values["end_date"],
         ),
     )  # fmt: skip
@@ -51,9 +72,9 @@ def list_habits(
     *,
     include_archived: bool,
     status: str | None,
-    after: tuple[str, str] | None,
     limit: int,
-) -> list[dict[str, Any]]:
+    offset: int,
+) -> tuple[list[dict[str, Any]], int]:
     clauses: list[str] = []
     params: list[Any] = []
     if not include_archived:
@@ -61,13 +82,12 @@ def list_habits(
     if status is not None:
         clauses.append("h.status=?")
         params.append(status)
-    if after is not None:
-        clauses.append("(e.created_at,h.id)>(?,?)")
-        params.extend(after)
     where = (" WHERE " + " AND ".join(clauses)) if clauses else ""
-    params.append(limit)
-    sql = _HABIT_SELECT + where + " ORDER BY e.created_at,h.id LIMIT ?"
-    return _rows(conn.execute(sql, params))
+    total = conn.execute(
+        "SELECT count(*) FROM habits h JOIN entities e ON e.id=h.id" + where, params
+    ).fetchone()[0]
+    sql = _HABIT_SELECT + where + " ORDER BY e.created_at,h.id LIMIT ? OFFSET ?"
+    return _rows(conn.execute(sql, (*params, limit, offset))), total
 
 
 def update_habit(conn: sqlite3.Connection, habit_id: str, columns: dict[str, Any]) -> None:

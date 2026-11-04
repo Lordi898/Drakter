@@ -37,7 +37,7 @@ def _revision(value: str | None) -> int | None:
     try:
         return int(value.strip().strip('"'))
     except ValueError:
-        raise AppError("validation_error", "If-Match debe ser la revisión numérica", 422) from None
+        raise AppError("validation_error", "La revisión indicada no es válida", 422) from None
 
 
 @router.get("/habits", response_model=service.HabitPage)
@@ -47,10 +47,10 @@ def list_habits(
     include_archived: bool = False,
     status: HabitStatus | None = None,
     limit: int | None = None,
-    cursor: str | None = None,
+    offset: int | None = None,
 ) -> service.HabitPage:
     return service.list_habits(
-        conn, ctx, include_archived=include_archived, status=status, limit=limit, cursor=cursor
+        conn, ctx, include_archived=include_archived, status=status, limit=limit, offset=offset
     )
 
 

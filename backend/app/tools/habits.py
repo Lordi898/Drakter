@@ -44,7 +44,7 @@ class ListHabitsArgs(_Args):
     include_archived: bool = False
     status: HabitStatus | None = None
     limit: int | None = Field(default=None, ge=1, le=200)
-    cursor: str | None = None
+    offset: int | None = Field(default=None, ge=0)
 
 
 class RegisterCompletionArgs(_Args):
@@ -82,7 +82,7 @@ def _archive(conn: sqlite3.Connection, ctx: RequestContext, args: ArchiveHabitAr
 def _list(conn: sqlite3.Connection, ctx: RequestContext, args: ListHabitsArgs) -> service.HabitPage:
     return service.list_habits(
         conn, ctx, include_archived=args.include_archived, status=args.status,
-        limit=args.limit, cursor=args.cursor,
+        limit=args.limit, offset=args.offset,
     )  # fmt: skip
 
 
@@ -172,16 +172,16 @@ TOOLS: tuple[ToolSpec, ...] = (
     ),
     ToolSpec(
         name="list_habits",
-        description="Lista los hábitos del usuario (sin archivados salvo include_archived=true), paginados.",
+        description="Lista los hábitos del usuario (sin archivados salvo include_archived=true), paginados (limit/offset).",
         domain="habits",
         args_model=ListHabitsArgs,
         result_model=service.HabitPage,
         permission="habits.read",
         risk=RiskClass.READ,
         handler=service_handler("list_habits", _list),
-        errors=("validation_error", "invalid_cursor"),
+        errors=("validation_error",),
         idempotent=True,
-        audit={"include_archived": "log", "status": "log", "limit": "log", "cursor": "omit"},
+        audit={"include_archived": "log", "status": "log", "limit": "log", "offset": "log"},
     ),
     ToolSpec(
         name="register_habit_completion",
@@ -211,7 +211,7 @@ TOOLS: tuple[ToolSpec, ...] = (
         permission="habits.read",
         risk=RiskClass.READ,
         handler=service_handler("get_habit_history", _history),
-        errors=("validation_error", "not_found", "window_too_large"),
+        errors=("validation_error", "not_found", "invalid_query"),
         idempotent=True,
         audit={"habit_id": "log", "from_date": "log", "to_date": "log"},
     ),
@@ -227,7 +227,7 @@ TOOLS: tuple[ToolSpec, ...] = (
         permission="habits.read",
         risk=RiskClass.READ,
         handler=service_handler("get_habit_statistics", _stats),
-        errors=("validation_error", "not_found", "window_too_large"),
+        errors=("validation_error", "not_found", "invalid_query"),
         idempotent=True,
         audit={"habit_id": "log", "from_date": "log", "to_date": "log"},
     ),
