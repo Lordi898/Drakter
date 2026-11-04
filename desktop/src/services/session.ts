@@ -1,6 +1,4 @@
 import type { DrakterBridge } from '../../electron/shared/bridge'
-import type { ConfirmationDecision } from '@/services/protocol'
-import { WS_PATH } from '@/services/protocol'
 
 /**
  * Sesión con el backend local. El token vive SOLO en la memoria de este módulo:
@@ -8,15 +6,21 @@ import { WS_PATH } from '@/services/protocol'
  */
 export interface BackendSession {
   readonly baseUrl: string
-  readonly wsUrl: string
+  /** Origen WebSocket sin ruta; la ruta (con `after_seq`) la añade `ws.ts`. */
+  readonly wsBase: string
   readonly token: string
+  /** Identifica al backend (puerto+token). Cambia cuando el backend se reinicia con otras credenciales. */
+  readonly instanceId: string
 }
+
+export type ReviewOutcome = 'approved' | 'rejected' | 'dismissed' | 'expired' | 'unavailable'
 
 /** Parte del puente que aún no declara `bridge.ts`; se detecta en tiempo de ejecución. */
 export type ExtendedBridge = DrakterBridge &
   Partial<{
     getBackendSession(): Promise<{ port: number; token: string } | null>
-    decideConfirmation(id: string, decision: ConfirmationDecision): Promise<void>
+    /** Abre el diálogo nativo en main; el renderer no aprueba ni rechaza. */
+    reviewConfirmation(actionId: string): Promise<{ outcome: ReviewOutcome }>
   }>
 
 const HOST = '127.0.0.1'
@@ -25,6 +29,13 @@ const TOKEN_PATTERN = /^[A-Za-z0-9._~+-]{1,1024}$/
 let cached: BackendSession | null = null
 let inFlight: Promise<BackendSession | null> | null = null
 let generation = 0
+let lastIdentity: { key: string; id: string } | null = null
+
+function instanceFor(port: number, token: string): string {
+  const key = `${port}:${token}`
+  if (lastIdentity?.key !== key) lastIdentity = { key, id: crypto.randomUUID() }
+  return lastIdentity.id
+}
 
 /** En un navegador normal el puente no existe aunque el tipo diga lo contrario. */
 export function getExtendedBridge(): ExtendedBridge | null {
@@ -42,8 +53,9 @@ function buildSession(raw: unknown): BackendSession | null {
   if (!isValidPort(port) || typeof token !== 'string' || !TOKEN_PATTERN.test(token)) return null
   return {
     baseUrl: `http://${HOST}:${port}`,
-    wsUrl: `ws://${HOST}:${port}${WS_PATH}`,
-    token
+    wsBase: `ws://${HOST}:${port}`,
+    token,
+    instanceId: instanceFor(port, token)
   }
 }
 

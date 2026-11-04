@@ -1,5 +1,12 @@
 import { useSyncExternalStore } from 'react'
-import { ApiError, cancelTurn, describeError, sendChatMessage } from '@/services/api'
+import {
+  ApiError,
+  cancelTurn,
+  createChatSession,
+  describeError,
+  listSessionMessages,
+  sendChatMessage
+} from '@/services/api'
 import { notify } from '@/services/notify'
 import type { ServerEvent } from '@/services/protocol'
 import { startBackendLink, subscribeLinkStatus, subscribeServerEvents } from '@/services/ws'
@@ -19,6 +26,8 @@ export interface ChatMessage {
   readonly status: ChatMessageStatus
   readonly turnId: string | null
   readonly error?: string
+  /** En mensajes `failed` del agente: si el backend dijo que reintentar tiene sentido. */
+  readonly retryable?: boolean
   readonly tools: readonly ToolActivity[]
 }
 
@@ -26,24 +35,29 @@ export const MAX_MESSAGE_CHARS = 8000
 const MAX_KEPT = 500
 const MAX_ENDED_TURNS = 200
 const TURN_FAILED = 'El agente no pudo completar esta respuesta.'
+const BUSY = 'Drakter sigue respondiendo. Espera a que termine o cancela el turno.'
 
 /*
- * Supuestos sobre el protocolo (provisional):
- * - Un turno produce un mensaje del agente: `message_completed` cierra el turno.
- * - `message_completed.content` es autoritativo (sustituye a los deltas, incluso si
- *   falta alguno o no hubo ninguno) y puede promover un mensaje `interrupted` a `complete`.
- * - Los eventos de un turno pueden llegar antes que la respuesta HTTP del POST.
+ * Supuestos sobre el protocolo (hermes CONTRACT §4):
+ * - Una burbuja del agente por turno, identificada por turn_id (id local `agent:<turn>`).
+ * - `message_completed.text` es autoritativo y cierra el turno; puede promover un mensaje
+ *   `interrupted` (corte de enlace o cancelación) a `complete`.
+ * - Tras un corte de enlace, el replay por after_seq reanuda los deltas perdidos, así que
+ *   un mensaje `interrupted` por enlace sigue recibiendo deltas. Tras cancelar, no.
+ * - `seq` y la deduplicación los resuelve ws.ts.
  */
 
 let messages: readonly ChatMessage[] = []
 let activeTurn: string | null = null
 let sessionId: string | null = null
+let sessionPromise: Promise<string> | null = null
 let wasOpen = false
 let cancelling = false
+let rehydrating = false
 
-const lastSeq = new Map<string, number>()
 const endedTurns = new Set<string>()
 const endedOrder: string[] = []
+const cancelledTurns = new Set<string>()
 const listeners = new Set<() => void>()
 
 function emit(): void {
@@ -67,19 +81,23 @@ function endTurn(turnId: string): void {
     endedOrder.push(turnId)
     if (endedOrder.length > MAX_ENDED_TURNS) {
       const oldest = endedOrder.shift()
-      if (oldest !== undefined) endedTurns.delete(oldest)
+      if (oldest !== undefined) {
+        endedTurns.delete(oldest)
+        cancelledTurns.delete(oldest)
+      }
     }
   }
   if (activeTurn === turnId) setActiveTurn(null)
 }
 
-function placeholderId(turnId: string): string {
-  return `pending-${turnId}`
+function agentId(turnId: string): string {
+  return `agent:${turnId}`
 }
 
 function withoutError(message: ChatMessage): ChatMessage {
-  const { error: _error, ...rest } = message
+  const { error: _error, retryable: _retryable, ...rest } = message
   void _error
+  void _retryable
   return rest
 }
 
@@ -92,52 +110,32 @@ function clean(text: string, max: number): string {
   return text.replace(/[\u0000-\u001f\u007f]+/g, ' ').trim().slice(0, max)
 }
 
-/**
- * Busca el mensaje del agente por id; si no existe, adopta el marcador del turno
- * (creado por herramientas o errores previos a los deltas) para no duplicar burbuja.
- */
+/** Burbuja del agente de un turno; la crea (en `streaming`) si no existe. `guard` decide si se puede tocar. */
 function upsertAgent(
-  messageId: string,
   turnId: string,
   guard: (existing: ChatMessage) => boolean,
   mutate: (message: ChatMessage) => ChatMessage
-): void {
-  let list = messages
-  let index = list.findIndex((m) => m.role === 'agent' && m.id === messageId)
-  if (index < 0 && messageId !== placeholderId(turnId)) {
-    index = list.findIndex((m) => m.role === 'agent' && m.id === placeholderId(turnId))
-    const adopted = list[index]
-    if (adopted) list = list.map((m, i) => (i === index ? { ...m, id: messageId } : m))
-  }
-  const existing = list[index]
+): boolean {
+  const id = agentId(turnId)
+  const index = messages.findIndex((m) => m.id === id)
+  const existing = messages[index]
   if (existing) {
-    if (!guard(existing)) return
-  } else {
-    list = [...list, { id: messageId, role: 'agent', content: '', status: 'streaming', turnId, tools: [] }]
-    index = list.length - 1
+    if (!guard(existing)) return false
+    setMessages(messages.map((m, i) => (i === index ? mutate(m) : m)))
+    return true
   }
-  setMessages(list.map((m, i) => (i === index ? mutate(m) : m)))
-}
-
-function currentAgentTarget(turnId: string): string {
-  for (let i = messages.length - 1; i >= 0; i -= 1) {
-    const m = messages[i]
-    if (m && m.role === 'agent' && m.turnId === turnId && m.status === 'streaming') return m.id
-  }
-  return placeholderId(turnId)
+  const created: ChatMessage = { id, role: 'agent', content: '', status: 'streaming', turnId, tools: [] }
+  setMessages([...messages, mutate(created)])
+  return true
 }
 
 function upsertTool(turnId: string, tool: ToolActivity): void {
   upsertAgent(
-    currentAgentTarget(turnId),
     turnId,
-    () => true,
+    (m) => m.status === 'streaming' || m.status === 'interrupted',
     (m) => {
       const known = m.tools.some((t) => t.id === tool.id)
-      return {
-        ...m,
-        tools: known ? m.tools.map((t) => (t.id === tool.id ? tool : t)) : [...m.tools, tool]
-      }
+      return { ...m, tools: known ? m.tools.map((t) => (t.id === tool.id ? tool : t)) : [...m.tools, tool] }
     }
   )
 }
@@ -145,95 +143,86 @@ function upsertTool(turnId: string, tool: ToolActivity): void {
 function handleEvent(event: ServerEvent): void {
   switch (event.type) {
     case 'agent.message_delta': {
-      const { turn_id, message_id, seq, delta } = event.payload
-      const last = lastSeq.get(message_id) ?? -1
-      if (seq <= last) return
-      const before = messages
-      upsertAgent(
-        message_id,
+      const { turn_id, delta } = event.payload
+      if (cancelledTurns.has(turn_id)) return
+      const applied = upsertAgent(
         turn_id,
-        (m) => m.status === 'streaming',
+        (m) => m.status === 'streaming' || m.status === 'interrupted',
         (m) => ({ ...m, content: m.content + delta, status: 'streaming' })
       )
-      if (messages === before) return // ignorado (mensaje ya terminado)
-      lastSeq.set(message_id, seq)
-      if (!endedTurns.has(turn_id)) setActiveTurn(turn_id)
+      if (applied && !endedTurns.has(turn_id)) setActiveTurn(turn_id)
       return
     }
     case 'agent.message_completed': {
-      const { turn_id, message_id, content } = event.payload
+      const { turn_id, text } = event.payload
       upsertAgent(
-        message_id,
         turn_id,
         (m) => m.status !== 'failed',
-        (m) => ({ ...withoutError(m), content, status: 'complete', turnId: turn_id })
+        (m) => ({ ...withoutError(m), content: text, status: 'complete', turnId: turn_id })
       )
-      lastSeq.delete(message_id)
       endTurn(turn_id)
       return
     }
     case 'agent.tool_started': {
-      const { turn_id, tool_call_id, tool_name } = event.payload
+      const { turn_id, call_id, tool } = event.payload
       if (endedTurns.has(turn_id)) return
-      upsertTool(turn_id, { id: tool_call_id, name: clean(tool_name, 100), state: 'running' })
+      upsertTool(turn_id, { id: call_id, name: clean(tool, 100), state: 'running' })
       setActiveTurn(turn_id)
       return
     }
     case 'agent.tool_completed': {
-      const { turn_id, tool_call_id, tool_name, ok } = event.payload
-      const state = ok ? 'ok' : 'failed'
-      const owner = messages.find((m) => m.role === 'agent' && m.tools.some((t) => t.id === tool_call_id))
+      const { turn_id, call_id, tool, error } = event.payload
+      const state = error ? 'failed' : 'ok'
+      const owner = messages.find((m) => m.role === 'agent' && m.tools.some((t) => t.id === call_id))
       if (owner) {
         setMessages(
           messages.map((m) =>
-            m === owner ? { ...m, tools: m.tools.map((t) => (t.id === tool_call_id ? { ...t, state } : t)) } : m
+            m === owner ? { ...m, tools: m.tools.map((t) => (t.id === call_id ? { ...t, state } : t)) } : m
           )
         )
       } else if (!endedTurns.has(turn_id)) {
-        upsertTool(turn_id, { id: tool_call_id, name: clean(tool_name, 100), state })
+        upsertTool(turn_id, { id: call_id, name: clean(tool, 100), state })
       }
       return
     }
     case 'agent.error': {
-      const { turn_id, message, recoverable } = event.payload
-      if (turn_id === null) {
-        if (!recoverable) {
-          notify({
-            tone: 'error',
-            title: 'El agente ha tenido un problema',
-            body: clean(message, 200) || 'Error no especificado.',
-            desktop: true
-          })
-        }
-        return
+      const { turn_id, message, retryable } = event.payload
+      if (turn_id !== null) {
+        failTurn(turn_id, retryable)
+      } else if (!retryable) {
+        notify({
+          tone: 'error',
+          title: 'El agente ha tenido un problema',
+          body: clean(message, 200) || 'Error no especificado.',
+          desktop: true
+        })
       }
-      failTurn(turn_id)
       return
     }
+    case 'agent.replay_truncated':
+      void rehydrate()
+      return
     default:
       return
   }
 }
 
-function failTurn(turnId: string): void {
+function failTurn(turnId: string, retryable: boolean): void {
   endTurn(turnId)
-  let touched = false
-  const next = messages.map((m): ChatMessage => {
-    if (m.role === 'agent' && m.turnId === turnId && (m.status === 'streaming' || m.status === 'interrupted')) {
-      touched = true
-      lastSeq.delete(m.id)
-      return { ...m, status: 'failed', error: TURN_FAILED, tools: failTools(m.tools) }
-    }
-    return m
-  })
-  if (touched) {
-    setMessages(next)
-  } else if (!messages.some((m) => m.role === 'agent' && m.turnId === turnId)) {
-    setMessages([
-      ...messages,
-      { id: placeholderId(turnId), role: 'agent', content: '', status: 'failed', turnId, error: TURN_FAILED, tools: [] }
-    ])
+  const id = agentId(turnId)
+  const existing = messages.find((m) => m.id === id)
+  if (existing && (existing.status === 'complete' || existing.status === 'failed')) return
+  const failed: ChatMessage = {
+    id,
+    role: 'agent',
+    content: existing?.content ?? '',
+    status: 'failed',
+    turnId,
+    error: TURN_FAILED,
+    retryable,
+    tools: failTools(existing?.tools ?? [])
   }
+  setMessages(existing ? messages.map((m) => (m === existing ? failed : m)) : [...messages, failed])
 }
 
 function interruptStreaming(turnId: string | null): void {
@@ -248,6 +237,41 @@ function interruptStreaming(turnId: string | null): void {
   if (touched) setMessages(next)
 }
 
+/** El replay ya no cubre lo perdido: se relee el historial de la sesión y se sustituye la lista. */
+async function rehydrate(): Promise<void> {
+  const id = sessionId
+  if (id === null || rehydrating) {
+    interruptStreaming(null)
+    setActiveTurn(null)
+    return
+  }
+  rehydrating = true
+  try {
+    const stored = await listSessionMessages(id)
+    const storedTurns = new Set(stored.map((m) => m.turn_id).filter((t): t is string => t !== null && t !== ''))
+    const fromServer: ChatMessage[] = stored.map((m) => ({
+      id: m.id,
+      role: m.role,
+      content: m.text,
+      status: 'complete',
+      turnId: m.turn_id,
+      tools: []
+    }))
+    // Lo local que el servidor aún no refleja (envíos en curso, fallos, respuesta en vuelo) se conserva.
+    const local = messages.filter(
+      (m) =>
+        (m.status === 'sending' || m.status === 'failed' || m.status === 'streaming') &&
+        !(m.role === 'agent' && m.turnId !== null && storedTurns.has(m.turnId))
+    )
+    setMessages([...fromServer, ...local])
+  } catch {
+    interruptStreaming(null)
+    setActiveTurn(null)
+  } finally {
+    rehydrating = false
+  }
+}
+
 // Suscripciones: una sola vez, al cargar el módulo.
 subscribeServerEvents(handleEvent)
 subscribeLinkStatus((status) => {
@@ -257,7 +281,7 @@ subscribeLinkStatus((status) => {
   }
   if (!wasOpen) return
   wasOpen = false
-  // Link perdido: lo que estaba llegando queda cortado; un `message_completed` posterior puede completarlo.
+  // Enlace perdido: lo que llegaba queda cortado; el replay o un `message_completed` posterior pueden reanudarlo.
   interruptStreaming(null)
   setActiveTurn(null)
 })
@@ -268,24 +292,48 @@ function patchMessage(id: string, change: (m: ChatMessage) => ChatMessage): void
   setMessages(messages.map((m) => (m.id === id ? change(m) : m)))
 }
 
+function ensureSession(): Promise<string> {
+  if (sessionId !== null) return Promise.resolve(sessionId)
+  if (!sessionPromise) {
+    sessionPromise = createChatSession()
+      .then((info) => {
+        sessionId = info.id
+        return info.id
+      })
+      .finally(() => {
+        sessionPromise = null
+      })
+  }
+  return sessionPromise
+}
+
+async function post(id: string, content: string) {
+  const request = { text: content, client_message_id: id }
+  try {
+    return await sendChatMessage(await ensureSession(), request)
+  } catch (error) {
+    // Sesión desconocida (p. ej. backend reiniciado): se crea otra y se reintenta una sola vez.
+    if (!(error instanceof ApiError && error.status === 404)) throw error
+    sessionId = null
+    return sendChatMessage(await ensureSession(), request)
+  }
+}
+
 async function deliver(id: string, content: string): Promise<void> {
   startBackendLink()
   try {
-    const response = await sendChatMessage({ session_id: sessionId, client_message_id: id, content })
-    sessionId = response.session_id
-    const turnId = response.turn_id
+    const { turn_id: turnId } = await post(id, content)
     patchMessage(id, (m) => ({ ...withoutError(m), status: 'complete', turnId }))
-    // Los eventos del turno pueden haber llegado antes que esta respuesta.
-    const settled = messages.some(
-      (m) => m.role === 'agent' && m.turnId === turnId && m.status !== 'streaming'
-    )
+    // Los eventos del turno pueden haber llegado antes que esta respuesta: la burbuja ya existe por turn_id.
+    const bubble = messages.find((m) => m.id === agentId(turnId))
+    const settled = bubble !== undefined && bubble.status !== 'streaming'
     if (!endedTurns.has(turnId) && !settled) setActiveTurn(turnId)
   } catch (error) {
-    patchMessage(id, (m) => ({
-      ...m,
-      status: 'failed',
-      error: describeError(error, 'No se pudo enviar el mensaje.')
-    }))
+    const message =
+      error instanceof ApiError && error.code === 'agent_busy'
+        ? BUSY
+        : describeError(error, 'No se pudo enviar el mensaje.')
+    patchMessage(id, (m) => ({ ...m, status: 'failed', error: message }))
   }
 }
 
@@ -316,6 +364,7 @@ export async function retryMessage(id: string): Promise<void> {
     return
   }
 
+  if (target.retryable === false) return
   let source: ChatMessage | undefined = messages.find(
     (m) => m.role === 'user' && target.turnId !== null && m.turnId === target.turnId
   )
@@ -345,6 +394,8 @@ export async function cancelActiveTurn(): Promise<void> {
   } finally {
     cancelling = false
   }
+  // El contrato no define evento terminal de cancelación: se cierra aquí. Un message_completed posterior lo sustituye.
+  cancelledTurns.add(turnId)
   interruptStreaming(turnId)
   endTurn(turnId)
 }

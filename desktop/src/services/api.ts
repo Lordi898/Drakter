@@ -1,12 +1,14 @@
 import { clearBackendSession, loadBackendSession } from '@/services/session'
 import {
   API_PATHS,
-  isPendingConfirmation,
+  isAgentState,
+  isStoredChatMessage,
+  type AgentStatusInfo,
   type ApiErrorDetail,
-  type ConfirmationDecision,
-  type PendingConfirmation,
+  type ChatSessionInfo,
   type SendMessageRequest,
-  type SendMessageResponse
+  type SendMessageResponse,
+  type StoredChatMessage
 } from '@/services/protocol'
 
 const TIMEOUT_MS = 15_000
@@ -162,35 +164,50 @@ export async function apiRequest<T>(path: string, init: ApiRequestInit = {}): Pr
   return body as T
 }
 
-export async function sendChatMessage(request: SendMessageRequest): Promise<SendMessageResponse> {
-  const body = await apiRequest<unknown>(API_PATHS.chatMessages, { method: 'POST', body: request })
-  const { session_id, turn_id } =
-    typeof body === 'object' && body !== null ? (body as Record<string, unknown>) : {}
-  if (typeof session_id !== 'string' || typeof turn_id !== 'string') {
-    throw new ApiError(502, 'bad_response', 'La respuesta del servicio local no es válida.')
-  }
-  return { session_id, turn_id }
+function asRecord(value: unknown): Record<string, unknown> {
+  return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {}
+}
+
+function badResponse(): ApiError {
+  return new ApiError(502, 'bad_response', 'La respuesta del servicio local no es válida.')
+}
+
+export async function createChatSession(): Promise<ChatSessionInfo> {
+  const body = asRecord(await apiRequest<unknown>(API_PATHS.chatSessions, { method: 'POST', body: {} }))
+  if (typeof body['id'] !== 'string') throw badResponse()
+  return { id: body['id'] }
+}
+
+export async function sendChatMessage(
+  sessionId: string,
+  request: SendMessageRequest
+): Promise<SendMessageResponse> {
+  const body = asRecord(
+    await apiRequest<unknown>(API_PATHS.sessionMessages(sessionId), { method: 'POST', body: request })
+  )
+  if (typeof body['turn_id'] !== 'string' || typeof body['message_id'] !== 'string') throw badResponse()
+  return { turn_id: body['turn_id'], message_id: body['message_id'] }
 }
 
 export async function cancelTurn(turnId: string): Promise<void> {
   await apiRequest<unknown>(API_PATHS.cancelTurn(turnId), { method: 'POST' })
 }
 
-export async function listPendingConfirmations(): Promise<readonly PendingConfirmation[]> {
-  const body = await apiRequest<unknown>(API_PATHS.pendingConfirmations)
-  const list = Array.isArray(body)
-    ? body
-    : typeof body === 'object' && body !== null && Array.isArray((body as { items?: unknown }).items)
-      ? ((body as { items: unknown[] }).items)
-      : []
-  return list.filter(isPendingConfirmation)
+export async function listSessionMessages(sessionId: string): Promise<readonly StoredChatMessage[]> {
+  const body = asRecord(await apiRequest<unknown>(API_PATHS.sessionMessages(sessionId)))
+  const items = body['items']
+  if (!Array.isArray(items)) throw badResponse()
+  return items.filter(isStoredChatMessage)
 }
 
-/**
- * Solo debe llamarla `stores/confirmations.ts#decide`, que exige un gesto de
- * usuario de confianza. Ningún otro código debe importarla para aprobar.
- */
-export async function decideConfirmation(id: string, decision: ConfirmationDecision): Promise<void> {
-  const path = decision === 'approved' ? API_PATHS.approveConfirmation(id) : API_PATHS.rejectConfirmation(id)
-  await apiRequest<unknown>(path, { method: 'POST' })
+export async function getAgentStatus(): Promise<AgentStatusInfo> {
+  const body = asRecord(await apiRequest<unknown>(API_PATHS.agentStatus))
+  if (!isAgentState(body['state'])) throw badResponse()
+  const text = (value: unknown): string => (typeof value === 'string' ? value.slice(0, 200) : '')
+  return {
+    state: body['state'],
+    provider: text(body['provider']),
+    model: text(body['model']),
+    detail: typeof body['detail'] === 'string' ? body['detail'].slice(0, 200) : null
+  }
 }

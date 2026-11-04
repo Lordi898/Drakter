@@ -1,5 +1,11 @@
 import { clearBackendSession, loadBackendSession } from '@/services/session'
-import { WS_AUTH_PREFIX, WS_SUBPROTOCOL, parseServerEvent, type ServerEvent } from '@/services/protocol'
+import {
+  WS_AUTH_PREFIX,
+  WS_SUBPROTOCOL,
+  chatEventsPath,
+  parseServerEvent,
+  type ServerEvent
+} from '@/services/protocol'
 
 export type LinkStatus = 'idle' | 'connecting' | 'open' | 'reconnecting'
 
@@ -7,7 +13,6 @@ const PING_INTERVAL_MS = 20_000
 const PONG_TIMEOUT_MS = 10_000
 const BACKOFF_MIN_MS = 500
 const BACKOFF_MAX_MS = 30_000
-const DEDUPE_SIZE = 500
 const MAX_FRAME_CHARS = 1_000_000
 
 const eventListeners = new Set<(event: ServerEvent) => void>()
@@ -25,8 +30,13 @@ let reconnectTimer: ReturnType<typeof setTimeout> | null = null
 let pingTimer: ReturnType<typeof setInterval> | null = null
 let pongTimer: ReturnType<typeof setTimeout> | null = null
 
-const seenIds = new Set<string>()
-const seenOrder: string[] = []
+/** Mayor `seq` visto, solo en memoria. Base de `after_seq` y de la deduplicación. */
+let lastSeq: number | null = null
+let lastInstance: string | null = null
+/** Estado del heartbeat de la conexión actual / de la sesión de backend. */
+let pongSeen = false
+let pingSent = false
+let heartbeatDisabled = false
 
 function setStatus(next: LinkStatus): void {
   if (status === next) return
@@ -40,19 +50,9 @@ function setStatus(next: LinkStatus): void {
   }
 }
 
-function remember(eventId: string): boolean {
-  if (seenIds.has(eventId)) return false
-  seenIds.add(eventId)
-  seenOrder.push(eventId)
-  if (seenOrder.length > DEDUPE_SIZE) {
-    const oldest = seenOrder.shift()
-    if (oldest !== undefined) seenIds.delete(oldest)
-  }
-  return true
-}
-
 function dispatch(event: ServerEvent): void {
-  if (!remember(event.event_id)) return
+  if (lastSeq !== null && event.seq <= lastSeq) return
+  lastSeq = event.seq
   for (const listener of [...eventListeners]) {
     try {
       listener(event)
@@ -113,10 +113,14 @@ function onLost(): void {
 
 function startHeartbeat(ws: WebSocket): void {
   clearHeartbeat()
+  pongSeen = false
+  pingSent = false
+  if (heartbeatDisabled) return
   pingTimer = setInterval(() => {
     if (socket !== ws || ws.readyState !== WebSocket.OPEN) return
     try {
       ws.send('ping')
+      pingSent = true
     } catch {
       onLost()
       return
@@ -124,7 +128,8 @@ function startHeartbeat(ws: WebSocket): void {
     if (pongTimer === null) {
       pongTimer = setTimeout(() => {
         pongTimer = null
-        if (socket === ws) onLost()
+        // /chat/events no promete `pong`: solo cuenta si ya se vio uno en esta conexión.
+        if (socket === ws && pongSeen) onLost()
       }, PONG_TIMEOUT_MS)
     }
   }, PING_INTERVAL_MS)
@@ -133,6 +138,7 @@ function startHeartbeat(ws: WebSocket): void {
 function handleMessage(data: unknown): void {
   if (typeof data !== 'string') return
   if (data === 'pong') {
+    pongSeen = true
     if (pongTimer !== null) clearTimeout(pongTimer)
     pongTimer = null
     return
@@ -175,9 +181,15 @@ async function connect(): Promise<void> {
   }
 
   let ws: WebSocket
+  if (lastInstance !== session.instanceId) {
+    // Otro backend (reinicio con otro puerto/token): su secuencia no es continuación de la anterior.
+    lastInstance = session.instanceId
+    lastSeq = null
+    heartbeatDisabled = false
+  }
   try {
     // El token va solo en el subprotocolo, nunca en la URL.
-    ws = new WebSocket(session.wsUrl, [WS_SUBPROTOCOL, WS_AUTH_PREFIX + session.token])
+    ws = new WebSocket(session.wsBase + chatEventsPath(lastSeq), [WS_SUBPROTOCOL, WS_AUTH_PREFIX + session.token])
   } catch {
     onLost()
     return
@@ -196,8 +208,10 @@ async function connect(): Promise<void> {
   ws.onerror = () => {
     // El cierre llega justo después y gestiona la reconexión.
   }
-  ws.onclose = () => {
-    if (socket === ws) onLost()
+  ws.onclose = (closeEvent: CloseEvent) => {
+    if (socket !== ws) return
+    if (closeEvent.code === 1003 && pingSent && !pongSeen) heartbeatDisabled = true
+    onLost()
   }
 }
 
@@ -221,6 +235,8 @@ export function stopBackendLink(): void {
   connecting = false
   attempt = 0
   everOpened = false
+  lastSeq = null
+  lastInstance = null
   clearReconnectTimer()
   dropSocket()
   if (typeof window !== 'undefined') window.removeEventListener('online', onOnline)
