@@ -1,7 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import {
   IPC_CHANNELS,
-  type ApiChannel,
+  type ApiTopic,
   type BackendConnection,
   type DrakterApi,
   type DrakterBridge
@@ -9,11 +9,11 @@ import {
 
 type Listener = (event: unknown) => void
 
-const listeners: Record<ApiChannel, Set<Listener>> = { events: new Set(), connection: new Set() }
+const listeners: Record<ApiTopic, Set<Listener>> = { events: new Set(), connection: new Set() }
 
 /** Un oyente que falla no debe dejar sin eventos a los demás. */
-function emit(channel: ApiChannel, event: unknown): void {
-  for (const listener of [...listeners[channel]]) {
+function emit(topic: ApiTopic, event: unknown): void {
+  for (const listener of [...listeners[topic]]) {
     try {
       listener(event)
     } catch (error) {
@@ -43,12 +43,12 @@ ipcRenderer.on(IPC_CHANNELS.connectionChanged, (_message, connection: BackendCon
   emit('connection', connection)
 })
 
-function subscribe(channel: ApiChannel, callback: Listener): () => void {
-  if (channel !== 'events' && channel !== 'connection') throw new TypeError('Canal no válido')
+function subscribe(topic: ApiTopic, callback: Listener): () => void {
+  if (topic !== 'events' && topic !== 'connection') throw new TypeError('Tema no válido')
   // Cada llamada del mundo principal llega como función nueva: se envuelve una sola vez.
   const listener: Listener = (event) => callback(event)
-  listeners[channel].add(listener)
-  if (channel === 'events' && !eventsRequested) {
+  listeners[topic].add(listener)
+  if (topic === 'events' && !eventsRequested) {
     eventsRequested = true
     void ipcRenderer.invoke(IPC_CHANNELS.openEvents).catch((error: unknown) => {
       eventsRequested = false
@@ -56,19 +56,18 @@ function subscribe(channel: ApiChannel, callback: Listener): () => void {
     })
   }
   return () => {
-    listeners[channel].delete(listener)
+    listeners[topic].delete(listener)
   }
 }
 
 const api: DrakterApi = {
-  call: (op, args) => ipcRenderer.invoke(IPC_CHANNELS.apiCall, { op, args }),
+  call: (method, path, body) => ipcRenderer.invoke(IPC_CHANNELS.apiCall, { method, path, body }),
   subscribe,
   requestApproval: (actionId) => ipcRenderer.invoke(IPC_CHANNELS.requestApproval, actionId),
   getConnection: () => ipcRenderer.invoke(IPC_CHANNELS.getConnection)
 }
 
 const bridge: DrakterBridge = {
-  api,
   getAppInfo: () => ipcRenderer.invoke(IPC_CHANNELS.getAppInfo),
   showDesktopNotification: (request) =>
     ipcRenderer.invoke(IPC_CHANNELS.showDesktopNotification, request),
@@ -76,3 +75,4 @@ const bridge: DrakterBridge = {
 }
 
 contextBridge.exposeInMainWorld('drakter', bridge)
+contextBridge.exposeInMainWorld('api', api)
