@@ -5,9 +5,9 @@ Fuera de alcance: tablas de dominio, rutas de dominio, eventos WebSocket de nego
 
 ## Arranque
 
-- Único punto de entrada: `python -m app` desde `backend/`. `app/__main__.py` pone `os.umask(0o077)`, carga la configuración, abre y enlaza él mismo el socket a `127.0.0.1:<port>` y se lo pasa a Uvicorn con `server.run(sockets=[sock])`. Si el puerto está ocupado, sale con código distinto de 0 sin tocar el archivo de sesión.
+- Único punto de entrada: `python -m app` desde `backend/`. `app/__main__.py` pone `os.umask(0o077)`, carga la configuración, abre, enlaza y pone a escuchar él mismo el socket en `127.0.0.1:<port>` y se lo pasa a Uvicorn con `server.run(sockets=[sock])`. Si el puerto está ocupado, sale con código distinto de 0 sin tocar el archivo de sesión.
 - La dirección no es configurable: `BIND_HOST = "127.0.0.1"`, constante.
-- Uvicorn: `log_config=None`, `access_log=False`, `server_header=False`, `proxy_headers=False`, `ws="websockets"`, `ws_max_size=1048576`, `lifespan="on"`.
+- Uvicorn: `log_config=None`, `access_log=False`, `server_header=False`, `proxy_headers=False`, `ws="websockets-sansio"`, `ws_max_size=1048576`, `lifespan="on"`.
 - `create_app(settings: Settings) -> FastAPI` en `app/main.py`. No existe un `app` a nivel de módulo. `docs_url`, `redoc_url` y `openapi_url` son `None`.
 - Orden del `lifespan`: preparar directorios → `configure_logging` → `migrate` → escribir archivo de sesión. Al apagar, borrar el archivo de sesión. Si `migrate` falla, el arranque falla.
 
@@ -64,7 +64,7 @@ def install_error_handlers(app: FastAPI) -> None: ...
 ```
 
 - Todo error HTTP responde `{"error":{"code","message","request_id","details"}}` con `application/json`.
-- Cubre `AppError`, `RequestValidationError` (422, código `validation_error`; `details` solo con `field` y `message`, jamás `input` ni `ctx`), `StarletteHTTPException` (`http_404`, `http_405`, …, con mensaje fijo, conservando sus cabeceras) y `Exception` (500, código `internal_error`, mensaje fijo, traza solo en el log).
+- Cubre `AppError`, `RequestValidationError` (422, código `validation_error`; `details` con `field`, `code` y `message`, jamás `input` ni `ctx`), `StarletteHTTPException` (`http_404`, `http_405`, …, con mensaje fijo, conservando sus cabeceras) y `Exception` (500, código `internal_error`, mensaje fijo, traza solo en el log).
 - `request_id` sale de `request.scope["state"]["request_id"]`; si no está, `uuid4`. Nunca se toma de la petición del cliente.
 
 ## `app/core/security.py`
@@ -94,12 +94,14 @@ Archivo de sesión: JSON `{"token","port","pid","started_at"}`, escrito en un te
 
 1. Asigna `scope["state"]["request_id"] = str(uuid4())` y `lifespan` pasa sin más.
 2. Exige que `scope["client"]` sea `127.0.0.1` (403 `forbidden_client`).
-3. Exige exactamente una cabecera `Host`, igual a `127.0.0.1:<port>` o `localhost:<port>` (sin distinguir mayúsculas). Si no: 403 `forbidden_host`.
+3. Exige exactamente una cabecera `Host`, igual a `127.0.0.1:<port>` o `localhost:<port>` (sin distinguir mayúsculas). Si no: 403 `forbidden_host`. Una petición sin `Host` o con dos la corta antes h11 con un 400 sin envelope; el guardia es la segunda barrera.
 4. Si hay `Origin`, exige exactamente uno y que esté en `allowed_origins`. Si no: 403 `forbidden_origin`. Sin `Origin` se continúa: los clientes que no son navegador no lo envían.
-5. Deja pasar sin token las rutas de `PUBLIC_PATHS` y las preflight CORS (`OPTIONS` con `Origin` ya validado y `Access-Control-Request-Method`).
+5. Solo en HTTP, deja pasar sin token las rutas de `PUBLIC_PATHS` y las preflight CORS (`OPTIONS` con `Origin` ya validado y `Access-Control-Request-Method`). En websocket, `/health` también exige token.
 6. Todo lo demás, incluidas rutas inexistentes, exige token: `Authorization: Bearer <token>`. En websocket vale además el subprotocolo `drakter.auth.<token>`. Nunca por query string ni cookie. Si no: 401 `unauthorized` con `WWW-Authenticate: Bearer`.
 
 En websocket, cualquier rechazo se hace antes de aceptar: se consume `websocket.connect` y se envía `websocket.close` con código 1008, de modo que el cliente recibe un rechazo del handshake. El guardia nunca registra cabeceras, consulta ni token. Registra `event`, `method`, `path` sin consulta, `status` y `request_id`.
+
+Con un `Origin` validado, el guardia lo guarda en `scope["state"]["cors_origin"]` y sus 401 y el 500 de `install_error_handlers` añaden `Access-Control-Allow-Origin`, porque nacen fuera de `CORSMiddleware`. Una preflight con método no permitido devuelve el 400 en texto plano de `CORSMiddleware`.
 
 CORS: `CORSMiddleware` dentro del guardia, con `allow_origins=settings.allowed_origins`, `allow_credentials=False`, `allow_methods` GET/POST/PUT/PATCH/DELETE, `allow_headers` Authorization/Content-Type. Sin expresiones regulares.
 
