@@ -61,10 +61,15 @@ function subscribe(topic: ApiTopic, callback: Listener): () => void {
 }
 
 const api: DrakterApi = {
-  call: (method, path, body) => ipcRenderer.invoke(IPC_CHANNELS.apiCall, { method, path, body }),
+  call: (method, path, body, options) =>
+    ipcRenderer.invoke(IPC_CHANNELS.apiCall, { method, path, body, options }),
   subscribe,
   requestApproval: (actionId) => ipcRenderer.invoke(IPC_CHANNELS.requestApproval, actionId),
-  getConnection: () => ipcRenderer.invoke(IPC_CHANNELS.getConnection)
+  getConnection: () => ipcRenderer.invoke(IPC_CHANNELS.getConnection),
+  addStorageLocation: (label) => ipcRenderer.invoke(IPC_CHANNELS.addStorageLocation, label),
+  updateStorageLocation: (id, changes) =>
+    ipcRenderer.invoke(IPC_CHANNELS.updateStorageLocation, { id, changes }),
+  deleteStorageLocation: (id) => ipcRenderer.invoke(IPC_CHANNELS.deleteStorageLocation, id)
 }
 
 const bridge: DrakterBridge = {

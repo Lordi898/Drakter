@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SELF="$(readlink -f "${BASH_SOURCE[0]}")"
+DESKTOP_DIR="$(cd "$(dirname "$SELF")/../.." && pwd)"
+ELECTRON_BIN="$DESKTOP_DIR/node_modules/.bin/electron"
+SANDBOX="$DESKTOP_DIR/node_modules/electron/dist/chrome-sandbox"
+
+warn() {
+  echo "drakter: $1" >&2
+  if command -v notify-send >/dev/null 2>&1; then notify-send "Drakter" "$1" || true; fi
+}
+
+if [[ ! -f "$DESKTOP_DIR/out/main/index.js" ]]; then
+  warn "falta la compilación (out/main/index.js): ejecuta 'npm run build' en $DESKTOP_DIR"
+  exit 1
+fi
+if [[ ! -x "$ELECTRON_BIN" ]]; then
+  warn "falta Electron: ejecuta 'npm install' en $DESKTOP_DIR"
+  exit 1
+fi
+
+ARGS=()
+if [[ "${DRAKTER_DEV_NO_SANDBOX:-}" == "1" ]]; then
+  echo "drakter: AVISO: arrancando SIN sandbox (solo desarrollo)" >&2
+  ARGS+=(--no-sandbox)
+else
+  # U-2 admite dos caminos: chrome-sandbox SUID, o espacios de usuario permitidos (perfil AppArmor).
+  USERNS_RESTRICTED="$(cat /proc/sys/kernel/apparmor_restrict_unprivileged_userns 2>/dev/null || echo 0)"
+  shopt -s nullglob
+  APPARMOR_PROFILES=(/etc/apparmor.d/*drakter* /etc/apparmor.d/*electron*)
+  shopt -u nullglob
+  if [[ "$USERNS_RESTRICTED" == "1" && ${#APPARMOR_PROFILES[@]} -eq 0 ]] \
+    && { [[ ! -f "$SANDBOX" ]] || [[ "$(stat -c '%u %a' "$SANDBOX")" != "0 4755" ]]; }; then
+    warn "sandbox sin configurar (paso U-2): falta perfil AppArmor o chrome-sandbox root y 4755. Para desarrollo: DRAKTER_DEV_NO_SANDBOX=1"
+    exit 1
+  fi
+fi
+
+exec "$ELECTRON_BIN" "$DESKTOP_DIR" "${ARGS[@]}" "$@"
