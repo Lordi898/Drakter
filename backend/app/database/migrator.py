@@ -153,7 +153,7 @@ def migrate(
 ) -> MigrationResult:
     migrations = load_migrations(migrations_dir)
     try:
-        conn = connect(db_path, create=True)
+        conn = connect(db_path, create=True, migrating=True)
     except (OSError, ValueError, sqlite3.Error) as exc:
         raise MigrationError(f"No se puede abrir la base: {exc}") from exc
     try:

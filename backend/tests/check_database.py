@@ -19,6 +19,7 @@ import subprocess
 import sys
 import tempfile
 import time
+from contextlib import closing
 from pathlib import Path
 
 BACKEND = Path(__file__).resolve().parents[1]
@@ -235,6 +236,7 @@ def run_audit_cases(root: Path) -> None:
     case_damaged_live_database(root)
     case_row_damage(root)
     case_no_create(root)
+    case_hardened_connection(root)
 
 
 PARENT_CHILD = (
@@ -470,6 +472,44 @@ def get_health(port: int, token: str) -> int:
         return conn.getresponse().status
     finally:
         conn.close()
+
+
+def case_hardened_connection(root: Path) -> None:
+    db = root / "hardened.db"
+    raw_db = root / "raw.db"
+    schema = ("CREATE TABLE p(id INTEGER PRIMARY KEY);"
+              "CREATE TABLE c(p INTEGER NOT NULL REFERENCES p(id));"
+              "CREATE VIRTUAL TABLE f USING fts5(body);")
+    with closing(connect(db, create=True, migrating=True)) as setup:
+        for statement in schema.split(";")[:-1]:
+            setup.execute(statement)
+
+    with closing(connect(db)) as conn:
+        check("7: modo defensivo activo",
+              conn.getconfig(sqlite3.SQLITE_DBCONFIG_DEFENSIVE) is True)
+        conn.execute("PRAGMA foreign_keys")
+        for pragma in ("foreign_keys=OFF", "main.foreign_keys=OFF", "foreign_keys(0)",
+                       "defer_foreign_keys=ON", "ignore_check_constraints=ON",
+                       "writable_schema=ON"):
+            check(f"7: PRAGMA {pragma} denegado",
+                  isinstance(_try(conn.execute, f"PRAGMA {pragma}"), sqlite3.DatabaseError))
+        check("7: foreign_keys sigue en 1", conn.execute("PRAGMA foreign_keys").fetchone() == (1,))
+        check("7: una FK rota falla",
+              isinstance(_try(conn.execute, "INSERT INTO c VALUES(99)"), sqlite3.IntegrityError))
+        conn.execute("INSERT INTO p VALUES(99)")
+        conn.execute("INSERT INTO c VALUES(99)")
+        check("control 7: la misma fila con padre entra",
+              conn.execute("SELECT count(*) FROM c").fetchone() == (1,))
+        conn.execute("INSERT INTO f(body) VALUES('hola')")
+        check("control 7: el FTS funciona por su tabla virtual",
+              conn.execute("SELECT count(*) FROM f WHERE f MATCH 'hola'").fetchone() == (1,))
+        check("7: escribir la tabla sombra del FTS falla",
+              isinstance(_try(conn.execute, "DELETE FROM f_data"), sqlite3.DatabaseError))
+
+    with closing(sqlite3.connect(raw_db)) as raw:
+        raw.execute("CREATE VIRTUAL TABLE f USING fts5(body)")
+        raw.execute("DELETE FROM f_data")
+        check("control 7: sin modo defensivo la tabla sombra se puede escribir", True)
 
 
 def case_no_create(root: Path) -> None:
