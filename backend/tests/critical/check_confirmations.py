@@ -31,7 +31,7 @@ from app.database.migrator import migrate
 from app.main import create_app
 from app.permissions.credentials import APPROVER_FILE_NAME, ApprovalSigner
 from app.permissions.engine import PermissionEngine
-from app.permissions.models import ActionRegistry, ActionSpec, ActorContext, Principal
+from app.permissions.models import ActionSpec, ActorContext, Principal
 from app.permissions.setup import install_security, start_security, stop_security
 from app.services.actions import ActionService, ConfirmationRequiredError
 from app.tools.dispatcher import dispatch
