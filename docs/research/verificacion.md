@@ -133,8 +133,12 @@ Del código de `b200f5bc` y de `fastapi_lib.py`, que sí se ejecutó:
 - `run_conversation(mensaje)` es síncrono y devuelve un dict con `final_response`. Un `AIAgent` y un hilo por turno; 3 turnos paralelos sin fuga de herramientas.
 - VERIFICADOS: `stream_delta_callback(delta)`, `tool_start_callback(...)`, `tool_complete_callback(...)`, `valid_tool_names`.
 - Solo declarados en la firma (⚠️ no ejecutados): `thinking_callback`, `step_callback`, `event_callback(str, dict)`, `tool_progress_callback`, `notice_callback`, `tool_result_metadata_callback`.
-- Parada, ⚠️ pendiente de prueba: `interrupt()` y `clear_interrupt()` en `agent/interrupt_control.py`; `is_interrupted`, `close()` y `release_clients()` en `run_agent.py`.
-- MCP: `discover_mcp_tools(allowed_mcp_names=...)` global al proceso; `shutdown_mcp_servers()` en `tools/mcp_tool_lifecycle.py` (⚠️ cierre no ejecutado). `HERMES_HOME` se resuelve por proceso.
+- **Parada, VERIFICADO** (`lider/stop/runner.py`, stub SSE lento, `agent.interrupt("stop", hard_cancel=True)` desde otro hilo, devuelve `True`):
+  - A mitad de stream: `join` 0,04 s, `interrupted=True`, `final_response` con el texto parcial; el stub vio cortada la conexión.
+  - Durante herramienta MCP de 12 s: `join` 0,11 s, `interrupted=True`, `final_response=None`.
+  - **La herramienta MCP no se cancela:** `mcp.log` registró `end` unos 11 s después del corte. `tool_complete_callback` salta al interrumpir, así que no significa que haya terminado. El backend debe resolverlo con idempotencia y sin informar de "cancelado" sin confirmarlo.
+- **Cierre, VERIFICADO:** `agent.close()` por turno; `shutdown_mcp_servers()` tardó 1,2-2 s y mató el hijo MCP. Queda `hermes_cli/process_supervisor.sh` mientras viva el padre (⚠️ salida al morir el padre sin comprobar). Sin gateway: `pgrep` no vio `gateway run`.
+- MCP: `discover_mcp_tools()` una vez por proceso, antes de crear el agente. `HERMES_HOME` se resuelve por proceso.
 
 ### 1.8 Verificación independiente
 
