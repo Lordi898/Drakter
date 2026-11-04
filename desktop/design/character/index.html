@@ -1,0 +1,363 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Drakter, estados del personaje</title>
+<style>
+  :root {
+    --manganeso: #3A2240;
+    --manganeso-hondo: #24142A;
+    --azulejo: #4A2E50;
+    --azulejo-par: #432849;
+    --cardenillo: #1F6E66;
+    --hueso: #EADFC6;
+    --hueso-tenue: #C9BBB8;
+    --ambar: #EFA21E;
+    --familia: "Palatino Linotype", "Book Antiqua", Palatino, "URW Palladio L",
+      P052, "TeX Gyre Pagella", Georgia, serif;
+  }
+
+  * { box-sizing: border-box; }
+
+  html { background: var(--manganeso); }
+
+  body {
+    margin: 0;
+    color: var(--hueso);
+    font-family: var(--familia);
+    font-size: 1.0625rem;
+    line-height: 1.45;
+  }
+
+  .obra {
+    max-width: 92rem;
+    margin: 0 auto;
+    padding: 1.5rem clamp(1rem, 3vw, 3rem) 2.5rem;
+  }
+
+  /* La mesa acota el sticky de la escena: el personaje no pisa la hoja. */
+  .mesa {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(20rem, 27rem);
+    gap: 1.5rem 3rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .escena {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    align-self: start;
+    position: sticky;
+    top: 1rem;
+  }
+
+  h1 {
+    align-self: flex-start;
+    margin: 0;
+    font-size: 1.25rem;
+    font-weight: 400;
+  }
+
+  #personaje {
+    width: min(100%, 68vh);
+    aspect-ratio: 1;
+  }
+
+  .ahora {
+    margin: -1.5rem 0 0;
+    font-size: clamp(2rem, 4.5vw, 3.25rem);
+    font-style: italic;
+    line-height: 1.1;
+    text-align: center;
+  }
+
+  .solo-lector {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  fieldset {
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+  }
+
+  legend {
+    padding: 0 0 .5rem .75rem;
+    color: var(--hueso-tenue);
+  }
+
+  .control { display: block; position: relative; margin-bottom: 2px; }
+
+  /* El radio cubre toda la fila: cualquier clic en ella es un clic en él. */
+  .control input {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    opacity: 0;
+    cursor: pointer;
+  }
+
+  .fila {
+    display: grid;
+    grid-template-columns: 1.75rem minmax(0, 1fr);
+    gap: 0 .75rem;
+    padding: .5rem .75rem;
+    border-radius: 3px;
+    cursor: pointer;
+  }
+
+  .control:hover .fila { background: var(--azulejo); }
+
+  .tecla {
+    display: grid;
+    place-items: center;
+    width: 1.75rem;
+    height: 1.75rem;
+    border: 1.5px solid var(--hueso-tenue);
+    border-radius: 50%;
+    font-size: .9375rem;
+    line-height: 1;
+  }
+
+  .nombre { font-weight: 700; }
+
+  .codigo {
+    margin-left: .4em;
+    color: var(--hueso-tenue);
+    font-style: italic;
+  }
+
+  .motivo {
+    grid-column: 2;
+    font-size: 1rem;
+    line-height: 1.35;
+  }
+
+  .control input:checked + .fila {
+    background: var(--cardenillo);
+  }
+
+  .control input:checked + .fila .tecla {
+    border-color: var(--ambar);
+    background: var(--ambar);
+    color: var(--manganeso-hondo);
+    font-weight: 700;
+  }
+
+  .control input:checked + .fila .codigo { color: var(--hueso); }
+
+  .control input:focus-visible + .fila {
+    outline: 3px solid var(--ambar);
+    outline-offset: 2px;
+  }
+
+  .hoja {
+    grid-column: 1 / -1;
+    margin-top: 1rem;
+  }
+
+  h2 {
+    margin: 0 0 .75rem;
+    font-size: 1.25rem;
+    font-weight: 400;
+  }
+
+  /* Friso de azulejos: piezas contiguas unidas por la llaga oscura. */
+  .friso {
+    display: grid;
+    grid-template-columns: repeat(9, minmax(0, 1fr));
+    gap: 3px;
+    margin: 0;
+    padding: 3px;
+    background: var(--manganeso-hondo);
+    list-style: none;
+  }
+
+  .azulejo {
+    margin: 0;
+    padding: .25rem .25rem .6rem;
+    background: var(--azulejo);
+    text-align: center;
+  }
+
+  .azulejo:nth-child(even) { background: var(--azulejo-par); }
+
+  .mini {
+    width: 100%;
+    max-width: 8rem;
+    aspect-ratio: 1;
+    margin: 0 auto;
+  }
+
+  .azulejo p { margin: 0; line-height: 1.2; }
+
+  .azulejo .rotulo { font-size: 1rem; }
+
+  .azulejo .codigo {
+    margin: 0;
+    font-size: .9375rem;
+  }
+
+  @media (max-width: 62rem) {
+    .friso { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  }
+
+  @media (max-width: 54rem) {
+    .obra { padding-top: .5rem; }
+
+    .mesa { grid-template-columns: minmax(0, 1fr); }
+
+    /* El personaje sigue a la vista mientras se recorre la lista. */
+    .escena {
+      top: 0;
+      z-index: 1;
+      padding-bottom: .5rem;
+      background: var(--manganeso);
+    }
+
+    #personaje { width: min(100%, 34vh); }
+
+    .ahora { font-size: 1.75rem; }
+
+    .control { scroll-margin-top: 48vh; }
+  }
+
+  @media (max-width: 34rem) {
+    .friso { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  }
+</style>
+</head>
+<body>
+<main class="obra">
+  <div class="mesa">
+  <section class="escena" aria-label="Personaje">
+    <h1>Drakter</h1>
+    <div id="personaje"></div>
+    <p class="ahora" id="ahora" aria-live="polite" aria-atomic="true"></p>
+  </section>
+
+  <form id="controles">
+    <fieldset>
+      <legend>Elige un estado o pulsa su número, del 1 al 9.</legend>
+      <div id="lista"></div>
+    </fieldset>
+  </form>
+  </div>
+
+  <section class="hoja" aria-labelledby="titulo-hoja">
+    <h2 id="titulo-hoja">Los nueve estados a la vez</h2>
+    <ul class="friso" id="friso"></ul>
+  </section>
+</main>
+
+<script src="character.js"></script>
+<script>
+  (function () {
+    'use strict';
+
+    var COPY = {
+      idle: ['Esperando', 'Está contigo sin nada entre manos. Puedes hablarle cuando quieras.'],
+      listening: ['Escuchando', 'Te está oyendo. Sigue hablando: aún no ha empezado a responder.'],
+      thinking: ['Pensando', 'Ha entendido lo que pides y está decidiendo cómo responder.'],
+      speaking: ['Hablando', 'Te está respondiendo. Puedes cortarle en cualquier momento.'],
+      executing: ['Trabajando', 'Está haciendo algo por ti, como mover tareas o buscar un archivo.'],
+      success: ['Hecho', 'Ha terminado lo que le pediste y ha salido bien.'],
+      error: ['Algo ha fallado', 'No se ha completado. Te dirá qué ha pasado y qué puedes hacer.'],
+      interrupted: ['Interrumpido', 'Le has cortado. Se ha parado y espera a ver qué quieres.'],
+      offline: ['Sin conexión', 'Ahora no puede responder. Lo que tienes guardado sigue en tu equipo.']
+    };
+
+    var states = window.DRAKTER_STATES;
+    var lista = document.getElementById('lista');
+    var friso = document.getElementById('friso');
+    var ahora = document.getElementById('ahora');
+    var radios = {};
+
+    function element(tag, className, text) {
+      var el = document.createElement(tag);
+      if (className) el.className = className;
+      if (text) el.textContent = text;
+      return el;
+    }
+
+    function code(name) {
+      var el = element('span', 'codigo', name);
+      el.lang = 'en';
+      return el;
+    }
+
+    states.forEach(function (name, index) {
+      var label = element('label', 'control');
+      var input = element('input');
+      input.type = 'radio';
+      input.name = 'estado';
+      input.value = name;
+      input.addEventListener('change', function () { window.setState(name); });
+      radios[name] = input;
+
+      var fila = element('span', 'fila');
+      var titulo = element('span');
+      titulo.appendChild(element('span', 'nombre', COPY[name][0]));
+      titulo.appendChild(code(name));
+      fila.appendChild(element('span', 'tecla', String(index + 1)));
+      fila.appendChild(titulo);
+      fila.appendChild(element('span', 'motivo', COPY[name][1]));
+
+      label.appendChild(input);
+      label.appendChild(fila);
+      lista.appendChild(label);
+
+      var azulejo = element('li', 'azulejo');
+      var mini = element('div', 'mini');
+      azulejo.appendChild(mini);
+      azulejo.appendChild(element('p', 'rotulo', COPY[name][0]));
+      var rotulo = element('p');
+      rotulo.appendChild(code(name));
+      azulejo.appendChild(rotulo);
+      friso.appendChild(azulejo);
+      window.createCharacter(mini, { state: name });
+    });
+
+    function show(name) {
+      radios[name].checked = true;
+      ahora.textContent = '';
+      ahora.appendChild(document.createTextNode(COPY[name][0]));
+      ahora.appendChild(element('span', 'solo-lector', '. ' + COPY[name][1]));
+    }
+
+    var pedido = new URLSearchParams(window.location.search).get('state');
+    var inicial = states.indexOf(pedido) !== -1 ? pedido : 'idle';
+    var personaje = window.createCharacter(document.getElementById('personaje'), { state: inicial });
+    show(inicial);
+
+    window.setState = function (name) {
+      if (!personaje.setState(name)) return false;
+      show(name);
+      return true;
+    };
+
+    if (pedido !== null && pedido !== inicial) window.setState(pedido);
+
+    document.getElementById('controles').addEventListener('submit', function (event) {
+      event.preventDefault();
+    });
+
+    document.addEventListener('keydown', function (event) {
+      if (event.ctrlKey || event.metaKey || event.altKey || event.repeat) return;
+      var name = states[Number(event.key) - 1];
+      if (name) window.setState(name);
+    });
+  })();
+</script>
+</body>
+</html>
