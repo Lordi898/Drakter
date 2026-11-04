@@ -1,0 +1,189 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * Cianotipo y fichero: el chasis es azul de Prusia en ambos temas; lo que cambia
+ * con el tema es la hoja de trabajo. El ámbar se reserva para el estado de Drakter
+ * y el foco de teclado: no se usa como decoración.
+ */
+:root {
+  --prusia-950: #081a33;
+  --prusia-900: #0c2747;
+  --prusia-800: #133560;
+  --prusia-600: #27588f;
+  --prusia-300: #9dbbd8;
+  --ambar: #f2ad2e;
+  --sello: #b5324a;
+  --verdin: #2c7d6b;
+
+  /* Chasis: lateral y panel contextual, iguales en ambos temas. */
+  --chassis: var(--prusia-900);
+  --chassis-raised: var(--prusia-800);
+  --chassis-foreground: #e6eef5;
+  --chassis-muted: var(--prusia-300);
+  --chassis-line: #2a4d78;
+
+  /* Hoja: tema claro, papel de calco frío. */
+  --background: #e8eef2;
+  --foreground: #0d2238;
+  --card: #f5f8fa;
+  --card-foreground: #0d2238;
+  --popover: #f5f8fa;
+  --popover-foreground: #0d2238;
+  --primary: #133560;
+  --primary-foreground: #f5f8fa;
+  --secondary: #d7e2ea;
+  --secondary-foreground: #133560;
+  --muted: #d7e2ea;
+  --muted-foreground: #47607a;
+  --accent: #cfdde8;
+  --accent-foreground: #0d2238;
+  --destructive: var(--sello);
+  --destructive-foreground: #fff6f6;
+  --border: #bccddb;
+  --input: #a9bdcf;
+  --ring: var(--ambar);
+  --success: var(--verdin);
+  --warning: #9a6a0c;
+  /* Trazo de los planos dibujados en estados vacíos. */
+  --plan-line: #6f92b4;
+
+  --radius-sheet: 18px;
+  --radius-tab: 12px;
+  --radius: 7px;
+
+  --voice-casual: 'CASL' 1, 'MONO' 0;
+  --face-ui: 'CASL' 0, 'MONO' 0;
+  --face-display: 'CASL' 0.35, 'MONO' 0;
+}
+
+.dark {
+  --background: #06152a;
+  --foreground: #e6eef5;
+  --card: #0d2340;
+  --card-foreground: #e6eef5;
+  --popover: #0d2340;
+  --popover-foreground: #e6eef5;
+  --primary: #cfe0ee;
+  --primary-foreground: #0c2747;
+  --secondary: #14304f;
+  --secondary-foreground: #e6eef5;
+  --muted: #14304f;
+  --muted-foreground: #9dbbd8;
+  --accent: #1b3d63;
+  --accent-foreground: #e6eef5;
+  --destructive: #e0596f;
+  --destructive-foreground: #1b0a10;
+  --border: #24466f;
+  --input: #35608f;
+  --success: #57b9a2;
+  --warning: #f2ad2e;
+  --plan-line: #5f88b3;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-plan-line: var(--plan-line);
+  --color-chassis: var(--chassis);
+  --color-chassis-raised: var(--chassis-raised);
+  --color-chassis-foreground: var(--chassis-foreground);
+  --color-chassis-muted: var(--chassis-muted);
+  --color-chassis-line: var(--chassis-line);
+  --color-ambar: var(--ambar);
+
+  --radius-sm: 4px;
+  --radius-md: var(--radius);
+  --radius-lg: 10px;
+  --radius-xl: 14px;
+  --radius-sheet: var(--radius-sheet);
+  --radius-tab: var(--radius-tab);
+
+  --font-sans: 'Recursive Variable', ui-sans-serif, system-ui, sans-serif;
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    margin: 0;
+    overflow: hidden;
+    background: var(--chassis);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    font-variation-settings: var(--face-ui);
+    font-size: 15px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--ambar);
+    outline-offset: 2px;
+  }
+}
+
+/* Lo que dice Drakter va en Recursive casual; la interfaz, en su corte lineal. */
+.voice-drakter {
+  font-variation-settings: var(--voice-casual);
+}
+
+.type-display {
+  font-variation-settings: var(--face-display);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.08;
+}
+
+/* `data-reduce-motion` lo fija el shell a partir de la preferencia del usuario. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+[data-reduce-motion='true'] *,
+[data-reduce-motion='true'] *::before,
+[data-reduce-motion='true'] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+}
