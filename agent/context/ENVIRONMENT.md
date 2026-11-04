@@ -1,6 +1,6 @@
 # ENVIRONMENT.md — Entorno técnico
 
-Dónde se ejecuta Drakter. Describe el entorno, no su estado en este momento: lo que está funcionando ahora lo dice `get_system_status`.
+Dónde se ejecuta Drakter. Describe el entorno, no su estado en este momento: eso lo dicen las herramientas de estado de la lista de ejecución.
 
 ## Hechos del producto
 
