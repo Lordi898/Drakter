@@ -1,4 +1,4 @@
-import type { ApiCallResult, DrakterApi, HttpMethod } from '../../electron/shared/bridge'
+import type { ApiCallOptions, ApiCallResult, DrakterApi, HttpMethod } from '../../electron/shared/bridge'
 import {
   isAgentState,
   isConfirmationOut,
@@ -138,19 +138,11 @@ export function subscribeConfirmationRequired(listener: (ticket: ConfirmationTic
 export interface ApiRequestInit {
   readonly method?: HttpMethod
   readonly body?: unknown
-  /** Solo `If-Match`: la credencial la pone main y el renderer no la conoce. */
-  readonly headers?: { readonly 'If-Match'?: string }
+  /** Solo estas cabeceras, y no en GET: la credencial la pone main y el renderer no la conoce. */
+  readonly headers?: { readonly 'If-Match'?: string; readonly 'Idempotency-Key'?: string }
 }
 
-/** Cuarto argumento de `window.api.call`. Pendiente en bridge.ts (drakter-24): hasta entonces main lo ignora. */
-type CallWithOptions = (
-  method: HttpMethod,
-  path: string,
-  body?: unknown,
-  options?: { readonly ifMatch: string }
-) => Promise<ApiCallResult>
-
-const IF_MATCH_PATTERN = /^[\x21-\x7e]{1,128}$/
+const HEADER_VALUE_PATTERN = /^[\x21-\x7e]{1,128}$/
 
 function getApi(): DrakterApi | null {
   return typeof window !== 'undefined' && typeof window.api !== 'undefined' ? window.api : null
@@ -193,17 +185,23 @@ export async function apiRequest<T>(path: string, init: ApiRequestInit = {}): Pr
   if (!path.startsWith('/') || path.startsWith('//') || path.includes('\\') || path.includes('://')) {
     throw new ApiError(0, 'invalid_request', CODE_MESSAGES['invalid_request'] ?? 'La solicitud no es válida.')
   }
+  const method = init.method ?? 'GET'
   const ifMatch = init.headers?.['If-Match']
-  if (ifMatch !== undefined && !IF_MATCH_PATTERN.test(ifMatch)) {
+  const idempotencyKey = init.headers?.['Idempotency-Key']
+  const headerValues = [ifMatch, idempotencyKey].filter((value) => value !== undefined)
+  if (headerValues.some((value) => method === 'GET' || !HEADER_VALUE_PATTERN.test(value))) {
     throw new ApiError(0, 'invalid_request', CODE_MESSAGES['invalid_request'] ?? 'La solicitud no es válida.')
+  }
+  const options: ApiCallOptions = {
+    ...(ifMatch === undefined ? {} : { ifMatch }),
+    ...(idempotencyKey === undefined ? {} : { idempotencyKey })
   }
   const api = getApi()
   if (!api) throw new ApiError(0, 'backend_unavailable', messageFor(0, 'backend_unavailable'))
 
   let result: ApiCallResult
   try {
-    const call = api.call as CallWithOptions
-    result = await call(init.method ?? 'GET', path, init.body, ifMatch === undefined ? undefined : { ifMatch })
+    result = await api.call(method, path, init.body, headerValues.length === 0 ? undefined : options)
   } catch {
     throw new ApiError(0, 'backend_unavailable', messageFor(0, 'backend_unavailable'))
   }
