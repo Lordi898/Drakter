@@ -53,6 +53,18 @@ def parse_if_match(value: str | None) -> int | None:
     return int(text)
 
 
+def expected_revision(if_match: str | None, revision: int | None) -> int | None:
+    """Revisión esperada: `window.api.call` no lleva cabeceras, así que la GUI usa `?revision=N`."""
+    from_header = parse_if_match(if_match)
+    if from_header is not None and revision is not None and from_header != revision:
+        raise AppError(
+            "invalid_query",
+            "No se pudo comprobar si el elemento cambió. Recarga e inténtalo de nuevo.",
+            400,
+        )
+    return from_header if from_header is not None else revision
+
+
 def confirmation_response(request: Request, required: ConfirmationRequired) -> JSONResponse:
     """409 con el sobre común y `confirmation` a su lado (`contracts/README.md` §5)."""
     envelope = ErrorEnvelope(

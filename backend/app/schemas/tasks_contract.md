@@ -85,7 +85,7 @@ project_activity(ctx, project_id, *, limit: int, offset: int) -> Page[HistoryEnt
 
 ## REST (`/api/v1`, cada router exporta `router`)
 
-Handlers síncronos con `with service_context(request) as ctx:`. `If-Match` opcional con `parse_if_match`. `except ConfirmationRequired as exc: return confirmation_response(request, exc)`.
+Handlers síncronos con `with service_context(request) as ctx:`. Revisión opcional: `If-Match` o `?revision=N` con `expected_revision(if_match, revision)`; la GUI usa la query porque `window.api.call` no transporta cabeceras. `except ConfirmationRequired as exc: return confirmation_response(request, exc)`.
 
 | Método y ruta | Cuerpo | Respuesta |
 |---|---|---|
