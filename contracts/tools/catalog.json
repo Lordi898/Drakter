@@ -1106,7 +1106,7 @@
   "permission": "relationships.read",
   "risk": "read",
   "idempotent": true,
-  "returns_untrusted": false,
+  "returns_untrusted": true,
   "timeout_s": 15.0,
   "errors": [
    "not_found",

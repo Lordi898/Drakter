@@ -24,7 +24,6 @@ Backend (D-14): lo lanza Electron main, su único cliente, con `python -m app`. 
 | `ui`, por stdin | `/health`, `/api/v1/**` y `WS /api/v1/events`, salvo lo de `approver` |
 | `approver`, por stdin, solo en Electron main | `approve` y `reject`, y métodos de escritura en `/api/v1/storage-locations/**` y `/api/v1/permissions/**`. El renderer no lo conoce |
 | `agent_tool_token`, aleatorio por arranque | Solo el servidor MCP, en un listener propio de loopback con **puerto efímero** (bind a `127.0.0.1:0`), ni fijo ni configurable. El backend lo pasa a Hermes por entorno filtrado. No alcanza ninguna ruta de la GUI |
-| `API_SERVER_KEY` de Hermes | Solo backend → Hermes, también en loopback |
 
 Toda petición lleva `Authorization: Bearer <token>`, sin excepción: no hay ruta pública, y `/health` también exige token. Nada de token por consulta, cookie o subprotocolo. Cualquier cabecera `Origin` da 403 y no hay CORS. Token válido con rol equivocado: 403 `permission_denied`; desconocido, también el del agente en este puerto: 401.
 

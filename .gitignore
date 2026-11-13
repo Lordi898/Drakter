@@ -13,3 +13,4 @@ __pycache__/
 # Estado de Agent Orchestrator (AO)
 .ao/
 .claude/.gitignore
+*.tsbuildinfo
