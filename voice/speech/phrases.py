@@ -378,6 +378,21 @@ def resolve_active_profile(name: str | None) -> tuple[str, str | None]:
     return canonical, config.perfiles[canonical].reference_id or None
 
 
+def _load_fish_key() -> None:
+    """La CLI la lanza el usuario a mano: si no hay FISH_API_KEY en el entorno, se toma de
+    ~/.config/drakter/.env (como hace el supervisor del backend). Nunca se imprime."""
+    if os.environ.get("FISH_API_KEY"):
+        return
+    env = Path.home() / ".config" / "drakter" / ".env"
+    try:
+        lines = env.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return
+    for line in lines:
+        if line.startswith("FISH_API_KEY="):
+            os.environ["FISH_API_KEY"] = line.split("=", 1)[1].strip().strip('"').strip("'")
+
+
 def main(argv: list[str] | None = None, cfg: Any = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m voice phrases", description=__doc__.splitlines()[0])
     parser.add_argument("--profile", help="perfil de voces.toml (por defecto, el activo)")
@@ -387,6 +402,7 @@ def main(argv: list[str] | None = None, cfg: Any = None) -> int:
     parser.add_argument("--check", action="store_true", help="solo valida el TOML")
     args = parser.parse_args(argv)
     phrases = load_phrases()
+    _load_fish_key()
     if args.check:
         print(f"ok: {len(phrases)} claves, {sum(len(v) for v in phrases.values())} variantes")
         return 0
