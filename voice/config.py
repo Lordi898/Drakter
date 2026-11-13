@@ -145,14 +145,17 @@ def load_config(environ: dict[str, str] | None = None) -> VoiceConfig:
                     raise ValueError(f"clave desconocida en {toml_path}: {key}")
                 values.setdefault(key, _coerce(hints[key], raw))
 
-    for key, kind in hints.items():
-        raw = env.get(f"DRAKTER_VOICE_{key.upper()}", "").strip()
-        if raw:
-            values[key] = _coerce(kind, raw)
-
     cfg = VoiceConfig(**values)
-    if env.get("DRAKTER_VOICE_NULL", "").strip().lower() in {"1", "true", "yes", "on"}:
+    # DRAKTER_VOICE_NULL=1 vacía todos los proveedores; una variable explícita puede
+    # después sustituir uno (p. ej. un STT simulado en una comprobación).
+    if _coerce(bool, env.get("DRAKTER_VOICE_NULL", "")):
         cfg = cfg.with_null_providers()
+    overrides = {
+        key: _coerce(kind, raw)
+        for key, kind in hints.items()
+        if (raw := env.get(f"DRAKTER_VOICE_{key.upper()}", "").strip())
+    }
+    cfg = dataclasses.replace(cfg, **overrides)
     if cfg.stt_model not in {"small", "tiny"}:
         raise ValueError("stt_model debe ser 'small' o 'tiny'")
     return cfg

@@ -1,33 +1,36 @@
-"""Per-turn latency metrics. Timings and lengths only: text never gets in here."""
+"""Latencias por turno: tiempos y contadores, nunca texto.
+
+`UserBotLatencyObserver` de Pipecat mide el ciclo usuario → bot; aquí se resume en los campos
+de `voice.metrics` (`drakter_contracts.voice_ipc.EvtMetrics`), se escribe una línea en
+`metrics.jsonl` y se emite el evento. `agent_ttft_ms` lo mide el backend.
+"""
 
 from __future__ import annotations
 
 import json
+import logging
 import os
 import stat
 import threading
 import time
 from collections.abc import Mapping
 from pathlib import Path
-from typing import Final
+from typing import TYPE_CHECKING, Any, Final
 
-MARKS: Final = (
-    "wake",
-    "listen_start",
-    "speech_start",
-    "speech_end",
-    "stt_start",
-    "stt_first_segment",
-    "stt_end",
-    "text_received",
-    "tts_start",
-    "tts_first_audio",
-    "playback_start",
-    "playback_end",
-)
-NOTES: Final = frozenset({"audio_s", "stt_provider", "stt_model", "tts_provider", "tts_audio_s", "tts_synth_s"})
+if TYPE_CHECKING:
+    from pipecat.observers.user_bot_latency_observer import LatencyBreakdown, UserBotLatencyObserver
 
-_NS_PER_MS: Final = 1_000_000
+    from voice.session import Session
+
+log = logging.getLogger("voice.metrics")
+
+# Claves de `LatencyBreakdown.contributions` (Pipecat 1.16.0) → campo de voice.metrics.
+_CONTRIBUTIONS: Final[Mapping[str, str]] = {
+    "endpointing_wait": "endpointing_ms",
+    "turn_detection": "endpointing_ms",
+    "transcription": "stt_ms",
+    "speech_synthesis": "tts_ttfa_ms",
+}
 
 
 def ensure_private_dir(path: Path) -> None:
@@ -66,95 +69,57 @@ def ensure_private_dir(path: Path) -> None:
         os.close(fd)
 
 
-def _rss_mb() -> float | None:
-    try:
-        with open("/proc/self/status", encoding="ascii", errors="replace") as fh:
-            for line in fh:
-                if line.startswith("VmRSS:"):
-                    return round(int(line.split()[1]) / 1024, 1)
-    except (OSError, ValueError, IndexError):
-        pass
-    return None
-
-
-def _loadavg() -> list[float] | None:
-    try:
-        return [round(v, 2) for v in os.getloadavg()]
-    except OSError:
-        return None
-
-
-class TurnMetrics:
-    """Marks are written from several threads, so all access takes the lock."""
-
-    def __init__(self, turn_id: str) -> None:
-        self.turn_id = turn_id
-        self._marks: dict[str, int] = {}
-        self._notes: dict[str, float | int | str] = {}
-        self._lock = threading.Lock()
-
-    def mark(self, name: str, at_ns: int | None = None) -> None:
-        """Record `name` once. `at_ns` is for callers holding the real instant (a frame, the player)."""
-        if name not in MARKS:
-            raise ValueError(f"unknown metric mark: {name}")
-        with self._lock:
-            if name not in self._marks:
-                self._marks[name] = time.perf_counter_ns() if at_ns is None else at_ns
-
-    def note(self, name: str, value: float | int | str) -> None:
-        if name not in NOTES:
-            raise ValueError(f"unknown metric note: {name}")
-        with self._lock:
-            self._notes[name] = value
-
-    def _span_ms(self, start: str, end: str) -> float | None:
-        a, b = self._marks.get(start), self._marks.get(end)
-        return None if a is None or b is None else (b - a) / _NS_PER_MS
-
-    def _ratio(self, numerator: object, denominator: object) -> float | None:
-        if not isinstance(numerator, int | float) or not isinstance(denominator, int | float):
-            return None
-        return numerator / denominator if denominator > 0 else None
-
-    def snapshot(self) -> dict[str, object]:
-        with self._lock:
-            notes = dict(self._notes)
-            stt_ms = self._span_ms("stt_start", "stt_end")
-            raw: dict[str, float | None] = {
-                "stt_ms": stt_ms,
-                "stt_rtf": None if stt_ms is None else self._ratio(stt_ms / 1000, notes.get("audio_s")),
-                "tts_first_audio_ms": self._span_ms("tts_start", "tts_first_audio"),
-                "tts_rtf": self._ratio(notes.get("tts_synth_s"), notes.get("tts_audio_s")),
-                "response_gap_ms": self._span_ms("speech_end", "playback_start"),
-            }
-        spans = {name: round(value, 3) for name, value in raw.items() if value is not None}
-        return {
-            "turn_id": self.turn_id,
-            "spans_ms": spans,
-            "notes": notes,
-            "rss_mb": _rss_mb(),
-            "loadavg": _loadavg(),
-        }
-
-
 class MetricsSink:
-    """JSONL file, 0600, in a 0700 directory. Only the fields of snapshot() are ever written."""
+    """Fichero JSONL 0600 en un directorio 0700. Solo números: los campos son una lista cerrada."""
 
-    _FIELDS: Final = ("turn_id", "spans_ms", "notes", "rss_mb", "loadavg")
+    _FIELDS: Final = ("ts", "turn_id", "endpointing_ms", "stt_ms", "tts_ttfa_ms", "total_ms", "false_ducks")
 
     def __init__(self, path: Path) -> None:
         self._path = Path(path)
         self._lock = threading.Lock()
 
-    def write(self, snapshot: Mapping[str, object]) -> None:
-        line = json.dumps({k: snapshot.get(k) for k in self._FIELDS}, separators=(",", ":"), allow_nan=False)
+    def write(self, record: Mapping[str, Any]) -> None:
+        line = json.dumps({k: record[k] for k in self._FIELDS if k in record}, separators=(",", ":"))
         with self._lock:
             ensure_private_dir(self._path.parent)
-            flags = os.O_WRONLY | os.O_APPEND | os.O_CREAT | os.O_NOFOLLOW
-            fd = os.open(self._path, flags, 0o600)
+            fd = os.open(self._path, os.O_WRONLY | os.O_APPEND | os.O_CREAT | os.O_NOFOLLOW, 0o600)
             try:
                 if stat.S_IMODE(os.fstat(fd).st_mode) != 0o600:
                     os.fchmod(fd, 0o600)
                 os.write(fd, (line + "\n").encode("utf-8"))
             finally:
                 os.close(fd)
+
+
+def summarize(breakdown: LatencyBreakdown) -> dict[str, int]:
+    """Reduce el desglose de Pipecat a milisegundos enteros por campo del contrato."""
+    out: dict[str, int] = {"total_ms": round(breakdown.total_secs * 1000)}
+    for part in breakdown.contributions:
+        name = _CONTRIBUTIONS.get(part.key)
+        if name:
+            out[name] = out.get(name, 0) + round(part.duration_secs * 1000)
+    return out
+
+
+def create_observer(session: Session, sink: MetricsSink) -> UserBotLatencyObserver:
+    """Observador de un pipeline: escribe `metrics.jsonl` y emite `voice.metrics`."""
+    from pipecat.observers.user_bot_latency_observer import UserBotLatencyObserver
+
+    observer = UserBotLatencyObserver()
+
+    @observer.event_handler("on_latency_breakdown")
+    async def on_latency_breakdown(_observer: Any, breakdown: LatencyBreakdown) -> None:
+        metrics: dict[str, Any] = summarize(breakdown)
+        if session.state.turn_id:
+            metrics["turn_id"] = session.state.turn_id
+        false_ducks = session.take_false_ducks()
+        if false_ducks:
+            metrics["false_ducks"] = false_ducks
+        session.metrics_last = metrics
+        try:
+            sink.write({"ts": round(time.time(), 3), **metrics})
+        except (OSError, ValueError) as exc:
+            log.warning("metrics_write_failed", extra={"data": {"error": type(exc).__name__}})
+        await session.emit("voice.metrics", metrics)
+
+    return observer
