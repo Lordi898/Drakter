@@ -15,6 +15,7 @@
     "relationships.write",
     "search.read",
     "storage.read",
+    "storage.write",
     "subjects.delete",
     "subjects.read",
     "subjects.write",
