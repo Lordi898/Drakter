@@ -32,6 +32,8 @@ El backend monta solo cada `backend/app/api/<módulo>.py` que tenga `router` (`_
    (cd desktop && npm ci)
    ```
 
+   `npm ci` también descarga el binario de Electron (`postinstall` de `desktop/`, ~100 MB). Electron 45 ya no trae su propio `postinstall`, así que no depende de la política de scripts de npm. Si falta el binario: `node desktop/scripts/ensure-electron.cjs` (idempotente; `dev.sh` y `drakter-local.sh` lo ejecutan solos). Con `--ignore-scripts` no corre el `postinstall`, pero esos dos scripts lo cierran.
+
 3. Comprueba el entorno. Imprime líneas `OK`, `AVISO` o `FALTA` y sale con 1 si hay algún `FALTA`:
 
    ```sh

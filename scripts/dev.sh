@@ -30,9 +30,9 @@ require_desktop() {
   command -v node >/dev/null || die "node no está en el PATH" "instala Node y vuelve a abrir la terminal"
   command -v npm >/dev/null || die "npm no está en el PATH" "instala Node y vuelve a abrir la terminal"
   [ -d "$desktop_dir/node_modules" ] || die "falta desktop/node_modules" "cd desktop && npm ci"
-  # npm 12 no ejecuta scripts de instalación: el binario de Electron se descarga aparte.
-  [ -f "$desktop_dir/node_modules/electron/path.txt" ] \
-    || die "falta el binario de Electron" "cd desktop && node node_modules/electron/install.js"
+  # Electron 45 no trae postinstall: el paso idempotente descarga el binario si falta.
+  node "$desktop_dir/scripts/ensure-electron.cjs" >&2 \
+    || die "no se pudo obtener el binario de Electron" "cd desktop && node scripts/ensure-electron.cjs"
   [ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ] || die "no hay sesión gráfica" "ejecuta dev.sh desde el escritorio o exporta DISPLAY"
 }
 

@@ -68,13 +68,13 @@ Detalle paso a paso en [`docs/installation/instalar.md`](docs/installation/insta
 git clone https://github.com/Lordi898/Drakter.git
 cd Drakter
 (cd backend && uv sync --frozen)
-(cd desktop && npm ci && node node_modules/electron/install.js)
+(cd desktop && npm ci)
 scripts/check-env.sh
 ```
 
 Hermes va aparte, en su propio venv con Python >= 3.14: sigue [`docs/installation/hermes-y-openviking.md`](docs/installation/hermes-y-openviking.md).
 
-- `npm` 12 no ejecuta el script que descarga Electron; de ahí `node node_modules/electron/install.js`.
+- Electron 45 ya no trae `postinstall` y descarga su binario al primer arranque; por eso `desktop/package.json` tiene un `postinstall` propio (`desktop/scripts/ensure-electron.cjs`, idempotente) que lo baja durante `npm ci`. Si lo instalaste sin él: `node desktop/scripts/ensure-electron.cjs`.
 - `scripts/check-env.sh` imprime líneas `OK`, `AVISO` o `FALTA` y sale con 1 si falta algo. Comprueba Python 3.12, que haya un Python >= 3.14 para Hermes (no comprueba que Hermes esté instalado), Node, npm, `uv`, `~/.config/drakter/.env` (sin leerlo), el sandbox de Electron y la sesión gráfica.
 
 ## Configuración
