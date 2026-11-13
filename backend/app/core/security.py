@@ -44,6 +44,10 @@ class SessionToken:
             return False
         return hmac.compare_digest(self._value, candidate)
 
+    def reveal(self) -> str:
+        """Only to hand the token to a child process we start (the Hermes MCP client)."""
+        return self._value.decode("ascii")
+
     def __repr__(self) -> str:
         return "SessionToken(<redacted>)"
 

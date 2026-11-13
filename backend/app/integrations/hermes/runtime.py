@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import secrets
 from dataclasses import dataclass, field
 from pathlib import Path
 from types import SimpleNamespace
@@ -187,7 +188,7 @@ class AgentRuntime:
         from app.integrations.hermes.supervisor import HermesSupervisor
         from app.tools.mcp_bridge import AgentToolsServer, build_agent_tools_app
 
-        token = SessionToken()
+        token = SessionToken(secrets.token_urlsafe(32))
         app = build_agent_tools_app(
             self.registry, self.turns, token, self.tool_state, observer=self.observe_tool_outcome
         )

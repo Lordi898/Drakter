@@ -386,6 +386,7 @@ class HermesSupervisor:
             proc = await asyncio.create_subprocess_exec(
                 python,
                 "-I",
+                "-B",  # -I ignores PYTHONDONTWRITEBYTECODE: no __pycache__ inside plugins/
                 str(RUNNER_PATH),
                 cwd=self._paths.cwd,
                 env=self._child_env(python),
