@@ -27,6 +27,8 @@ from uuid import UUID
 from app.core.config import BIND_HOST, ensure_private_dir
 from app.core.logging import redact, register_secret
 from app.integrations.hermes.home import (
+    DEFAULT_HOME_NAME,
+    DEFAULT_REASONING_EFFORT,
     GUARD_NONCE_ENV,
     GUARD_PROOF,
     MCP_TOKEN_ENV,
@@ -137,6 +139,8 @@ class HermesSupervisor:
         on_state: Callable[[str], Any] | None = None,
         *,
         ready_timeout_s: float = READY_TIMEOUT_S,
+        home_name: str = DEFAULT_HOME_NAME,
+        reasoning_effort: str = DEFAULT_REASONING_EFFORT,
     ) -> None:
         self._settings = settings
         self._data_dir = Path(data_dir)
@@ -146,7 +150,9 @@ class HermesSupervisor:
         self._repo_root = Path(repo_root)
         self._on_state = on_state
         self._ready_timeout_s = ready_timeout_s
-        self._paths = HomePaths.under(self._data_dir)
+        self._home_name = home_name
+        self._reasoning_effort = reasoning_effort
+        self._paths = HomePaths.under(self._data_dir, home_name)
         self._state: SupervisorState = "stopped"
         self._detail = ""
         self._nonce = ""
@@ -244,6 +250,13 @@ class HermesSupervisor:
             _signal_group(proc.pid, signal.SIGKILL)
         with contextlib.suppress(TimeoutError):
             await asyncio.wait_for(turn.finished.wait(), EOF_GRACE_S)
+
+    async def steer_turn(self, turn_id: UUID | str, text: str) -> bool:
+        """`steer` to the runner for the active turn; it answers `steered` in the turn stream."""
+        turn = self._turn
+        if turn is None or turn.turn_id != str(turn_id) or turn.stopping:
+            return False
+        return await self._send({"op": "steer", "turn_id": turn.turn_id, "text": text})
 
     def _set_state(self, state: SupervisorState, detail: str) -> None:
         changed = state != self._state
@@ -368,7 +381,14 @@ class HermesSupervisor:
         ):
             raise _Fatal("ANTHROPIC_API_KEY is not configured")
         try:
-            self._manifest = materialize_home(s, self._data_dir, self._tool_names, self._repo_root)
+            self._manifest = materialize_home(
+                s,
+                self._data_dir,
+                self._tool_names,
+                self._repo_root,
+                home_name=self._home_name,
+                reasoning_effort=self._reasoning_effort,
+            )
         except HomeError as exc:
             raise _Fatal(str(exc)) from exc
 

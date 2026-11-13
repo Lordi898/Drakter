@@ -48,10 +48,19 @@ class ToolCompleted(_AgentEvent):
     source: ToolSource = "drakter"
 
 
+class Steered(_AgentEvent):
+    """Answer to a `steer`: accepted means Hermes took the correction into the same turn."""
+
+    type: Literal["steered"] = "steered"
+    accepted: bool
+
+
 class TurnCompleted(_AgentEvent):
     type: Literal["turn_completed"] = "turn_completed"
     text: str
     usage: dict[str, int] = Field(default_factory=dict)
+    # A correction Hermes accepted but never consumed: the runtime opens a new turn with it.
+    pending_steer: str | None = None
 
 
 class TurnCancelled(_AgentEvent):
@@ -66,7 +75,7 @@ class TurnFailed(_AgentEvent):
 
 
 AgentEvent = Annotated[
-    Thinking | MessageDelta | ToolStarted | ToolCompleted | TurnCompleted | TurnCancelled | TurnFailed,
+    Thinking | MessageDelta | ToolStarted | ToolCompleted | Steered | TurnCompleted | TurnCancelled | TurnFailed,
     Field(discriminator="type"),
 ]
 TERMINAL_EVENTS: Final = (TurnCompleted, TurnCancelled, TurnFailed)

@@ -35,6 +35,14 @@ COMPRESSION_THRESHOLD_TOKENS: Final = 80_000  # stays under the 100K price step 
 SOUL_MAX_CHARS: Final = 120_000  # Hermes truncates SOUL.md silently beyond context_file_max_chars
 
 _TOOL_NAME_RE: Final = re.compile(r"^[a-z][a-z0-9_]{2,47}$")
+# "hermes" is the foreground home; job lanes use "hermes-w1", "hermes-w2"... (V-24).
+_HOME_NAME_RE: Final = re.compile(r"^hermes(-[a-z0-9]{1,16})?$")
+DEFAULT_HOME_NAME: Final = "hermes"
+DEFAULT_REASONING_EFFORT: Final = "low"  # foreground; job lanes use "medium" (V-20)
+# VALID_REASONING_EFFORTS of hermes_constants at HERMES_COMMIT, plus "none" (thinking off).
+REASONING_EFFORTS: Final = frozenset({"none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"})
+# A line of agent/identity/VOICE.md replaced with speech_markup.prompt_block() (same text every time).
+SPEECH_MARKUP_PLACEHOLDER: Final = "<!-- speech_markup.prompt_block -->"
 _GUARD_SOURCES: Final = ("__init__.py", "plugin.yaml")
 _GUARD_ALLOWLIST: Final = "allowed_tools.json"
 _GUARD_FILES: Final = frozenset({*_GUARD_SOURCES, _GUARD_ALLOWLIST})
@@ -50,6 +58,7 @@ _IDENTITY_ORDER: Final = (
     ("identity", "COMMUNICATION.md"),
     ("identity", "EMOTIONAL_STYLE.md"),
     ("identity", "BEHAVIOR.md"),
+    ("identity", "VOICE.md"),
     ("knowledge", "CAPABILITIES.md"),
     ("knowledge", "TOOL_GUIDE.md"),
     ("knowledge", "WORKSPACE_GUIDE.md"),
@@ -142,8 +151,10 @@ class HomePaths:
     tmp: Path
 
     @classmethod
-    def under(cls, data_dir: Path) -> HomePaths:
-        root = data_dir.absolute() / "hermes"
+    def under(cls, data_dir: Path, home_name: str = DEFAULT_HOME_NAME) -> HomePaths:
+        if not _HOME_NAME_RE.fullmatch(home_name):
+            raise HomeError("invalid Hermes home name")
+        root = data_dir.absolute() / home_name
         plugins = root / "plugins"
         return cls(
             root=root,
@@ -192,13 +203,28 @@ def _render_auxiliary(s: AgentSettings) -> dict[str, Any]:
     return tasks
 
 
-def render_config(s: AgentSettings, tool_names: Sequence[str], *, cwd: Path) -> dict[str, Any]:
-    """Pure and deterministic. `cwd` is the absolute empty directory for terminal.cwd."""
+def render_config(
+    s: AgentSettings,
+    tool_names: Sequence[str],
+    *,
+    cwd: Path,
+    reasoning_effort: str = DEFAULT_REASONING_EFFORT,
+) -> dict[str, Any]:
+    """Pure and deterministic. `cwd` is the absolute empty directory for terminal.cwd.
+
+    `agent.reasoning_effort` is read by the runner through hermes_constants.resolve_reasoning_config.
+    """
     if not cwd.is_absolute():
         raise HomeError("terminal.cwd must be absolute")
+    if reasoning_effort not in REASONING_EFFORTS:
+        raise HomeError("invalid reasoning effort")
     return {
         "_config_version": HERMES_CONFIG_VERSION,
-        "agent": {"disabled_toolsets": list(_DISABLED_TOOLSETS), "max_turns": s.agent_max_turns},
+        "agent": {
+            "disabled_toolsets": list(_DISABLED_TOOLSETS),
+            "max_turns": s.agent_max_turns,
+            "reasoning_effort": reasoning_effort,
+        },
         "approvals": {"mode": "manual"},
         "auth": {"adopt_external_logins": False},
         "auxiliary": _render_auxiliary(s),
@@ -315,7 +341,12 @@ def render_soul(repo_root: Path) -> str:
     for folder, name in files:
         directory = agent_dir / folder
         if directory.is_dir() and not directory.is_symlink() and os.path.lexists(directory / name):
-            identity.append(_read_regular(directory / name).decode("utf-8").strip() + "\n")
+            text = _read_regular(directory / name).decode("utf-8").strip()
+            if SPEECH_MARKUP_PLACEHOLDER in text:
+                from drakter_contracts.speech_markup import prompt_block
+
+                text = text.replace(SPEECH_MARKUP_PLACEHOLDER, prompt_block())
+            identity.append(text + "\n")
     soul = "\n\n".join([safety.strip() + "\n", *(identity or [_NEUTRAL_SOUL])])
     if len(soul) > SOUL_MAX_CHARS:
         raise HomeError("the identity is too long for SOUL.md")
@@ -323,11 +354,15 @@ def render_soul(repo_root: Path) -> str:
 
 
 def _desired_files(
-    s: AgentSettings, tool_names: Sequence[str], repo_root: Path, paths: HomePaths
+    s: AgentSettings,
+    tool_names: Sequence[str],
+    repo_root: Path,
+    paths: HomePaths,
+    reasoning_effort: str,
 ) -> dict[Path, bytes]:
     names = _normalize_tool_names(tool_names)
     source = repo_root / "agent" / "configuration" / "hermes_plugins" / GUARD_NAME
-    config = render_config(s, names, cwd=paths.cwd)
+    config = render_config(s, names, cwd=paths.cwd, reasoning_effort=reasoning_effort)
     allowed = {"allowed": [captured_tool_name(name) for name in names]}
     files: dict[Path, bytes] = {
         paths.config: (json.dumps(config, indent=2, sort_keys=True) + "\n").encode(),
@@ -346,17 +381,23 @@ def _build_manifest(paths: HomePaths, files: Mapping[Path, bytes]) -> HomeManife
 
 
 def materialize_home(
-    s: AgentSettings, data_dir: Path, tool_names: Sequence[str], repo_root: Path
+    s: AgentSettings,
+    data_dir: Path,
+    tool_names: Sequence[str],
+    repo_root: Path,
+    *,
+    home_name: str = DEFAULT_HOME_NAME,
+    reasoning_effort: str = DEFAULT_REASONING_EFFORT,
 ) -> HomeManifest:
-    """Write the home and return its hashes. Raises HomeError on anything unexpected."""
-    paths = HomePaths.under(data_dir)
+    """Write the home `<data_dir>/<home_name>` and return its hashes. Raises HomeError on anything unexpected."""
+    paths = HomePaths.under(data_dir, home_name)
     try:
         for directory in (paths.root, paths.plugins, paths.hooks, paths.cwd, paths.user_home, paths.run, paths.tmp):
             ensure_private_dir(directory)
         _check_executable_trees(paths)
         _check_location(paths)
         ensure_private_dir(paths.guard)
-        files = _desired_files(s, tool_names, repo_root, paths)
+        files = _desired_files(s, tool_names, repo_root, paths, reasoning_effort)
         for path, content in files.items():
             _write_private(path, content)
     except (OSError, ValueError, UnicodeDecodeError) as exc:

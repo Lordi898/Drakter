@@ -118,6 +118,7 @@ class Runner:
         from hermes_cli.config import load_config
         from hermes_cli.runtime_provider import resolve_runtime_provider
         from hermes_cli.version_info import get_version_info
+        from hermes_constants import resolve_reasoning_config
         from hermes_state import SessionDB
         from run_agent import AIAgent
         from tools.mcp_tool_discovery import discover_mcp_tools
@@ -132,6 +133,8 @@ class Runner:
         self.config = load_config()
         self.runtime = resolve_runtime_provider()
         self.session_db = SessionDB()
+        # agent.reasoning_effort of the home: low in the foreground, medium in job lanes (V-20).
+        self.reasoning = resolve_reasoning_config(self.config, str(self.config["model"]["default"]))
         include = self.config["mcp_servers"][SERVER]["tools"]["include"]
         self.allowed = {f"{TOOL_PREFIX}{name}" for name in include}
         if not self.allowed:
@@ -179,6 +182,7 @@ class Runner:
             load_soul_identity=True,
             cwd=str(config["terminal"]["cwd"]),
             fallback_model=None,
+            reasoning_config=self.reasoning,
             stream_delta_callback=self.on_delta,
             tool_start_callback=self.on_tool_start,
             tool_complete_callback=self.on_tool_complete,
@@ -249,7 +253,11 @@ class Runner:
             print(f"drakter_runner: turn failed: {result.get('error')}", file=sys.stderr, flush=True)
             return {"ev": "failed", "code": classify_failure(result.get("error")), "message": "El modelo no respondió."}
         usage = {key: result[key] for key in USAGE_KEYS if isinstance(result.get(key), int)}
-        return {"ev": "completed", "output": str(final), "usage": usage}
+        terminal: dict[str, Any] = {"ev": "completed", "output": str(final), "usage": usage}
+        pending = result.get("pending_steer")
+        if isinstance(pending, str) and pending.strip():
+            terminal["pending_steer"] = pending  # accepted but never consumed: the backend reopens it
+        return terminal
 
     def guarded_turn(self, message: dict[str, Any]) -> None:
         try:
@@ -280,6 +288,18 @@ class Runner:
         if agent is not None:
             agent.hard_interrupt("Detenido por el usuario")
 
+    def steer(self, turn_id: str, text: str) -> None:
+        """Voice v2 (V-22): a correction into the running turn, same turn_id. Always answers."""
+        with self.lock:
+            agent = self.agent if turn_id == self.active_turn and not self.stop_requested else None
+        accepted = False
+        if agent is not None:
+            try:
+                accepted = bool(agent.redirect(text))
+            except Exception:
+                traceback.print_exc(file=sys.stderr)
+        self.protocol.emit("steered", turn_id=turn_id, accepted=accepted)
+
     def exit_now(self) -> None:
         """EOF means the backend is gone: no orphan, whatever Hermes is doing."""
         with self.lock:
@@ -308,6 +328,8 @@ class Runner:
                     self.turns.put(message)
             elif op == "stop" and isinstance(message.get("turn_id"), str):
                 self.interrupt(message["turn_id"])
+            elif op == "steer" and isinstance(message.get("turn_id"), str) and isinstance(message.get("text"), str):
+                self.steer(message["turn_id"], message["text"])
             elif op == "shutdown":
                 self.exit_now()
             else:
