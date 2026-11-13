@@ -11,8 +11,8 @@ import asyncio
 import logging
 import re
 import time
-from collections.abc import AsyncIterator, Coroutine
-from dataclasses import dataclass, field
+from collections.abc import AsyncIterator, Callable, Coroutine
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Final, Protocol
 from uuid import UUID, uuid4
@@ -33,6 +33,8 @@ from app.integrations.hermes.events import (
     turn_failed,
 )
 from app.integrations.hermes.provider import ProviderStatus, TurnRequest
+from app.integrations.memory.context.builder import build_context
+from app.integrations.memory.models import PriorityLevel
 
 if TYPE_CHECKING:
     from app.integrations.hermes.settings import AgentSettings
@@ -57,6 +59,10 @@ _RUNNER_CODES: Final = frozenset(
     }
 )
 _END_OF_STREAM: Final = object()
+# Trusted levels that go with the safety instructions; identity already reaches Hermes in SOUL.md.
+_INSTRUCTION_LEVELS: Final = frozenset(
+    {PriorityLevel.SECURITY, PriorityLevel.SYSTEM_RULES, PriorityLevel.USER_CONTEXT}
+)
 
 
 class _Supervisor(Protocol):
@@ -119,10 +125,19 @@ class HermesProvider:
     name = "hermes"
 
     def __init__(
-        self, settings: AgentSettings, supervisor: _Supervisor | None, repo_root: Path
+        self,
+        settings: AgentSettings,
+        supervisor: _Supervisor | None,
+        repo_root: Path,
+        *,
+        memory: Callable[[], Any] | None = None,
+        turns: Any | None = None,
     ) -> None:
         self._settings = settings
         self._supervisor = supervisor
+        self._agent_dir = repo_root / "agent"
+        self._memory = memory  # returns the MemoryService, or None while it is not installed
+        self._turns_tracker = turns  # TurnTracker: a turn with memory taints its session
         self._instructions_path = repo_root / INSTRUCTIONS_RELATIVE_PATH
         self._instructions: str | None = None
         self._turns: dict[UUID, _Turn] = {}
@@ -191,9 +206,10 @@ class HermesProvider:
                 turn.finished = True
                 yield turn_failed(ErrorCode.AGENT_UNAVAILABLE, retryable=True)
                 return
+            prompt, instructions = await asyncio.to_thread(self._prepare_turn, request)
             yield Thinking()
             started = True
-            async for event in self._consume(request, turn):
+            async for event in self._consume(replace(request, text=prompt), turn, instructions):
                 yield event
         except Exception as exc:  # noqa: BLE001 - the terminal event is the contract
             logger.warning(
@@ -212,9 +228,34 @@ class HermesProvider:
                 # The consumer left mid-turn (shutdown): the runner must not keep working.
                 self._spawn(self._stop_quietly(request.turn_id))
 
-    async def _consume(self, request: TurnRequest, turn: _Turn) -> AsyncIterator[AgentEvent]:
+    def _prepare_turn(self, request: TurnRequest) -> tuple[str, str]:
+        """Selective retrieval and `build_context`: the turn prompt and the session instructions.
+
+        Memories travel in the turn prompt, fenced as untrusted data, never in the instructions.
+        A missing rules file raises: a turn must not run without the system rules.
+        """
+        assert self._instructions is not None
+        memories: list[Any] = []
+        service = self._memory() if self._memory is not None else None
+        if service is not None:
+            try:
+                memories = service.memories_for_context(request.text)
+            except Exception as exc:  # noqa: BLE001 - a turn without memory beats no turn
+                logger.warning(
+                    "memory retrieval failed",
+                    extra={"event": "memory_retrieval_failed", "kind": type(exc).__name__},
+                )
+        bundle = build_context(instruction=request.text, memories=memories, agent_dir=self._agent_dir)
+        if bundle.tainted and self._turns_tracker is not None:
+            self._turns_tracker.mark_tainted(request.session_id)
+        trusted = [s.text for s in bundle.sections if s.level in _INSTRUCTION_LEVELS and s.text]
+        return bundle.turn_prompt, "\n\n".join([self._instructions.strip(), *trusted])
+
+    async def _consume(
+        self, request: TurnRequest, turn: _Turn, instructions: str
+    ) -> AsyncIterator[AgentEvent]:
         queue: asyncio.Queue[object] = asyncio.Queue(maxsize=256)
-        pump = asyncio.create_task(self._pump(request, queue))
+        pump = asyncio.create_task(self._pump(request, queue, instructions))
         try:
             while True:
                 expired = self._expired_deadline(turn)
@@ -243,11 +284,13 @@ class HermesProvider:
             pump.cancel()
             await asyncio.gather(pump, return_exceptions=True)
 
-    async def _pump(self, request: TurnRequest, queue: asyncio.Queue[object]) -> None:
-        assert self._supervisor is not None and self._instructions is not None
+    async def _pump(
+        self, request: TurnRequest, queue: asyncio.Queue[object], instructions: str
+    ) -> None:
+        assert self._supervisor is not None
         try:
             stream = self._supervisor.run_turn(
-                request.turn_id, request.session_id, request.text, self._instructions
+                request.turn_id, request.session_id, request.text, instructions
             )
             async for raw in stream:
                 await queue.put(raw)
