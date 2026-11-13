@@ -69,6 +69,7 @@ scripts/drakter-local.sh stop
 
 ### Cerrados en el cierre
 
+- **Borrar relaciones:** el 500 visto en un arnés de calendario no se reproduce en la app real (`05381dd`): `DELETE /relationships/{id}` → 409 → aprobar → 200 `executed`.
 - **Calendario y asignaturas (CL9):** eventos, bloques, solapamientos, zonas horarias (cambio de hora), asignaturas, horarios recurrentes y sesiones comprobados; recursos de asignatura por relaciones (`bbee4c4`); `POST /calendar/events` acepta `:00` final (`f16753f`).
 - **Búsqueda global:** `SearchPalette` (Ctrl+K) y el aviso de notificaciones están montados en `AppShell`; con `7787e9b` hay una sola ruta `GET /api/v1/search` y encuentra tareas, proyectos, hábitos, eventos y asignaturas (antes daba 0 resultados).
 - **`drakter-local.sh stop` no paraba la app:** el pid se guardaba mal porque `setsid` hace fork; corregido en `f0f084b`.
