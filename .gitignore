@@ -1,19 +1,86 @@
-# Secretos
+# --- Secretos (solo se versionan las plantillas .env.example) ---
 .env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets/
 
-# Claude Code: configuración local y worktrees
+# --- Claude Code: configuración local y worktrees ---
 .claude/settings.local.json
 .claude/worktrees/
+.claude/.gitignore
 
-# Dependencias y entornos
+# Skills de terceros sin licencia redistribuible: se instalan con
+# scripts/install-agent-skills.sh (ver THIRD_PARTY_NOTICES.md).
+.claude/skills/electron/
+.claude/skills/electron-builder/
+.claude/skills/electron-vite/
+.claude/skills/vite/
+.claude/skills/vitest/
+.claude/skills/playwright-cli/
+.claude/skills/typescript-best-practices/
+.claude/skills/react-19/
+.claude/skills/shadcn/
+.claude/skills/radix-ui/
+.claude/skills/lucide-react/
+.claude/skills/react-arborist/
+.claude/skills/tailwind-css/
+.claude/skills/motion/
+.claude/skills/fastapi/
+.claude/skills/pydantic-dev/
+.claude/skills/python-best-practices/
+.claude/skills/fastmcp-sdk/
+.claude/skills/pdf-to-markdown/
+
+# --- Estado de Agent Orchestrator (AO) ---
+.ao/
+
+# --- Dependencias y entornos ---
 node_modules/
 __pycache__/
+*.py[cod]
 .venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
 
-# Estado de Agent Orchestrator (AO)
-.ao/
-.claude/.gitignore
+# --- Builds ---
 *.tsbuildinfo
+desktop/out/
+desktop/dist/
 desktop/release/
 backend/dist/
 backend/build/
+coverage/
+
+# --- Datos de usuario (viven fuera del repo; por si se apunta DRAKTER_DATA_DIR aquí) ---
+data/
+*.sqlite
+*.sqlite3
+*.db
+*.db-wal
+*.db-shm
+*.log
+
+# --- Modelos y audio de voz ---
+/models/
+voice/models/
+*.onnx
+*.gguf
+*.safetensors
+*.pt
+*.wav
+*.mp3
+*.ogg
+*.flac
+
+# --- Sistema y editores ---
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*~

@@ -1,4 +1,0 @@
----
-title: "Max-Height"
-description: "Utilities for setting the maximum height of an element."
----

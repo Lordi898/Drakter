@@ -2,16 +2,28 @@
 
 Todos los cambios relevantes de Drakter se anotan aquí.
 
-El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Aún no hay ninguna versión publicada.
+El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y las versiones, [SemVer](https://semver.org/lang/es/).
 
 ## [Sin publicar]
+
+## [0.1.0] - 2026-11-13 (pre-release)
+
+Primera versión publicada en GitHub (repositorio privado).
+
+### Publicación y repositorio (2026-11-13)
+- Historial completo publicado en `main` tras un escaneo de secretos con gitleaks (sin secretos reales).
+- Documentos de proyecto abierto: `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md` (Contributor Covenant 2.1), `SECURITY.md`, `THIRD_PARTY_NOTICES.md` y `.editorconfig`; README reescrito para quien llega de fuera, con resumen en inglés.
+- `.github/`: CI (comprobaciones críticas del backend y typecheck + build del escritorio), plantillas de issues y PR, `CODEOWNERS` y Dependabot.
+- Las 19 skills de `LLMTooling/agent-skills`, sin licencia, salen del árbol: se instalan con `scripts/install-agent-skills.sh`.
+- `.env.example` completo (voz y `FISH_API_KEY`) y `.gitignore` ampliado.
+- Licencia del proyecto: Apache-2.0 (`LICENSE`, `NOTICE` y campo `license` en `package.json` y `pyproject.toml`).
 
 ### Cierre de la v1 (2026-11-13)
 
 **Resultado:** en las Checklists 0–17, 260 de 295 casillas en `[x]` (29 con una reserva ⚠️), 25 sin marcar con ⚠️ y 10 sin código. Pasada integrada final `scripts/verify-all.sh`: 44/44 sobre `183cc25`. Banco red-team final: 169 BLOCKED / 12 BREACH / 19 N/A / 0 ERROR. Detalle en `docs/IMPLEMENTATION_STATUS.md` y `docs/RUN_STATE.md`.
 
 #### Integración y arranque
-- Las 22 ramas `drakter/*` integradas en `drakter/integracion`; cadena local `drakter/integracion` → `drakter/build` → `main` por fast-forward, sin push; respaldo de `main` en `respaldo/main-local-2026-11-13`.
+- Las 22 ramas `drakter/*` integradas en `drakter/integracion`; cadena local `drakter/integracion` → `drakter/build` → `main` por fast-forward; respaldo de `main` en `respaldo/main-local-2026-11-13`.
 - Electron es dueño del backend (handshake por stdin, puerto efímero); `scripts/drakter-local.sh start [anthropic]|stop|status` (y `stop` vuelve a parar la app); conexiones SQLite por petición sin `check_same_thread`; runner de Hermes con `-B`; Hoy se recarga cuando el servicio local conecta.
 - `.env.example` lista solo las variables que lee el código y las líneas vacías se ignoran en todos los ajustes.
 - Empaquetado: el backend congelado incluye todos los módulos de `app` (antes respondía 404 en todas las rutas) y el `.deb` lleva `homepage`.
@@ -63,3 +75,6 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). A�
 
 - Agente `.claude/agents/orchestrator.md`, sustituido por `drakter-orquestator`.
 - Copias `.docx` de los documentos de `docs/`.
+
+[Sin publicar]: https://github.com/Lordi898/Drakter/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/Lordi898/Drakter/releases/tag/v0.1.0

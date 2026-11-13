@@ -1,4 +1,0 @@
----
-title: "Align Items"
-description: "Utilities for controlling how flex and grid items are positioned along a container's cross axis."
----

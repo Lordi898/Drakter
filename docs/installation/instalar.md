@@ -87,7 +87,3 @@ El backend solo lee `DRAKTER_DATA_DIR` y `DRAKTER_LOG_LEVEL` (`backend/app/core/
 - `invalid configuration: <campos>`: algún `DRAKTER_*` es inválido (por ejemplo, `DRAKTER_DATA_DIR` relativa). Las líneas sin valor se ignoran (`env_ignore_empty`).
 - `falta backend/.venv`: ejecuta `cd backend && uv sync --frozen`.
 - `backend/.venv no es Python 3.12`: ejecuta `rm -rf backend/.venv && cd backend && uv sync --frozen`.
-
-## Pendiente
-
-- `.env.example` de la raíz aún lista variables que el backend ya no lee (`DRAKTER_PORT`, `DRAKTER_RUNTIME_DIR`, `DRAKTER_ALLOWED_ORIGINS`...). Guíate por [clave-api.md](clave-api.md).

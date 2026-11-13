@@ -1,0 +1,68 @@
+name: Error
+description: Algo no funciona como debería.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Gracias por avisar. Si es un problema de seguridad, **no lo publiques aquí**: usa el [reporte privado](https://github.com/Lordi898/Drakter/security/advisories/new).
+        No pegues claves de API, tokens ni datos personales en los logs.
+  - type: textarea
+    id: what
+    attributes:
+      label: Qué ha pasado
+      description: Qué esperabas y qué ha ocurrido en su lugar.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Pasos para reproducirlo
+      placeholder: |
+        1. scripts/drakter-local.sh start
+        2. Abre Tareas…
+        3. …
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Zona
+      options:
+        - Escritorio (desktop/)
+        - Backend (backend/)
+        - Agente / Hermes
+        - Memoria
+        - Almacén
+        - Voz
+        - Instalación / empaquetado
+        - Otra
+    validations:
+      required: true
+  - type: dropdown
+    id: model
+    attributes:
+      label: Modelo
+      options:
+        - Claude real (anthropic)
+        - Stub de desarrollo (dev_stub)
+        - No aplica
+  - type: input
+    id: version
+    attributes:
+      label: Versión o commit
+      placeholder: v0.1.0 o el hash de git rev-parse --short HEAD
+    validations:
+      required: true
+  - type: textarea
+    id: env
+    attributes:
+      label: Entorno
+      description: Salida de scripts/check-env.sh y distribución de Linux.
+      render: text
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Fragmentos relevantes (ver docs/RUN_STATE.md para dónde están). Revisa que no lleven secretos.
+      render: text
