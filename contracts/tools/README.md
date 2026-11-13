@@ -2,7 +2,7 @@
 
 `catalog.json` es una lista de `ToolManifest` (`contracts/python/drakter_contracts/tools.py`). Es la única lista de lo que Hermes puede llamar; se sirve por MCP en puerto propio. Hermes no toca la BD. Formato de `ToolSpec`: `backend/app/integrations/hermes/CONTRACT.md` §1 (drakter-16).
 
-78 herramientas en el catálogo: 35 `read`, 36 `write`, 7 `confirm`. 74 construidas, 4 sin construir. Comprobado el 2026-11-13 contra el registro real (`TOOLS` de `backend/app/tools/*.py` en `drakter/integracion`): en las 74 coinciden `domain`, `permission`, `risk` y `returns_untrusted` (corregido `get_related_items`, que el código marca `returns_untrusted`). El registro carga además 4 herramientas de automejora que no están en el catálogo (ver «Automejora»); al arrancar, `registry._warn_catalog_drift` registra un aviso `tool_catalog_drift` por cada una.
+82 herramientas en el catálogo: 37 `read`, 36 `write`, 9 `confirm`. 78 construidas, 4 sin construir. Comprobado el 2026-11-13 contra el registro real (`TOOLS` de `backend/app/tools/*.py` en `drakter/integracion`): en las 78 coinciden `domain`, `permission`, `risk` y `returns_untrusted` (corregido `get_related_items`, que el código marca `returns_untrusted`). Las 4 de automejora están en el catálogo desde la decisión de cierre (ver «Automejora»), así que `registry._warn_catalog_drift` no emite ningún aviso `tool_catalog_drift`.
 
 ## Reglas aplicadas
 
@@ -19,7 +19,7 @@
 - Los frentes añadieron herramientas fuera de la lista de partida, y se incluyen: `unarchive_task`, `unarchive_project`, `set_task_tags`, `add_task_dependency`, `remove_task_dependency`, `search_all`, `search_memory`, `get_memory_item`, `propose_memory`, `forget_memory`.
 - `set_task_tags` (drakter-13) convive con `add_tag`/`remove_tag` (genéricas, ya construidas en `app/tools/tags.py`). El integrador decide si se retira `set_task_tags`.
 - No hay `delete_project` ni `delete_habit` ni `delete_resource`: el borrado queda en la GUI (así lo dejó drakter-13, `projects.py:1`).
-- Memoria: `propose_memory` deja el registro pendiente hasta que el usuario lo aprueba en la GUI. Automejora: el contrato decía que ninguna herramienta (Fase 18 no expone nada al agente), pero `backend/app/tools/improvement.py` registra `record_improvement_feedback` y `create_improvement_proposal` (`improvement.write`, `write`) y `list_improvement_proposals` y `get_improvement_proposal` (`improvement.read`, `read`), sin herramientas para evaluar, aprobar, aplicar ni revertir. `improvement` tampoco está en `TOOL_DOMAINS`. **Pendiente de decisión:** o se añaden al catálogo y a `TOOL_DOMAINS`, o se retiran del registro.
+- Memoria: `propose_memory` deja el registro pendiente hasta que el usuario lo aprueba en la GUI. Automejora (decisión de cierre, 2026-11-13): el agente tiene cuatro herramientas en el catálogo y en `TOOL_DOMAINS` (`improvement`, fase 18): `record_improvement_feedback` y `create_improvement_proposal` (`improvement.write`, `confirm`), y `list_improvement_proposals` y `get_improvement_proposal` (`improvement.read`, `read`, `returns_untrusted`). No hay herramienta para evaluar, aprobar, aplicar ni revertir: eso solo ocurre en la GUI.
 
 ## Sin construir (4)
 

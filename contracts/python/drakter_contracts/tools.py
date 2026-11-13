@@ -25,7 +25,7 @@ AuditPolicy = Literal["log", "hash", "omit"]
 # `permission` es `<dominio>.<accion>`: búsqueda transversal = dominio `search`, permiso `search.read`.
 TOOL_DOMAINS: Final = (
     "tasks", "projects", "habits", "calendar", "subjects", "storage", "relationships",
-    "tags", "search", "memory", "system", "config",
+    "tags", "search", "memory", "system", "config", "improvement",
 )
 
 
