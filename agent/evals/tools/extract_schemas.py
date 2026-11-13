@@ -8,7 +8,7 @@ Usage:
   PYTHONDONTWRITEBYTECODE=1 TMPDIR=/var/tmp/drakter-evals /var/tmp/drakter-5-verif/ov-a/venv/bin/python \
       extract_schemas.py [--root WORKTREES_DIR] [--catalog-ref drakter/contratos] [--out FILE]
 Interpreter needs pydantic, platformdirs, pydantic_settings, mcp (ov-a venv has them; hermes-b lacks platformdirs).
-Env: DRAKTER_WORKTREES (default /home/imagana/.ao/data/worktrees/drakter).
+Env: DRAKTER_WORKTREES (default ~/.ao/data/worktrees/drakter).
 """
 
 from __future__ import annotations
@@ -146,7 +146,7 @@ def finalize(schema: dict) -> dict:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--root", default=os.environ.get("DRAKTER_WORKTREES", "/home/imagana/.ao/data/worktrees/drakter"))
+    ap.add_argument("--root", default=os.environ.get("DRAKTER_WORKTREES", os.path.expanduser("~/.ao/data/worktrees/drakter")))
     ap.add_argument("--catalog-ref", default="drakter/contratos")
     ap.add_argument("--stub", action="append", default=[], help="third-party module to stub if missing (repeatable)")
     ap.add_argument("--out", default=str(DEFAULT_OUT))

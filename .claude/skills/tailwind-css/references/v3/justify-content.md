@@ -1,4 +1,0 @@
----
-title: "Justify Content"
-description: "Utilities for controlling how flex and grid items are positioned along a container's main axis."
----
