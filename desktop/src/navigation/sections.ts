@@ -8,11 +8,16 @@ import {
   Settings,
   Smile,
   SquareCheckBig,
+  Sun,
   type LucideIcon
 } from 'lucide-react'
 
-/** Las secciones son predefinidas (MASTER_PLAN §5.2): el orden es el de §5.3. */
+/**
+ * Las secciones son predefinidas (MASTER_PLAN §5.2): el orden es el de §5.3,
+ * precedido por Hoy, que es la pantalla inicial.
+ */
 export const SECTION_IDS = [
+  'today',
   'home',
   'habits',
   'tasks',
@@ -35,6 +40,7 @@ export interface Section {
 }
 
 export const SECTIONS: readonly Section[] = [
+  { id: 'today', label: 'Hoy', icon: Sun, shortcut: '0' },
   { id: 'home', label: 'Drakter', icon: Smile, shortcut: '1' },
   { id: 'habits', label: 'Hábitos', icon: Flame, shortcut: '2' },
   { id: 'tasks', label: 'Tareas', icon: SquareCheckBig, shortcut: '3' },

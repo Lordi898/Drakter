@@ -2,7 +2,7 @@ import { useSyncExternalStore } from 'react'
 import { isSectionId, type SectionId } from './sections'
 
 // La sección actual vive en el hash: funciona con file:// y sobrevive a recargas.
-const DEFAULT_SECTION: SectionId = 'home'
+const DEFAULT_SECTION: SectionId = 'today'
 
 function readSection(): SectionId {
   const hash = window.location.hash.replace(/^#\/?/, '')

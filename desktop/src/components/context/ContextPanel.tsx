@@ -3,6 +3,8 @@ import type { SectionId } from '@/navigation/sections'
 import { useCurrentSection } from '@/navigation/route'
 
 const SELECTION_HELP: Record<SectionId, string> = {
+  today:
+    'Aquí ves lo que vence, la agenda y los hábitos del día. Cada elemento te lleva a su sección.',
   home:
     'Aquí verás la actividad reciente y el detalle de lo que Drakter esté haciendo, cuando esté conectado.',
   habits:
@@ -23,7 +25,8 @@ const SELECTION_HELP: Record<SectionId, string> = {
 }
 
 const SHORTCUTS: readonly { keys: readonly string[]; label: string }[] = [
-  { keys: ['Ctrl', '1–9'], label: 'Cambiar de sección' },
+  { keys: ['Ctrl', '0–9'], label: 'Cambiar de sección' },
+  { keys: ['Ctrl', 'K'], label: 'Buscar' },
   { keys: ['Ctrl', '\\'], label: 'Ocultar este panel' }
 ]
 
