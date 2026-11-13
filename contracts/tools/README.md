@@ -38,6 +38,6 @@ Consistencia de permisos (el catálogo ya lleva la forma correcta):
 
 3. ~~`delete_event` y `delete_time_block` con `calendar.write`~~ Resuelto: `calendar.delete`.
 4. ~~`delete_class_session` con `subjects.write`~~ Resuelto: `subjects.delete`.
-5. **Sigue abierta.** `backend/app/tools/habits_calendar_toolspec.py:26-52` define un `ToolSpec` de reserva si falla el import de `app.tools.spec`. Corrección: retirarlo, porque `app/tools/spec.py` ya está integrado y así solo existe una definición.
+5. ~~`ToolSpec` de reserva en `habits_calendar_toolspec.py`~~ Resuelto: retirado (fusión de drakter-39); solo existe `app/tools/spec.py`.
 
 Comprobado el 2026-11-13: se cargaron los módulos de `app/tools` y se comparó el registro con `catalog.json`; los argumentos de `create_resource` se leyeron del modelo real.

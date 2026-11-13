@@ -93,6 +93,7 @@ export interface AgendaItem {
   source_id: string;
   title: string;
   description: string | null;
+  location: string | null;
   kind: string;
   status: string;
   all_day: boolean;
@@ -266,7 +267,6 @@ export interface CalendarEventCreate {
   end_date_exclusive?: string | null;
   rrule?: string | null;
   reminder_minutes_before?: number | null;
-  metadata?: Record<string, unknown>;
 }
 
 export interface CalendarEventOut {
@@ -275,7 +275,6 @@ export interface CalendarEventOut {
   updated_at: string;
   archived_at: string | null;
   revision: number;
-  metadata: Record<string, unknown>;
   title: string;
   description: string | null;
   location: string | null;
@@ -290,7 +289,6 @@ export interface CalendarEventOut {
   starts_at_utc: string | null;
   ends_at_utc: string | null;
   rrule: string | null;
-  recurrence_until_utc: string | null;
   reminder_minutes_before: number | null;
 }
 
@@ -308,7 +306,6 @@ export interface CalendarEventUpdate {
   end_date_exclusive?: string | null;
   rrule?: string | null;
   reminder_minutes_before?: number | null;
-  metadata?: Record<string, unknown> | null;
 }
 
 export interface CalendarEventWriteResult {
@@ -323,6 +320,7 @@ export interface ChatSession {
   created_at: string;
   updated_at: string;
   ended_at: string | null;
+  status: "open" | "closed";
 }
 
 export interface ClassSessionCreate {
@@ -334,7 +332,6 @@ export interface ClassSessionCreate {
   valid_until?: string | null;
   interval_weeks?: number;
   room?: string | null;
-  metadata?: Record<string, unknown>;
 }
 
 export interface ClassSessionOut {
@@ -343,7 +340,6 @@ export interface ClassSessionOut {
   updated_at: string;
   archived_at: string | null;
   revision: number;
-  metadata: Record<string, unknown>;
   subject_id: string;
   weekday: number;
   starts_local_time: string;
@@ -364,7 +360,6 @@ export interface ClassSessionUpdate {
   valid_until?: string | null;
   interval_weeks?: number | null;
   room?: string | null;
-  metadata?: Record<string, unknown> | null;
 }
 
 export interface ComponentHealth {
@@ -470,7 +465,16 @@ export interface ConversationUpdate {
   title?: string | null;
 }
 
-/** Campos de `entities` presentes en toda entidad de dominio (0001). */
+/** Campos de `entities` que expone toda entidad de dominio (0001). */
+export interface EntityCoreOut {
+  id: string;
+  created_at: string;
+  updated_at: string;
+  archived_at: string | null;
+  revision: number;
+}
+
+/** Entidad que además expone `metadata` en la API (tareas, proyectos, eventos). */
 export interface EntityOut {
   id: string;
   created_at: string;
@@ -515,9 +519,6 @@ export interface EventEnvelope {
 export interface FolderCreate {
   name: string;
   parent_folder_id?: string | null;
-  location_id?: string | null;
-  relative_path?: string | null;
-  metadata?: Record<string, unknown>;
 }
 
 export interface FolderOut {
@@ -526,18 +527,15 @@ export interface FolderOut {
   updated_at: string;
   archived_at: string | null;
   revision: number;
-  metadata: Record<string, unknown>;
   name: string;
   parent_folder_id: string | null;
-  location_id: string | null;
-  relative_path: string | null;
   resource_count: number;
 }
 
 export interface FolderUpdate {
   name?: string | null;
   parent_folder_id?: string | null;
-  metadata?: Record<string, unknown> | null;
+  expected_revision?: number | null;
 }
 
 export interface FreeSlot {
@@ -554,11 +552,10 @@ export interface HabitCreate {
   rrule: string;
   start_date: string;
   end_date?: string | null;
-  target_note?: string | null;
+  goal_note?: string | null;
   goal_project_id?: string | null;
   preferred_local_time?: string | null;
   reminder_enabled?: boolean;
-  metadata?: Record<string, unknown>;
 }
 
 export interface HabitHistory {
@@ -581,7 +578,6 @@ export interface HabitOut {
   updated_at: string;
   archived_at: string | null;
   revision: number;
-  metadata: Record<string, unknown>;
   name: string;
   description: string | null;
   timezone: string;
@@ -590,7 +586,7 @@ export interface HabitOut {
   status: HabitStatus;
   start_date: string;
   end_date: string | null;
-  target_note: string | null;
+  goal_note: string | null;
   goal_project_id: string | null;
   preferred_local_time: string | null;
   reminder_enabled: boolean;
@@ -650,11 +646,10 @@ export interface HabitUpdate {
   schedule_effective_from?: string | null;
   end_date?: string | null;
   status?: HabitStatus | null;
-  target_note?: string | null;
+  goal_note?: string | null;
   goal_project_id?: string | null;
   preferred_local_time?: string | null;
   reminder_enabled?: boolean | null;
-  metadata?: Record<string, unknown> | null;
 }
 
 export interface HealthOut {
@@ -746,7 +741,15 @@ export interface MemoryEntityRef {
   entity_id: string;
 }
 
-/** La memoria es dato no confiable: nunca modifica reglas, permisos ni confirmaciones. */
+/** De dónde salió un recuerdo. Lo fija el backend; nunca lo manda el cliente. */
+export interface MemoryProvenance {
+  source_type: MemorySourceType;
+  source_ref: string | null;
+  session_id: string | null;
+  captured_at: string;
+}
+
+/** Alta desde la GUI (`POST /api/v1/memory`). La memoria es dato no confiable: nunca modifica reglas, permisos ni confirmaciones. El origen (`provenance`) lo pone el backend. */
 export interface MemoryRecordCreate {
   kind: MemoryKind;
   category: MemoryCategory;
@@ -754,12 +757,8 @@ export interface MemoryRecordCreate {
   content: string;
   abstract?: string;
   overview?: string;
-  source_type: MemorySourceType;
-  source_ref?: string | null;
-  session_id?: string | null;
   confidence?: number;
   valid_until?: string | null;
-  supersedes?: string | null;
   entity_refs?: MemoryEntityRef[];
 }
 
@@ -772,10 +771,7 @@ export interface MemoryRecordOut {
   content: string;
   abstract: string;
   overview: string;
-  source_type: MemorySourceType;
-  source_ref: string | null;
-  session_id: string | null;
-  captured_at: string;
+  provenance: MemoryProvenance;
   trust: MemoryTrust;
   confidence: number;
   valid_until: string | null;
@@ -787,22 +783,27 @@ export interface MemoryRecordOut {
   updated_at: string;
 }
 
+/** `PATCH /api/v1/memory/{id}`. Aprobar, rechazar u olvidar van por sus rutas. */
 export interface MemoryRecordUpdate {
-  category?: MemoryCategory | null;
   subject?: string | null;
   content?: string | null;
   abstract?: string | null;
   overview?: string | null;
-  confidence?: number | null;
+  kind?: MemoryKind | null;
+  category?: MemoryCategory | null;
   valid_until?: string | null;
-  status?: "approved" | "rejected" | null;
-  entity_refs?: MemoryEntityRef[] | null;
 }
 
+/** Resultado de búsqueda: solo L0 (`abstract`); L1/L2 se leen bajo demanda. Dato no confiable. */
 export interface MemorySearchHit {
-  record: MemoryRecordOut;
-  score: number | null;
-  content_trust: "untrusted";
+  id: string;
+  kind: MemoryKind;
+  category: MemoryCategory;
+  abstract: string;
+  score: number;
+  trust: MemoryTrust;
+  provenance: MemoryProvenance;
+  updated_at: string;
 }
 
 /** Respuesta 202 de POST /chat/sessions/{id}/messages. */
@@ -825,7 +826,6 @@ export interface MessageOut {
   turn_id: string | null;
   role: MessageRole;
   text: string;
-  client_message_id: string | null;
   status: MessageStatus;
   created_at: string;
 }
@@ -891,6 +891,7 @@ export interface ProjectCreate {
   start_date?: string | null;
   target_date?: string | null;
   manual_progress?: number | null;
+  objective?: string | null;
   metadata?: Record<string, unknown>;
 }
 
@@ -909,6 +910,7 @@ export interface ProjectOut {
   target_date: string | null;
   completed_at: string | null;
   manual_progress: number | null;
+  objective: string | null;
   progress: ProjectProgress | null;
 }
 
@@ -932,6 +934,7 @@ export interface ProjectUpdate {
   start_date?: string | null;
   target_date?: string | null;
   manual_progress?: number | null;
+  objective?: string | null;
   metadata?: Record<string, unknown> | null;
 }
 
@@ -1000,6 +1003,8 @@ export interface RelationshipSearch {
   target_id?: string | null;
   entity_type?: EntityType | null;
   relationship_type?: RelationshipType | null;
+  limit?: number;
+  cursor?: string | null;
 }
 
 export interface RelationshipTypeOut {
@@ -1026,7 +1031,6 @@ export interface ResourceCreate {
   description?: string | null;
   tags?: string[];
   index_content?: boolean;
-  metadata?: Record<string, unknown>;
 }
 
 export interface ResourceOut {
@@ -1035,7 +1039,6 @@ export interface ResourceOut {
   updated_at: string;
   archived_at: string | null;
   revision: number;
-  metadata: Record<string, unknown>;
   title: string;
   resource_type: ResourceType;
   folder_id: string | null;
@@ -1086,7 +1089,7 @@ export interface ResourceUpdate {
   description?: string | null;
   tags?: string[] | null;
   index_content?: boolean | null;
-  metadata?: Record<string, unknown> | null;
+  expected_revision?: number | null;
 }
 
 /** Búsqueda global (`search_documents`): metadatos y fragmento; sin contenido completo. */
@@ -1177,7 +1180,6 @@ export interface SubjectCreate {
   description?: string | null;
   teacher?: string | null;
   color?: string | null;
-  metadata?: Record<string, unknown>;
 }
 
 export interface SubjectOut {
@@ -1186,7 +1188,6 @@ export interface SubjectOut {
   updated_at: string;
   archived_at: string | null;
   revision: number;
-  metadata: Record<string, unknown>;
   name: string;
   description: string | null;
   teacher: string | null;
@@ -1199,7 +1200,6 @@ export interface SubjectUpdate {
   description?: string | null;
   teacher?: string | null;
   color?: string | null;
-  metadata?: Record<string, unknown> | null;
 }
 
 export interface SystemHealthChanged {
@@ -1229,7 +1229,7 @@ export interface TagOut {
   id: string;
   name: string;
   color: string | null;
-  created_at: string;
+  usage_count: number | null;
 }
 
 export interface TagUpdate {
@@ -1325,7 +1325,6 @@ export interface TimeBlockCreate {
   local_end: string;
   status?: TimeBlockStatus;
   task_id?: string | null;
-  metadata?: Record<string, unknown>;
 }
 
 export interface TimeBlockOut {
@@ -1334,7 +1333,6 @@ export interface TimeBlockOut {
   updated_at: string;
   archived_at: string | null;
   revision: number;
-  metadata: Record<string, unknown>;
   title: string;
   description: string | null;
   timezone: string;
@@ -1354,7 +1352,6 @@ export interface TimeBlockUpdate {
   local_end?: string | null;
   status?: TimeBlockStatus | null;
   task_id?: string | null;
-  metadata?: Record<string, unknown> | null;
 }
 
 export interface TimeBlockWriteResult {
@@ -1380,6 +1377,7 @@ export interface TimetableEntry {
   room: string | null;
   valid_from: string;
   valid_until: string | null;
+  interval_weeks: number;
 }
 
 /** `summary` lo calcula el backend desde los argumentos, nunca el modelo. */

@@ -265,9 +265,13 @@ def _sources(
 
 
 def _check_bundled_database(database: Path, manifest: BundleManifest) -> None:
-    """The manifest is a claim: only the extracted database proves its schema version."""
+    """The manifest is a claim: only the extracted database proves its schema version.
+
+    Its bytes were already checked against the manifest's SHA-256 by `read_bundle`, and a
+    bundle carries no `.sha256` sidecar: the digest check is not repeated here.
+    """
     try:
-        verify_backup(database)
+        verify_backup(database, check_digest=False)
         actual = _schema_version_of(database)
     except (BackupError, sqlite3.Error, ValueError, TypeError) as exc:
         raise ArchiveRejected("La base de datos de la copia no es válida") from exc

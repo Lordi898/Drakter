@@ -1,5 +1,5 @@
 from enum import StrEnum
-from typing import Annotated, Literal
+from typing import Annotated
 
 from pydantic import Field
 
@@ -59,8 +59,18 @@ class MemoryEntityRef(ContractModel):
     entity_id: Id
 
 
+class MemoryProvenance(OutModel):
+    """De dónde salió un recuerdo. Lo fija el backend; nunca lo manda el cliente."""
+
+    source_type: MemorySourceType
+    source_ref: str | None = None
+    session_id: str | None = None
+    captured_at: Instant
+
+
 class MemoryRecordCreate(ContractModel):
-    """La memoria es dato no confiable: nunca modifica reglas, permisos ni confirmaciones."""
+    """Alta desde la GUI (`POST /api/v1/memory`). La memoria es dato no confiable: nunca
+    modifica reglas, permisos ni confirmaciones. El origen (`provenance`) lo pone el backend."""
 
     kind: MemoryKind
     category: MemoryCategory
@@ -68,25 +78,21 @@ class MemoryRecordCreate(ContractModel):
     content: Annotated[str, Field(min_length=1, max_length=20_000)]
     abstract: Annotated[str, Field(max_length=500)] = ""
     overview: Annotated[str, Field(max_length=4000)] = ""
-    source_type: MemorySourceType
-    source_ref: str | None = None
-    session_id: Id | None = None
-    confidence: Confidence = 0.5
+    confidence: Confidence = 1.0
     valid_until: Instant | None = None
-    supersedes: Id | None = None
     entity_refs: list[MemoryEntityRef] = []
 
 
 class MemoryRecordUpdate(ContractModel):
-    category: MemoryCategory | None = None
+    """`PATCH /api/v1/memory/{id}`. Aprobar, rechazar u olvidar van por sus rutas."""
+
     subject: Annotated[str, Field(max_length=200)] | None = None
     content: Annotated[str, Field(min_length=1, max_length=20_000)] | None = None
     abstract: Annotated[str, Field(max_length=500)] | None = None
     overview: Annotated[str, Field(max_length=4000)] | None = None
-    confidence: Confidence | None = None
+    kind: MemoryKind | None = None
+    category: MemoryCategory | None = None
     valid_until: Instant | None = None
-    status: Literal["approved", "rejected"] | None = Field(default=None, description="Decisión desde la GUI")
-    entity_refs: list[MemoryEntityRef] | None = None
 
 
 class MemoryRecordOut(OutModel):
@@ -99,10 +105,7 @@ class MemoryRecordOut(OutModel):
     content: str
     abstract: str = ""
     overview: str = ""
-    source_type: MemorySourceType
-    source_ref: str | None = None
-    session_id: Id | None = None
-    captured_at: Instant
+    provenance: MemoryProvenance
     trust: MemoryTrust
     confidence: float
     valid_until: Instant | None = None
@@ -130,6 +133,13 @@ class MemoryConflictOut(OutModel):
 
 
 class MemorySearchHit(OutModel):
-    record: MemoryRecordOut
-    score: float | None = None
-    content_trust: Literal["untrusted"] = "untrusted"
+    """Resultado de búsqueda: solo L0 (`abstract`); L1/L2 se leen bajo demanda. Dato no confiable."""
+
+    id: Id
+    kind: MemoryKind
+    category: MemoryCategory
+    abstract: str
+    score: float
+    trust: MemoryTrust
+    provenance: MemoryProvenance
+    updated_at: Instant

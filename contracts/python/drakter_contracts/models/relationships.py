@@ -1,5 +1,7 @@
 from enum import StrEnum
-from typing import Literal
+from typing import Annotated, Literal
+
+from pydantic import Field
 
 from ..common import ContractModel, EntityType, Id, Instant
 from ._base import Metadata, OutModel
@@ -56,6 +58,8 @@ class RelationshipSearch(ContractModel):
     target_id: Id | None = None
     entity_type: EntityType | None = None
     relationship_type: RelationshipType | None = None
+    limit: int = Field(default=50, ge=1, le=200)
+    cursor: Annotated[str, Field(max_length=200)] | None = None
 
 
 class RelatedItem(OutModel):

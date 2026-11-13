@@ -1,5 +1,5 @@
 from enum import StrEnum
-from typing import Annotated
+from typing import Annotated, Literal
 
 from pydantic import Field
 
@@ -56,6 +56,8 @@ class ConversationOut(OutModel):
 class ChatSession(ConversationOut):
     """Sesión de chat en la API. `session_id` en rutas y eventos es `conversations.id`."""
 
+    status: Literal["open", "closed"]
+
 
 class MessageCreate(ContractModel):
     """Mensaje del usuario; arranca un turno. `client_message_id` evita duplicados al reintentar."""
@@ -95,7 +97,6 @@ class MessageOut(OutModel):
     turn_id: Id | None = None
     role: MessageRole
     text: str
-    client_message_id: str | None = None
     status: MessageStatus
     created_at: Instant
 

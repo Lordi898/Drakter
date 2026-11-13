@@ -4,40 +4,35 @@ from __future__ import annotations
 
 import logging
 import sqlite3
-from collections.abc import Callable
-from typing import Annotated, Final, TypeVar
+from collections.abc import Callable, Mapping
+from typing import Annotated, Any, Final, TypeVar
 
+from drakter_contracts.common import Origin as OriginEnum
 from fastapi import APIRouter, Body, Request
 
 from app.core.config import Settings
 from app.core.errors import AppError
+from app.permissions.models import ActorContext
+from app.permissions.models import Principal as PermissionPrincipal
+from app.services.backup_actions import DELETE_BACKUP, DeleteBackupArgs
 from app.services.backup_export import export_workspace
 from app.services.backup_models import (
     BundleInfo,
-    ConfirmationResponse,
-    ConfirmRequest,
     CreateBundleRequest,
-    DeleteResponse,
     ExportResponse,
-    RestoreReport,
     VerifyResponse,
 )
 from app.services.backup_service import (
-    bundle_digest,
     create_bundle,
-    delete_bundle,
     is_bundle_name,
     list_bundles,
     resolve_bundle,
-    restore_bundle,
     verify_bundle,
 )
 from app.services.improvement_ports import (
-    ApprovalRequest,
     AuditEvent,
     Principal,
     get_audit,
-    get_gate,
     get_principal,
     require_user,
 )
@@ -51,8 +46,6 @@ Detail = dict[str, str | int | bool | None]
 
 _ENTITY_TYPE: Final = "backup"
 _COLLECTION: Final = "bundles"
-_RESTORE: Final = "backup.restore"
-_DELETE: Final = "backup.delete"
 
 
 def _settings(request: Request) -> Settings:
@@ -114,45 +107,6 @@ def _audited(
     return outcome
 
 
-def _approval(request: Request, action: str, name: str, verb: str) -> ApprovalRequest:
-    return ApprovalRequest(
-        action=action,
-        target_id=name,
-        digest=bundle_digest(_settings(request), name),
-        summary=f"{verb} la copia {name}",
-    )
-
-
-def _request_confirmation(
-    request: Request, name: str, action: str, verb: str
-) -> ConfirmationResponse:
-    principal = _authorize(request, action, name)
-
-    audited_action = f"{action}.request"
-    try:
-        approval = _approval(request, action, name, verb)
-        confirmation_id = get_gate(request).request(approval, principal)
-    except AppError as exc:
-        _audit(request, principal, audited_action, name, "denied", {"code": exc.code})
-        raise
-    _audit(request, principal, audited_action, name, "ok")
-    return ConfirmationResponse(confirmation_id=confirmation_id)
-
-
-def _consume(
-    request: Request, principal: Principal, action: str, name: str, verb: str, confirmation_id: str
-) -> None:
-    """Spend the approval against the file as it is now, before acting."""
-    try:
-        approval = _approval(request, action, name, verb)
-        get_gate(request).consume(confirmation_id, approval, principal)
-    except AppError as exc:
-        _audit(request, principal, action, name, "denied", {"code": exc.code})
-        raise
-
-
-
-
 @router.get("", response_model=list[BundleInfo])
 def get_bundles(request: Request) -> list[BundleInfo]:
     action = "backup.list"
@@ -211,59 +165,22 @@ def post_verify(request: Request, name: str) -> VerifyResponse:
     return _audited(request, principal, action, name, verify)
 
 
-@router.post("/{name}/restore-request", response_model=ConfirmationResponse)
-def post_restore_request(request: Request, name: str) -> ConfirmationResponse:
-    return _request_confirmation(request, name, _RESTORE, "Restaurar")
+@router.delete("/{name}")
+def delete_one(request: Request, name: str) -> Mapping[str, Any]:
+    """Sin cuerpo: 409 `confirmation_required`; se borra en `/confirmations/{id}/approve`.
 
-
-@router.post("/{name}/delete-request", response_model=ConfirmationResponse)
-def post_delete_request(request: Request, name: str) -> ConfirmationResponse:
-    return _request_confirmation(request, name, _DELETE, "Borrar")
-
-
-@router.post("/{name}/restore", response_model=RestoreReport)
-def post_restore(request: Request, name: str, body: ConfirmRequest) -> RestoreReport:
-    principal = _authorize(request, _RESTORE, name)
-    _consume(request, principal, _RESTORE, name, "Restaurar", body.confirmation_id)
-    state = request.app.state
-    try:
-        report = restore_bundle(
-            _settings(request),
-            name,
-            getattr(state, "post_restore_hooks", ()),
-            getattr(state, "restore_quiesce", None),
+    `ActionService` audita la petición y la ejecución. Sin el pipeline montado no se borra.
+    """
+    resolve_bundle(_settings(request), name)  # 400 nombre no válido, 404 inexistente
+    actions = getattr(request.app.state, "actions", None)
+    spec = actions.registry.get(DELETE_BACKUP) if actions is not None else None
+    if spec is None:
+        raise AppError(
+            "confirmation_unavailable", "No se puede confirmar ahora mismo. No se ha borrado nada.", 503
         )
-    except AppError as exc:
-        _audit(request, principal, _RESTORE, name, "failed", {"code": exc.code})
-        raise
-    except Exception:
-        _audit(request, principal, _RESTORE, name, "failed", {"code": "internal_error"})
-        raise
-    # Written now on purpose: the restore rolled `audit_events` back, and this
-    # entry is the record that it did. The previous history is in `pre_restore`.
-    recorded = _audit(
-        request,
-        principal,
-        _RESTORE,
-        name,
-        "ok" if report.status == "ok" else "failed",
-        {
-            "status": report.status,
-            "pre_restore": report.pre_restore,
-            "schema_version": report.schema_version,
-            "hook_failures": len(report.hook_failures),
-        },
+    actor = ActorContext(
+        principal=PermissionPrincipal.UI,
+        origin=OriginEnum.REST,
+        correlation_id=request.scope.get("state", {}).get("request_id") or "",
     )
-    return report.model_copy(update={"audit_recorded": recorded})
-
-
-@router.delete("/{name}", response_model=DeleteResponse)
-def delete_one(request: Request, name: str, body: ConfirmRequest) -> DeleteResponse:
-    principal = _authorize(request, _DELETE, name)
-    _consume(request, principal, _DELETE, name, "Borrar", body.confirmation_id)
-
-    def delete() -> DeleteResponse:
-        delete_bundle(_settings(request), name)
-        return DeleteResponse(name=name, deleted=True)
-
-    return _audited(request, principal, _DELETE, name, delete)
+    return actions.unwrap(actions.execute_or_request(actor, spec, DeleteBackupArgs(name=name)))

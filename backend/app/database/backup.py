@@ -193,23 +193,28 @@ def _check_file_shape(backup_path: Path) -> None:
         raise BackupError("La copia está en modo WAL: puede depender de archivos auxiliares")
 
 
-def verify_copy(backup_path: Path) -> None:
+def verify_copy(backup_path: Path, *, check_digest: bool = True) -> None:
     """Check a copy is intact, whatever it holds.
 
     Own fresh copies stop here: the database they protect may legitimately have
     no `schema_version` yet, and that must not block the operation being protected.
+
+    `check_digest=False` is only for a database extracted from a container that
+    already checked its SHA-256 (a bundle verified against its manifest). A loose
+    copy always needs its `.sha256` sidecar.
     """
     try:
         _check_file_shape(backup_path)
-        _check_digest(backup_path)
+        if check_digest:
+            _check_digest(backup_path)
         with closing(_open_read_only(backup_path)) as conn:
             _check_integrity(conn)
     except _FAILURES as exc:
         raise BackupError(f"La copia no es válida: {exc}") from exc
 
 
-def verify_backup(backup_path: Path) -> None:
-    verify_copy(backup_path)
+def verify_backup(backup_path: Path, *, check_digest: bool = True) -> None:
+    verify_copy(backup_path, check_digest=check_digest)
     try:
         with closing(_open_read_only(backup_path)) as conn:
             present = has_version_table(conn)
