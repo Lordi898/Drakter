@@ -1,7 +1,8 @@
 # Comprobaciones manuales para la pasada integrada
 
-Ninguna de estas comprobaciones se ha ejecutado todavía. Usa siempre un repositorio
-temporal, nunca el real, y `TMPDIR` fuera de `/tmp`.
+Salvo la reversión por contenido, ya probada en un repositorio temporal, estas
+comprobaciones siguen pendientes. Usa siempre un repositorio temporal, nunca el
+real, y `TMPDIR` fuera de `/tmp`.
 
 ## Preparación
 
@@ -41,6 +42,7 @@ def add_file(path, line="hola", mode="100644"):
 | # | Caso | Llamada | Esperado |
 |---|---|---|---|
 | 1 | Agente en ruta protegida | `lab.evaluate_patch(cfg, str(uuid.uuid4()), add_file("backend/app/core/x.py"), "agent")` | `failed`, `checks` vacío, ruta en `protected_paths` |
+| 1b | Agente en Python del backend | `add_file("backend/app/services/x.py", "x = 1")` con `"agent"` | `failed`, ruta en `protected_paths` |
 | 2 | Persona en ruta protegida | Igual, con `"user"` y `add_file("backend/app/core/x.py", "x = 1")` | `passed`, ruta en `protected_paths`, checks con salida 0 |
 | 3 | Enlace simbólico | `add_file("docs/l", "/etc/passwd", "120000")` con `"user"` | `failed`: no aplica o se rechaza por enlace simbólico |
 | 4 | Parche válido, checkout intacto | Ver abajo | `passed`, y el repositorio sin cambios |
@@ -75,7 +77,11 @@ subprocess.run(["git", "-C", str(LAB / "repo"), "merge", "--ff-only", change.bra
 lab.revert_change(cfg, change)  # AppError 409 change_already_merged
 ```
 
-Sin el merge, `revert_change` borra la rama y una segunda llamada no hace nada.
+Sin el merge, `revert_change` borra la rama y una segunda llamada no hace nada. Con
+`git merge --squash` más un commit, también da `change_already_merged`. Si tras ese
+squash cambia otra parte de los mismos archivos, sigue siendo `change_already_merged`;
+si cambian las mismas líneas dentro de un squash mezclado, da `revert_inconclusive`.
+En todos estos casos la rama sigue existiendo.
 
 Caso 6:
 
@@ -90,6 +96,7 @@ assert out.status == "blocked", out
 - `cfg` con `repo_path=None`: `evaluate_patch` da `blocked`; `apply_patch` y
   `revert_change` dan 409 `improvement_repo_unconfigured`.
 - `experiments/` queda vacío después de cada llamada.
+- `sweep_experiments` borra los experimentos huérfanos y no sigue enlaces simbólicos.
 - Un check que se cuelga termina en su `timeout_s`, con `exit_code=None`, y no deja
   procesos vivos.
 - Si `kernel.apparmor_restrict_unprivileged_userns=1` impide el espacio de nombres

@@ -33,7 +33,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from app.core.config import Settings, ensure_private_dir
 from app.core.errors import AppError
-from app.services.improvement_policy import is_agent_allowed, is_protected, is_valid_path
+from app.services.improvement_policy import check_paths, is_protected
 from app.services.improvement_ports import PrincipalKind
 
 logger = logging.getLogger("drakter.improvement")
@@ -320,14 +320,11 @@ def _apply_to_clone(clone: Path, base: str, patch: bytes) -> tuple[str, ...]:
 
 
 def _policy_violation(paths: Sequence[str], author: PrincipalKind) -> str | None:
-    if not all(is_valid_path(path) for path in paths):
-        return "El parche contiene rutas inválidas"
-    # Only a human gets the elevated path: "system" is held to the agent's rules.
-    if author == "user":
+    if not check_paths(paths, author):
         return None
-    if not all(is_agent_allowed(path) for path in paths):
-        return "El parche toca rutas protegidas o fuera de las permitidas al agente"
-    return None
+    if author == "user":
+        return "El parche contiene rutas inválidas"
+    return "El parche toca rutas protegidas o fuera de las permitidas al agente"
 
 
 def _parse_check(raw: object) -> _Check:
@@ -704,9 +701,9 @@ def apply_patch(
 ) -> AppliedChange:
     """Publish an approved patch as branch ``improvement/<id>``.
 
-    Everything is validated again on a fresh clone. No author is passed in: the
-    agent rule is final in ``evaluate_patch``, and here only what no author may
-    do is enforced. The caller must hold a ``passed`` outcome for this digest.
+    Everything is validated again on a fresh clone. No author is passed in: only
+    what no author may do is enforced here, so the caller must run ``check_paths``
+    with the proposal's author and hold a ``passed`` outcome for this digest.
     Never merges, never pushes, never touches HEAD, the index or other branches.
     """
     repo = _require_repo(config)
@@ -738,19 +735,89 @@ def apply_patch(
     return AppliedChange(branch=branch, commit=commit)
 
 
-def _is_merged(repo: Path, commit: str, ref: str) -> bool:
-    if _git(repo, "merge-base", "--is-ancestor", commit, "HEAD").returncode == 0:
+def _default_targets(repo: Path) -> tuple[str, ...]:
+    """Commits a change may have landed on: HEAD can be a work branch."""
+    commits = [_read_ref(repo, ref) for ref in ("HEAD", "refs/heads/main", "refs/heads/master")]
+    if commits[0] is None:
+        raise _Blocked("El repositorio no tiene un commit base")
+    return tuple(dict.fromkeys(commit for commit in commits if commit is not None))
+
+
+def _landed_by_content(
+    repo: Path, root: Path, commit: str, parent: str, target: str
+) -> bool | None:
+    """Tell whether ``target`` holds the change under another SHA, or None if unknown.
+
+    False needs proof: ``target`` still has the parent's version of every changed
+    file. Nothing here writes to the repository: the index is a temporary file.
+    """
+    cherry = _git(repo, "cherry", target, commit, parent)
+    marks = cherry.stdout.decode("ascii", "replace").split()
+    if cherry.returncode != 0 or len(marks) != 2 or marks[0] not in ("+", "-"):
+        return None
+    if marks[0] == "-":  # same patch-id: squash, rebase or cherry-pick
         return True
-    # HEAD may be a work branch while the merge landed in main.
-    containing = _git(repo, "for-each-ref", "--contains", commit, "--format=%(refname)",
-                      "refs/heads/")  # fmt: skip
-    if containing.returncode != 0:
-        return False  # the commit is gone, so nothing can contain it
-    return any(line != ref for line in containing.stdout.decode("utf-8", "replace").splitlines())
+
+    names = _git_ok(repo, "diff", "--name-only", "--no-renames", "-z", parent, commit)
+    paths = [os.fsdecode(name) for name in names.split(b"\0") if name]
+    untouched = _git(
+        repo,
+        "diff", "--quiet", "--no-ext-diff", parent, target, "--", *paths,
+        extra_env={"GIT_LITERAL_PATHSPECS": "1"},
+    )  # fmt: skip
+    if untouched.returncode == 0:
+        return False
+    if untouched.returncode != 1:
+        return None
+
+    # The files moved on: maybe a squash that also carried other changes.
+    patch = _git_ok(
+        repo, "diff", "--no-color", "--no-ext-diff", "--no-textconv", "--no-renames",
+        "--src-prefix=a/", "--dst-prefix=b/", parent, commit,
+    )  # fmt: skip
+    index = {"GIT_INDEX_FILE": str(root / "index")}
+    if _git(repo, "read-tree", target, extra_env=index).returncode != 0:
+        return None
+    reverse = _git(repo, "apply", "--cached", "--reverse", "--check", stdin=patch, extra_env=index)
+    return True if reverse.returncode == 0 else None
+
+
+def _merge_state(
+    config: LabConfig, repo: Path, proposal_id: str, commit: str, ref: str
+) -> Literal["merged", "unmerged", "unknown"]:
+    try:
+        ancestor = _git(repo, "merge-base", "--is-ancestor", commit, "HEAD").returncode
+        if ancestor == 0:
+            return "merged"
+        containing = _git(
+            repo, "for-each-ref", "--contains", commit, "--format=%(refname)", "refs/heads/"
+        )  # fmt: skip
+        if ancestor != 1 or containing.returncode != 0:
+            return "unknown"
+        if any(line != ref for line in containing.stdout.decode("utf-8", "replace").splitlines()):
+            return "merged"
+
+        parent = _read_ref(repo, f"{commit}^")
+        if parent is None:
+            return "unknown"
+        with _experiment(config, proposal_id) as root:
+            verdicts = [
+                _landed_by_content(repo, root, commit, parent, target)
+                for target in _default_targets(repo)
+            ]
+    except _Blocked:
+        return "unknown"
+    if True in verdicts:
+        return "merged"
+    return "unknown" if None in verdicts else "unmerged"
 
 
 def revert_change(config: LabConfig, change: AppliedChange) -> None:
-    """Drop an unmerged proposal branch. A merged change must be reverted by hand."""
+    """Drop an unmerged proposal branch. A merged change must be reverted by hand.
+
+    The ref goes only with proof that the change has not landed: an undecidable
+    case is a 409, because losing the branch would hide a change still in place.
+    """
     repo = _require_repo(config)
     proposal_id = change.branch.removeprefix(_BRANCH_PREFIX)
     _require_proposal_id(proposal_id)
@@ -759,12 +826,20 @@ def revert_change(config: LabConfig, change: AppliedChange) -> None:
     if not change.branch.startswith(_BRANCH_PREFIX) or _COMMIT_SHA.fullmatch(change.commit) is None:
         raise AppError("invalid_change", "Cambio aplicado inválido", 422)
     try:
-        if _is_merged(repo, change.commit, ref):
-            raise AppError(
-                "change_already_merged",
-                "El cambio ya está integrado: hay que revertirlo a mano",
-                409,
-            )
+        if _git(repo, "cat-file", "-e", f"{change.commit}^{{commit}}").returncode == 0:
+            state = _merge_state(config, repo, proposal_id, change.commit, ref)
+            if state == "merged":
+                raise AppError(
+                    "change_already_merged",
+                    "El cambio ya está integrado: hay que revertirlo a mano",
+                    409,
+                )
+            if state == "unknown":
+                raise AppError(
+                    "revert_inconclusive",
+                    "No se puede determinar si el cambio ya está integrado",
+                    409,
+                )
         current = _read_ref(repo, ref)
         if current is None:
             return
@@ -774,3 +849,49 @@ def revert_change(config: LabConfig, change: AppliedChange) -> None:
             raise _branch_conflict()
     except _Blocked as exc:
         raise AppError("improvement_lab_unavailable", exc.reason, 503) from exc
+
+
+def _is_canonical_uuid(name: str) -> bool:
+    try:
+        return str(uuid.UUID(name)) == name
+    except ValueError:
+        return False
+
+
+def sweep_experiments(config: LabConfig) -> int:
+    """Delete experiments left behind by a crash and return how many went.
+
+    Call it at startup, before any evaluation: it cannot tell a live experiment
+    from an orphan. A symlink is unlinked, never followed.
+    """
+    try:
+        ensure_private_dir(config.experiments_dir)
+    except (OSError, ValueError):
+        logger.warning("Skipping the experiment sweep: unsafe experiments directory")
+        return 0
+
+    removed = 0
+    with os.scandir(config.experiments_dir) as proposals:
+        for proposal in list(proposals):
+            if proposal.is_symlink():
+                os.unlink(proposal.path)
+            elif proposal.is_dir(follow_symlinks=False) and _is_canonical_uuid(proposal.name):
+                removed += _sweep_proposal(proposal.path)
+    return removed
+
+
+def _sweep_proposal(path: str) -> int:
+    removed = 0
+    with os.scandir(path) as experiments:
+        for experiment in list(experiments):
+            if experiment.is_symlink():
+                os.unlink(experiment.path)
+            elif experiment.is_dir(follow_symlinks=False) and _is_canonical_uuid(experiment.name):
+                try:
+                    shutil.rmtree(experiment.path)  # does not follow links inside
+                    removed += 1
+                except OSError:
+                    logger.warning("Could not remove experiment %s", experiment.name)
+    with suppress(OSError):
+        os.rmdir(path)
+    return removed

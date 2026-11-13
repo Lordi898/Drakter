@@ -30,10 +30,13 @@ Implementación: `backend/app/services/improvement_lab.py` (laboratorio y Git) y
 - **La verdad sale de Git.** Las rutas y los modos se leen del índice después de
   aplicar, no del texto del parche. Se rechazan enlaces simbólicos, submódulos,
   binarios y parches que no aplican.
-- **Política en código.** Denegación por defecto: el agente solo llega a las raíces
-  permitidas menos las protegidas. Si incumple, el resultado es `failed` y
-  definitivo. Una persona sí puede pasar, y las rutas se informan en
-  `protected_paths`. `system` sigue las reglas del agente.
+- **Política en código.** Denegación por defecto: el agente solo llega a
+  `desktop/src/`, `agent/skills/` y `docs/`, menos las rutas protegidas. Ningún
+  Python del backend le queda abierto, porque correría en el proceso del backend y
+  podría anular la política en memoria: todo `.py` bajo `backend/` y todo
+  `__init__.py` están protegidos. Si incumple, el resultado es `failed` y
+  definitivo. Una persona sí puede pasar, con aprobación elevada, y las rutas se
+  informan en `protected_paths`. `system` sigue las reglas del agente.
 - **Las comprobaciones no dependen del parche.** Se leen de
   `evaluations/default.json` en el commit base, nunca del árbol parcheado.
 - **Sandbox obligatorio.** Se ejecutan dentro de `bwrap`, sobre una exportación de
@@ -45,12 +48,19 @@ Implementación: `backend/app/services/improvement_lab.py` (laboratorio y Git) y
   firma. Sin checkout, sin tocar `HEAD`, el índice ni otras ramas. Nunca merge ni
   push.
 - **Reversión acotada.** `revert_change` solo borra esa ref, y solo si sigue en el
-  commit esperado. Si el cambio ya está integrado en `HEAD` o en otra rama, devuelve
-  `change_already_merged`: hay que revertirlo a mano.
+  commit esperado y hay prueba de que el cambio no ha entrado. Devuelve
+  `change_already_merged` si el commit está en `HEAD` o en otra rama, o si `HEAD`,
+  `main` o `master` tienen el mismo contenido con otro SHA (squash, rebase o
+  cherry-pick, detectados con `git cherry` y aplicando el parche al revés en un
+  índice temporal). Hay que revertirlo a mano. Si no se puede decidir, por ejemplo
+  porque esos archivos cambiaron después, devuelve `revert_inconclusive` y la ref
+  se queda.
+- **Sin restos.** Al arrancar, `sweep_experiments` borra los experimentos huérfanos
+  de una caída, sin seguir enlaces. Debe ejecutarse antes de la primera evaluación.
 
-`apply_patch` no recibe el autor. La regla del agente es definitiva en
-`evaluate_patch`, así que quien llame a `apply_patch` debe tener un resultado
-`passed` y la aprobación para ese mismo SHA-256.
+`apply_patch` no recibe el autor, así que quien lo llame debe pasar por `check_paths`
+con el autor de la propuesta y tener un resultado `passed` y la aprobación para ese
+mismo SHA-256.
 
 ## Qué vive dónde
 

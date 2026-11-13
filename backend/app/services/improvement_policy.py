@@ -11,13 +11,16 @@ from __future__ import annotations
 
 import re
 import unicodedata
+from collections.abc import Sequence
 from typing import Final
 
+from app.services.improvement_ports import PrincipalKind
+
 # Compared as written: "Docs/x.md" is not under "docs/" on a case-sensitive disk.
+# No backend root: any Python there runs inside the backend process, where it
+# could replace this very policy in memory.
 AGENT_ALLOWED_ROOTS: Final = (
     "desktop/src/",
-    "backend/app/services/",
-    "backend/app/api/",
     "agent/skills/",
     "docs/",
 )
@@ -52,6 +55,7 @@ _PROTECTED_COMPONENT_PREFIXES: Final = (".git", ".env", ".claude")
 _PROTECTED_BASENAMES: Final = frozenset(
     {
         "claude.md",
+        "__init__.py",
         "package.json",
         "package-lock.json",
         "pnpm-lock.yaml",
@@ -122,6 +126,8 @@ def is_protected(path: str) -> bool:
     folded = _fold(path)
     if folded in _PROTECTED_FILES or folded.startswith(_PROTECTED_PREFIXES):
         return True
+    if folded.startswith("backend/") and folded.endswith(".py"):
+        return True
     components = folded.split("/")
     if any(part.startswith(_PROTECTED_COMPONENT_PREFIXES) for part in components):
         return True
@@ -134,3 +140,15 @@ def is_protected(path: str) -> bool:
 def is_agent_allowed(path: str) -> bool:
     """Return True only for an unprotected path under an allowed root."""
     return not is_protected(path) and path.startswith(AGENT_ALLOWED_ROOTS)
+
+
+def check_paths(paths: Sequence[str], author: PrincipalKind) -> tuple[str, ...]:
+    """Return the ``paths`` denied to ``author``, in order.
+
+    Malformed paths are denied to everyone. A protected path stays open to a
+    human, under elevated approval. ``system`` is held to the agent's rules, so
+    only the exact ``user`` kind gets the wider path.
+    """
+    if author == "user":
+        return tuple(path for path in paths if not is_valid_path(path))
+    return tuple(path for path in paths if not is_agent_allowed(path))
