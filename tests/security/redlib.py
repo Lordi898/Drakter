@@ -13,6 +13,8 @@ from __future__ import annotations
 import base64
 import json
 import os
+import secrets
+import select
 import shutil
 import signal
 import socket
@@ -133,6 +135,7 @@ class Context:
     runtime_dir: Path
     port: int
     token: str
+    approver_token: str
     session: dict[str, Any]
     stderr_path: Path
     contract: dict[str, Any]
@@ -189,7 +192,7 @@ class Context:
 
     def ws_handshake(
         self,
-        path: str = "/ws",
+        path: str = "/api/v1/events",
         *,
         headers: Iterable[tuple[str, str]] | None = None,
         host: str | None = None,
@@ -260,15 +263,32 @@ def _isolated_root() -> Path:
     return Path(tempfile.mkdtemp(prefix="redteam-", dir=parent))
 
 
-def start_target(backend_dir: Path, python: str, contract: dict[str, Any]) -> Context:
-    """Arranca `python -m app` con todo el estado dentro de una raíz nueva.
+def _read_announcement(process: subprocess.Popen[bytes], timeout: float) -> int:
+    """Espera la línea `{"v":1,"port":N}` con la que el backend anuncia que está listo."""
+    assert process.stdout is not None
+    deadline = time.monotonic() + timeout
+    line = b""
+    while b"\n" not in line:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise RuntimeError("el backend no anunció su puerto a tiempo")
+        if select.select([process.stdout], [], [], remaining)[0]:
+            chunk = os.read(process.stdout.fileno(), 4096)
+            if not chunk:
+                raise RuntimeError(f"el backend salió sin anunciar puerto: {process.wait(5)}")
+            line += chunk
+    return int(json.loads(line)["port"])
 
-    HOME y XDG_CONFIG_HOME apuntan a esa raíz: el banco no puede leer la
-    configuración ni los secretos reales del usuario.
+
+def start_target(backend_dir: Path, python: str, contract: dict[str, Any]) -> Context:
+    """Arranca `python -m app` como lo hace Electron main (D-14), en una raíz nueva.
+
+    Los tokens se entregan por stdin y el puerto llega por stdout; stdin queda
+    abierto porque su cierre apaga el backend. HOME y XDG_CONFIG_HOME apuntan a
+    esa raíz: el banco no puede leer la configuración ni los secretos reales.
     """
     root = _isolated_root()
     data_dir, runtime_dir = root / "data", root / "runtime"
-    port = _free_port()
     environment = {
         "PATH": os.environ.get("PATH", ""),
         "LANG": "C.UTF-8",
@@ -277,51 +297,46 @@ def start_target(backend_dir: Path, python: str, contract: dict[str, Any]) -> Co
         "XDG_DATA_HOME": str(root / "xdg-data"),
         "XDG_RUNTIME_DIR": str(root / "xdg-runtime"),
         "TMPDIR": str(root),
-        "DRAKTER_PORT": str(port),
         "DRAKTER_DATA_DIR": str(data_dir),
         "DRAKTER_RUNTIME_DIR": str(runtime_dir),
         "DRAKTER_LOG_LEVEL": "DEBUG",
         **contract.get("env", {}),
     }
     (root / "home").mkdir(mode=0o700)
+    ui_token, approver_token = secrets.token_urlsafe(32), secrets.token_urlsafe(32)
     stderr_path = root / "stderr.log"
     with open(stderr_path, "wb") as stderr:
         process = subprocess.Popen(
             [python, "-m", "app"],
             cwd=backend_dir,
             env=environment,
-            stdout=stderr,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
             stderr=stderr,
             start_new_session=True,
         )
-    session_file = runtime_dir / "session.json"
-    deadline = time.monotonic() + START_TIMEOUT_SECONDS
-    while time.monotonic() < deadline:
-        if process.poll() is not None:
-            raise RuntimeError(f"el backend salió con {process.returncode}: {stderr_path}")
-        if session_file.exists():
-            try:
-                session = json.loads(session_file.read_text("utf-8"))
-                with socket.create_connection(("127.0.0.1", port), timeout=1):
-                    pass
-            except (OSError, ValueError):
-                time.sleep(0.05)
-                continue
-            return Context(
-                backend_dir=backend_dir,
-                root=root,
-                data_dir=data_dir,
-                runtime_dir=runtime_dir,
-                port=port,
-                token=session["token"],
-                session=session,
-                stderr_path=stderr_path,
-                contract=contract,
-                process=process,
-            )
-        time.sleep(0.05)
-    stop_target(process)
-    raise RuntimeError("el backend no publicó el archivo de sesión a tiempo")
+    assert process.stdin is not None
+    try:
+        handshake = {"v": 1, "ui": ui_token, "approver": approver_token}
+        process.stdin.write(json.dumps(handshake).encode("ascii") + b"\n")
+        process.stdin.flush()
+        port = _read_announcement(process, START_TIMEOUT_SECONDS)
+    except BaseException:
+        stop_target(process)
+        raise
+    return Context(
+        backend_dir=backend_dir,
+        root=root,
+        data_dir=data_dir,
+        runtime_dir=runtime_dir,
+        port=port,
+        token=ui_token,
+        approver_token=approver_token,
+        session={"token": ui_token, "approver_token": approver_token, "port": port},
+        stderr_path=stderr_path,
+        contract=contract,
+        process=process,
+    )
 
 
 def stop_target(process: subprocess.Popen[bytes]) -> None:
@@ -354,6 +369,7 @@ def run_attacks(context: Context, attacks: Iterable[Attack]) -> list[dict[str, A
             verdict, detail = "ERROR", traceback.format_exc(limit=4)
         # El token real nunca sale del banco, ni siquiera en el informe.
         detail = detail.replace(context.token, "[TOKEN]")
+        detail = detail.replace(context.approver_token, "[APPROVER_TOKEN]")
         results.append(
             {
                 "id": item.id,

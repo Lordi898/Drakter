@@ -23,7 +23,7 @@ CONTRACT: dict[str, Any] = {
         "vault_archive": "/api/v1/vault/archives/extract",
         "memory_search": "/api/v1/memory/search",
     },
-    # Credenciales por principal dentro de session.json (dossier F05).
+    # Credenciales por principal en `ctx.session` (D-14: llegan por stdin, sin archivo).
     "principals": {
         "gui_renderer": "token",
         "gui_approver": "approver_token",
