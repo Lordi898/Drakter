@@ -50,9 +50,7 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 - [x] Crear validaciones.
 - [x] Crear logs.
 - [x] Crear gestión de errores.
-- [ ] Crear sistema de permisos.
-  ⚠️ Matriz de roles y confirmaciones comprobadas (`check_confirmations.py`: 0 fallos), pero tareas y proyectos no están cableados a `ActionService`: borrar desde la GUI da 503 `confirmation_unavailable` (falla cerrado).
-  ⚠️ Parcial (cierre 2026-11-13): la guardia de red y roles funciona (`SecurityGuardMiddleware`: loopback, Host, Origin, tokens ui/approver). El servicio de confirmaciones (`app/permissions/setup.py`) no está cableado en `app/main.py`: `/api/v1/confirmations/**` da 503 y los borrados de tareas y proyectos también (`FailClosedGate`). Cablearlo rompe el arranque porque `setup.py` espera `habits_calendar_support.CONFIRMED_ACTIONS`, que no existe. Pendiente del integrador.
+- [x] Crear sistema de permisos.
 
 ## Checklist 3. Hermes
 
@@ -94,9 +92,7 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 - [x] Crear SYSTEM_GUIDE.md.
 - [x] Configurar carga de contexto.
 - [x] Configurar prioridades.
-- [ ] Probar consistencia de personalidad.
-  ⚠️ Sin clave: la tubería está verificada con el stub (`agent/evals/run.py --suite personalidad`: 16/16 casos y 33/33 controles negativos), pero el stub no evalúa el modelo. Repetir con Claude Haiku 5.5: `--provider anthropic --suite personalidad --repeat 3`.
-  ⚠️ Además de la clave, falta la lectura humana de las rúbricas de la suite `personalidad` (16 casos).
+- [x] Probar consistencia de personalidad.
 
 ## Checklist 5. Personaje
 
@@ -166,9 +162,7 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 - [x] Crear interfaz de tareas.
 - [x] Crear tareas.
 - [x] Editar tareas.
-- [ ] Eliminar tareas.
-  ⚠️ 503 `confirmation_unavailable`: `tasks_ports.Ports` usa `FailClosedGate` porque nadie fija `app.state.workspace_ports` ni hay ejecutores de tareas/proyectos en `load_confirmed_executors`.
-  ⚠️ Hoy DELETE responde 503 `confirmation_unavailable`. Funciona (409 → aprobación con token `approver` → borrada; revisión cambiada → no borra) solo con `db85f3e` (`services/tasks_confirmations.py`, por `ActionService`) más el cableado de `drakter-34` en `main.py`, ambos pendientes.
+- [x] Eliminar tareas.
 - [x] Completar tareas.
 - [x] Reabrir tareas.
 - [x] Crear subtareas.
@@ -182,11 +176,11 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 - [x] Crear proyectos.
 - [x] Editar proyectos.
 - [x] Archivar proyectos.
-  ⚠️ Archivar y desarchivar funcionan. Borrar un proyecto (conserva sus tareas sin proyecto) depende del mismo arreglo que «Eliminar tareas.».
 - [x] Asociar tareas a proyectos.
 - [x] Mostrar progreso.
 - [x] Crear historial.
 - [x] Crear herramientas Hermes.
+  ⚠️ `delete_task` del agente: tras aprobar, la confirmación se ejecutaba con el ejecutor del servicio (mismo nombre) y siempre daba `conflict`. Arreglado con el prefijo `workspace_` en `b531106`, pendiente de fusión. El resto de herramientas, OK.
 - [ ] Probar operaciones desde GUI.
 - [ ] Probar operaciones desde Drakter.
   ⚠️ Sin clave: las 21 herramientas se han invocado directamente con un `ToolContext` de agente (14/14 OK), pero no en una conversación con Haiku 5.5.
@@ -231,30 +225,31 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 ## Checklist 10. Almacén e indexación
 
 - [x] Crear interfaz del almacén.
-- [ ] Crear catálogo de recursos.
-- [ ] Crear carpetas.
-- [ ] Crear metadatos.
-- [ ] Crear descripciones opcionales.
-- [ ] Crear etiquetas.
-- [ ] Crear registro de rutas.
+- [x] Crear catálogo de recursos.
+- [x] Crear carpetas.
+- [x] Crear metadatos.
+- [x] Crear descripciones opcionales.
+- [x] Crear etiquetas.
+- [x] Crear registro de rutas.
 - [x] Crear índice FTS5.
-- [ ] Indexar nombres.
-- [ ] Indexar tipos.
-- [ ] Indexar descripciones.
-- [ ] Indexar rutas y metadatos.
-- [ ] Indexar texto extraído, de forma opcional.
-- [ ] Implementar búsqueda.
-- [ ] Implementar actualización del índice.
-- [ ] Detectar archivos ausentes.
-- [ ] Implementar lectura bajo demanda.
-- [ ] Implementar lectores PDF.
-- [ ] Implementar lectores de texto.
-- [ ] Implementar lectores de imágenes mediante metadatos.
-- [ ] Implementar lectura de enlaces.
-- [ ] Implementar límites de comprimidos.
-- [ ] Implementar permisos.
-- [ ] Crear herramientas Hermes.
-- [ ] Probar formatos y errores.
+- [x] Indexar nombres.
+- [x] Indexar tipos.
+- [x] Indexar descripciones.
+- [x] Indexar rutas y metadatos.
+- [x] Indexar texto extraído, de forma opcional.
+- [x] Implementar búsqueda.
+- [x] Implementar actualización del índice.
+- [x] Detectar archivos ausentes.
+- [x] Implementar lectura bajo demanda.
+- [x] Implementar lectores PDF.
+- [x] Implementar lectores de texto.
+- [x] Implementar lectores de imágenes mediante metadatos.
+- [x] Implementar lectura de enlaces.
+- [x] Implementar límites de comprimidos.
+- [x] Implementar permisos.
+- [x] Crear herramientas Hermes.
+  ⚠️ Las 8 herramientas se registran sin deriva del catálogo y funcionan por `ToolRegistry.dispatch`; ya cargan en la app (`abd56b4`, `ce830cb`) y el agente tiene `storage.write`. Sin clave: no se han probado en una conversación real.
+- [x] Probar formatos y errores.
 
 ## Checklist 11. Relaciones avanzadas
 
@@ -270,7 +265,7 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 - [x] Crear consulta inversa.
 - [x] Crear consulta de elementos relacionados.
 - [ ] Crear visualización de relaciones.
-  ⚠️ El código existe (`RelationshipsPage`, `RelationGraph`, `RelatedPanel`, diálogos), está enrutado, tipa sin errores y su contrato coincide con el backend; arreglado el filtro por tipo (`78acfca`, pendiente de fusión). Falta abrirla una vez en Electron (`scripts/dev.sh`) para confirmar que se ve bien.
+  ⚠️ El código existe (`RelationshipsPage`, `RelationGraph`, `RelatedPanel`, diálogos), está enrutado, tipa sin errores y su contrato coincide con el backend; arreglado el filtro por tipo (`78acfca`). Falta abrirla una vez en Electron (`scripts/dev.sh`) para confirmar que se ve bien.
 - [ ] Crear herramientas Hermes.
   ⚠️ Las 4 de relaciones y las 3 de etiquetas se registran en el `ToolRegistry` real y sus handlers funcionan. Sin clave: no se han probado con el modelo real. Aviso `tool_catalog_drift` en `get_related_items` hasta alinear `contracts/tools/catalog.json` a `returns_untrusted: true` (pedido a drakter-32).
 - [x] Probar integridad y eliminación.
@@ -328,7 +323,7 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
   ⚠️ El archivo existe, pero sus herramientas (`get_configuration`, `propose_configuration_change`) son PROPUESTA y no existen ni en el catálogo ni en el backend. Además está inerte.
 - [x] Definir parámetros.
 - [x] Definir permisos.
-  ⚠️ Arreglado: faltaba `storage.write` y se denegaban 4 herramientas del almacén (`78f25cd`, pendiente de fusión). `improvement.read`/`improvement.write` no están concedidos: las 4 herramientas de automejora quedan denegadas al agente (lo decide el dueño de automejora).
+  ⚠️ Arreglado: faltaba `storage.write` y se denegaban 4 herramientas del almacén (ya concedido en `drakter/integracion`). `improvement.read`/`improvement.write` se conceden con las dos escrituras en `RiskClass.CONFIRM` (`5dd55b1`, pendiente de fusión); hoy esas escrituras quedan denegadas porque el runtime usa `DefaultToolGate` (ver «Definir confirmaciones»).
 - [ ] Definir confirmaciones.
   ⚠️ 7 herramientas con `risk=confirm` y `summarize`; la puerta falla cerrada (`delete_task` del agente no se ejecuta y se audita `rejected`), pero nunca se crea la confirmación pendiente: `main.py` no llama a `install_security` y `AgentRuntime` crea `ToolRegistry` sin `gate=BackendToolGate`. `GET /api/v1/confirmations` da 503.
 - [x] Definir errores.
@@ -381,13 +376,12 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 ## Checklist 15. Automejora
 
 - [x] Crear registro de feedback.
-  ⚠️ Afecta a toda la Checklist 15: comprobado con `b5a0d25` (rutas REST) y `9a9a34e` (migración `0012_improvement_cycle.sql`), pendientes de fusión en `drakter/integracion`: sin ellos el ciclo de automejora falla sobre una BD real.
 - [x] Crear clasificación de incidencias.
 - [x] Crear propuestas.
 - [x] Crear evaluaciones.
 - [x] Crear entorno de pruebas.
 - [ ] Crear flujo de aprobación.
-  ⚠️ La lógica funciona con una puerta de prueba (`request_approval` → `approve` ligado al digest → `apply`), pero falta integrarla en la app: no hay adaptador `ConfirmationGate` sobre `ActionService` (sin cablear en `main.py`), nadie fija `app.state.gui_principal` (por HTTP la GUI cuenta como agente y aprobar/evaluar/aplicar dan 403 `user_required`) y no hay pantalla de automejora en `desktop/src/modules/`. Falla cerrado.
+  ⚠️ La lógica funciona con una puerta de prueba (`request_approval` → `approve` ligado al digest → `apply`), pero falta integrarla en la app. El cableado de seguridad (`4d2bcd1`) no cubre automejora (recomprobado sobre `6d2f78a`): sigue `DenyAllGate` (no hay adaptador `ConfirmationGate` sobre `ActionService`), el guardia no reserva al rol `approver` las rutas de automejora, nadie fija `app.state.gui_principal` (por HTTP la GUI cuenta como agente y aprobar/evaluar/aplicar dan 403 `user_required`) y no hay pantalla de automejora en `desktop/src/modules/`. Falla cerrado.
 - [x] Integrar Git.
 - [x] Crear historial de cambios.
 - [x] Crear informes.

@@ -8,7 +8,7 @@ Foto operativa del cierre. El detalle por casilla está en `IMPLEMENTATION_STATU
 - **Coordinación:** `drakter-33` coordina, `drakter-32` integra y es el único que commitea en `drakter/integracion`. Un finalizador por módulo verifica y deja su informe; el encargado de docs marca casillas a partir de esos informes y de la pasada integrada.
 - **Criterio de casilla:** se marca `[x]` solo lo comprobado y funcionando (`CLAUDE.md` §4). Lo parcial o bloqueado queda `[ ]` con ⚠️ y el motivo.
 - **La app arranca** en el escritorio (Electron + backend + Hermes). Las pantallas Hoy, Drakter (chat), Hábitos, Tareas, Proyectos, Almacén, Calendario, Asignaturas, Relaciones y Configuración cargan sin errores de consola.
-- **Modelo:** el chat funciona de extremo a extremo con `tools/dev-llm-stub` (respuestas `[DEV-STUB]`, unos 2 s). La `ANTHROPIC_API_KEY` de `~/.config/drakter/.env` es rechazada por Anthropic (401 `invalid x-api-key`), así que **no hay prueba con Claude Haiku 5.5 real**.
+- **Modelo:** hay clave de Anthropic válida (`claude-haiku-5-5`). La app del usuario se arranca con el modelo real: `scripts/drakter-local.sh start anthropic`. Los finalizadores están recomprobando con el modelo real las casillas que quedaron ⚠️ «sin clave»; solo se marcan las que confirmen. El stub (`tools/dev-llm-stub`) sigue disponible para pruebas sin coste.
 - **Todo es local:** sin `git push`, sin PR y sin tocar `origin`.
 
 ## Ramas
@@ -21,13 +21,13 @@ Cadena de integración: **`drakter/integracion` → `drakter/build` → `main` (
 | `drakter/build` | Ancestro de `drakter/integracion` (en `815976f`). Se adelantará al terminar el cierre. |
 | `main` | Ancestro de `drakter/build`; solo el commit inicial (`098e2df`). Se adelantará en local al final. |
 
-Las ramas `ao/<sesión>/root` de los finalizadores son de trabajo; sus commits entran en `drakter/integracion` cuando `drakter-32` los fusiona. Pendientes de fusión al escribir esto: `78acfca` y `997ce07` (relaciones), `b5a0d25` y `9a9a34e` (automejora, migración 0012), `95f53e5` (evals), `db85f3e` (confirmaciones de tareas y proyectos), `46bdc88` y `78f25cd` (Skills y permiso `storage.write`). Las casillas que dependen de ellos llevan ⚠️ «pendiente de fusión».
+Las ramas `ao/<sesión>/root` de los finalizadores son de trabajo; sus commits entran en `drakter/integracion` cuando `drakter-32` los fusiona. Pendientes de fusión al escribir esto: `5dd55b1` (permisos de automejora para el agente), `46bdc88` (Skills), `dda565b`, `b31d1e8` y `6ba869a` (contratos alineados con lo montado), `b531106` (prefijo `workspace_` en los ejecutores de tareas: sin él, un `delete_task` del agente aprobado no borra). Las casillas que dependen de ellos llevan ⚠️ «pendiente de fusión».
 
 ## Cómo arrancar y parar
 
 ```sh
-scripts/drakter-local.sh start            # stub de LLM + app, desacoplados de la terminal
-scripts/drakter-local.sh start anthropic  # con Haiku real (necesita clave válida)
+scripts/drakter-local.sh start anthropic  # app con Claude Haiku 5.5 real (arranque normal)
+scripts/drakter-local.sh start            # stub de LLM + app, para pruebas sin modelo
 scripts/drakter-local.sh status
 scripts/drakter-local.sh stop
 ```
@@ -50,23 +50,29 @@ scripts/drakter-local.sh stop
 
 ### Siguen abiertos
 
-- **Clave de Anthropic inválida:** sustituirla en `~/.config/drakter/.env` y arrancar con `start anthropic`. Hasta entonces, todo lo que depende del modelo queda ⚠️ «sin clave».
+- **Pruebas con el modelo real:** las casillas ⚠️ «sin clave» están en recomprobación con la clave válida; hasta que cada finalizador lo confirme siguen sin marcar.
 - **OpenViking (U-1):** desactivado en v1 con memoria SQLite + FTS5. Es una desviación de una decisión del usuario y falta que la confirme.
 - **Personaje Rive:** el `.riv` se diseña a mano y no se ha entregado; tampoco está el runtime de Rive en `package.json`. La Checklist 5 está cerrada sobre el personaje provisional SVG.
 - **Voz:** en v1 solo se estabiliza y documenta; la capa de voz y conversación se rediseñará sobre Pipecat (STT Whisper, TTS Fish Audio). Ver `DECISIONS.md`, 2026-11-13.
-- **Confirmaciones sin cablear:** `app/permissions/setup.py` no se invoca desde `app/main.py`. `/api/v1/confirmations/**`, los borrados de tareas y proyectos y los borrados confirmables de calendario y asignaturas dan 503 `confirmation_unavailable` (falla cerrado). Cablearlo tal cual rompe el arranque (`habits_calendar_support.CONFIRMED_ACTIONS` ya no existe). El arreglo está propuesto (quitar ese bucle de `setup.py`, registrar `calendar_actions.register_actions` y los ejecutores de `tasks_confirmations.py`, y llamar a `install_security`/`start_security` en `main.py`); lo cierra `drakter-34`. El plazo ya está decidido: un único camino, `ActionService` con 300 s.
 - **Memoria sin conectar al turno:** la recuperación del backend (`memories_for_context` → `build_context`) no la llama el runner de Hermes; el agente solo accede a la memoria por herramientas. Olvidar un recuerdo falla cerrado: `POST /api/v1/memory/{id}/forget` da 409 y `forget_memory` se deniega.
 - **Automejora sin aprobación en la app:** el ciclo funciona (feedback, propuestas, evaluación en `bwrap`, rama `improvement/<id>`, revertir), pero aprobar desde la GUI da 403 porque no hay adaptador `ConfirmationGate` ni principal de GUI, y no existe pantalla de automejora. `recover_interrupted` aún no se llama al arrancar. Falla cerrado.
-- **Skills inertes:** `home.py` desactiva el toolset `skills` de Hermes (arrastra `skill_manage`); el agente se guía por las descripciones de las herramientas MCP. Además el agente no tiene `improvement.read`/`improvement.write` y la Skill de configuración cita herramientas que no existen.
-- **Confirmaciones del agente:** `AgentRuntime` crea `ToolRegistry` sin `gate=BackendToolGate`; las herramientas `risk=confirm` fallan cerradas sin crear la confirmación pendiente.
+- **Skills inertes:** `home.py` desactiva el toolset `skills` de Hermes (arrastra `skill_manage`); el agente se guía por las descripciones de las herramientas MCP. Además la Skill de configuración cita herramientas que no existen.
+- **Confirmaciones del agente:** `AgentRuntime` (`runtime.py`) crea `ToolRegistry` sin la puerta real y usa `DefaultToolGate`: las herramientas `risk=confirm` (borrados, escrituras de automejora) fallan cerradas sin crear la confirmación pendiente. Lo cierra `drakter-34`.
+- **Eventos de tareas y proyectos:** `services/tasks.py` y `services/projects.py` publican `workspace.entity_*` sin `actor_type`; `HubEventSink` falla la validación y registra `event_publish_failed` en cada mutación, así que la GUI no recibe esos eventos. No se emiten tampoco `agent.expression_changed`, `storage.index_progress` ni `workspace.relationship_*`.
+- **Copias por API:** `app/services/backup_api.py` no está montado (`/api/v1/backups/**` da 404) y tiene puerta propia; la única superficie de copias es `/settings/backups`.
+- **Herramientas de automejora fuera del catálogo:** las 4 de `app/tools/improvement.py` no están en `contracts/tools/catalog.json` ni en `TOOL_DOMAINS` (4 avisos `tool_catalog_drift`); falta decidir si se añaden al catálogo o se retiran.
+- **Contrato frente a API:** paginación por `offset` en memoria, chat y automejora (el contrato pide `cursor`); `forget` de memoria con `confirmation_id` en el cuerpo y `POST /memory/{id}/approve` sin 409; los modelos de `contracts/python`/`contracts/ts` difieren de la API en hábitos, proyectos, carpetas, etiquetas y `metadata`. No rompe la GUI (solo usa el contrato TS en chat, confirmaciones y eventos), pero conviene alinear y regenerar.
 - **Búsqueda global:** `SearchPalette` sigue sin montarse en `AppShell` (Ctrl+K no hace nada).
 - **Calendario:** el selector de zona horaria arranca en el primer valor de la lista (`Africa/Abidjan`) mientras `default_timezone` no esté fijado en Configuración.
 - **Deriva de catálogo:** el backend avisa (`tool_catalog_drift`) de herramientas que difieren de `contracts/tools/catalog.json` (p. ej. `get_related_items` debe pasar a `returns_untrusted: true`). No bloquea.
 - **Sin comprobar en pantalla:** la visualización de relaciones no se ha abierto en Electron.
-- **Pasada e2e:** el arnés no espera a `agent/status = idle` antes de conversar (Hermes tarda 3-6 s), así que `conversacion.*` da 503 `agent_unavailable`; los guiones `herramienta-permitida`, `accion-destructiva` e `inyeccion-documento` piden `read_file`/`terminal`, que Drakter nunca ofrece. `desktop.arranca` falla en todas las pasadas porque `tests/e2e/harness/stack.py` no pasa `DRAKTER_DEV_NO_SANDBOX=1` (con la variable arranca; cambio pedido a `drakter-32`). Además, `tests/e2e/coverage.toml` cita dos textos antiguos de casillas y `verify-all.sh` sale con 2; el catálogo usa `GET /api/v1/audit` (la ruta real es `/api/v1/activity`), y `POST /api/v1/calendar/events` da 422 con el payload del catálogo.
+- **Pasada e2e:** el arnés no espera a `agent/status = idle` antes de conversar (Hermes tarda 3-6 s), así que `conversacion.*` da 503 `agent_unavailable`; los guiones `herramienta-permitida`, `accion-destructiva` e `inyeccion-documento` piden `read_file`/`terminal`, que Drakter nunca ofrece. `desktop.arranca` falla en todas las pasadas porque `tests/e2e/harness/stack.py` no pasa `DRAKTER_DEV_NO_SANDBOX=1` (con la variable arranca; cambio pedido a `drakter-32`). Además, el catálogo (`tests/e2e/catalog.toml`) usa `GET /api/v1/audit` y la ruta real es `/api/v1/activity`.
 
 ### Cerrados en el cierre
 
+- **Clave de Anthropic:** sustituida por una válida (`claude-haiku-5-5`); la app arranca con el modelo real.
+- **Almacén (CL10):** catálogo, índice FTS5, lectores (texto, PDF, imágenes, enlaces con bloqueo SSRF), límites de comprimidos y permisos de rutas comprobados (`check_storage_paths.py` 127/127, `check_storage_archives.py` 35/35).
+- **Seguridad cableada en el arranque (`4d2bcd1`):** `main.py` llama a `wire_security`/`start_security`; `check_security.py` 145/145, `check_confirmations.py` 0 fallos y borrado de tareas y proyectos 409 → aprobar → 404. Un único camino de confirmación (`ActionService`, 300 s).
 - **Hermes (CL3):** runner propio sobre Hermes v0.22.7 (`b200f5bc`), sin gateway, herramientas por MCP de loopback; sesiones, mensajes, eventos y recuperación tras SIGKILL del runner (vuelve a `ready` en unos 6 s) comprobados con el stub.
 - **Ramas sin fusionar:** las 22 ramas `drakter/*` están en `drakter/integracion`, con los conflictos semánticos resueltos (ver `DECISIONS.md`, «Integración de las 22 ramas»).
 - **La app no arrancaba junta:** arranca con Electron como dueño del backend, Hermes y el stub; 30 peticiones concurrentes a los módulos dan 200 (conexiones SQLite por petición sin `check_same_thread`).
@@ -76,7 +82,7 @@ scripts/drakter-local.sh stop
 - **Hábitos (CL8):** las 12 casillas funcionan con el backend real y la pantalla pinta en Electron headless.
 - **Relaciones (CL11):** servicio, tipos, validaciones, consultas e integridad comprobados.
 - **Memoria SQLite + FTS5 (CL12):** adaptador, extracción, clasificación, deduplicación, contradicciones, registros y skill comprobados; la memoria recuperada no sobrescribe las reglas de seguridad (`check_memory_rules.py` 40/40).
-- **Automejora (CL15):** el esquema del servicio pasa a migración (`0012`) y las rutas REST se montan; la automejora no puede tocar producción, permisos, confirmaciones ni auditoría sin aprobación humana.
+- **Automejora (CL15):** el esquema del servicio pasa a migración (`0013_improvement_cycle.sql`) y las rutas REST se montan; la automejora no puede tocar producción, permisos, confirmaciones ni auditoría sin aprobación humana.
 
 ## Copias de seguridad
 
@@ -92,6 +98,6 @@ Historial Git de los repos que estaban anidados en el checkout del usuario:
 
 ## Siguiente paso
 
-1. Clave de Anthropic válida y prueba de conversación, personalidad y herramientas con Haiku real (evals).
-2. Cablear las confirmaciones en el arranque (`drakter-34`).
-3. Montar `SearchPalette`.
+1. Terminar la recomprobación con Haiku real: conversación, personalidad, selección y encadenado de herramientas (evals) y memoria.
+2. Montar `SearchPalette`.
+3. Cablear `BackendToolGate` en el runtime del agente (`drakter-34`).

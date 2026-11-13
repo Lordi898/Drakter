@@ -381,7 +381,7 @@ Decisiones técnicas, cambios de tecnología y motivos.
 ## [2026-11-04] Almacén en v1
 - **Contexto:** `drakter-15` comunica por el orquestador el alcance del almacén.
 - **Decisión:** en v1 las ubicaciones son `read_only=1`. Borrar un recurso no toca el archivo. El agente solo crea notas con `create_resource`. Las imágenes se leen sin Pillow (solo metadatos con parser propio). `.docx` no tiene lector. La caducidad de la confirmación se queda en 300 s.
-- **⚠️ Desajuste con el código:** `CONFIRMATION_TTL_SECONDS = 300` está en `backend/app/services/actions.py` de `drakter/seguridad`, pero `drakter/build` (`488b83d`) tiene en `backend/app/services/habits_calendar_support.py` una caducidad propia de 15 minutos. Son dos caminos de confirmación con plazos distintos, y `contracts/README.md` §5 pide uno solo.
+- **Desajuste con el código (resuelto el 2026-11-13, ver «Cierre del desajuste de caducidad de confirmaciones»):** `CONFIRMATION_TTL_SECONDS = 300` está en `backend/app/services/actions.py` de `drakter/seguridad`, pero `drakter/build` (`488b83d`) tiene en `backend/app/services/habits_calendar_support.py` una caducidad propia de 15 minutos. Son dos caminos de confirmación con plazos distintos, y `contracts/README.md` §5 pide uno solo.
 - **Alternativas descartadas:** añadir Pillow y un lector de `.docx` (más dependencias y más superficie para archivos no confiables).
 - **Motivo:** menor superficie en v1.
 - **Impacto:** `backend/app/services/`, `backend/app/tools/storage.py`.
@@ -446,6 +446,7 @@ Decisiones técnicas, cambios de tecnología y motivos.
 - **Contexto:** la `ANTHROPIC_API_KEY` de `~/.config/drakter/.env` recibe 401 `invalid x-api-key`, también en una llamada directa a `GET /v1/models`.
 - **Decisión:** la app se deja arrancada con `tools/dev-llm-stub`. Nada de lo marcado demuestra el comportamiento de Claude Haiku 5.5.
 - **Impacto:** Checklist 3 y 13 de `IMPLEMENTATION_STATUS.md`.
+- **Estado (2026-11-13, más tarde):** hay clave válida. La app del usuario se arranca con el modelo real (`scripts/drakter-local.sh start anthropic`) y las casillas ⚠️ «sin clave» se recomprueban con él; el stub queda para pruebas sin coste.
 
 ## [2026-11-13] Cierre de backend base: seguridad sin cablear en el arranque
 - **Contexto:** al cerrar las Checklists 0/2/6, `app/permissions/setup.py` (confirmaciones y permisos del agente) no se invoca desde `app/main.py`. Cablearlo tal y como indica `permissions/README.md` rompe el arranque porque `load_confirmed_executors` espera `habits_calendar_support.CONFIRMED_ACTIONS`, que no existe.
@@ -489,12 +490,12 @@ Decisiones técnicas, cambios de tecnología y motivos.
 - **Motivo:** que el prompt real lleve lo que dice la decisión vigente, sin tocar el texto de la identidad.
 - **Impacto:** Checklist 4 (carga de contexto). SOUL.md pasa de 21.922 a 46.227 caracteres, por debajo de `context_file_max_chars` = 120.000. La cifra de 20.000 caracteres que citan las entradas del 2026-11-04 ya no aplica: el tope configurado es `SOUL_MAX_CHARS`.
 
-## [2026-11-13] Esquema de automejora: manda el del servicio (migración 0012)
+## [2026-11-13] Esquema de automejora: manda el del servicio (migración 0013)
 - **Contexto:** la migración 0010 y `contracts/.../improvement.py` definían unas tablas `improvement_*` que ningún código usa. Los servicios de automejora se escribieron contra `backend/app/schemas/ddl_improvement.sql`, que nunca pasó a una migración, de modo que sobre una BD real todo el ciclo fallaba.
-- **Decisión:** `0012_improvement_cycle.sql` borra las tablas de 0010 (vacías) y crea el esquema del servicio, con CHECK/FK/UNIQUE con nombre y triggers de inmutabilidad (propuestas inmutables, evaluaciones e historial de solo añadir). Las rutas se montan con `backend/app/api/improvement.py`.
+- **Decisión:** `0013_improvement_cycle.sql` (renumerada desde 0012 por la colisión con `0012_confirmation_hardening.sql`) borra las tablas de 0010 (vacías) y crea el esquema del servicio, con CHECK/FK/UNIQUE con nombre y triggers de inmutabilidad (propuestas inmutables, evaluaciones e historial de solo añadir). Las rutas se montan con `backend/app/api/improvement.py`.
 - **Alternativas descartadas:** adaptar los servicios al esquema de 0010 (pierde el historial `improvement_events`, el parche, el digest de aprobación y los triggers de seguridad); tablas con otro nombre (dos esquemas vivos).
 - **Motivo:** el esquema del servicio es el único con código, y garantiza en la BD que nada cambia sin aprobación.
-- **Impacto:** `backend/migrations/0012_improvement_cycle.sql`, `check_migrations.py`, `backend/app/api/improvement.py`. `contracts/python/drakter_contracts/models/improvement.py` y `contracts/ts` quedan desalineados (categorías y estados distintos): hay que actualizarlos o marcarlos como obsoletos. Checklist 15.
+- **Impacto:** `backend/migrations/0013_improvement_cycle.sql`, `check_migrations.py`, `backend/app/api/improvement.py`. `contracts/python/drakter_contracts/models/improvement.py` y `contracts/ts` quedan desalineados (categorías y estados distintos): hay que actualizarlos o marcarlos como obsoletos. Checklist 15.
 
 ## [2026-11-13] Checklist 5 cerrada con el personaje provisional SVG
 - **Contexto:** el cierre verifica el personaje provisional (`desktop/src/character/`). El `.riv` sigue sin entregarse.
@@ -515,6 +516,7 @@ Decisiones técnicas, cambios de tecnología y motivos.
 - **Decisión:** se da por cerrado. Desde a123a90 todos los borrados de hábitos, calendario y asignaturas pasan por `run_confirmable` → `ActionService` (300 s), con sus `ActionSpec` en `services/calendar_actions.py`. Se retira el bucle heredado `CONFIRMED_ACTIONS` de `permissions/setup.py`.
 - **Alternativas descartadas:** restaurar `CONFIRMED_ACTIONS` vacío en `habits_calendar_support.py` como compatibilidad (mantendría un segundo camino muerto).
 - **Motivo:** contracts/README.md §5 pide un único camino de confirmación.
+- **Comprobado (drakter-38, sobre `612d8e4` con la seguridad cableada):** en la app real, DELETE de evento o asignatura → 409 con `expires_at` a +300 s; el token `ui` no aprueba; un hash distinto se rechaza; aprobar borra y rechazar conserva.
 - **Impacto:** backend/app/permissions/setup.py, backend/app/main.py (instalar la seguridad al arrancar), Checklist 8/9.
 
 ## [2026-11-13] Confirmaciones de tareas y proyectos sobre pending_confirmations
@@ -522,7 +524,8 @@ Decisiones técnicas, cambios de tecnología y motivos.
 - **Decisión:** `services/tasks_confirmations.py` registra cada operación de `TASK_CONFIRMABLE`/`PROJECT_CONFIRMABLE` como `ActionSpec` (riesgo confirm, `external=True`, prefijo `workspace_`) y `ActionServiceGate` pide la confirmación con `ActionService.execute_or_request`, único camino (TTL 300 s). Los `targets` y `affected_count` que resuelve el servicio viajan en los argumentos firmados; al aprobar, el servicio abre su transacción y vuelve a comprobar alcance y revisiones. `main.py` deja `app.state.workspace_ports = build_ports(actions)`.
 - **Alternativas descartadas:** insertar la fila en `pending_confirmations` desde el módulo, como hace almacén (segundo camino paralelo a `ActionService`); usar los nombres sin prefijo (chocarían con las herramientas del agente `delete_task`, `update_task` y `complete_task`, que ejecuta el registro).
 - **Motivo:** reutiliza las reglas de dominio y la comprobación de revisiones del servicio sin tocar el contrato de confirmaciones.
-- **Impacto:** `backend/app/services/tasks_confirmations.py` (`db85f3e`, pendiente de fusión), `backend/app/main.py` (cableado de `drakter-34`); Checklist 7 (eliminar tareas, borrar proyectos).
+- **Impacto:** `backend/app/services/tasks_confirmations.py`, `backend/app/main.py` (cableado de `drakter-34`); Checklist 7 (eliminar tareas, borrar proyectos).
+- **Estado:** descartada el mismo día; ver «Seguridad cableada en el arranque». `tasks_confirmations.py` (`8ff52da`/`db85f3e`) no se fusiona.
 
 ## [2026-11-13] Voz: cierre mínimo, rediseño posterior sobre Pipecat
 - **Contexto:** la capa de voz de v1 (`voice/`: openWakeWord, Silero VAD, Faster-Whisper, Kokoro/Piper, Voice Manager) llega al cierre sin probar de punta a punta. `drakter-1` indica que la capa de voz y conversación se rediseñará sobre Pipecat, con STT Whisper y TTS Fish Audio.
@@ -551,3 +554,50 @@ Decisiones técnicas, cambios de tecnología y motivos.
 - **Alternativas descartadas:** reactivar toolsets nativos para la prueba (rompería la lista blanca que se quiere comprobar).
 - **Motivo:** probar el cableado real del producto.
 - **Impacto:** `tests/e2e/`, `tools/dev-llm-stub/scenarios/` (pendiente: lo hace drakter-32).
+
+## [2026-11-13] Seguridad cableada en el arranque
+- **Contexto:** al cerrar las Checklists 0/2/6, `app/permissions/setup.py` (confirmaciones y permisos del agente) no se invocaba desde `app/main.py`, y cablearlo tal cual rompía el arranque porque `load_confirmed_executors` esperaba `habits_calendar_support.CONFIRMED_ACTIONS`, que ya no existe. Resultado: `/api/v1/confirmations/**` y los borrados de tareas, proyectos, calendario y asignaturas daban 503 `confirmation_unavailable`. Tareas proponía además su propia puerta (`services/tasks_confirmations.py`, `8ff52da`/`db85f3e`).
+- **Decisión:** `drakter-34` cablea la seguridad (`4d2bcd1`). `permissions/wiring.py` aporta `PendingConfirmationGate` para tareas y proyectos, los ejecutores de `TASK_CONFIRMABLE`/`PROJECT_CONFIRMABLE`, las `ActionSpec` de calendario y `wire_security()`; `main.py` llama a `wire_security` en `_install_services` y a `start_security`/`stop_security` en `lifespan`. `load_confirmed_executors` ya no falla sin `CONFIRMED_ACTIONS`. La migración `0012_confirmation_hardening.sql` congela la identidad de las confirmaciones (las filas nacen `pending` y las cerradas no cambian). Se descarta la puerta propia de tareas para no tener un segundo camino de confirmación.
+- **Alternativas descartadas:** fusionar `tasks_confirmations.py` (segundo camino paralelo al de seguridad); cablear con `try/except` para tolerar el fallo (dejaría las confirmaciones a medias sin avisar).
+- **Motivo:** un único camino de confirmación (`contracts/README.md` §5), con caducidad de 300 s.
+- **Comprobado:** `check_security.py` 145/145, `check_confirmations.py` 0 fallos, borrado de tareas y proyectos 409 → aprobar → 404.
+- **Impacto:** `backend/app/main.py`, `backend/app/permissions/wiring.py`, `setup.py`, `tool_gate.py`, `backend/app/services/actions.py`, `backend/migrations/0012_confirmation_hardening.sql`; Checklists 2 (sistema de permisos), 7 (eliminar tareas, borrar proyectos), 9 y 16. La migración de automejora se renumeró a `0013_improvement_cycle.sql`.
+
+## [2026-11-13] Permisos de automejora para el agente: lectura libre, escritura siempre con confirmación
+- **Contexto:** el informe de Hermes (drakter-36) vio que `agent/configuration/permissions.json` no concedía `improvement.read` ni `improvement.write`, así que las 4 herramientas de automejora quedaban denegadas al agente.
+- **Decisión:** se conceden `improvement.read` e `improvement.write`, y las dos herramientas de escritura (`record_improvement_feedback`, `create_improvement_proposal`) pasan de `RiskClass.WRITE` a `RiskClass.CONFIRM`: toda escritura del agente pasa por confirmación en `ActionService`. El agente sigue sin herramientas para evaluar, aprobar, aplicar o revertir (solo GUI, `require_user`); sus escrituras solo insertan feedback o un borrador en SQLite y nunca tocan producción, permisos, confirmaciones ni auditoría.
+- **Alternativas descartadas:** dejar las escrituras en `WRITE` sin confirmar (solo pedirían confirmación en sesiones `tainted`).
+- **Motivo:** CLAUDE.md §8: la automejora no cambia nada sin autorización.
+- **Comprobado:** con el motor real (`tool_action_spec` + `ActionService` + `permissions.json`), las lecturas dan ALLOW; cada escritura da CONFIRM y deja la fila en `pending_confirmations` sin escribir; al aprobar con `approver` se ejecuta; sin el permiso, DENY.
+- **⚠️ En ejecución:** el runtime de Hermes usa `DefaultToolGate`, que deniega CONFIRM: hoy las escrituras del agente quedan denegadas (falla cerrado) hasta que el runtime use `BackendToolGate` (pendiente de drakter-34).
+- **Impacto:** `agent/configuration/permissions.json`, `backend/app/tools/improvement.py` (`5dd55b1`, pendiente de fusión); Checklists 13 (permisos, confirmaciones) y 15.
+
+## [2026-11-13] Cierre del almacén: arreglos de integración
+- **Contexto:** al integrar `drakter/integracion`, el almacén no funcionaba: `Settings` ya no tiene `runtime_dir`, `untrusted_envelope` se movió a `app.tools.envelope`, el registro de herramientas rechaza claves de `audit` que no son argumentos y `uv.lock` no incluía pypdf.
+- **Decisión:** `denied_roots` usa `runtime_dir` solo si existe; `tools/storage.py` importa de `envelope` y filtra `audit` por los campos de cada `args_model`; se regenera `uv.lock` con pypdf; el agente necesita `storage.write` para crear notas (DECISIONS «Almacén en v1»).
+- **Alternativas descartadas:** añadir `runtime_dir` a `Settings` (es un archivo compartido y nadie más lo usa); quitar la validación de `audit` del registro (es un control de seguridad).
+- **Motivo:** dejar el almacén operativo sin tocar contratos compartidos.
+- **Comprobado:** `check_storage_paths.py` 127/127, `check_storage_archives.py` 35/35, `check_storage_catalog.py` y `check_storage_api.py` OK, flujo REST de extremo a extremo 19/19 (rutas denegadas, symlinks fuera de la raíz, SSRF, límites de comprimidos).
+- **Impacto:** `backend/app/services/storage_ports.py`, `backend/app/tools/storage.py`, `backend/uv.lock`, `agent/configuration/permissions.json`, Checklist 10.
+
+## [2026-11-13] Prefijo workspace_ en las confirmaciones de los servicios de tareas y proyectos
+- **Contexto:** `wiring.py` registraba los ejecutores de `TASK_CONFIRMABLE`/`PROJECT_CONFIRMABLE` con los nombres `delete_task`, `update_task` y `complete_task`, que también son herramientas del agente. `ActionService.approve` prefiere los ejecutores al registro, así que un `delete_task` del agente aprobado nunca llegaba a borrar.
+- **Decisión:** las filas de `PendingConfirmationGate` y las claves de los ejecutores de servicio llevan el prefijo `workspace_` (`workspace_delete_task`, `workspace_delete_project`, …). Las herramientas del agente siguen con sus nombres y las ejecuta el registro.
+- **Alternativas descartadas:** renombrar las herramientas del agente (rompe el catálogo y la lista blanca); una puerta propia del módulo (segundo camino paralelo a `ActionService`).
+- **Motivo:** un nombre identifica una sola acción en `pending_confirmations`.
+- **Impacto:** `backend/app/permissions/wiring.py` (`b531106`, pendiente de fusión); Checklist 7 (eliminar tareas, herramientas Hermes).
+
+## [2026-11-13] Fecha-hora local sin segundos
+- **Contexto:** `contracts/README.md` §2 y `drakter_contracts.common.LocalDateTime` exigían `YYYY-MM-DDTHH:MM:SS`. El calendario (esquemas, herramientas del agente, `HABITS_CALENDAR_CONTRACT.md`, `occurrence_id`) y el desktop (`localIso`) usan `YYYY-MM-DDTHH:MM`, y la API rechaza los segundos con 422.
+- **Decisión:** el contrato pasa a `YYYY-MM-DDTHH:MM`.
+- **Alternativas descartadas:** cambiar el calendario a segundos (toca datos guardados, `occurrence_id`, herramientas y GUI sin ganar nada).
+- **Motivo:** el código construido y consumido es coherente entre sí; el desfasado era el contrato.
+- **Impacto:** `contracts/README.md` §2, `contracts/python/drakter_contracts/common.py`; `contracts/ts` no cambia.
+
+## [2026-11-13] routes.md refleja lo montado en drakter/integracion
+- **Contexto:** la columna Estado de `contracts/api/routes.md` y su sección de desviaciones describían ramas anteriores a la integración (routers sin montar, `/ws`, tareas sin router…). Además faltaban 12 rutas de automejora ya montadas.
+- **Decisión:** el Estado se calcula contra la app real (`construida`, `escrita, sin montar`, `(sin construir)`); las desviaciones solo recogen lo que sigue abierto; se documentan las 17 rutas de automejora.
+- **Alternativas descartadas:** mantener el estado por frente (inservible tras integrar).
+- **Motivo:** que el contrato sea la fuente fiable de lo que existe.
+- **Comprobado:** 175 pares método+ruta de la app real frente a `routes.md`: 0 rutas en código sin contrato y 0 filas «construida» sin código; `gen_ts.py` regenera `contracts/ts/index.ts` idéntico.
+- **Impacto:** `contracts/api/routes.md` (`dda565b`, `b31d1e8`, `6ba869a`, pendientes de fusión); al regenerar `desktop/electron/shared/routes.generated.ts` entran 12 rutas de automejora, incluidas `apply` y `revert` (decisión de desktop/integrador).
