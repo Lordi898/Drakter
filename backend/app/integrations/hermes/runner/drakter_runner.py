@@ -210,8 +210,8 @@ class Runner:
             history = self.session_db.get_messages_as_conversation(session_id) or []
         return history
 
-    def run_turn(self, message: dict[str, Any]) -> None:
-        """One AIAgent per turn; SOUL.md, instructions and tools are the same each time (H-21)."""
+    def run_turn(self, message: dict[str, Any]) -> dict[str, Any]:
+        """Returns the terminal event. One AIAgent per turn; SOUL.md, instructions and tools are the same each time (H-21)."""
         from tools.terminal_tool import set_approval_callback
 
         # Per-thread slot. No human can answer here: real confirmations live in the backend.
@@ -227,8 +227,7 @@ class Runner:
                 self.agent = agent
                 stopped = self.stop_requested
             if stopped:
-                self.protocol.emit("cancelled", turn_id=turn_id)
-                return
+                return {"ev": "cancelled"}
             result = agent.run_conversation(
                 str(message["input"]), conversation_history=self.history_for(session_id), task_id=session_id
             )
@@ -236,36 +235,33 @@ class Runner:
                 self.histories[session_id] = result["messages"]
             with self.lock:
                 stopped = self.stop_requested
-            self.emit_outcome(turn_id, result, stopped)
+            return self.outcome(result, stopped)
         finally:
             with self.lock:
                 self.agent = None
             agent.close()
 
-    def emit_outcome(self, turn_id: str, result: dict[str, Any], stopped: bool) -> None:
+    def outcome(self, result: dict[str, Any], stopped: bool) -> dict[str, Any]:
         final = result.get("final_response")
         if stopped or result.get("interrupted"):  # final_response may be partial here
-            self.protocol.emit("cancelled", turn_id=turn_id)
-        elif result.get("failed") or not final:
+            return {"ev": "cancelled"}
+        if result.get("failed") or not final:
             print(f"drakter_runner: turn failed: {result.get('error')}", file=sys.stderr, flush=True)
-            self.protocol.emit(
-                "failed", turn_id=turn_id, code=classify_failure(result.get("error")), message="El modelo no respondió."
-            )
-        else:
-            usage = {key: result[key] for key in USAGE_KEYS if isinstance(result.get(key), int)}
-            self.protocol.emit("completed", turn_id=turn_id, output=str(final), usage=usage)
+            return {"ev": "failed", "code": classify_failure(result.get("error")), "message": "El modelo no respondió."}
+        usage = {key: result[key] for key in USAGE_KEYS if isinstance(result.get(key), int)}
+        return {"ev": "completed", "output": str(final), "usage": usage}
 
     def guarded_turn(self, message: dict[str, Any]) -> None:
-        turn_id = str(message["turn_id"])
         try:
-            self.run_turn(message)
+            terminal = self.run_turn(message)
         except Exception:
             traceback.print_exc(file=sys.stderr)
-            self.protocol.emit("failed", turn_id=turn_id, code="provider_error", message="Fallo interno del agente.")
-        finally:
-            with self.lock:
-                self.active_turn = None
-                self.stop_requested = False
+            terminal = {"ev": "failed", "code": "provider_error", "message": "Fallo interno del agente."}
+        with self.lock:
+            self.active_turn = None
+            self.stop_requested = False
+        # Last, so that a terminal event means the next turn is already accepted.
+        self.protocol.emit(terminal.pop("ev"), turn_id=str(message["turn_id"]), **terminal)
 
     def work(self) -> None:
         """One thread per turn, one turn at a time; stdin has its own thread."""
