@@ -468,7 +468,7 @@ Decisiones técnicas, cambios de tecnología y motivos.
 - **Alternativas descartadas:** conectarlo en el cierre (integración nueva en `app/integrations/hermes/` y en el flujo de confirmaciones, fuera del alcance de cierre).
 - **Motivo:** el protocolo de cierre solo termina lo empezado.
 - **Impacto:** Checklist 12; siguiente paso: llamar a `build_context` en el runner y enchufar `memory.forget` a `app/services/actions.py`.
-- **Estado (2026-11-13, más tarde):** la recuperación al turno ya está conectada (ver «Contexto de cada turno de Hermes por build_context»). El olvido sigue sin conectar.
+- **Estado (2026-11-13, más tarde):** la recuperación al turno ya está conectada (ver «Contexto de cada turno de Hermes por build_context») y, con `effda18` y `6270011`, olvidar y aprobar recuerdos desde la GUI responden 409 y se ejecutan en `/confirmations/{id}/approve` (acciones `forget_memory_gui` y `approve_memory_gui`, con el hash del recuerdo como objetivo); `confirmation_id` en el cuerpo ya no tiene efecto.
 
 ## [2026-11-13] Caducidad única de confirmaciones: 300 s
 - **Contexto:** convivían tres plazos de confirmación: `ActionService` 300 s (`backend/app/services/actions.py`), `habits_calendar_support` 15 min y `storage_ports` 600 s («propuesto»). `contracts/README.md` §5 pide un único camino de confirmación.
