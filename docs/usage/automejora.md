@@ -1,6 +1,6 @@
 # Automejora
 
-> **Estado:** sale de la rama `drakter/automejora`, sin integrar en `drakter/build` (2da8bef). En 2da8bef solo hay rutas `/api/v1/improvement/*` (`proposals`, `proposals/{id}`, `approve`, `reject`, `feedback`) en `routes.generated.ts` y el modelo en `contracts/`; no hay código de automejora en `backend/` ni pantalla en `desktop/src`. NO COMPROBADO en la app real: solo se ha leído el código.
+> **Estado:** el código de backend está en `drakter/integracion` (`2e05ba6`) (`backend/app/services/improvement_*.py`), y su router `/api/v1/improvement` se monta (`backend/app/api/improvement.py`) y está en las rutas permitidas de Electron, pero no hay pantalla en `desktop/src`: hoy solo se usa por API o desde el agente. Las notas «Pendiente» del cuerpo se escribieron sobre `drakter/build` (`2da8bef`) y alguna puede estar ya resuelta. NO COMPROBADO en la app real (ver «Estado de la integración» en [README](README.md)).
 
 Drakter puede preparar cambios sobre su propio código a partir de tus quejas o preferencias, pero no los aplica por su cuenta. Tú decides. Nada se fusiona solo.
 

@@ -1,6 +1,6 @@
 # Relaciones
 
-> **Estado:** sale de la rama `drakter/almacen-relaciones`, sin integrar en `drakter/build` (2da8bef). En `drakter/build` (2da8bef) solo hay la migración `0006_relationships.sql` y una pantalla **Relaciones** vacía (`RelationshipsPage.tsx`: «Aún no hay relaciones»); no hay servicio ni API de relaciones. NO COMPROBADO en la app real: se ha leído el código de la rama (`desktop/src/modules/relationships/`, `backend/app/services/relations.py`).
+> **Estado:** integrado en `drakter/integracion` (`2e05ba6`): pantalla **Relaciones** en la navegación y APIs `relations` y `relations_tags` montadas. Las notas «Pendiente» del cuerpo se escribieron sobre `drakter/build` (`2da8bef`) y alguna puede estar ya resuelta. NO COMPROBADO en la app real (ver «Estado de la integración» en [README](README.md)).
 
 Una relación es un vínculo entre dos elementos del espacio de trabajo: tareas, proyectos, hábitos, eventos, bloques de tiempo, asignaturas, clases, recursos y carpetas. Sirve para saber qué usa, qué depende de qué y qué apoya a qué.
 

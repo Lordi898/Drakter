@@ -11,6 +11,10 @@ directories:
 asar: true
 publish: null # sin auto-actualizacion por red por ahora (ver README)
 
+# El target deb (fpm) exige homepage; package.json no la tiene.
+extraMetadata:
+  homepage: https://github.com/Lordi898/Drakter
+
 # Solo el resultado de `electron-vite build` y package.json. Los dependencies del renderer
 # ya van empaquetados por Vite; si main llega a importar un paquete externo, quitar la
 # exclusion de node_modules.

@@ -1,6 +1,6 @@
 # Instalar la voz
 
-> **Estado:** sale de la rama `drakter/voz`, sin integrar en `drakter/build` (2da8bef): ahí no hay carpeta `voice/` ni `DRAKTER_VOICE_*` en el backend, así que estos pasos no se pueden seguir desde `build`. NO COMPROBADO en la app real: nadie ha ejecutado estos pasos, ni los comandos de descarga de modelos.
+> **Estado:** `voice/` está en `drakter/integracion` (`2e05ba6`), con su propio `pyproject.toml` (extras `stt`, `kokoro`, `wakeword`). En esta máquina solo hay modelo Kokoro en `/var/tmp/drakter-voz/models` y ningún venv de voz con sus extras. El router de voz del backend no se monta todavía. NO COMPROBADO de principio a fin.
 
 La voz es un proceso aparte con su propio entorno Python, que arranca el backend. Escucha, transcribe (Whisper) y habla (Kokoro, con Piper de respaldo), todo en local y en CPU.
 
@@ -8,7 +8,7 @@ La voz es un proceso aparte con su propio entorno Python, que arranca el backend
 
 - `voice/CONTRACT.md` lista `manager.py`, `registry.py`, `ipc.py`, `service.py`, `__main__.py` y `metrics.py`, pero **no están en la rama** `drakter/voz`. Sin ellos `python -m voice` no puede arrancar.
 - `backend/app/main.py` de esa rama no registra el servicio de voz (el contrato dice que lo hace el integrador).
-- `desktop/src` de esa rama no tiene ninguna pantalla ni botón de voz (2da8bef tampoco).
+- `desktop/src` no tiene ninguna pantalla ni botón de voz.
 
 Mientras tanto solo se puede preparar el entorno, los modelos y los scripts de `voice/tests/`.
 

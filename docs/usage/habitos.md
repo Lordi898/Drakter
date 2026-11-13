@@ -1,6 +1,6 @@
 # Hábitos
 
-> **Estado:** integrado en `drakter/build` (2da8bef). NO COMPROBADO en la app real: nadie ha ejecutado esta pantalla; todo está leído del código (`desktop/src/modules/habits/`, `backend/app/services/habits.py`). Ojo: en 2da8bef `backend/app/main.py` solo monta `health`, `auth` y `ws`; `api/habits.py` existe pero no está incluido, así que la pantalla no recibirá datos hasta que se monte el router.
+> **Estado:** integrado en `drakter/integracion` (`2e05ba6`): pantalla **Hábitos** en la navegación y API `habits` montada. Las notas «Pendiente» del cuerpo se escribieron sobre `drakter/build` (`2da8bef`) y alguna puede estar ya resuelta. NO COMPROBADO en la app real (ver «Estado de la integración» en [README](README.md)).
 
 ## Para qué sirve
 

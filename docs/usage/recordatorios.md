@@ -1,6 +1,6 @@
 # Recordatorios
 
-> **Estado:** integrado en `drakter/build` (4a84a5d). El backend ya está enganchado: el router `notifications` se registra solo y `ReminderTicker` arranca en el `lifespan`. En la interfaz falta montar `startNotificationFeed` y `RemindersNotice` (ver Pendiente), así que los avisos del backend aún no llegan a la campana. NO COMPROBADO en la app real.
+> **Estado:** integrado en `drakter/integracion` (`2e05ba6`): el router `notifications` se registra solo, `ReminderTicker` arranca en el `lifespan` y la interfaz monta `startNotificationFeed` (`AppShell`) y `RemindersNotice` (Configuración). Las notas «Pendiente» del cuerpo se escribieron sobre `drakter/build` (`2da8bef`) y alguna puede estar ya resuelta. NO COMPROBADO en la app real (ver «Estado de la integración» en [README](README.md)).
 
 ## Aviso importante
 
