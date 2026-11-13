@@ -5,6 +5,8 @@
     "calendar.write",
     "habits.read",
     "habits.write",
+    "improvement.read",
+    "improvement.write",
     "memory.forget",
     "memory.read",
     "memory.write",

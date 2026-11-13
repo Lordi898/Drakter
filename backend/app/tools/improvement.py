@@ -1,6 +1,7 @@
 """Agent tools of the improvement cycle: thin wrappers over ``improvement_tools``.
 
 There are no tools to evaluate, approve, apply or revert, and the author is fixed.
+The two writes are CONFIRM: nothing the agent records lands without the user.
 """
 
 from __future__ import annotations
@@ -137,11 +138,11 @@ TOOLS: tuple[ToolSpec, ...] = (
         args_model=RecordFeedbackParams,
         result_model=FeedbackResult,
         permission="improvement.write",
-        risk=RiskClass.WRITE,
+        risk=RiskClass.CONFIRM,
         handler=_record_feedback,
         errors=_ERRORS,
         audit={"text": "hash"},
-        # Fixed text: a tainted turn turns this into a confirmation for the user.
+        # Every agent write waits for the user's confirmation; this is what they see.
         summarize=lambda _: "Registrar una observación de mejora",
     ),
     ToolSpec(
@@ -151,7 +152,7 @@ TOOLS: tuple[ToolSpec, ...] = (
         args_model=CreateProposalParams,
         result_model=ProposalCreated,
         permission="improvement.write",
-        risk=RiskClass.WRITE,
+        risk=RiskClass.CONFIRM,
         handler=_create_proposal,
         errors=_ERRORS,
         audit={
