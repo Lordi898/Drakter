@@ -40,6 +40,6 @@ Normalmente ninguno; opcionalmente, qué componente interesa.
 Se invocan como `mcp__drakter__<nombre>`.
 - `get_system_status`
 - `get_agent_status`
-- `get_voice_status`
+- `get_voice_status` (en el catálogo; el backend aún no la sirve)
 - `get_memory_status`
-- `get_workspace_summary`
+- `get_workspace_summary` (en el catálogo; el backend aún no la sirve)
