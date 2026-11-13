@@ -537,7 +537,8 @@ def system_cases(be: Backend, tokens: list[str], root: Path) -> None:
     mine = [l.split()[3] for l in ss if len(l.split()) > 3 and l.split()[3].rsplit(":", 1)[-1] == str(port)]
     check("ss -ltn: el puerto solo escucha en 127.0.0.1", bool(mine) and all(a == f"127.0.0.1:{port}" for a in mine), repr(mine))
     own = [l.split()[3] for l in ss if f"pid={pid}," in l or f"pid={pid})" in l]
-    check("ss -ltnp: todos los listeners del proceso son 127.0.0.1:<puerto>", all(a == f"127.0.0.1:{port}" for a in own), repr(own))
+    # El servidor de herramientas del agente abre un segundo puerto efímero, también en loopback.
+    check("ss -ltnp: todos los listeners del proceso están en 127.0.0.1", bool(own) and all(a.startswith("127.0.0.1:") for a in own), repr(own))
     check("puerto anunciado dentro de 1024..65535", 1024 <= port <= 65535, str(port))
 
     fd0 = os.readlink(f"/proc/{pid}/fd/0")

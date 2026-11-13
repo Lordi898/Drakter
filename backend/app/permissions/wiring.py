@@ -20,10 +20,19 @@ from drakter_contracts.events import EVENTS
 from fastapi import FastAPI
 
 from app.core.config import Settings
-from app.permissions.canonical import after, canonical_json, compute_params_hash, utc_now
+from app.permissions.canonical import (
+    after,
+    canonical_json,
+    compute_params_hash,
+    utc_now,
+)
 from app.permissions.models import ACTOR_TYPES, ActorContext
 from app.permissions.setup import install_security
-from app.services.actions import CONFIRMATION_TTL_SECONDS, ActionService, ConfirmedExecutor
+from app.services.actions import (
+    CONFIRMATION_TTL_SECONDS,
+    ActionService,
+    ConfirmedExecutor,
+)
 
 logger = logging.getLogger("drakter.security")
 
@@ -55,7 +64,7 @@ class PendingConfirmationGate:
         affected_count: int,
         targets: Sequence[Any],
     ) -> Any:
-        from app.schemas.tasks import ConfirmationTicket  # noqa: PLC0415 - optional front
+        from app.schemas.tasks import ConfirmationTicket
 
         canonical = canonical_json(dict(args))
         digest = compute_params_hash(tool_name, canonical)
@@ -103,13 +112,13 @@ class HubEventSink:
     def publish(self, event_type: str, payload: Mapping[str, Any]) -> None:
         try:
             self._hub.publish(event_type, EVENTS[event_type].model_validate(dict(payload)))
-        except Exception:  # noqa: BLE001 - the change is committed; only the notice is lost
+        except Exception:
             logger.exception("event not published", extra={"event": "event_publish_failed"})
 
 
 def _stored_targets(conn: sqlite3.Connection, tool: str, args: Mapping[str, Any]) -> list[Any]:
     """Targets of the row this approval claimed (status `executing`, same tool and hash)."""
-    from app.services.tasks_ports import ConfirmationTarget  # noqa: PLC0415
+    from app.services.tasks_ports import ConfirmationTarget
 
     digest = compute_params_hash(tool, canonical_json(dict(args)))
     row = conn.execute(
@@ -126,7 +135,7 @@ def _workspace_executor(
     run: Callable[..., Any], tool: str, ports: Any
 ) -> ConfirmedExecutor:
     def execute(conn: sqlite3.Connection, ctx: ActorContext, args: Mapping[str, Any]) -> Any:
-        from app.services.tasks_ports import Actor, ServiceContext  # noqa: PLC0415
+        from app.services.tasks_ports import Actor, ServiceContext
 
         conn.row_factory = sqlite3.Row
         actor = Actor(
@@ -146,8 +155,8 @@ def workspace_executors(ports: Any) -> dict[str, ConfirmedExecutor]:
     """Approved tasks and projects. Absent fronts contribute nothing."""
     executors: dict[str, ConfirmedExecutor] = {}
     try:
-        from app.services.projects import PROJECT_CONFIRMABLE  # noqa: PLC0415
-        from app.services.tasks import TASK_CONFIRMABLE  # noqa: PLC0415
+        from app.services.projects import PROJECT_CONFIRMABLE
+        from app.services.tasks import TASK_CONFIRMABLE
     except ModuleNotFoundError:
         return executors
     for table in (TASK_CONFIRMABLE, PROJECT_CONFIRMABLE):
@@ -160,13 +169,13 @@ def wire_security(app: FastAPI, settings: Settings) -> ActionService:
     """After `app.state.event_hub` exists and before the app starts serving."""
     actions = install_security(app, settings, agent_grants_path=AGENT_GRANTS)
     try:
-        from app.services.calendar_actions import register_actions  # noqa: PLC0415
+        from app.services.calendar_actions import register_actions
     except ModuleNotFoundError:
         register_actions = None
     if register_actions is not None:
         register_actions(actions.registry)
 
-    from app.services.tasks_ports import Ports  # noqa: PLC0415
+    from app.services.tasks_ports import Ports
 
     hub = getattr(app.state, "event_hub", None)
     ports = Ports(

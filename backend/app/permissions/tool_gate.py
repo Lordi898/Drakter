@@ -17,6 +17,7 @@ from drakter_contracts.tools import ToolConfirmationRequired, ToolFailed
 from pydantic import BaseModel
 
 from app.audit.writer import AuditEvent, filter_params, write
+from app.permissions.canonical import canonical_json
 from app.permissions.models import ActionSpec, ActorContext, Principal, Verdict
 from app.services.actions import ActionService
 
@@ -51,7 +52,16 @@ def tool_action_spec(tool: Any, make_context: Callable[[], Any]) -> ActionSpec:
 
 
 def _default_summary(name: str) -> Callable[[BaseModel], str]:
-    return lambda _params: f"El agente quiere ejecutar «{name}»."
+    """Built by the backend from the validated arguments, so the approver sees what runs.
+
+    `ActionService` strips control and bidi characters and truncates it.
+    """
+
+    def summarize(params: BaseModel) -> str:
+        shown = canonical_json(params.model_dump(mode="json"))
+        return f"El agente quiere ejecutar «{name}» con {shown}"
+
+    return summarize
 
 
 def _audit_result(event: Any) -> str | None:
