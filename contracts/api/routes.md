@@ -4,7 +4,7 @@ Tabla única de rutas. Manda `contracts/README.md`; después, lo ya construido e
 
 ## Convenciones
 
-- **Listados:** `GET` devuelve `{items, next_cursor, total?}` y acepta `limit`, `cursor`, `sort=campo,-campo` (lista blanca por ruta); `limit` por defecto 50, máximo 200 (100 en recursos y búsqueda). El cursor es opaco; `total` es opcional. Salvo marca expresa, los listados excluyen archivados y aceptan `include_archived=true`.
+- **Listados:** salvo las excepciones aceptadas en v1 (memoria, chat y automejora paginan por `offset`: ver desviaciones), `GET` devuelve `{items, next_cursor, total?}` y acepta `limit`, `cursor`, `sort=campo,-campo` (lista blanca por ruta); `limit` por defecto 50, máximo 200 (100 en recursos y búsqueda). El cursor es opaco; `total` es opcional. Salvo marca expresa, los listados excluyen archivados y aceptan `include_archived=true`.
 - **PATCH:** parcial, `extra="forbid"`; `If-Match: <revision>` opcional, 412 `revision_mismatch`. Las mutaciones sobre una entidad aceptan `If-Match`. `POST` acepta `Idempotency-Key`.
 - **Errores:** `{"error":{"code","message","request_id","details":[{"field","code","message"}]}}`. Sin otra forma de error.
 - **Confirmación:** una ruta con riesgo `confirm` responde **409** `confirmation_required` con el sobre más `confirmation:{id,summary,affected_count,expires_at,params_hash}`; nunca 2xx. El cliente no manda `confirmation_id` ni `pre_confirmed`: la GUI aprueba con `POST /confirmations/{id}/approve` y el backend ejecuta los argumentos guardados. Los `DELETE` definitivos tienen riesgo `confirm`; archivar es `write`.
@@ -21,12 +21,12 @@ Tabla única de rutas. Manda `contracts/README.md`; después, lo ya construido e
 | GET | `/api/v1/auth/check` | - | `{authenticated:true}` | construida | read | seguridad (12) |
 | WS | `/api/v1/events` | `after_seq`, `boot_id` | eventos `{event_id,seq,boot_id,timestamp,type,version,correlation_id,payload}` | construida | read | contratos / chat (17) |
 | GET | `/api/v1/system/status` | - | versión, `boot_id`, BD y migración, salud de módulos, hora y zona | (sin construir) | read | seguridad (12) |
-| GET | `/api/v1/backups` | - | `BundleInfo[]`, lista completa sin paginar | escrita, sin montar | read | automejora (20) |
-| POST | `/api/v1/backups` | opciones de copia | `BundleInfo` | escrita, sin montar | write | automejora (20) |
-| POST | `/api/v1/backups/export` | - | `ExportResponse` | escrita, sin montar | write | automejora (20) |
-| POST | `/api/v1/backups/{name}/verify` | - | `VerifyResponse` | escrita, sin montar | read | automejora (20) |
-| POST | `/api/v1/backups/{name}/restore` | sin cuerpo | 409 `confirmation_required`; se ejecuta en `/confirmations/{id}/approve` | escrita, sin montar, ver desviaciones | confirm | automejora (20) |
-| DELETE | `/api/v1/backups/{name}` | sin cuerpo | 409 `confirmation_required`; se ejecuta en `/confirmations/{id}/approve` | escrita, sin montar, ver desviaciones | confirm | automejora (20) |
+| GET | `/api/v1/backups` | - | `BundleInfo[]`, lista completa sin paginar | construida | read | backend-base (copias) |
+| POST | `/api/v1/backups` | `CreateBundleRequest` `{label?, include_storage?}` | `BundleInfo` | construida | write | backend-base (copias) |
+| POST | `/api/v1/backups/export` | - | `ExportResponse` | construida | write | backend-base (copias) |
+| POST | `/api/v1/backups/{name}/verify` | - | `VerifyResponse` | construida | read | backend-base (copias) |
+| POST | `/api/v1/backups/{name}/restore` | sin cuerpo | 409 `confirmation_required`; se ejecutaría en `/confirmations/{id}/approve` | (sin construir), ver desviaciones | confirm | backend-base (copias) |
+| DELETE | `/api/v1/backups/{name}` | sin cuerpo | 409 `confirmation_required` (acción `delete_backup`, permiso `backups.delete`); se borra en `/confirmations/{id}/approve` | construida | confirm | backend-base (copias) |
 | GET | `/api/v1/today` | `timezone` (obligatoria, IANA) | `TodayResponse`; 422 `invalid_timezone` | construida | read | hoy-ajustes |
 | GET | `/api/v1/settings` | - | `{persisted, items:[SettingOut]}` | construida | read | hoy-ajustes |
 | GET | `/api/v1/settings/status` | - | estado de agente y clave, solo presencia | construida | read | hoy-ajustes |
@@ -280,12 +280,14 @@ Ya resuelto (fusión de drakter-34, `app/permissions/wiring.py`): pipeline de co
 
 | Qué | Dónde | Efecto hoy | Qué debe hacer |
 |---|---|---|---|
-| Router de copias fuera de `app/api/` | `app/services/backup_api.py` (automejora ya se monta con `app/api/improvement.py`) | `/api/v1/backups/**` da 404 `http_404`; la única superficie de copias montada es `/settings/backups` | Montarlo como automejora (un `app/api/backups.py` que reexporte `router`), una vez resuelta su puerta propia |
+| Restaurar copias por la API | `app/services/backup_service.py:restore_bundle` llama a `database/backup.restore_backup`, que toma el bloqueo de instancia con un `flock` propio; con el backend en marcha ese bloqueo ya lo tiene el proceso, y nadie instala `post_restore_hooks` ni `restore_quiesce` | ⚠️ Sin ruta: restaurar solo con el backend parado (`python -m app.database.cli restore`, copias SQLite) | Diseño propio: dejar de servir, soltar el bloqueo, restaurar, invalidar confirmaciones (README §5) y rearrancar. Fuera del cierre v1 |
 | Voz sin montar ni arrancar | `app/integrations/voice/router.py` y su supervisor no se usan fuera de su paquete | `/api/v1/voice/**` da 404 y no se emite ningún `voice.*` | Nada en v1: DECISIONS «Voz: cierre mínimo, rediseño posterior sobre Pipecat». Se rehace con el rediseño |
 
-### Paginación (debe ser `{items,next_cursor,total?}` + `limit`/`cursor`)
+### Paginación por `offset`: desviación aceptada en v1
 
-| Frente | Dónde | Qué hace | Qué debe hacer |
+El contrato pide `{items,next_cursor,total?}` con `limit`/`cursor`. Estos listados usan `limit`/`offset` y **no se refactorizan en v1** (decisión de cierre del 2026-11-13): el cliente debe usar `offset` en ellos. El resto de listados siguen el cursor.
+
+| Frente | Dónde | Qué hace | Forma del contrato (posterior a v1) |
 |---|---|---|---|
 | memoria (18) | `backend/app/integrations/memory/router.py:84,115-125` | `limit`, `offset`, `{items,total,limit,offset}` | `cursor` y `next_cursor`; puede conservar `total` |
 | agente/chat (16) | `backend/app/api/chat.py:83,95` | `limit`, `offset` en sesiones y mensajes | `cursor` y `next_cursor` |
@@ -297,11 +299,12 @@ Ya resuelto (fusión de drakter-34, `app/permissions/wiring.py`): pipeline de co
 |---|---|---|---|
 | memoria (18) | `backend/app/integrations/memory/router.py:105,187-188` | `forget` recibe `confirmation_id` en el cuerpo | Sin cuerpo; 409 con `confirmation` en el sobre |
 | memoria (18) | `backend/app/integrations/memory/router.py:177-179` | `POST /memory/{id}/approve` aprueba directamente | 409 y camino único: consolidar un recuerdo candidato exige confirmación |
-| automejora (20) | `backend/app/services/backup_api.py:214-227,260` | Puerta propia, rutas `restore-request` y `delete-request`, `confirmation_id` en el cuerpo | Quitar esas dos rutas y la puerta; `restore` y `DELETE` sin cuerpo, 409 y ejecución en `/confirmations/{id}/approve` |
 | automejora (20) | `backend/app/services/improvement_api.py:139-161`, `services/improvement_proposals.py:493-533,672-713`, `services/improvement_ports.py:119-121` | Puerta propia: `approval-request`/`revert-request` devuelven `confirmation_id` y `approve`/`revert` lo reciben en el cuerpo. La puerta sale de `app.state.confirmation_gate`, que nadie asigna, así que siempre es `DenyAllGate` (503 `confirmation_unavailable`: falla cerrada, pero no se puede aprobar nada) | Pasar por el pipeline único de `ActionService` (README §5 y DECISIONS «Caducidad única de confirmaciones: 300 s»): 409 y ejecución en `/confirmations/{id}/approve` |
-| hoy-ajustes | `backend/app/api/settings.py:35,40`, consumidas por `desktop/src/pages/today/requests.ts:29,33` | `/settings/backups`, segunda superficie de copias (la única montada hoy) | Usar `/api/v1/backups` cuando se monte `backup_api.py` y retirar estas rutas |
+| hoy-ajustes | `backend/app/api/settings.py:35,40`, consumidas por `desktop/src/pages/today/requests.ts:29,33` | `/settings/backups`, copias SQLite sueltas (`database/backup.create_backup`), segunda superficie junto a los bundles de `/api/v1/backups` | Que la GUI pase a `/api/v1/backups` y retirar estas rutas |
 
 ### Eventos del catálogo que nadie emite o nadie escucha
+
+Solo documentados: en v1 no se implementan emisores ni oyentes nuevos (decisión de cierre del 2026-11-13). El catálogo de `events.py` se mantiene.
 
 | Evento | Estado |
 |---|---|

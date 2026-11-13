@@ -6,7 +6,7 @@ from pydantic import Field
 from ..common import (
     ContractModel, HexColor, IanaTimezone, Id, Instant, LocalDate, LocalDateTime,
 )
-from ._base import EntityOut, LongText, Metadata, OutModel, Title
+from ._base import EntityCoreOut, LongText, OutModel, Title
 
 Rrule = Annotated[str, Field(max_length=200)]
 ReminderMinutes = Annotated[int, Field(ge=0)]
@@ -59,7 +59,6 @@ class CalendarEventCreate(ContractModel):
     end_date_exclusive: LocalDate | None = None
     rrule: Rrule | None = None
     reminder_minutes_before: ReminderMinutes | None = None
-    metadata: Metadata = {}
 
 
 class CalendarEventUpdate(ContractModel):
@@ -76,10 +75,9 @@ class CalendarEventUpdate(ContractModel):
     end_date_exclusive: LocalDate | None = None
     rrule: Rrule | None = None
     reminder_minutes_before: ReminderMinutes | None = None
-    metadata: Metadata | None = None
 
 
-class CalendarEventOut(EntityOut):
+class CalendarEventOut(EntityCoreOut):
     title: str
     description: str | None = None
     location: str | None = None
@@ -94,7 +92,6 @@ class CalendarEventOut(EntityOut):
     starts_at_utc: Instant | None = None
     ends_at_utc: Instant | None = None
     rrule: str | None = None
-    recurrence_until_utc: Instant | None = None
     reminder_minutes_before: int | None = None
 
 
@@ -106,7 +103,6 @@ class TimeBlockCreate(ContractModel):
     local_end: LocalDateTime
     status: TimeBlockStatus = TimeBlockStatus.PLANNED
     task_id: Id | None = None
-    metadata: Metadata = {}
 
 
 class TimeBlockUpdate(ContractModel):
@@ -117,10 +113,9 @@ class TimeBlockUpdate(ContractModel):
     local_end: LocalDateTime | None = None
     status: TimeBlockStatus | None = None
     task_id: Id | None = None
-    metadata: Metadata | None = None
 
 
-class TimeBlockOut(EntityOut):
+class TimeBlockOut(EntityCoreOut):
     title: str
     description: str | None = None
     timezone: IanaTimezone
@@ -167,6 +162,7 @@ class AgendaItem(OutModel):
     source_id: Id
     title: str
     description: str | None = None
+    location: str | None = None
     kind: str = Field(description="event|reminder|work_session|time_block|class")
     status: str
     all_day: bool

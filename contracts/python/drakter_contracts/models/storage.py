@@ -4,7 +4,7 @@ from typing import Annotated, Literal
 from pydantic import AnyHttpUrl, Field
 
 from ..common import ContractModel, Id, Instant
-from ._base import EntityOut, LongText, Metadata, Name, OutModel, TagName, Title
+from ._base import EntityCoreOut, LongText, Name, OutModel, TagName, Title
 from .tags import TagOut  # noqa: F401
 
 RelativePath = Annotated[str, Field(min_length=1, max_length=4096, description="Relativo a la ubicación; sin '..' ni '/' inicial")]
@@ -70,22 +70,17 @@ class StorageLocationOut(OutModel):
 class FolderCreate(ContractModel):
     name: Name
     parent_folder_id: Id | None = None
-    location_id: Id | None = None
-    relative_path: RelativePath | None = None
-    metadata: Metadata = {}
 
 
 class FolderUpdate(ContractModel):
     name: Name | None = None
     parent_folder_id: Id | None = None
-    metadata: Metadata | None = None
+    expected_revision: Annotated[int, Field(ge=1)] | None = None
 
 
-class FolderOut(EntityOut):
+class FolderOut(EntityCoreOut):
     name: str
     parent_folder_id: Id | None = None
-    location_id: Id | None = None
-    relative_path: str | None = None
     resource_count: int = 0
 
 
@@ -101,7 +96,6 @@ class ResourceCreate(ContractModel):
     description: LongText | None = None
     tags: Annotated[list[TagName], Field(max_length=32)] = []
     index_content: bool = False
-    metadata: Metadata = {}
 
 
 class ResourceUpdate(ContractModel):
@@ -111,10 +105,10 @@ class ResourceUpdate(ContractModel):
     description: LongText | None = None
     tags: Annotated[list[TagName], Field(max_length=32)] | None = None
     index_content: bool | None = None
-    metadata: Metadata | None = None
+    expected_revision: Annotated[int, Field(ge=1)] | None = None
 
 
-class ResourceOut(EntityOut):
+class ResourceOut(EntityCoreOut):
     title: str
     resource_type: ResourceType
     folder_id: Id | None = None

@@ -20,12 +20,17 @@ class OutModel(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
 
-class EntityOut(OutModel):
-    """Campos de `entities` presentes en toda entidad de dominio (0001)."""
+class EntityCoreOut(OutModel):
+    """Campos de `entities` que expone toda entidad de dominio (0001)."""
 
     id: Id
     created_at: Instant
     updated_at: Instant
     archived_at: Instant | None = None
     revision: int = Field(ge=1)
+
+
+class EntityOut(EntityCoreOut):
+    """Entidad que además expone `metadata` en la API (tareas, proyectos, eventos)."""
+
     metadata: Metadata = {}

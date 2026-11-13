@@ -4,7 +4,7 @@ from typing import Annotated
 from pydantic import Field
 
 from ..common import ContractModel, IanaTimezone, Id, Instant, LocalDate, LocalTime
-from ._base import EntityOut, LongText, Metadata, Name, OutModel
+from ._base import EntityCoreOut, LongText, Name, OutModel
 
 Rrule = Annotated[str, Field(max_length=200, description="Subconjunto RRULE, p. ej. FREQ=WEEKLY;BYDAY=MO,WE")]
 
@@ -28,11 +28,10 @@ class HabitCreate(ContractModel):
     rrule: Rrule
     start_date: LocalDate
     end_date: LocalDate | None = None
-    target_note: Annotated[str, Field(max_length=1000)] | None = None
+    goal_note: Annotated[str, Field(max_length=1000)] | None = None
     goal_project_id: Id | None = None
     preferred_local_time: LocalTime | None = None
     reminder_enabled: bool = False
-    metadata: Metadata = {}
 
 
 class HabitUpdate(ContractModel):
@@ -45,11 +44,10 @@ class HabitUpdate(ContractModel):
     )
     end_date: LocalDate | None = None
     status: HabitStatus | None = None
-    target_note: Annotated[str, Field(max_length=1000)] | None = None
+    goal_note: Annotated[str, Field(max_length=1000)] | None = None
     goal_project_id: Id | None = None
     preferred_local_time: LocalTime | None = None
     reminder_enabled: bool | None = None
-    metadata: Metadata | None = None
 
 
 class HabitScheduleVersionOut(OutModel):
@@ -59,7 +57,7 @@ class HabitScheduleVersionOut(OutModel):
     valid_until: LocalDate | None = None
 
 
-class HabitOut(EntityOut):
+class HabitOut(EntityCoreOut):
     name: str
     description: str | None = None
     timezone: IanaTimezone
@@ -68,7 +66,7 @@ class HabitOut(EntityOut):
     status: HabitStatus
     start_date: LocalDate
     end_date: LocalDate | None = None
-    target_note: str | None = None
+    goal_note: str | None = Field(default=None, description="Columna `habits.target_note`")
     goal_project_id: Id | None = None
     preferred_local_time: LocalTime | None = None
     reminder_enabled: bool

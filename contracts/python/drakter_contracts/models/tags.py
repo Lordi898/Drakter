@@ -2,7 +2,7 @@ from typing import Annotated
 
 from pydantic import Field
 
-from ..common import ContractModel, HexColor, Id, Instant
+from ..common import ContractModel, HexColor, Id
 from ._base import OutModel, TagName
 
 
@@ -20,7 +20,7 @@ class TagOut(OutModel):
     id: Id
     name: str
     color: HexColor | None = None
-    created_at: Instant
+    usage_count: int | None = Field(default=None, description="Solo en `GET /api/v1/tags`")
 
 
 class EntityTagsReplace(ContractModel):

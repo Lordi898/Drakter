@@ -3,7 +3,7 @@ from typing import Annotated
 from pydantic import Field
 
 from ..common import ContractModel, HexColor, IanaTimezone, Id, LocalDate, LocalTime
-from ._base import EntityOut, LongText, Metadata, Name, OutModel
+from ._base import EntityCoreOut, LongText, Name, OutModel
 
 Weekday = Annotated[int, Field(ge=1, le=7, description="1=lunes .. 7=domingo")]
 
@@ -13,7 +13,6 @@ class SubjectCreate(ContractModel):
     description: LongText | None = None
     teacher: Name | None = None
     color: HexColor | None = None
-    metadata: Metadata = {}
 
 
 class SubjectUpdate(ContractModel):
@@ -21,10 +20,9 @@ class SubjectUpdate(ContractModel):
     description: LongText | None = None
     teacher: Name | None = None
     color: HexColor | None = None
-    metadata: Metadata | None = None
 
 
-class SubjectOut(EntityOut):
+class SubjectOut(EntityCoreOut):
     name: str
     description: str | None = None
     teacher: str | None = None
@@ -41,7 +39,6 @@ class ClassSessionCreate(ContractModel):
     valid_until: LocalDate | None = None
     interval_weeks: Annotated[int, Field(ge=1)] = 1
     room: Name | None = None
-    metadata: Metadata = {}
 
 
 class ClassSessionUpdate(ContractModel):
@@ -53,10 +50,9 @@ class ClassSessionUpdate(ContractModel):
     valid_until: LocalDate | None = None
     interval_weeks: Annotated[int, Field(ge=1)] | None = None
     room: Name | None = None
-    metadata: Metadata | None = None
 
 
-class ClassSessionOut(EntityOut):
+class ClassSessionOut(EntityCoreOut):
     subject_id: Id
     weekday: int
     starts_local_time: LocalTime
@@ -81,6 +77,7 @@ class TimetableEntry(OutModel):
     room: str | None = None
     valid_from: LocalDate
     valid_until: LocalDate | None = None
+    interval_weeks: int = Field(ge=1)
 
 
 class Timetable(OutModel):

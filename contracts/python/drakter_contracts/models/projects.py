@@ -4,7 +4,7 @@ from typing import Annotated
 from pydantic import Field
 
 from ..common import ContractModel, Id, Instant, LocalDate, Priority
-from ._base import EntityOut, LongText, Metadata, Name, OutModel, TagName
+from ._base import EntityOut, LongText, Metadata, Name, OutModel
 
 
 class ProjectStatus(StrEnum):
@@ -31,6 +31,7 @@ class ProjectCreate(ContractModel):
     start_date: LocalDate | None = None
     target_date: LocalDate | None = None
     manual_progress: ManualProgress | None = None
+    objective: Annotated[str, Field(max_length=2000)] | None = Field(default=None, description="Se guarda en `entities.metadata_json`")
     metadata: Metadata = {}
 
 
@@ -42,6 +43,7 @@ class ProjectUpdate(ContractModel):
     start_date: LocalDate | None = None
     target_date: LocalDate | None = None
     manual_progress: ManualProgress | None = None
+    objective: Annotated[str, Field(max_length=2000)] | None = None
     metadata: Metadata | None = None
 
 
@@ -66,4 +68,5 @@ class ProjectOut(EntityOut):
     target_date: LocalDate | None = None
     completed_at: Instant | None = None
     manual_progress: int | None = None
+    objective: str | None = None
     progress: ProjectProgress | None = None
