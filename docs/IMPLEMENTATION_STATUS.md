@@ -263,8 +263,8 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 - [x] Crear relaciones entre asignaturas y recursos.
 - [x] Crear consulta inversa.
 - [x] Crear consulta de elementos relacionados.
-- [ ] Crear visualización de relaciones.
-  ⚠️ El código existe (`RelationshipsPage`, `RelationGraph`, `RelatedPanel`, diálogos), está enrutado, tipa sin errores y su contrato coincide con el backend; arreglado el filtro por tipo (`78acfca`). Falta abrirla una vez en Electron (`scripts/dev.sh`) para confirmar que se ve bien.
+- [x] Crear visualización de relaciones.
+  Nota: vista en Electron real con backend (drakter-48): lista con filtros, panel con grafo SVG y relaciones salientes, sin errores de consola. Detalles menores: la lista muestra tipo + ID corto en vez del título, y el panel contextual del shell sigue en «Nada seleccionado».
 - [ ] Crear herramientas Hermes.
   ⚠️ Con Claude Haiku 5.5 real por Hermes, leer, buscar y crear relaciones funcionan (`create_relationship`, `get_related_items`). `delete_relationship` queda denegado (`confirmation_unavailable`) hasta que el runtime use la puerta real de confirmación (drakter-34). El desvío de catálogo de `get_related_items` ya está corregido.
 - [x] Probar integridad y eliminación.

@@ -71,7 +71,7 @@ scripts/drakter-local.sh stop
 - **Instalador:** el AppImage se genera con el backend congelado corregido (`39503a7`), pero el `.deb` no se ha regenerado tras ese arreglo (`fpm` falló con `/tmp` lleno; regenerar con más de 3 GB libres, `flock` y `TMPDIR` en disco, ver `docs/installation/paquete-deb.md`), no se ha instalado ni se ha abierto la ventana empaquetada sin `--no-sandbox`. Sin icono propio ni proceso de versión (0.1.0).
 - **Sin medir:** RAM/CPU general, latencia de Hermes, y STT/TTS en reposo. Sin pasada de optimización de SQLite, FTS5, memoria ni carga de interfaz (el renderer es un único JS de 1,63 MB).
 - **Hora de los avisos de eventos:** el aviso dice «Empieza a las HH:MM» en la zona del evento, mientras Hoy muestra la hora en la zona del usuario. Solo difiere si el evento tiene otra zona.
-- **Sin comprobar en pantalla:** la visualización de relaciones y las vistas diaria y mensual del calendario no se han visto funcionar en Electron.
+- **Sin comprobar en pantalla:** las vistas diaria y mensual del calendario no se han visto funcionar en Electron.
 - **Pasada e2e:** el arnés no espera a `agent/status = idle` antes de conversar (Hermes tarda 3-6 s), así que `conversacion.*` da 503 `agent_unavailable`; los guiones `herramienta-permitida`, `accion-destructiva` e `inyeccion-documento` piden `read_file`/`terminal`, que Drakter nunca ofrece. `desktop.arranca` falla en todas las pasadas porque `tests/e2e/harness/stack.py` no pasa `DRAKTER_DEV_NO_SANDBOX=1` (con la variable arranca; cambio pedido a `drakter-32`). Además, el catálogo (`tests/e2e/catalog.toml`) usa `GET /api/v1/audit` y la ruta real es `/api/v1/activity`.
 
 ### Cerrados en el cierre
