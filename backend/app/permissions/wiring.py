@@ -175,6 +175,13 @@ def wire_security(app: FastAPI, settings: Settings) -> ActionService:
     if register_actions is not None:
         register_actions(actions.registry)
 
+    from app.services import improvement_actions
+    from app.services.improvement_ports import Principal as ImprovementPrincipal
+
+    improvement_actions.register_actions(actions.registry, settings)
+    # The UI token belongs to the desktop; Hermes reaches tools only through MCP.
+    app.state.gui_principal = ImprovementPrincipal(kind="user", id="desktop")
+
     from app.services.tasks_ports import Ports
 
     hub = getattr(app.state, "event_hub", None)
