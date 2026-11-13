@@ -200,9 +200,29 @@ def execute_delete_subject(conn: sqlite3.Connection, subject_id: str) -> dict[st
 def get_subject_resources(
     conn: sqlite3.Connection, ctx: RequestContext, subject_id: str
 ) -> SubjectResources:
-    """Vacío hasta que exista el módulo de relaciones."""
+    """Recursos enlazados a la asignatura en `relationships`, en cualquier sentido.
+
+    Solo ids y valores de enumeración: títulos y descripciones son datos no confiables
+    y se leen con `get_resource`, que los marca como tales.
+    """
     require_entity(conn, subject_id, "subject")
-    return SubjectResources(items=[])
+    rows = conn.execute(
+        """
+        SELECT r.id, r.resource_type, r.availability_status, rel.relationship_type,
+               CASE WHEN rel.source_id = :s THEN 'outgoing' ELSE 'incoming' END AS direction
+        FROM relationships rel
+        JOIN resources r
+          ON r.id = CASE WHEN rel.source_id = :s THEN rel.target_id ELSE rel.source_id END
+        JOIN entities e ON e.id = r.id
+        WHERE (rel.source_id = :s AND rel.target_type = 'resource')
+           OR (rel.target_id = :s AND rel.source_type = 'resource')
+        ORDER BY rel.created_at, r.id
+        LIMIT 200
+        """,
+        {"s": subject_id},
+    ).fetchall()
+    keys = ("resource_id", "resource_type", "availability_status", "relationship_type", "direction")
+    return SubjectResources(items=[dict(zip(keys, tuple(row), strict=True)) for row in rows])
 
 
 # --- sesiones de clase ---------------------------------------------------------------------

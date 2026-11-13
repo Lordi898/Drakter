@@ -12,15 +12,17 @@ from typing import Annotated, Literal, Self
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, model_validator
 
-_LOCAL_DATETIME = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}")
+_LOCAL_DATETIME = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:00)?")
 _LOCAL_TIME = re.compile(r"([01]\d|2[0-3]):[0-5]\d")
 
 
 def _check_local_datetime(value: str) -> str:
+    """Se guarda `AAAA-MM-DDTHH:MM`. Se acepta `:00` final, que es el formato de
+    `drakter_contracts.common`, y se recorta: el calendario no usa segundos."""
     if not _LOCAL_DATETIME.fullmatch(value):
         raise ValueError("se esperaba YYYY-MM-DDTHH:MM")
     datetime.fromisoformat(value)
-    return value
+    return value[:16]
 
 
 def _check_local_time(value: str) -> str:
