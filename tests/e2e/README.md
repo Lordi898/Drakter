@@ -16,6 +16,8 @@ scripts/verify-all.sh --hermes-venv /ruta/al/venv-de-hermes
 
 El venv de Hermes es propio, con Python >= 3.14 y el commit `b200f5bc` instalado. El preflight lo comprueba por commit (`direct_url.json`), no por texto de versión, y exige el runner `backend/app/integrations/hermes/runner/drakter_runner.py`. No hay gateway. Un venv incorrecto es FALLA; sin venv o sin runner, NO COMPROBADO. En ambos casos no se ejecuta ninguna conversación.
 
+El stub se arranca con los guiones de `tests/e2e/stub-scenarios/`, no con los suyos: estos piden herramientas nativas de Hermes (`read_file`, `terminal`) que el runner de Drakter no ofrece. Los del arnés usan el catálogo real: `list_tags` (lectura), `forget_memory` (CONFIRM) y `search_resources` sobre una nota con inyección que crea la propia comprobación.
+
 `agent.tools` se comprueba desde fuera: un proxy del arnés entre backend y stub registra los `tools[]` de cada petición al modelo, y `conversacion.lista_blanca` exige que todos cumplan `tool_pattern` de `config.toml`.
 
 Si `desktop/out` es anterior a las fuentes, ejecuta `npm run build`, que es una compilación pesada. Con Electron se abre una ventana real en el escritorio mientras dura la pasada, salvo con `--headless`.

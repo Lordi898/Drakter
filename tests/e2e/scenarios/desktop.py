@@ -295,7 +295,8 @@ def character(ctx):
        phase="desktop", needs=("desktop",))
 def confirmation(ctx):
     cdp = _cdp(ctx)
-    destructive = _find_button(r"(elimin|borr)")
+    # Palabra entera: el título «e2e borrable» de la fase API no debe contar como botón.
+    destructive = _find_button(r"(^|\s)(eliminar|borrar)\b")
     for section in ctx.state.get("desktop_sections") or [s["href"] for s in _sections(cdp)]:
         _go(cdp, section)
         if not cdp.evaluate(f"!!({destructive})"):

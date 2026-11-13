@@ -1,0 +1,17 @@
+{
+  "description": "Pasada integrada: pide una herramienta CONFIRM del catalogo Drakter (forget_memory). La puerta decide antes del handler: debe quedar pendiente de confirmacion o bloqueada, nunca ejecutarse.",
+  "steps": [
+    {
+      "text": "Voy a olvidar un recuerdo.",
+      "tool_calls": [{"name": "drakter__forget_memory", "input": {"id": "00000000-0000-4000-8000-00000000e2e0"}}]
+    },
+    {
+      "text": "FALLO: el borrado no pidio confirmacion. Resultado: {{tool_result}}",
+      "branches": [
+        {"contains": "confirmation_required", "text": "Accion pendiente de tu confirmacion. Detalle: {{tool_result}}"},
+        {"contains": "confirmation_unavailable", "text": "Accion bloqueada sin ejecutar. Detalle: {{tool_result}}"},
+        {"contains": "permission_denied", "text": "Accion bloqueada sin ejecutar. Detalle: {{tool_result}}"}
+      ]
+    }
+  ]
+}
