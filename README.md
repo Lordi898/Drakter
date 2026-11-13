@@ -1,16 +1,27 @@
 # Drakter
 
+> **English summary.** Drakter is a local-first personal AI agent with its own desktop app, built for a single user on Linux. An Electron + React desktop talks to a local FastAPI + SQLite backend, which drives a [Hermes Agent](https://github.com/NousResearch/hermes-agent) runtime backed by Claude Haiku 5.5. The agent manages tasks, projects, habits, calendar, subjects, a file storage with full-text search, relations between items and its own memory, always through validated backend tools with explicit confirmation for destructive actions. Status: v0.1.0 pre-release — the v1 scope is integrated and verified module by module; voice, the animated Rive character and the self-improvement screen are still in progress. Documentation is in Spanish. License: not chosen yet (see [Licencia](#licencia)).
+
 Agente personal de IA con aplicación de escritorio propia. Local-first, para un solo usuario, en Linux primero.
 
-El diseño completo son tres sistemas conectados por APIs internas: Core (agente, personalidad, memoria, herramientas), Desktop (Electron + React) y Workspace (datos en SQLite), con un backend FastAPI en medio.
+## Qué es
 
-**Estado (2026-11-13): cierre de la v1 terminado.** Todo el código está integrado y verificado módulo a módulo; la app arranca (Electron + backend + Hermes) con Claude Haiku 5.5 real. En las Checklists 0–17 hay 260 de 295 casillas en `[x]` (29 con una reserva ⚠️), 25 sin marcar con ⚠️ y 10 sin código. Pendiente sobre todo: voz conectada (se rediseña sobre Pipecat), personaje Rive, OpenViking (U-1), pantalla de automejora, `.deb` instalado y mediciones de rendimiento.
+Tres sistemas conectados por APIs internas:
 
-## Estado real
+- **Drakter Core:** el agente (Hermes + Claude Haiku 5.5), su personalidad, su memoria y sus herramientas.
+- **Drakter Desktop:** Electron + React + TypeScript + Tailwind + shadcn/ui, con un personaje animado y paneles por módulo.
+- **Drakter Workspace:** SQLite (+ FTS5) con tareas, proyectos, hábitos, calendario, asignaturas, almacén y relaciones.
 
-Foto del cierre, 2026-11-13. Cadena de ramas: `drakter/integracion` → `drakter/build` → `main` (local, por fast-forward, sin push). Pasada integrada final: `scripts/verify-all.sh` 44/44. Detalle operativo en [`docs/RUN_STATE.md`](docs/RUN_STATE.md) y por casilla en [`docs/IMPLEMENTATION_STATUS.md`](docs/IMPLEMENTATION_STATUS.md).
+En medio, un backend FastAPI (REST + WebSocket) que es el único dueño de los datos. El agente nunca toca la base de datos: llama a herramientas del backend, que validan parámetros, permisos y relaciones, piden confirmación para lo destructivo y lo registran en auditoría.
 
-Arranque desde el checkout: `scripts/drakter-local.sh start anthropic` (con el modelo real) o `start` (con el stub); `status` y `stop` para consultarla y pararla.
+## Estado
+
+**v0.1.0, pre-release (2026-11-13).** El alcance de la v1 está integrado y verificado módulo a módulo; la app arranca (Electron + backend + Hermes) con Claude Haiku 5.5 real. En las Checklists 0–17 hay 260 de 295 casillas en `[x]` (29 con una reserva ⚠️), 25 sin marcar con ⚠️ y 10 sin código. Pasada integrada final: `scripts/verify-all.sh` 44/44.
+
+Pendiente sobre todo: voz conectada a la app, personaje Rive (hoy hay un provisional en SVG con los mismos estados), OpenViking, pantalla de automejora, `.deb` instalado y mediciones de rendimiento.
+
+<details>
+<summary>Estado por bloque</summary>
 
 | Bloque | Dónde | `[x]` | Estado verificado |
 |---|---|---|---|
@@ -18,95 +29,54 @@ Arranque desde el checkout: `scripts/drakter-local.sh start anthropic` (con el m
 | Escritorio (CL1) | `desktop/` | 13/13 | Verificado en la app: Electron con backend real, ventana, navegación de 10 secciones, área central, panel contextual, notificaciones, configuración y gestión de errores; búsqueda global (Ctrl+K), Hoy y Ajustes contra el backend. Empaquetado configurado (AppImage generado; el `.deb`, ver CL17) |
 | Backend FastAPI + SQLite (CL2) | `backend/app/` | 12/12 | Verificado, incluido el sistema de permisos: guardia de red y roles, y confirmaciones cableadas en el arranque con un único camino (`ActionService`, 300 s) |
 | Hermes y chat (CL3) | `backend/app/integrations/`, `agent/` | 11/12 | GUI → backend → Hermes v0.22.7 → respuesta en el chat con Claude Haiku 5.5 real: sesiones, envío, recepción, eventos y recuperación tras caída del runner verificados. ⚠️ La primera Skill no la carga Hermes |
-| Personalidad y contexto (CL4) | `agent/identity/`, `agent/context/`, `agent/knowledge/` | 17/17 | Verificado: 14 archivos compuestos en el `SOUL.md` de Hermes, con la seguridad primero, y consistencia de personalidad comprobada con Claude Haiku 5.5 real. Los matices de estilo pasan al rediseño de personalidad |
+| Personalidad y contexto (CL4) | `agent/identity/`, `agent/context/`, `agent/knowledge/` | 17/17 | Verificado: 14 archivos compuestos en el `SOUL.md` de Hermes, con la seguridad primero, y consistencia de personalidad comprobada con Claude Haiku 5.5 real |
 | Personaje (CL5) | `desktop/src/character/` | 16/19 | Verificado en el personaje provisional SVG: diseño, 9 estados, transiciones y eventos visuales. ⚠️ Faltan el `.riv`, el runtime de Rive y la sincronización labial con audio |
 | Base de datos y migraciones (CL6) | `backend/migrations/` (0001–0013) | 18/18 | Verificado: 36 tablas, integridad referencial, copia y restauración |
-| Tareas y proyectos (CL7) | `backend/app/services/tasks*.py`, `desktop/src/modules/tasks/`, `projects/` | 23/23 | Verificado el backend y las 21 herramientas: CRUD con borrado confirmado, subtareas, estados, prioridades, etiquetas, dependencias, archivo, progreso e historial. Operaciones probadas desde la GUI en Electron y desde el chat con Haiku real, incluido el borrado pedido por el agente, que pide confirmación y se aprueba en la app |
+| Tareas y proyectos (CL7) | `backend/app/services/tasks*.py`, `desktop/src/modules/tasks/`, `projects/` | 23/23 | Verificado el backend y las 21 herramientas, desde la GUI y desde el chat con Haiku real, incluido el borrado pedido por el agente, que pide confirmación y se aprueba en la app |
 | Hábitos (CL8) | `backend/app/services/habits*.py`, `desktop/src/modules/habits/` | 12/12 | Verificado: CRUD, frecuencia y días, recordatorios, registros, historial, estadísticas, objetivos y persistencia. ⚠️ Herramientas sin probar con modelo |
-| Calendario y asignaturas (CL9) | `backend/app/services/calendar*.py`, `subjects.py`, `desktop/src/modules/calendar/`, `subjects/` | 18/18 | Verificado: vistas diaria, semanal y mensual, eventos, bloques, solapamientos, zonas horarias, asignaturas, horarios y sesiones, recursos y tareas asociadas, borrado con confirmación. Las 21 herramientas se registran |
+| Calendario y asignaturas (CL9) | `backend/app/services/calendar*.py`, `subjects.py`, `desktop/src/modules/calendar/`, `subjects/` | 18/18 | Verificado: vistas diaria, semanal y mensual, eventos, bloques, solapamientos, zonas horarias, asignaturas, horarios y sesiones, recursos y tareas asociadas, borrado con confirmación |
 | Almacén (CL10) | `backend/app/services/storage*.py`, `desktop/src/modules/storage/` | 25/25 | Verificado: catálogo, carpetas, etiquetas, índice FTS5, lectura bajo demanda (texto, PDF, imágenes, enlaces), límites de comprimidos y rutas permitidas. ⚠️ Herramientas sin probar con modelo |
-| Relaciones (CL11) | `backend/app/services/relations.py`, `desktop/src/modules/relationships/` | 13/14 | Verificado el servicio, los tipos, las validaciones, las consultas y la integridad. Leer, buscar y crear relaciones funcionan desde el agente con Haiku real. Pantalla vista en Electron (lista, grafo, panel). ⚠️ Borrar desde el agente sin recomprobar con el modelo |
-| Memoria (CL12) | `memory/`, `backend/app/integrations/memory/` | 20/22 | Verificado el adaptador SQLite + FTS5 y su ciclo (extraer, clasificar, deduplicar, contradicciones, caducidad). Recupera recuerdos en cada turno de Hermes (comprobado con Haiku real) y olvidar o aprobar recuerdos pasa por confirmación. ⚠️ OpenViking desactivado (U-1, sin confirmar) |
-| Skills y herramientas (CL13) | `agent/skills/`, `backend/app/tools/` | 7/15 | 78 herramientas por MCP con parámetros, permisos y errores verificados. ⚠️ Las Skills están inertes en Hermes (se desactiva `skill_manage`); selección y encadenado comprobados con Haiku real por Hermes y evals; las acciones del agente que lo requieren piden confirmación (`BackendToolGate`) |
-| Voz (CL14) | `voice/` | 13/18 | Verificado como proceso aislado: VAD, Whisper small, Kokoro, Voice Manager, reproducción e interrupciones. ⚠️ Sin conectar a la app (no hay conversación por voz), sin wake word ni Piper; rediseño previsto sobre Pipecat |
-| Automejora (CL15) | `improvement/`, `backend/app/services/improvement_*.py` | 11/11 | Verificado el ciclo (feedback, propuestas, evaluación aislada, rama Git, revertir) y que no puede cambiar nada sin aprobación. Aprobación y reversión por `ActionService`. ⚠️ Sin pantalla de automejora |
-| Seguridad (CL16) | `backend/app/permissions/`, `tests/security/` | 14/15 | Revisión adversarial hecha: permisos, confirmaciones por la GUI, rutas, comprimidos, auditoría, copias y restauración verificados (banco final 169 BLOCKED / 12 BREACH / 0 ERROR) y recuperación del backend tras caída. Las confirmaciones pedidas por el agente pasan por `BackendToolGate`. ⚠️ Brechas de diseño conocidas (contaminación no persistente, canal de datos de `TurnRequest`, INJ-05, TOCTOU de bajo riesgo); reconexión del WebSocket del escritorio sin observar |
-| Optimización y lanzamiento (CL17) | `desktop/electron-builder.*`, `docs/installation/` | 3/17 | Guías de instalación al día; AppImage generado con el backend congelado. Pruebas de aceptación: `verify-all.sh` 44/44. ⚠️ `.deb` sin regenerar ni instalar, sin mediciones de rendimiento ni optimización, sin versión estable |
+| Relaciones (CL11) | `backend/app/services/relations.py`, `desktop/src/modules/relationships/` | 13/14 | Verificado el servicio, los tipos, las validaciones, las consultas y la integridad; leer, buscar y crear desde el agente con Haiku real. ⚠️ Borrar desde el agente sin recomprobar con el modelo |
+| Memoria (CL12) | `memory/`, `backend/app/integrations/memory/` | 20/22 | Verificado el adaptador SQLite + FTS5 y su ciclo (extraer, clasificar, deduplicar, contradicciones, caducidad); olvidar o aprobar recuerdos pasa por confirmación. ⚠️ OpenViking desactivado |
+| Skills y herramientas (CL13) | `agent/skills/`, `backend/app/tools/` | 7/15 | 78 herramientas por MCP con parámetros, permisos y errores verificados. ⚠️ Las Skills están inertes en Hermes (`skill_manage` desactivado) |
+| Voz (CL14) | `voice/` | 13/18 | Verificado como proceso aislado: VAD, Whisper small, Kokoro, Voice Manager, reproducción e interrupciones. ⚠️ Sin conectar a la app, sin wake word ni Piper |
+| Automejora (CL15) | `improvement/`, `backend/app/services/improvement_*.py` | 11/11 | Verificado el ciclo (feedback, propuestas, evaluación aislada, rama Git, revertir) y que no puede cambiar nada sin aprobación. ⚠️ Sin pantalla de automejora |
+| Seguridad (CL16) | `backend/app/permissions/`, `tests/security/` | 14/15 | Revisión adversarial hecha (banco final 169 BLOCKED / 12 BREACH / 0 ERROR). ⚠️ Brechas de diseño conocidas: ver [SECURITY.md](SECURITY.md) |
+| Optimización y lanzamiento (CL17) | `desktop/electron-builder.*`, `docs/installation/` | 3/17 | Guías de instalación al día; AppImage generado con el backend congelado. ⚠️ `.deb` sin regenerar ni instalar, sin mediciones de rendimiento |
 
-## Estructura de carpetas
+Detalle por casilla en [`docs/IMPLEMENTATION_STATUS.md`](docs/IMPLEMENTATION_STATUS.md) y estado operativo en [`docs/RUN_STATE.md`](docs/RUN_STATE.md).
 
-```
-.
-├── .claude/        instrucciones, agentes, skills y comandos para Claude Code
-├── agent/          identidad, contexto, conocimiento, skills y evaluaciones del agente
-├── backend/        FastAPI + SQLite (API REST, WebSocket, migraciones)
-├── contracts/      contratos de API, eventos y modelos compartidos
-├── desktop/        Electron, React, TypeScript
-├── docs/           plan, estado, decisiones, arquitectura, instalación y uso
-├── improvement/    automejora y evaluaciones
-├── memory/         memoria del agente
-├── scripts/        check-env.sh, dev.sh, drakter, drakter-local.sh y verify-all.sh
-├── tests/          pasada e2e
-├── tools/          dev-llm-stub
-├── voice/          servicio de voz
-├── .env.example    plantilla de configuración (solo nombres)
-├── CHANGELOG.md
-└── README.md
-```
+</details>
 
 ## Requisitos
 
-- **Python 3.12 para el backend**, por elección del proyecto: `requires-python` admite solo 3.12 y se usa el comando `python3.12`.
-- **Python >=3.14 para Hermes**, en un venv propio, separado del backend. Hermes se instala desde git con el tag v0.22.7 (`b200f5bc`), nunca desde PyPI, y el backend lo encuentra como `hermes-python` en el `PATH` o con `DRAKTER_HERMES_PYTHON` (ver `docs/installation/hermes-y-openviking.md`).
-- **`uv`**, que crea el venv del backend (en la máquina de desarrollo, en `~/.local/bin`).
-- **Node 24 y npm**, que son las versiones usadas aquí.
-- Sesión gráfica para abrir el escritorio.
+- **Linux** con sesión gráfica. La arquitectura está preparada para Windows, pero solo se ha probado en Linux.
+- **Python 3.12** para el backend (`requires-python` admite solo 3.12; se usa el comando `python3.12`).
+- **Python >= 3.14** para Hermes, en un venv propio separado del backend. Hermes se instala desde git con el tag v0.22.7 (`b200f5bc`), nunca desde PyPI (ver [`docs/installation/hermes-y-openviking.md`](docs/installation/hermes-y-openviking.md)).
+- **[`uv`](https://docs.astral.sh/uv/)** para el venv del backend.
+- **Node 24 y npm.**
+- Una **clave de API de Anthropic** para usar el modelo real. Sin ella, la app funciona con el stub de desarrollo (`tools/dev-llm-stub`).
 
-Máquina de desarrollo: i7-8665U, Intel UHD 620 sin VRAM dedicada y 14 GB de RAM. El plan maestro habla de 32 GB y 4 GB de VRAM, que no se corresponden con ella.
+Se ha desarrollado en un portátil con 14 GB de RAM y gráfica integrada; la voz local es la parte más exigente.
 
-La instalación la ejecutas tú (detalle en [`docs/installation/instalar.md`](docs/installation/instalar.md)):
+## Instalación
+
+Detalle paso a paso en [`docs/installation/instalar.md`](docs/installation/instalar.md).
 
 ```sh
+git clone https://github.com/Lordi898/Drakter.git
+cd Drakter
 (cd backend && uv sync --frozen)
 (cd desktop && npm ci && node node_modules/electron/install.js)
-```
-
-`npm` 12 no ejecuta el script que descarga Electron; de ahí la última orden.
-
-## Comprobar el entorno
-
-```sh
 scripts/check-env.sh
 ```
 
-No admite argumentos. Imprime líneas `OK`, `AVISO` o `FALTA` y sale con 1 si hay algún `FALTA`, con 0 si no. Comprueba `python3.12`, un Python >=3.14 para el venv de Hermes (solo `AVISO` si no hay), Node, npm, `uv`, la existencia y los permisos de `~/.config/drakter/.env` (sin leerlo), el venv de `backend/`, `node_modules` de `desktop/`, el sandbox de Electron y la sesión gráfica.
+- `npm` 12 no ejecuta el script que descarga Electron; de ahí `node node_modules/electron/install.js`.
+- `scripts/check-env.sh` imprime líneas `OK`, `AVISO` o `FALTA` y sale con 1 si falta algo. Comprueba Python, Node, npm, `uv`, el venv de Hermes, `~/.config/drakter/.env` (sin leerlo), el sandbox de Electron y la sesión gráfica.
 
-## Arrancar en desarrollo
+## Configuración
 
-```sh
-scripts/drakter-local.sh start anthropic  # app con Claude Haiku 5.5 real
-scripts/drakter-local.sh start            # app con el stub de desarrollo
-scripts/drakter-local.sh status
-scripts/drakter-local.sh stop
-scripts/dev.sh [all|desktop]              # escritorio en primer plano
-```
-
-- El backend no se arranca aparte: lo lanza el proceso principal de Electron con las credenciales por stdin y un puerto efímero (D-14). `scripts/dev.sh backend` sale con error a propósito.
-- `drakter-local.sh` deja la app y el stub desacoplados de la terminal; `dev.sh` no instala nada y avisa si falta `hermes-python`.
-- Logs y cómo parar sin dejar procesos: [`docs/RUN_STATE.md`](docs/RUN_STATE.md).
-
-### Sandbox de Electron
-
-En la máquina de desarrollo AppArmor restringe los espacios de nombres sin privilegios (`kernel.apparmor_restrict_unprivileged_userns=1`), y sin más ajustes Electron aborta con un error de `chrome-sandbox`. `dev.sh` no desactiva el sandbox por su cuenta, y `check-env.sh` da un `AVISO`. Hay dos salidas (detalle en [`docs/installation/sandbox-electron.md`](docs/installation/sandbox-electron.md)):
-
-- Desactivarlo solo en esa sesión de desarrollo, que es lo que se ha probado: `ELECTRON_DISABLE_SANDBOX=1 DRAKTER_DEV_NO_SANDBOX=1 scripts/dev.sh`.
-- Dar a `chrome-sandbox` su propietario y modo, sin probar todavía, con `sudo chown root:root` y `sudo chmod 4755` sobre `desktop/node_modules/electron/dist/chrome-sandbox`. Hay que repetirlo tras cada `npm ci`.
-
-## Configuración y secretos
-
-El backend lee las variables del entorno y de `~/.config/drakter/.env` (respeta `XDG_CONFIG_HOME`). **No lee ningún `.env` en la raíz del repositorio.**
-
-`.env.example` es la plantilla. Se copia a esa ruta, nunca lleva valores reales y `.env` está en `.gitignore`. `cp -n` no sobrescribe un `.env` que ya exista.
+El backend lee las variables del entorno y de `~/.config/drakter/.env` (respeta `XDG_CONFIG_HOME`). **No lee ningún `.env` en la raíz del repositorio.** [`.env.example`](.env.example) es la plantilla completa, solo con nombres:
 
 ```sh
 mkdir -p ~/.config/drakter
@@ -114,9 +84,7 @@ cp -n .env.example ~/.config/drakter/.env
 chmod 600 ~/.config/drakter/.env
 ```
 
-Las líneas sin valor (`NOMBRE=`) se ignoran y se usa el valor por defecto, así que basta con rellenar las que necesites (al menos `ANTHROPIC_API_KEY`).
-
-No hay puerto, dirección ni orígenes que configurar: Electron lanza el backend, que escucha en `127.0.0.1` con un puerto efímero (D-14).
+Las líneas sin valor (`NOMBRE=`) se ignoran y se usa el valor por defecto; basta con rellenar las que necesites (al menos `ANTHROPIC_API_KEY` para el modelo real). No hay puerto que configurar: Electron lanza el backend en `127.0.0.1` con un puerto efímero.
 
 | Variable | Por defecto | Para qué |
 |---|---|---|
@@ -129,17 +97,77 @@ No hay puerto, dirección ni orígenes que configurar: Electron lanza el backend
 | `DRAKTER_MODEL_NAME` | `claude-haiku-5-5` | Modelo del agente |
 | `DRAKTER_HERMES_PYTHON` | `hermes-python` (en el `PATH`) | Python del venv de Hermes |
 | `DRAKTER_DEV_STUB_URL` | `http://127.0.0.1:28517` | Stub de desarrollo; solo `http` en loopback |
-| `DRAKTER_VOICE_ENABLED`, `DRAKTER_VOICE_PYTHON`, `DRAKTER_PIPER_PYTHON` | voz desactivada | Proceso de voz (ver `docs/installation/voz.md`) |
+| `DRAKTER_VOICE_*`, `DRAKTER_STT_*`, `DRAKTER_TTS_*`, `DRAKTER_VAD_*`, `DRAKTER_WAKEWORD_*`, `DRAKTER_AUDIO_*`, `DRAKTER_PIPER_*` | voz desactivada | Proceso de voz (ver [`docs/installation/voz.md`](docs/installation/voz.md)) |
 | `DRAKTER_IMPROVEMENT_REPO` | — | Repositorio de pruebas de la automejora; sin él, evaluar queda bloqueado |
 
-`OPENVIKING_ENDPOINT` y `OPENVIKING_API_KEY` están reservadas: nada las lee todavía. Guías: [instalación](docs/installation/README.md), [clave de API](docs/installation/clave-api.md) y [uso por módulo](docs/usage/README.md).
+`OPENVIKING_ENDPOINT`, `OPENVIKING_API_KEY` y `FISH_API_KEY` están reservadas: nada las lee todavía. Más: [clave de API](docs/installation/clave-api.md).
+
+## Arranque
+
+```sh
+scripts/drakter-local.sh start anthropic  # app con Claude Haiku 5.5 real
+scripts/drakter-local.sh start            # app con el stub de desarrollo
+scripts/drakter-local.sh status
+scripts/drakter-local.sh stop
+scripts/dev.sh [all|desktop]              # escritorio en primer plano
+```
+
+- El backend no se arranca aparte: lo lanza el proceso principal de Electron, con las credenciales por stdin y un puerto efímero.
+- `drakter-local.sh` deja la app y el stub desacoplados de la terminal. Logs y cómo parar sin dejar procesos: [`docs/RUN_STATE.md`](docs/RUN_STATE.md).
+- Pasada integrada completa (backend + stub + Electron): `scripts/verify-all.sh`.
+
+**Sandbox de Electron.** Si AppArmor restringe los espacios de nombres sin privilegios (`kernel.apparmor_restrict_unprivileged_userns=1`, el caso de Ubuntu reciente), Electron aborta con un error de `chrome-sandbox`. En desarrollo: `ELECTRON_DISABLE_SANDBOX=1 DRAKTER_DEV_NO_SANDBOX=1 scripts/dev.sh`. En producción el sandbox es obligatorio. Detalle en [`docs/installation/sandbox-electron.md`](docs/installation/sandbox-electron.md).
+
+## Arquitectura en breve
+
+```
+Electron (main) ──lanza──▶ backend FastAPI (127.0.0.1, puerto efímero)
+   │  proxy con lista blanca de rutas            │
+React (renderer) ◀── REST + WebSocket ──▶  servicios ── SQLite + FTS5 (Workspace)
+                                                  │
+                                       runner de Hermes (proceso aparte)
+                                       ── herramientas MCP ──▶ backend
+```
+
+- **Una sola fuente de verdad:** el Workspace en SQLite, con migraciones controladas (`backend/migrations/`).
+- **Herramientas, no acceso directo:** las 78 herramientas del agente tienen esquema, permisos, validación, resultado estructurado y errores; las destructivas pasan por confirmación (`ActionService`).
+- **Datos no confiables:** los documentos del almacén y la memoria recuperada se tratan como datos; no pueden cambiar las instrucciones ni las reglas de seguridad.
+- **Personalidad en archivos** (`agent/identity/`), separada del modelo; proveedor del modelo intercambiable; voz separada del razonamiento.
+
+Más en [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+
+## Estructura de carpetas
+
+```
+.
+├── .claude/        instrucciones, agentes, skills y comandos para Claude Code
+├── .github/        CI, plantillas de issues y PR, Dependabot
+├── agent/          identidad, contexto, conocimiento, skills y evaluaciones del agente
+├── backend/        FastAPI + SQLite (API REST, WebSocket, migraciones)
+├── contracts/      contratos de API, eventos y modelos compartidos
+├── desktop/        Electron, React, TypeScript
+├── docs/           plan, estado, decisiones, arquitectura, instalación y uso
+├── improvement/    automejora y evaluaciones
+├── memory/         memoria del agente
+├── scripts/        arranque, comprobación del entorno, pasada integrada e instalación de skills
+├── tests/          pasada e2e y banco de seguridad
+├── tools/          dev-llm-stub
+└── voice/          servicio de voz
+```
 
 ## Documentación
 
-- [Instalación](docs/installation/README.md)
-- [Uso por módulo](docs/usage/README.md)
-- [Arquitectura](docs/ARCHITECTURE.md)
-- [Convenciones](docs/CONVENTIONS.md)
-- [Estado de implementación](docs/IMPLEMENTATION_STATUS.md)
-- [Decisiones](docs/DECISIONS.md)
-- [Plan maestro](docs/MASTER_PLAN.md)
+- [Instalación](docs/installation/README.md) · [Uso por módulo](docs/usage/README.md)
+- [Arquitectura](docs/ARCHITECTURE.md) · [Convenciones](docs/CONVENTIONS.md)
+- [Estado de implementación](docs/IMPLEMENTATION_STATUS.md) · [Decisiones](docs/DECISIONS.md) · [Plan maestro](docs/MASTER_PLAN.md)
+- [Registro de cambios](CHANGELOG.md)
+
+## Contribuir y seguridad
+
+- Cómo contribuir: [CONTRIBUTING.md](CONTRIBUTING.md). Normas de convivencia: [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
+- Vulnerabilidades: **no abras un issue público**; sigue [SECURITY.md](SECURITY.md).
+- Contenido y dependencias de terceros: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+## Licencia
+
+**Pendiente.** El propietario todavía no ha elegido la licencia del proyecto, así que de momento no se concede ningún permiso de uso, copia ni redistribución más allá de lo que permite GitHub. Esta sección y el archivo `LICENSE` se completarán cuando se elija. El contenido de terceros conserva su propia licencia (ver [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)).

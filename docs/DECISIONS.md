@@ -774,3 +774,15 @@ Decisiones técnicas, cambios de tecnología y motivos.
 - **Alternativas descartadas:** relajar la regla de sandbox en `main`; reintentar turnos.
 - **Motivo:** la restricción del sandbox es correcta para producción; el arnés es el que debe adaptarse.
 - **Impacto:** `tests/e2e/harness/stack.py`, `tests/e2e/run.py`; Checklists 1, 3 y 5.
+
+## [2026-11-13] Publicación en GitHub e higiene de repositorio open source
+- **Contexto:** el usuario autoriza publicar `main` en `github.com/Lordi898/Drakter` (privado) y dejarlo listo para hacerse público. `.claude/` llevaba copiado contenido de terceros; las 19 skills de `LLMTooling/agent-skills@f096e2bc` no tienen licencia en ningún nivel del repositorio de origen, así que no hay permiso para redistribuirlas.
+- **Decisión:**
+  - Antes del push, escaneo de secretos de todo el historial de `main` con gitleaks 8.21.2 (checksum verificado): 7 hallazgos, todos falsos positivos (cebos de `tests/security/`, el nonce de ejemplo de RFC 6455 y ejemplos de documentación de terceros). Sin emails personales ni archivos `.env` reales en el historial.
+  - Las 19 skills de LLMTooling salen del árbol y se ignoran; `scripts/install-agent-skills.sh` las descarga del commit fijado y las reproduce byte a byte (comprobado). El resto de `.claude/` tiene licencia permisiva (MIT o Apache-2.0) y se queda, con su `LICENSE` y su fila en `THIRD_PARTY_NOTICES.md`; se añaden los `LICENSE` que faltaban (`skill-creator`, `find-skills`) y los textos de VoltAgent, lst97 y shadcn/ui en `docs/third-party-licenses/`.
+  - Origen identificado por hash de blob: `skill-creator` es `sentient-agi/meta-skill-creator@02cb1db9` (Apache-2.0); `categories/01–10` son `VoltAgent/awesome-claude-code-subagents@ed74d115` y `categories/11–17` + `agent-organizer.md` son `lst97/claude-code-sub-agents@96f5a506` (ambos MIT); `find-skills` es `vercel-labs/skills@b716f9dc` (MIT).
+  - Se añaden `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md` (Contributor Covenant 2.1, traducción oficial al español), `SECURITY.md` (reporte privado por GitHub), `THIRD_PARTY_NOTICES.md`, `.editorconfig`, plantillas de issues y PR, `CODEOWNERS`, Dependabot y CI (`.github/workflows/ci.yml`: las cuatro comprobaciones críticas del backend y typecheck + build del escritorio, acciones fijadas por SHA, permisos de solo lectura, sin clave de API).
+  - Sin `LICENSE` todavía: la elige el usuario.
+- **Alternativas descartadas:** mantener las skills de LLMTooling en el árbol (redistribución sin permiso); borrarlas sin script (rompe el flujo de desarrollo con Claude Code); reescribir el historial para sacarlas también de ahí (decisión del usuario antes de hacer público el repositorio).
+- **Motivo:** que el repositorio pueda hacerse público sin redistribuir contenido sin licencia y con lo mínimo de un proyecto open source serio.
+- **Impacto:** `.gitignore`, `.claude/skills/`, `scripts/install-agent-skills.sh`, documentos de la raíz, `.github/`, `docs/third-party-licenses/`. Tras actualizar un checkout existente hay que ejecutar `scripts/install-agent-skills.sh` para recuperar las 19 skills.
