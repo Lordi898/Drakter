@@ -20,13 +20,14 @@ from uuid import uuid4
 
 from app.core.config import Settings
 from app.core.errors import AppError
+from app.services.actions import CONFIRMATION_TTL_SECONDS as ACTIONS_CONFIRMATION_TTL_SECONDS
 
 ActorKind = Literal["user", "agent", "automation", "system"]
 Origin = Literal["rest", "mcp", "scheduler", "internal"]
 AuditResult = Literal["success", "denied", "failed", "confirmation_required"]
 
 MAX_AUDIT_VALUE_CHARS: Final = 200
-CONFIRMATION_TTL_SECONDS: Final = 600  # propuesto, sin fijar en contracts
+CONFIRMATION_TTL_SECONDS: Final = ACTIONS_CONFIRMATION_TTL_SECONDS  # único plazo: services/actions.py (300 s)
 
 
 @dataclass(frozen=True)
