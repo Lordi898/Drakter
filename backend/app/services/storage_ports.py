@@ -273,7 +273,8 @@ class StorageDeps:
     def denied_roots(self) -> tuple[Path, ...]:
         """Rutas que nunca se sirven, aunque queden dentro de una ubicación (BL-12)."""
         home = Path.home()
-        return (
+        runtime_dir = getattr(self.settings, "runtime_dir", None)  # Settings may not define it
+        roots = (
             home / ".ssh",
             home / ".gnupg",
             home / ".aws",
@@ -283,8 +284,9 @@ class StorageDeps:
             home / ".config" / "google-chrome",
             home / ".config" / "chromium",
             self.settings.data_dir,
-            self.settings.runtime_dir,
+            runtime_dir,
         )
+        return tuple(p for p in roots if p is not None)
 
 
 def utc_now() -> str:
