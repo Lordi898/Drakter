@@ -281,7 +281,7 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 - [x] Implementar y comprobar la deduplicación en el Memory Adapter.
 - [x] Implementar y comprobar la detección de contradicciones en el Memory Adapter.
 - [x] Configurar y comprobar la memoria de trabajo en Hermes y OpenViking.
-  ⚠️ La memoria de trabajo es la sesión propia de Hermes (`session_db`, `persist=True`): comprobado con el stub que el turno 2 lleva el historial del turno 1. La parte de OpenViking sigue desactivada (U-1).
+  ⚠️ En Hermes funciona: con Claude Haiku 5.5 real el turno 2 recuerda el turno 1 (sesión de Hermes, `persist=True`). La parte de OpenViking sigue desactivada (U-1); ningún código escribe `DRAKTER_DATA_DIR/memory/working/`.
 - [x] Implementar y comprobar la memoria episódica en el Memory Adapter.
 - [x] Implementar y comprobar la memoria semántica en el Memory Adapter.
 - [x] Implementar y comprobar la memoria procedimental en el Memory Adapter.
@@ -289,6 +289,7 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 - [x] Configurar y comprobar los límites de contexto.
 - [x] Configurar y comprobar los registros de memoria.
 - [x] Crear Skill de memoria.
+  ⚠️ El archivo existe y cita las herramientas reales, pero Hermes no carga las Skills (toolset `skills` apagado por `skill_manage`), como las de la Checklist 13.
 - [x] Probar persistencia.
 - [x] Probar recuperación.
   ⚠️ Sin modelo real (sin clave): comprobado por REST y por la herramienta `search_memory`.
@@ -378,7 +379,6 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 - [x] Crear permisos por módulo.
 - [x] Crear permisos por operación.
 - [x] Crear confirmaciones.
-  ⚠️ Por la GUI y por el agente funcionan (409 / confirmación pendiente → aprobar con `approver` → ejecutado; el agente por `BackendToolGate`, `3bafbe1`). Olvidar un recuerdo desde la GUI sigue con `DenyAllGate` y falla cerrado (pendiente de drakter-42).
 - [x] Proteger credenciales.
 - [x] Validar rutas.
 - [x] Limitar acceso a archivos.
