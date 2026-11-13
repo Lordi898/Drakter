@@ -184,6 +184,10 @@ def wire_security(app: FastAPI, settings: Settings) -> ActionService:
     from app.services.improvement_ports import Principal as ImprovementPrincipal
 
     improvement_actions.register_actions(actions.registry, settings)
+
+    from app.services import backup_actions
+
+    backup_actions.register_actions(actions.registry, settings)
     # The UI token belongs to the desktop; Hermes reaches tools only through MCP.
     app.state.gui_principal = ImprovementPrincipal(kind="user", id="desktop")
 
