@@ -449,7 +449,8 @@ def formatter_failure_open(ctx: Context) -> None:
     text = cases["stderr+file"][0] + child_stderr
     # Control: el fallo se produjo de verdad (Logging error / Traceback), si no el ataque no llegó.
     expect(
-        "Logging error" in text or "Traceback" in text or "RecursionError" in text,
+        "Logging error" in text or "Traceback" in text or "RecursionError" in text
+        or "log_format_error" in text,  # the formatter caught it and fell back to a safe line
         "control: el formateador no llegó a fallar; ataque no alcanzó el camino",
     )
     needles = cases["stderr+file"][1]
