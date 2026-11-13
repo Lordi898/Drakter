@@ -180,6 +180,10 @@ def _check_file_shape(backup_path: Path) -> None:
     info = os.lstat(backup_path)
     if not stat.S_ISREG(info.st_mode):
         raise BackupError("La copia no es un archivo regular")
+    # A copy is a single file: SQLite would replay a -wal or -journal found next to it,
+    # so what gets restored would not be what was hashed and checked.
+    if any(os.path.lexists(f"{backup_path}{suffix}") for suffix in ("-wal", "-shm", "-journal")):
+        raise BackupError("La copia tiene archivos auxiliares a su lado")
     with open(backup_path, "rb") as stream:
         header = stream.read(20)
     # An empty or foreign file would otherwise open as a valid empty database.

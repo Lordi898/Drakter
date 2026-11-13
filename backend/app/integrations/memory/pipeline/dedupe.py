@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 from collections.abc import Sequence
 
+from app.core.text import strip_invisible
 from app.integrations.memory.models import MemoryDraft, MemoryRecord, MemoryStatus
 from app.integrations.memory.store_sqlite import content_hash
 
@@ -21,7 +22,7 @@ INACTIVE = (MemoryStatus.REJECTED, MemoryStatus.SUPERSEDED)
 
 
 def tokens(text: str) -> list[str]:
-    return _TOKEN.findall(text.casefold())
+    return _TOKEN.findall(strip_invisible(text).casefold())
 
 
 def content_tokens(text: str) -> frozenset[str]:
