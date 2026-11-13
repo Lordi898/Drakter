@@ -1,6 +1,6 @@
 # Búsqueda global
 
-> **Estado:** el código está integrado en `drakter/build` (2da8bef), pero sin enganchar: `SearchPalette` no está montada en `AppShell` y `backend/app/main.py` no registra `search.router`. El índice (`search_documents`, `search_fts`) ya existe en la migración `backend/migrations/0009_search.sql`. NO COMPROBADO en la app real.
+> **Estado:** integrado en `drakter/build` (4a84a5d). El backend está enganchado (`search.router` se registra solo y el índice está en `backend/migrations/0009_search.sql`), pero `SearchPalette` sigue sin montarse en `AppShell`, así que Ctrl+K no hace nada en la interfaz. NO COMPROBADO en la app real.
 
 ## Para qué sirve
 
@@ -49,12 +49,12 @@ La búsqueda en sí, no. Solo puede aparecer una confirmación si, tras `search_
 - **"La búsqueda no está disponible ahora mismo"**: el servicio respondió 503.
 - **"Sin resultados"**: ningún elemento no archivado contiene todas las palabras como prefijo. Prueba con menos palabras o raíces más cortas.
 - **Un recurso nuevo no sale**: el almacén lo indexa al añadirlo; si no está indexado, no aparece.
-- **Ctrl+K no hace nada**: en 2da8bef el componente existe pero no está montado en la interfaz (ver Pendiente).
+- **Ctrl+K no hace nada**: en 4a84a5d el componente existe pero no está montado en la interfaz (ver Pendiente).
 
 ## Pendiente
 
 - **Pendiente:** montar `<SearchPalette />` en `desktop/src/app/AppShell.tsx` (hoy solo se exporta desde `desktop/src/modules/search/index.ts`).
-- **Pendiente:** registrar `search.router` en `backend/app/main.py`; el docstring de `backend/app/api/search.py` lo pide y no está hecho. `GET /api/v1/search` ya está en la lista permitida de Electron, aunque `contracts/api/routes.md` la marca "sin construir".
-- **Resuelto en 2da8bef:** el índice `search_documents` y `search_fts` ya está en `0009_search.sql`.
+- **Resuelto en 4a84a5d:** `search.router` entra por `_discover_routers()`; `GET /api/v1/search` está en la lista permitida de Electron. Discrepancia: `contracts/api/routes.md` aún la marca "sin construir".
+- **Resuelto:** el índice `search_documents` y `search_fts` ya está en `0009_search.sql`.
 - **Pendiente:** abrir el elemento concreto en lugar de solo su sección.
 - Todos los pasos de esta guía: NO COMPROBADO.

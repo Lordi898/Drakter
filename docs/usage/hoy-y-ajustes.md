@@ -1,6 +1,6 @@
 # Hoy y Configuración
 
-> **Estado:** el código de las pantallas y de los routers está integrado en `drakter/build` (2da8bef), pero sin enganchar: `TodayPage` no está en la navegación y los routers `today` y `settings` no están registrados en `backend/app/main.py` (ver Pendiente). NO COMPROBADO en la app real. Los pasos de Hoy describen lo que mostrará la pantalla cuando se conecte; los de Configuración, la pantalla tal como está.
+> **Estado:** integrado en `drakter/build` (4a84a5d). Configuración está montada y su backend se registra solo (`_discover_routers()` incluye `settings` y `today`). La pantalla Hoy (`TodayPage`) existe pero sigue fuera de la navegación, y Electron aún no deja pasar `GET /api/v1/today` (ver Pendiente). NO COMPROBADO en la app real. Los pasos de Hoy describen lo que mostrará la pantalla cuando se conecte; los de Configuración, la pantalla tal como está.
 
 ## Para qué sirve
 
@@ -74,14 +74,14 @@ Cada cambio de zona horaria y cada copia manual se anotan en la auditoría, sin 
 
 - **"El servicio local de Drakter no está conectado."** El escritorio no consigue hablar con el servicio local. Pulsa **Reintentar**. En Hoy, si ya había datos, se siguen mostrando los últimos.
 - **"No se pudo leer esta parte."** Un bloque de Hoy falló; los demás siguen funcionando.
-- **"Las tareas todavía no están disponibles."** (o proyectos, agenda, hábitos) El módulo correspondiente aún no tiene datos en la base.
+- **"Las tareas todavía no están disponibles."** (o proyectos, agenda, hábitos) El módulo correspondiente no se pudo leer (por ejemplo, falta alguna tabla en la base).
 - **No se puede guardar la zona horaria o crear la copia.** La base de datos o su tabla de ajustes aún no está migrada: el servicio responde "settings_unavailable" (503).
 - **"Disponible solo en la aplicación de escritorio"** en Acerca de: abriste la interfaz fuera de Electron.
 
 ## Pendiente
 
-- **Pendiente:** enganchar `TodayPage` a la navegación. En `desktop/src/navigation/pages.ts` (2da8bef) la sección `home` apunta a `HomePage`; nada importa `TodayPage`. No hay entrada "Hoy" en la barra lateral.
-- **Pendiente:** registrar los routers `today` y `settings` en `backend/app/main.py` (solo se incluyen `health`, `auth` y `ws`). Sin eso, `GET /api/v1/today` y `/api/v1/settings*` no existen y Configuración mostrará la conexión como no disponible.
-- **Pendiente:** añadir `GET /api/v1/today` a `contracts/api/routes.md`. La lista de rutas permitidas de Electron (`desktop/electron/shared/routes.generated.ts`, generada desde ese archivo) ya trae `/api/v1/settings` y `/api/v1/system/backups`, pero no `/api/v1/today`; aunque se registre el router, el proceso principal rechazaría la petición.
-- **Pendiente:** restaurar copias desde la interfaz. La ruta `POST /api/v1/system/backups/{id}/restore` está en el contrato, pero la pantalla no la usa.
+- **Pendiente:** enganchar `TodayPage` a la navegación. En `desktop/src/navigation/pages.ts` (4a84a5d) la sección `home` apunta a `HomePage`; nada importa `TodayPage`. No hay entrada "Hoy" en la barra lateral.
+- **Resuelto en 4a84a5d:** los routers `today` y `settings` ya se registran (`backend/app/main.py` descubre cada `app/api/<nombre>.py`).
+- **Pendiente:** añadir `GET /api/v1/today` a `contracts/api/routes.md` (no figura). La lista de rutas permitidas de Electron (`desktop/electron/shared/routes.generated.ts`, generada desde ese archivo) tiene `/api/v1/settings*` pero no `/api/v1/today`: el proceso principal rechazaría la petición aunque la pantalla estuviera montada.
+- **Pendiente:** restaurar copias desde la interfaz. `POST /api/v1/system/backups/{id}/restore` figura en el contrato como "sin construir", no hay `system.py` en `backend/app/api/` y la pantalla no lo usa (las copias usan `/api/v1/settings/backups`).
 - Todos los pasos de esta guía: NO COMPROBADO en la app real.

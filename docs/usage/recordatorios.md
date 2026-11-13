@@ -1,6 +1,6 @@
 # Recordatorios
 
-> **Estado:** el código está integrado en `drakter/build` (2da8bef), pero sin enganchar: `backend/app/main.py` solo registra `health`, `auth` y `ws` y nada monta el módulo `desktop/src/modules/notifications` (ver Pendiente). Las rutas `/api/v1/notifications*` ya están en la lista permitida de Electron. NO COMPROBADO en la app real.
+> **Estado:** integrado en `drakter/build` (4a84a5d). El backend ya está enganchado: el router `notifications` se registra solo y `ReminderTicker` arranca en el `lifespan`. En la interfaz falta montar `startNotificationFeed` y `RemindersNotice` (ver Pendiente), así que los avisos del backend aún no llegan a la campana. NO COMPROBADO en la app real.
 
 ## Aviso importante
 
@@ -23,6 +23,8 @@ Drakter te avisa de lo que vence o empieza: tareas con fecha o con hora, y event
 5. Las ocurrencias recurrentes y los hábitos todavía no generan avisos (el código deja un punto de enganche para añadirlos).
 
 ## Cómo lo ves en el día a día
+
+Los pasos 1 a 3 describen el comportamiento del código del módulo, que hoy no está montado en la interfaz (ver Pendiente).
 
 1. Abre Drakter y déjalo abierto. Cada minuto consulta los avisos sin leer (también reacciona al instante al evento `notification.created`).
 2. Hasta 3 avisos nuevos salen cada uno como notificación propia. Si hay más, se guardan todos en el centro de notificaciones y sale uno solo: "N recordatorios pendientes".
@@ -51,9 +53,9 @@ Nada. No hay herramienta del agente sobre notificaciones ni forma de borrarlas e
 
 ## Pendiente
 
-- **Pendiente:** registrar `notifications.router` en `backend/app/main.py` y arrancar `ReminderTicker` en el `lifespan` (el docstring de `backend/app/services/reminders.py` indica cómo). En 2da8bef no se hace.
-- **Pendiente:** montar `startNotificationFeed` y `RemindersNotice` en la interfaz (`AppShell.tsx` solo importa `NotificationCenter`, la campana).
-- **Resuelto en 2da8bef:** las operaciones `notifications.list`, `notifications.read` y `notifications.status` ya no se copian a mano: Electron usa rutas generadas desde `contracts/api/routes.md` y esas tres rutas figuran en `routes.generated.ts`. La tabla `notifications` ya está en la migración `0001_core_entities.sql`.
-- **Pendiente:** la pantalla donde se muestra `RemindersNotice` no está decidida en el código.
+- **Resuelto en 4a84a5d:** `notifications.router` se registra (`_discover_routers()`) y `ReminderTicker` se crea en `_install_services` y arranca/para en el `lifespan` de `backend/app/main.py`.
+- **Pendiente:** montar `startNotificationFeed` y `RemindersNotice` en la interfaz (`AppShell.tsx` solo importa `NotificationCenter`, la campana; nada más usa esos exports). Sin eso, solo salen en la campana los avisos generados en el propio escritorio.
+- **Resuelto:** las operaciones `notifications.list`, `notifications.read` y `notifications.status` ya no se copian a mano: Electron usa rutas generadas desde `contracts/api/routes.md` y esas tres rutas figuran en `routes.generated.ts`. La tabla `notifications` ya está en la migración `0001_core_entities.sql`.
+- **Pendiente:** la pantalla donde se muestra `RemindersNotice` no está decidida en el código (nadie la importa).
 - **Pendiente:** avisos de hábitos y ocurrencias recurrentes.
 - Todos los pasos de esta guía: NO COMPROBADO.
