@@ -1,0 +1,36 @@
+version: 2
+updates:
+  # Backend: uv.lock (Dependabot actualiza pyproject.toml y el lock juntos).
+  - package-ecosystem: uv
+    directory: /backend
+    schedule:
+      interval: weekly
+    groups:
+      backend:
+        patterns: ["*"]
+
+  # Resto de paquetes Python sin lock propio.
+  - package-ecosystem: pip
+    directories:
+      - /contracts/python
+      - /voice
+      - /agent/evals
+    schedule:
+      interval: weekly
+    groups:
+      python:
+        patterns: ["*"]
+
+  - package-ecosystem: npm
+    directory: /desktop
+    schedule:
+      interval: weekly
+    groups:
+      desktop:
+        patterns: ["*"]
+        update-types: [minor, patch]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

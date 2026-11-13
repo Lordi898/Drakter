@@ -1,0 +1,31 @@
+name: Propuesta
+description: Una idea o mejora para Drakter.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Qué problema resuelve
+      description: Qué quieres hacer y por qué hoy no se puede o cuesta.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Propuesta
+      description: Cómo te imaginas que funcione.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternativas
+      description: Otras formas de resolverlo que hayas pensado.
+  - type: checkboxes
+    id: rules
+    attributes:
+      label: Encaje con la arquitectura
+      description: Ver CONTRIBUTING.md, «Reglas de arquitectura que no se negocian».
+      options:
+        - label: La propuesta mantiene que el agente use herramientas del backend y no la base de datos directamente.
+        - label: Si incluye acciones destructivas o masivas, pasan por confirmación.
