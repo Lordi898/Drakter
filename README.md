@@ -18,7 +18,7 @@ Arranque: `scripts/drakter-local.sh start anthropic` (con el modelo real) o `sta
 | Backend FastAPI + SQLite (CL2) | `backend/app/` | Verificado, incluido el sistema de permisos: guardia de red y roles, y confirmaciones cableadas en el arranque con un único camino (`ActionService`, 300 s) |
 | Base de datos y migraciones (CL6) | `backend/migrations/` (0001–0011) | Verificado: 36 tablas, integridad referencial, copia y restauración |
 | Escritorio (CL1) | `desktop/` | Visto en la app: ventana, navegación, área central, panel contextual, configuración y gestión de errores; las 10 pantallas cargan contra el backend. Búsqueda global (Ctrl+K), notificaciones locales, Hoy y Ajustes funcionan contra el backend. ⚠️ Empaquetado en verificación |
-| Hermes y chat (CL3) | `backend/app/integrations/`, `agent/` | GUI → backend → Hermes v0.22.7 → respuesta en el chat, **solo con el stub** `tools/dev-llm-stub/` (recomprobación con Haiku real en curso). Verificados sesiones, envío, recepción, eventos y recuperación tras caída del runner. Las suites de evals (`agent/evals/`, 46 casos) están listas para correr con clave |
+| Hermes y chat (CL3) | `backend/app/integrations/`, `agent/` | GUI → backend → Hermes v0.22.7 → respuesta en el chat, con Claude Haiku 5.5 real. Verificados sesiones, envío, recepción, eventos, recuperación tras caída del runner y conversación completa con Claude Haiku 5.5 real. Las suites de evals (`agent/evals/`, 46 casos) están listas para correr con clave |
 | Skills y herramientas (CL13) | `agent/skills/`, `backend/app/tools/` | 78 herramientas por MCP con parámetros, permisos y errores verificados. ⚠️ Las Skills están inertes en Hermes (se desactiva `skill_manage`); las confirmaciones del agente fallan cerradas sin crear la pendiente; selección y encadenado comprobados con Haiku real (evals) |
 | Personalidad y contexto (CL4) | `agent/identity/`, `agent/context/`, `agent/knowledge/` | Verificado: 14 archivos compuestos en el `SOUL.md` de Hermes, con la seguridad primero, y consistencia de personalidad comprobada con Claude Haiku 5.5 real. Los matices de estilo pasan al rediseño de personalidad |
 | Personaje (CL5) | `desktop/src/character/` | Verificado en el personaje provisional SVG: diseño, 9 estados, transiciones y eventos visuales. ⚠️ Faltan el `.riv`, el runtime de Rive y la sincronización labial con audio |
@@ -55,19 +55,21 @@ Arranque: `scripts/drakter-local.sh start anthropic` (con el modelo real) o `sta
 ## Requisitos
 
 - **Python 3.12 para el backend**, por elección del proyecto: `requires-python` admite solo 3.12 y se usa el comando `python3.12`.
-- **Python >=3.14 para Hermes**, en un venv propio, separado del backend. Hermes se instalará desde git con el tag v0.22.7 (`b200f5bc`), nunca desde PyPI. Aún no está integrado.
-- **`uv`**, que crea el venv del backend. Todavía no está en el `PATH` de la máquina de desarrollo.
+- **Python >=3.14 para Hermes**, en un venv propio, separado del backend. Hermes se instala desde git con el tag v0.22.7 (`b200f5bc`), nunca desde PyPI, y el backend lo encuentra como `hermes-python` en el `PATH` o con `DRAKTER_HERMES_PYTHON` (ver `docs/installation/hermes-y-openviking.md`).
+- **`uv`**, que crea el venv del backend (en la máquina de desarrollo, en `~/.local/bin`).
 - **Node 24 y npm**, que son las versiones usadas aquí.
 - Sesión gráfica para abrir el escritorio.
 
 Máquina de desarrollo: i7-8665U, Intel UHD 620 sin VRAM dedicada y 14 GB de RAM. El plan maestro habla de 32 GB y 4 GB de VRAM, que no se corresponden con ella.
 
-La instalación la ejecutas tú, y solo es posible con `backend/` y `desktop/` presentes:
+La instalación la ejecutas tú (detalle en [`docs/installation/instalar.md`](docs/installation/instalar.md)):
 
 ```sh
 (cd backend && uv sync --frozen)
-(cd desktop && npm ci)
+(cd desktop && npm ci && node node_modules/electron/install.js)
 ```
+
+`npm` 12 no ejecuta el script que descarga Electron; de ahí la última orden.
 
 ## Comprobar el entorno
 
@@ -80,19 +82,22 @@ No admite argumentos. Imprime líneas `OK`, `AVISO` o `FALTA` y sale con 1 si ha
 ## Arrancar en desarrollo
 
 ```sh
-scripts/dev.sh [all|backend|desktop]
+scripts/drakter-local.sh start anthropic  # app con Claude Haiku 5.5 real
+scripts/drakter-local.sh start            # app con el stub de desarrollo
+scripts/drakter-local.sh status
+scripts/drakter-local.sh stop
+scripts/dev.sh [all|desktop]              # escritorio en primer plano
 ```
 
-- `all`, el modo por defecto, arranca el backend, espera a `/health`, arranca el escritorio y para el backend al salir.
-- `backend` y `desktop` arrancan solo esa parte en primer plano.
-
-El script no instala nada. Si falta `backend/` o `desktop/` en tu checkout, sale con error y dice qué lo resuelve: hoy `drakter/build` no tiene `backend/`, así que `all` y `backend` fallan allí hasta fusionar `drakter/backend-base`. Aun con ambos, el escritorio seguirá mostrando `offline`, porque no está conectado al backend.
+- El backend no se arranca aparte: lo lanza el proceso principal de Electron con las credenciales por stdin y un puerto efímero (D-14). `scripts/dev.sh backend` sale con error a propósito.
+- `drakter-local.sh` deja la app y el stub desacoplados de la terminal; `dev.sh` no instala nada y avisa si falta `hermes-python`.
+- Logs y cómo parar sin dejar procesos: [`docs/RUN_STATE.md`](docs/RUN_STATE.md).
 
 ### Sandbox de Electron
 
-En la máquina de desarrollo AppArmor restringe los espacios de nombres sin privilegios (`kernel.apparmor_restrict_unprivileged_userns=1`), y sin más ajustes Electron aborta con un error de `chrome-sandbox`. `dev.sh` no desactiva el sandbox por su cuenta, y `check-env.sh` da un `AVISO`. Hay dos salidas:
+En la máquina de desarrollo AppArmor restringe los espacios de nombres sin privilegios (`kernel.apparmor_restrict_unprivileged_userns=1`), y sin más ajustes Electron aborta con un error de `chrome-sandbox`. `dev.sh` no desactiva el sandbox por su cuenta, y `check-env.sh` da un `AVISO`. Hay dos salidas (detalle en [`docs/installation/sandbox-electron.md`](docs/installation/sandbox-electron.md)):
 
-- Desactivarlo solo en esa sesión de desarrollo, que es lo que se ha probado: `ELECTRON_DISABLE_SANDBOX=1 scripts/dev.sh`.
+- Desactivarlo solo en esa sesión de desarrollo, que es lo que se ha probado: `ELECTRON_DISABLE_SANDBOX=1 DRAKTER_DEV_NO_SANDBOX=1 scripts/dev.sh`.
 - Dar a `chrome-sandbox` su propietario y modo, sin probar todavía, con `sudo chown root:root` y `sudo chmod 4755` sobre `desktop/node_modules/electron/dist/chrome-sandbox`. Hay que repetirlo tras cada `npm ci`.
 
 ## Configuración y secretos
@@ -107,20 +112,30 @@ cp -n .env.example ~/.config/drakter/.env
 chmod 600 ~/.config/drakter/.env
 ```
 
-**Después de copiar, borra toda línea que dejes sin valor.** Para el backend `NOMBRE=` es un valor vacío, no una variable ausente: con `DRAKTER_PORT`, `DRAKTER_DATA_DIR`, `DRAKTER_RUNTIME_DIR` o `DRAKTER_LOG_LEVEL` vacías no arranca, y con `DRAKTER_ALLOWED_ORIGINS` vacía no admite ningún origen.
+**Después de copiar, borra toda línea que dejes sin valor.** Solo los ajustes del backend ignoran `NOMBRE=` vacío; los del agente y de la voz lo toman como valor y pueden impedir el arranque (por ejemplo, `DRAKTER_DEV_STUB_URL=` vacío no deja arrancar).
 
-| Variable | Por defecto | Formato |
+No hay puerto, dirección ni orígenes que configurar: Electron lanza el backend, que escucha en `127.0.0.1` con un puerto efímero (D-14).
+
+| Variable | Por defecto | Para qué |
 |---|---|---|
-| `DRAKTER_PORT` | `8765` | Entero entre 1024 y 65535 |
-| `DRAKTER_DATA_DIR` | Directorio de datos del usuario | Ruta absoluta |
-| `DRAKTER_RUNTIME_DIR` | Directorio de ejecución del usuario | Ruta absoluta |
+| `DRAKTER_DATA_DIR` | Directorio de datos del usuario | Ruta absoluta de datos, base de datos y logs |
 | `DRAKTER_LOG_LEVEL` | `INFO` | `DEBUG`, `INFO`, `WARNING` o `ERROR` |
-| `DRAKTER_ALLOWED_ORIGINS` | `app://drakter` | `scheme://host[:port]` separados por comas |
+| `DRAKTER_ENV` | `development` | `development` o `production` (en producción no se admite el stub) |
+| `ANTHROPIC_API_KEY` | — | Clave de Anthropic; obligatoria con `DRAKTER_MODEL_PROVIDER=anthropic` |
+| `DRAKTER_AGENT_PROVIDER` | `hermes` | `hermes` o `fake` |
+| `DRAKTER_MODEL_PROVIDER` | `anthropic` | `anthropic` o `dev_stub` |
+| `DRAKTER_MODEL_NAME` | `claude-haiku-5-5` | Modelo del agente |
+| `DRAKTER_HERMES_PYTHON` | `hermes-python` (en el `PATH`) | Python del venv de Hermes |
+| `DRAKTER_DEV_STUB_URL` | `http://127.0.0.1:28517` | Stub de desarrollo; solo `http` en loopback |
+| `DRAKTER_VOICE_ENABLED`, `DRAKTER_VOICE_PYTHON`, `DRAKTER_PIPER_PYTHON` | voz desactivada | Proceso de voz (ver `docs/installation/voz.md`) |
+| `DRAKTER_IMPROVEMENT_REPO` | — | Repositorio de pruebas de la automejora; sin él, evaluar queda bloqueado |
 
-La dirección de escucha es fija, `127.0.0.1`, y no se configura. El resto de variables de `.env.example` están reservadas: nada las lee aún de ese archivo.
+`OPENVIKING_ENDPOINT` y `OPENVIKING_API_KEY` están reservadas: nada las lee todavía. Guías: [instalación](docs/installation/README.md), [clave de API](docs/installation/clave-api.md) y [uso por módulo](docs/usage/README.md).
 
 ## Documentación
 
+- [Instalación](docs/installation/README.md)
+- [Uso por módulo](docs/usage/README.md)
 - [Arquitectura](docs/ARCHITECTURE.md)
 - [Convenciones](docs/CONVENTIONS.md)
 - [Estado de implementación](docs/IMPLEMENTATION_STATUS.md)

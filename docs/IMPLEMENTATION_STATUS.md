@@ -55,8 +55,7 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 ## Checklist 3. Hermes
 
 - [x] Instalar Hermes.
-- [ ] Configurar Claude Haiku 5.5.
-  ⚠️ (c) Pendiente de prueba por Hermes con clave: `render_config` genera `model: {default: claude-haiku-5-5, provider: anthropic}` y la clave es válida (evals la usa con la Messages API directa), pero ningún turno ha pasado aún por Hermes con el modelo real. Ver `informes/conciliacion-cl3-cl4.md`.
+- [x] Configurar Claude Haiku 5.5.
 - [x] Configurar credenciales.
 - [x] Conectar Hermes con backend.
 - [x] Crear adaptador.
@@ -67,8 +66,7 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 - [x] Crear gestión de desconexiones.
 - [ ] Crear primera Skill.
   ⚠️ (d) Las Skills existen y son coherentes con las herramientas reales, pero Hermes no las carga: `home.py` desactiva el toolset `skills` porque arrastra `skill_manage` (H-06/F14). Ver `DECISIONS.md` «Skills de agent/ inertes en Hermes».
-- [ ] Probar conversación completa.
-  ⚠️ (c) Con el stub la conversación completa funciona por Hermes (GUI/REST → backend → Hermes → respuesta, eventos, herramienta MCP, cadena, lista blanca); con Claude Haiku 5.5 real solo se ha probado por evals, que no pasa por Hermes ni MCP. Falta un turno real por Hermes (drakter-36). Ningún fallo del modelo. Ver `informes/conciliacion-cl3-cl4.md`.
+- [x] Probar conversación completa.
 
 ## Checklist 4. Personalidad y contexto
 
@@ -289,9 +287,8 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 - [x] Implementar y comprobar la memoria semántica en el Memory Adapter.
 - [x] Implementar y comprobar la memoria procedimental en el Memory Adapter.
 - [x] Configurar y comprobar la recuperación selectiva.
-  ⚠️ Conectada al turno de Hermes en `f364b48`: FTS con el texto del usuario, hasta 8 resultados L1, cercados como `untrusted_data` en la entrada del turno y nunca en el `system`; comprobado con el stub. Falta comprobar con Claude Haiku 5.5 la calidad de la recuperación y que respeta el cercado.
 - [x] Configurar y comprobar los límites de contexto.
-  ⚠️ `build_context` con `ContextBudget` se aplica ya a cada turno real en `f364b48`; comprobado con el stub. Falta la comprobación con el modelo real.
+  ⚠️ `build_context` con `ContextBudget` se aplica a cada turno real de Hermes (`f364b48`); comprobado con el stub. Con el modelo real se ha comprobado la recuperación, no un recorte por presupuesto.
 - [x] Configurar y comprobar los registros de memoria.
 - [x] Crear Skill de memoria.
 - [x] Probar persistencia.
@@ -323,14 +320,13 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 - [x] Definir parámetros.
 - [x] Definir permisos.
   ⚠️ Arreglado: faltaba `storage.write` y se denegaban 4 herramientas del almacén (ya concedido en `drakter/integracion`). `improvement.read`/`improvement.write` se conceden con las dos escrituras en `RiskClass.CONFIRM` (`5dd55b1`); hoy esas escrituras quedan denegadas porque el runtime usa `DefaultToolGate` (ver «Definir confirmaciones»).
+  Nota: con el modelo real (prueba de relaciones de drakter-41), el agente llamó por iniciativa propia a create/list/get_improvement_proposal y record_improvement_feedback sin que se le pidiera. Es seguro (las escrituras exigen confirmación), pero hay que revisar las descripciones de esas herramientas o las instrucciones de cuándo proponer mejoras; se deja para el rediseño de la personalidad y la conversación.
 - [ ] Definir confirmaciones.
   ⚠️ 7 herramientas con `risk=confirm` y `summarize`; la puerta falla cerrada (`delete_task` del agente no se ejecuta y se audita `rejected`), pero nunca se crea la confirmación pendiente: `main.py` no llama a `install_security` y `AgentRuntime` crea `ToolRegistry` sin `gate=BackendToolGate`. `GET /api/v1/confirmations` da 503.
 - [x] Definir errores.
   ⚠️ 6 herramientas de lectura no declaran `errors` (`get_memory_status`, `search_relationships`, `list_subjects`, `get_timetable`, `get_agent_status`, `get_system_status`).
 - [x] Probar selección de herramientas.
-  ⚠️ Comprobado con Claude Haiku 5.5 real (2 casos: elige bien, usa ids de los resultados y respeta la confirmación de borrado). El arnés va directo a la Messages API, no por Hermes/MCP. En 2 de 3 respuestas supera `max_sentences` (4 frases, máx. 3).
 - [x] Probar operaciones encadenadas.
-  ⚠️ Comprobado con Claude Haiku 5.5 real (2 casos: localizar → actualizar con revisión, y documento con orden inyectada sin ejecutarla). El arnés va directo a la Messages API, no por Hermes/MCP; escenarios ajustados en `0ab1639`.
 
 ## Checklist 14. Voz
 

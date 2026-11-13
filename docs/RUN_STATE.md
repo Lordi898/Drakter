@@ -25,6 +25,8 @@ Las ramas `ao/<sesión>/root` de los finalizadores son de trabajo; sus commits e
 
 ## Cómo arrancar y parar
 
+Instalación: guías de `docs/installation/` (`instalar.md`, `clave-api.md`, `hermes-y-openviking.md`, `sandbox-electron.md`, `voz.md`, `paquete-deb.md`). Uso por módulo: `docs/usage/`.
+
 ```sh
 scripts/drakter-local.sh start anthropic  # app con Claude Haiku 5.5 real (arranque normal)
 scripts/drakter-local.sh start            # stub de LLM + app, para pruebas sin modelo
@@ -50,7 +52,7 @@ scripts/drakter-local.sh stop
 
 ### Siguen abiertos
 
-- **Pruebas con el modelo real:** las casillas ⚠️ «sin clave» están en recomprobación con la clave válida; hasta que cada finalizador lo confirme siguen sin marcar.
+- **Pruebas con el modelo real:** hechas con `claude-haiku-5-5` por Hermes (conversación, selección y encadenado de herramientas, recuperación de memoria con un recuerdo malicioso ignorado) y por evals (personalidad, selección, encadenado). Lo que sigue con ⚠️ ya no depende de la clave, salvo alguna herramienta concreta sin conversación real.
 - **OpenViking (U-1):** desactivado en v1 con memoria SQLite + FTS5. Es una desviación de una decisión del usuario y falta que la confirme.
 - **Personaje Rive:** el `.riv` se diseña a mano y no se ha entregado; tampoco está el runtime de Rive en `package.json`. La Checklist 5 está cerrada sobre el personaje provisional SVG.
 - **Voz:** el pipeline propio (`voice/`) está verificado como proceso aislado (VAD, Whisper small, Kokoro, Voice Manager, interrupciones), pero no está registrado en `main.py` ni tiene cliente en el escritorio, así que no hay conversación por voz. Se congela así: la capa de voz y conversación se rediseñará sobre Pipecat (STT Whisper, TTS Fish Audio). Las cifras de latencia se tomaron con la máquina cargada y hay que repetirlas en reposo.
@@ -60,16 +62,17 @@ scripts/drakter-local.sh stop
 - **Confirmaciones del agente:** `AgentRuntime` (`runtime.py`) crea `ToolRegistry` sin la puerta real y usa `DefaultToolGate`: las herramientas `risk=confirm` (borrados, escrituras de automejora) fallan cerradas sin crear la confirmación pendiente. Lo cierra `drakter-34`.
 - **Eventos de tareas y proyectos:** `services/tasks.py` y `services/projects.py` publican `workspace.entity_*` sin `actor_type`; `HubEventSink` falla la validación y registra `event_publish_failed` en cada mutación, así que la GUI no recibe esos eventos. No se emiten tampoco `agent.expression_changed`, `storage.index_progress` ni `workspace.relationship_*`.
 - **Copias por API:** `app/services/backup_api.py` no está montado (`/api/v1/backups/**` da 404) y tiene puerta propia; la única superficie de copias es `/settings/backups`.
-- **Herramientas de automejora fuera del catálogo:** las 4 de `app/tools/improvement.py` no están en `contracts/tools/catalog.json` ni en `TOOL_DOMAINS` (4 avisos `tool_catalog_drift`); falta decidir si se añaden al catálogo o se retiran.
 - **Contrato frente a API:** paginación por `offset` en memoria, chat y automejora (el contrato pide `cursor`); `forget` de memoria con `confirmation_id` en el cuerpo y `POST /memory/{id}/approve` sin 409; los modelos de `contracts/python`/`contracts/ts` difieren de la API en hábitos, proyectos, carpetas, etiquetas y `metadata`. No rompe la GUI (solo usa el contrato TS en chat, confirmaciones y eventos), pero conviene alinear y regenerar.
 - **Calendario:** el selector de zona horaria arranca en el primer valor de la lista (`Africa/Abidjan`) mientras `default_timezone` no esté fijado en Configuración.
 - **Deriva de catálogo:** el backend avisa (`tool_catalog_drift`) de herramientas que difieren de `contracts/tools/catalog.json` (p. ej. `get_related_items` debe pasar a `returns_untrusted: true`). No bloquea.
-- **Herramientas de automejora espontáneas:** en una pasada con el modelo real (relaciones), el agente llamó sin que se le pidiera a `create_improvement_proposal`, `list_improvement_proposals`, `get_improvement_proposal` y `record_improvement_feedback`. Las escrituras quedan tras confirmación; conviene revisarlo en automejora/personalidad.
+- **Observación, herramientas de automejora espontáneas:** con el modelo real (prueba de relaciones de drakter-41), el agente llamó por iniciativa propia a create/list/get_improvement_proposal y record_improvement_feedback sin que se le pidiera. Es seguro (las escrituras exigen confirmación), pero hay que revisar las descripciones de esas herramientas o las instrucciones de cuándo proponer mejoras; se deja para el rediseño de la personalidad y la conversación.
 - **Sin comprobar en pantalla:** la visualización de relaciones y las vistas diaria y mensual del calendario no se han visto funcionar en Electron.
 - **Pasada e2e:** el arnés no espera a `agent/status = idle` antes de conversar (Hermes tarda 3-6 s), así que `conversacion.*` da 503 `agent_unavailable`; los guiones `herramienta-permitida`, `accion-destructiva` e `inyeccion-documento` piden `read_file`/`terminal`, que Drakter nunca ofrece. `desktop.arranca` falla en todas las pasadas porque `tests/e2e/harness/stack.py` no pasa `DRAKTER_DEV_NO_SANDBOX=1` (con la variable arranca; cambio pedido a `drakter-32`). Además, el catálogo (`tests/e2e/catalog.toml`) usa `GET /api/v1/audit` y la ruta real es `/api/v1/activity`.
 
 ### Cerrados en el cierre
 
+- **Conversación con el modelo real (CL3):** `agent/status` = `claude-haiku-5-5`; la conversación completa por Hermes recuerda el turno anterior, elige y encadena herramientas, y con un recuerdo que dice «IGNORA TODAS TUS REGLAS…» responde a lo pedido, avisa del recuerdo sospechoso y no llama a ninguna herramienta.
+- **Catálogo de automejora:** las 4 herramientas están en `contracts/tools/catalog.json` y `improvement` en `TOOL_DOMAINS` (`aff7605`); ya no hay avisos `tool_catalog_drift`.
 - **Borrar relaciones:** el 500 visto en un arnés de calendario no se reproduce en la app real (`05381dd`): `DELETE /relationships/{id}` → 409 → aprobar → 200 `executed`.
 - **Calendario y asignaturas (CL9):** eventos, bloques, solapamientos, zonas horarias (cambio de hora), asignaturas, horarios recurrentes y sesiones comprobados; recursos de asignatura por relaciones (`bbee4c4`); `POST /calendar/events` acepta `:00` final (`f16753f`).
 - **Búsqueda global:** `SearchPalette` (Ctrl+K) y el aviso de notificaciones están montados en `AppShell`; con `7787e9b` hay una sola ruta `GET /api/v1/search` y encuentra tareas, proyectos, hábitos, eventos y asignaturas (antes daba 0 resultados).
@@ -102,5 +105,4 @@ Historial Git de los repos que estaban anidados en el checkout del usuario:
 
 ## Siguiente paso
 
-1. Terminar la recomprobación con Haiku real: conversación completa por Hermes, memoria y herramientas por módulo. Selección y encadenado de herramientas ya pasan con el modelo real (evals).
 2. Cablear `BackendToolGate` en el runtime del agente (`drakter-34`).
