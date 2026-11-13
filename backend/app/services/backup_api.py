@@ -33,6 +33,7 @@ from app.services.improvement_ports import (
     AuditEvent,
     Principal,
     get_audit,
+    get_principal,
     require_user,
 )
 
@@ -80,14 +81,8 @@ def _audit(
     return True
 
 
-# La guardia (`core/security.py`) solo deja pasar aquí el token `ui` de la GUI: el agente
-# no tiene credencial en este listener. Por eso el actor es el usuario, sin resolverlo por
-# petición (`app.state.gui_principal` no se instala en ningún arranque).
-_USER: Final = Principal(kind="user", id="desktop")
-
-
 def _authorize(request: Request, action: str, target: str) -> Principal:
-    principal = _USER
+    principal = get_principal(request)
     try:
         require_user(principal)
     except AppError as exc:
