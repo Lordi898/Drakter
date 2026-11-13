@@ -29,6 +29,11 @@ updates:
       desktop:
         patterns: ["*"]
         update-types: [minor, patch]
+    ignore:
+      # Los tipos de Node siguen al runtime del proyecto (Node 24: README, CI).
+      # Subir este límite cuando el proyecto cambie de versión de Node.
+      - dependency-name: "@types/node"
+        versions: [">=25"]
 
   - package-ecosystem: github-actions
     directory: /
