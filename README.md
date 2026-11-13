@@ -112,7 +112,7 @@ cp -n .env.example ~/.config/drakter/.env
 chmod 600 ~/.config/drakter/.env
 ```
 
-**Después de copiar, borra toda línea que dejes sin valor.** Solo los ajustes del backend ignoran `NOMBRE=` vacío; los del agente y de la voz lo toman como valor y pueden impedir el arranque (por ejemplo, `DRAKTER_DEV_STUB_URL=` vacío no deja arrancar).
+Las líneas sin valor (`NOMBRE=`) se ignoran y se usa el valor por defecto, así que basta con rellenar las que necesites (al menos `ANTHROPIC_API_KEY`).
 
 No hay puerto, dirección ni orígenes que configurar: Electron lanza el backend, que escucha en `127.0.0.1` con un puerto efímero (D-14).
 
