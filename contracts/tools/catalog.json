@@ -1384,5 +1384,81 @@
   "args_model": "ForgetArgs",
   "result_model": "ForgetResult",
   "phase": "16"
+ },
+ {
+  "name": "record_improvement_feedback",
+  "domain": "improvement",
+  "description": "Registra una observación de mejora sobre Drakter.",
+  "permission": "improvement.write",
+  "risk": "confirm",
+  "idempotent": false,
+  "returns_untrusted": false,
+  "timeout_s": 15.0,
+  "errors": [
+   "validation_error",
+   "feedback_not_found",
+   "proposal_not_found",
+   "internal_error"
+  ],
+  "args_model": "RecordFeedbackParams",
+  "result_model": "FeedbackResult",
+  "phase": "18"
+ },
+ {
+  "name": "create_improvement_proposal",
+  "domain": "improvement",
+  "description": "Crea un borrador de propuesta de mejora, con parche opcional.",
+  "permission": "improvement.write",
+  "risk": "confirm",
+  "idempotent": false,
+  "returns_untrusted": false,
+  "timeout_s": 15.0,
+  "errors": [
+   "validation_error",
+   "feedback_not_found",
+   "proposal_not_found",
+   "internal_error"
+  ],
+  "args_model": "CreateProposalParams",
+  "result_model": "ProposalCreated",
+  "phase": "18"
+ },
+ {
+  "name": "list_improvement_proposals",
+  "domain": "improvement",
+  "description": "Lista propuestas de mejora y su estado.",
+  "permission": "improvement.read",
+  "risk": "read",
+  "idempotent": true,
+  "returns_untrusted": true,
+  "timeout_s": 15.0,
+  "errors": [
+   "validation_error",
+   "feedback_not_found",
+   "proposal_not_found",
+   "internal_error"
+  ],
+  "args_model": "ListProposalsParams",
+  "result_model": "ProposalPage",
+  "phase": "18"
+ },
+ {
+  "name": "get_improvement_proposal",
+  "domain": "improvement",
+  "description": "Consulta una propuesta de mejora y su última evaluación, sin el parche.",
+  "permission": "improvement.read",
+  "risk": "read",
+  "idempotent": true,
+  "returns_untrusted": true,
+  "timeout_s": 15.0,
+  "errors": [
+   "validation_error",
+   "feedback_not_found",
+   "proposal_not_found",
+   "internal_error"
+  ],
+  "args_model": "GetProposalParams",
+  "result_model": "ProposalDetail",
+  "phase": "18"
  }
 ]
