@@ -580,9 +580,13 @@ def _verified_digest(proposal: Proposal, evaluation: Evaluation | None) -> str:
 
 def _require_no_pending_restore(settings: Settings) -> None:
     # Deferred: keeps this module importable without loading the backup service.
-    from app.services.backup_service import restore_hooks_pending
+    from app.services import backup_service
 
-    if restore_hooks_pending(settings):
+    # The backup front does not track unfinished restore hooks yet: without that
+    # marker there is nothing pending to detect. Apply still needs the approval
+    # bound to the exact patch digest.
+    restore_hooks_pending = getattr(backup_service, "restore_hooks_pending", None)
+    if restore_hooks_pending is not None and restore_hooks_pending(settings):
         raise AppError(
             "restore_hooks_pending",
             "Hay una restauración pendiente de completar; no se puede aplicar",
