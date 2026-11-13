@@ -586,7 +586,7 @@ Decisiones técnicas, cambios de tecnología y motivos.
 - **Decisión:** las filas de `PendingConfirmationGate` y las claves de los ejecutores de servicio llevan el prefijo `workspace_` (`workspace_delete_task`, `workspace_delete_project`, …). Las herramientas del agente siguen con sus nombres y las ejecuta el registro.
 - **Alternativas descartadas:** renombrar las herramientas del agente (rompe el catálogo y la lista blanca); una puerta propia del módulo (segundo camino paralelo a `ActionService`).
 - **Motivo:** un nombre identifica una sola acción en `pending_confirmations`.
-- **Impacto:** `backend/app/permissions/wiring.py` (`b531106`, pendiente de fusión); Checklist 7 (eliminar tareas, herramientas Hermes).
+- **Impacto:** `backend/app/permissions/wiring.py` (`b531106`); Checklist 7 (eliminar tareas, herramientas Hermes).
 
 ## [2026-11-13] Fecha-hora local sin segundos
 - **Contexto:** `contracts/README.md` §2 y `drakter_contracts.common.LocalDateTime` exigían `YYYY-MM-DDTHH:MM:SS`. El calendario (esquemas, herramientas del agente, `HABITS_CALENDAR_CONTRACT.md`, `occurrence_id`) y el desktop (`localIso`) usan `YYYY-MM-DDTHH:MM`, y la API rechaza los segundos con 422.
