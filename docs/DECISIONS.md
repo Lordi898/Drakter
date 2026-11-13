@@ -578,3 +578,10 @@ Decisiones técnicas, cambios de tecnología y motivos.
 - **Motivo:** dejar el almacén operativo sin tocar contratos compartidos.
 - **Comprobado:** `check_storage_paths.py` 127/127, `check_storage_archives.py` 35/35, `check_storage_catalog.py` y `check_storage_api.py` OK, flujo REST de extremo a extremo 19/19 (rutas denegadas, symlinks fuera de la raíz, SSRF, límites de comprimidos).
 - **Impacto:** `backend/app/services/storage_ports.py`, `backend/app/tools/storage.py`, `backend/uv.lock`, `agent/configuration/permissions.json`, Checklist 10.
+
+## [2026-11-13] Prefijo workspace_ en las confirmaciones de los servicios de tareas y proyectos
+- **Contexto:** `wiring.py` registraba los ejecutores de `TASK_CONFIRMABLE`/`PROJECT_CONFIRMABLE` con los nombres `delete_task`, `update_task` y `complete_task`, que también son herramientas del agente. `ActionService.approve` prefiere los ejecutores al registro, así que un `delete_task` del agente aprobado nunca llegaba a borrar.
+- **Decisión:** las filas de `PendingConfirmationGate` y las claves de los ejecutores de servicio llevan el prefijo `workspace_` (`workspace_delete_task`, `workspace_delete_project`, …). Las herramientas del agente siguen con sus nombres y las ejecuta el registro.
+- **Alternativas descartadas:** renombrar las herramientas del agente (rompe el catálogo y la lista blanca); una puerta propia del módulo (segundo camino paralelo a `ActionService`).
+- **Motivo:** un nombre identifica una sola acción en `pending_confirmations`.
+- **Impacto:** `backend/app/permissions/wiring.py` (`b531106`, pendiente de fusión); Checklist 7 (eliminar tareas, herramientas Hermes).
