@@ -2,6 +2,25 @@
 
 Foto operativa al cierre de la v1. El detalle por casilla está en `IMPLEMENTATION_STATUS.md` y los motivos, en `DECISIONS.md`.
 
+## Voz v2 (2026-11-14)
+
+- **Qué funciona** (WP9, rama `ao/voice-integration/root`, verificado con la app integrada y frases sintéticas): WebRTC por loopback con un pipeline por conexión y relanzado automático de la voz en 1 s si muere; STT Moonshine small en castellano, VAD Silero y Smart Turn v3.2; hablar mientras Haiku genera; Fish `s2.1-pro-free` con respaldo Kokoro (corte por fecha auditado una vez); caché de frases; barge-in («para» corta, «ajá» no, corrección de 3+ palabras); «siga» reanuda; «descansa» → standby; «Hey Jarvis, <orden>» desde reposo; Super+J; voz y chat comparten sesión; confirmaciones nunca por voz; Jobs por voz (`jobs_start` en el carril w1, ~7 s, aviso y resumen); métricas por turno en `metrics.jsonl`; auditoría real. Eval `jobs_routing` 26/26 con `claude-haiku-5-5`.
+- **Cómo se arranca:** `scripts/drakter-local.sh start anthropic` o, compilado, `scripts/drakter`. Super+J tras `scripts/install-shortcut.sh install` (o `scripts/drakter activate`). Caché de frases: `python -m voice phrases`.
+- **Cifras clave** (i7-8665U, 14 GB, sin GPU): pipeline de voz listo ~4,3 s tras arrancar; fin de voz → turno cerrado 375-388 ms (frase única); STT final 98-302 ms; primer audio tras callar 2,36-2,88 s; TTFA Fish 0,71-0,96 s, Kokoro 0,72 s; primer delta de Haiku típico 1,8-4,2 s; Super+J → modo conversación ~0,29 s. CPU de voz: 79 % de un núcleo en conversación, ~53 % en reposo. RSS: voz ~990 MB, backend ~110 MB, Hermes ~230 MB, Hermes w1 ~188 MB. Umbrales sin cambios.
+- **Casillas:** 296 `[x]` de 341 en las Checklists 0-17 (tabla en `IMPLEMENTATION_STATUS.md`). Detalle en `DECISIONS.md` («WP9: integración de la voz v2», «WP9: cifras medidas y umbrales»).
+- **⚠️ Pendiente o no verificable sin el usuario:**
+  - Calidad y volumen reales a oído; barge-in con su voz y altavoces a volumen alto (aquí el bucle acústico era débil).
+  - «Hey Jarvis» con su voz real (con voz castellana sintética no detecta); falso positivo real (solo cubierto por check_pipeline).
+  - Recargar el renderer (Ctrl+R) en la app: no repetido; la reconexión sin recargar modelos la cubre `check_pipeline.py --real` (21/21 PASS con proveedores reales) y WP8a (1,1 s).
+  - Personaje: secuencia listening→thinking→speaking→idle sin parpadeos, no observada.
+  - Icono de altavoz (`voice_tts_enabled`) y tope de lectura de turnos escritos: requieren la UI.
+  - `jobs_amend` con un trabajo en marcha; trabajo con confirmación pendiente (`pending_actions>0`).
+  - Sin red / cambio wifi→ethernet: no probado (WP8a midió 347 ms sin red). Cambio de voz en caliente entre turnos: no probado.
+  - CPU en reposo ~53 % de un núcleo: optimizar (silencio continuo del mixer) en otra fase.
+  - Un steer (corrección) aparece en el chat después de la burbuja del asistente que corrige; un steer aceptado tarde (>5 s) se ejecutaría dos veces.
+  - Tras conmutar a Kokoro no vuelve a Fish hasta reiniciar el proceso de voz.
+  - Ejecutar `python -m voice phrases` con su perfil antes del 30-11-2026.
+
 ## Estado de cierre (2026-11-13)
 
 - **Cierre terminado.** Solo se terminó, verificó y documentó lo que ya tenía código; no entraron funcionalidades nuevas ni la Checklist 18.

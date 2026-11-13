@@ -1,7 +1,10 @@
 """Deterministic provider with no network: lets the GUI work without a key.
 
 Triggers inside the message text: `fake:tool` runs get_system_status through the real
-registry, `fake:slow` slows the reply down, `fake:fail` ends the turn with an error.
+registry, `fake:slow` slows the reply down, `fake:fail` ends the turn with an error,
+`fake:tags` answers with expression tags cut across deltas (and in the terminal text).
+A steer is accepted between deltas; its text decides: `fake:reject` refuses it and
+`fake:pending` accepts it but leaves it unconsumed (`pending_steer`).
 """
 
 from __future__ import annotations
@@ -17,6 +20,7 @@ from drakter_contracts.errors import ErrorCode
 from app.integrations.hermes.events import (
     AgentEvent,
     MessageDelta,
+    Steered,
     Thinking,
     ToolCompleted,
     ToolStarted,
@@ -46,6 +50,7 @@ class FakeProvider:
         self._state = state
         self._observer = observer
         self._cancels: dict[UUID, asyncio.Event] = {}
+        self._steers: dict[UUID, list[str]] = {}
 
     async def start(self) -> None:
         return None
@@ -68,8 +73,15 @@ class FakeProvider:
         if cancel is not None:
             cancel.set()
 
+    async def steer_turn(self, turn_id: UUID, text: str) -> None:
+        steers = self._steers.get(turn_id)
+        if steers is not None:
+            steers.append(text)
+
     async def stream_turn(self, request: TurnRequest) -> AsyncIterator[AgentEvent]:
         cancel = self._cancels[request.turn_id] = asyncio.Event()
+        steers = self._steers[request.turn_id] = []
+        pending: str | None = None
         command = request.text.lower()
         delay = SLOW_DELAY_S if "fake:slow" in command else FAST_DELAY_S
         try:
@@ -82,18 +94,39 @@ class FakeProvider:
             reply = f"Respuesta simulada a {len(request.text)} caracteres recibidos."
             words = reply.split(" ")
             chunks = [f"{word} " for word in words[:-1]] + [words[-1]]
+            if "fake:tags" in command:
+                reply = "[calm] Hola, señor. [happy]Todo en orden [break] y listo."
+                chunks = ["[cal", "m] Hola, ", "señor. [hap", "py]", "Todo en orden [", "break] y listo."]
             if "fake:fail" in command:
                 yield MessageDelta(text=chunks[0])
                 yield turn_failed(ErrorCode.PROVIDER_ERROR, retryable=True)
                 return
-            for chunk in chunks:
+            queue = list(chunks)
+            while queue:
                 if await self._cancelled(cancel, delay):
                     yield TurnCancelled()
                     return
-                yield MessageDelta(text=chunk)
-            yield TurnCompleted(text=reply, usage={"input_tokens": 0, "output_tokens": 0})
+                if steers:
+                    text = steers.pop(0)
+                    accepted = "fake:reject" not in text.lower()
+                    yield Steered(accepted=accepted)
+                    if accepted and "fake:pending" in text.lower():
+                        pending = text
+                    elif accepted:
+                        reply = f"Corrección recibida ({len(text)} caracteres)."
+                        queue = [f"{word} " for word in reply.split(" ")]
+                        queue[-1] = queue[-1].rstrip()
+                    continue
+                yield MessageDelta(text=queue.pop(0))
+            while steers:  # too late for this turn
+                steers.pop(0)
+                yield Steered(accepted=False)
+            yield TurnCompleted(
+                text=reply, usage={"input_tokens": 0, "output_tokens": 0}, pending_steer=pending
+            )
         finally:
             self._cancels.pop(request.turn_id, None)
+            self._steers.pop(request.turn_id, None)
 
     @staticmethod
     async def _cancelled(cancel: asyncio.Event, delay: float) -> bool:

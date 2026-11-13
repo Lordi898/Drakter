@@ -9,10 +9,11 @@ from __future__ import annotations
 import asyncio
 import logging
 import secrets
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from types import SimpleNamespace
-from typing import TYPE_CHECKING, Any, Final
+from typing import TYPE_CHECKING, Any, Final, Literal, Protocol
 from uuid import UUID, uuid4
 
 from drakter_contracts.errors import HTTP_STATUS, ErrorCode
@@ -22,20 +23,22 @@ from drakter_contracts.events import (
     AgentMessageDelta,
     AgentMessageStarted,
     AgentState,
-    AgentStatusChanged,
     AgentToolCompleted,
     AgentToolStarted,
     AgentTurnFinished,
     AgentTurnStarted,
+    ChatUserMessage,
     ConfirmationRequested,
     SystemHealthChanged,
 )
+from drakter_contracts.speech_markup import IncrementalStripper, strip_tags
 from pydantic import BaseModel
 
 from app.core.config import Settings
 from app.core.errors import AppError
 from app.core.security import SessionToken
 from app.events import EventHub
+from app.events.status import StatusArbiter
 from app.integrations.hermes.chat_store import (
     ActiveTurnExists,
     ChatMessage,
@@ -48,6 +51,7 @@ from app.integrations.hermes.events import (
     SAFE_MESSAGES,
     TERMINAL_EVENTS,
     MessageDelta,
+    Steered,
     Thinking,
     ToolCompleted,
     ToolStarted,
@@ -67,8 +71,38 @@ logger = logging.getLogger("drakter.agent.runtime")
 
 REPO_ROOT: Final = Path(__file__).resolve().parents[4]
 STOP_TURN_GRACE_S: Final = 12.0
-# success/error/interrupted are moments for the character, not resting states.
-SETTLE_DELAY_S: Final = 1.5
+# The runner answers a steer at once; past this the correction is treated as not accepted.
+STEER_TIMEOUT_S: Final = 5.0
+STEER_SEPARATOR: Final = "\n\n"
+SESSION_SCAN: Final = 50
+
+Source = Literal["text", "voice"]
+Outcome = Literal["completed", "cancelled", "failed"]
+
+
+class TurnTap(Protocol):
+    """Implemented by VoiceOrchestrator. SYNCHRONOUS and NON-blocking (put_nowait); the runtime
+    still wraps every call, so a broken tap never breaks a turn. Raw text, tags included."""
+
+    def on_turn_started(self, turn_id: UUID, session_id: UUID, source: Source) -> None: ...
+
+    def on_raw_delta(self, turn_id: UUID, text: str) -> None: ...
+
+    def on_tool_started(self, turn_id: UUID, tool: str) -> None: ...
+
+    def on_steered(self, turn_id: UUID, accepted: bool) -> None: ...
+
+    def on_terminal(self, turn_id: UUID, outcome: Outcome) -> None: ...
+
+
+TurnPrefix = Callable[[UUID, str], "str | None"]
+
+
+@dataclass(frozen=True, slots=True)
+class ActiveTurnInfo:
+    turn_id: UUID
+    session_id: UUID
+    phase: Literal["generating", "executing"]
 
 
 def _agent_error(code: ErrorCode) -> AppError:
@@ -83,9 +117,15 @@ def _not_found(message: str) -> AppError:
 class _ActiveTurn:
     session_id: UUID
     turn_id: UUID
-    text: list[str] = field(default_factory=list)
+    source: Source = "text"
+    text: list[str] = field(default_factory=list)  # already stripped of expression tags
     message_id: UUID | None = None
     task: asyncio.Task[None] | None = None
+    phase: Literal["generating", "executing"] = "generating"
+    stripper: IncrementalStripper = field(default_factory=IncrementalStripper)
+    steer_waiters: list[asyncio.Future[bool]] = field(default_factory=list)
+    # corrections accepted while `steer()` waited: that caller stores and shows them
+    echoed_steers: int = 0
 
     @property
     def correlation_id(self) -> str:
@@ -99,6 +139,8 @@ class AgentRuntime:
         self.settings = settings
         self.agent_settings = agent_settings or LoadedSettings()
         self.hub = EventHub()
+        # The only producer of agent.status_changed (V-28); the voice signals it too.
+        self.status_arbiter = StatusArbiter(self.hub)
         self.store = SqliteChatStore(settings.db_path)
         self.registry: Any | None = None
         self.turns: Any | None = None
@@ -111,9 +153,11 @@ class AgentRuntime:
         self._supervisor: Any | None = None
         self._boot_task: asyncio.Task[None] | None = None
         self._active: _ActiveTurn | None = None
-        self._state = AgentState.OFFLINE
         self._health: tuple[str, str | None] | None = None
-        self._settle: asyncio.TimerHandle | None = None
+        self._tap: TurnTap | None = None
+        self._prefixes: list[TurnPrefix] = []
+        self._session_lock = asyncio.Lock()
+        self._follow_ups: set[asyncio.Task[None]] = set()
 
     async def start(self) -> None:
         try:
@@ -237,8 +281,6 @@ class AgentRuntime:
         )
 
     async def stop(self) -> None:
-        if self._settle is not None:
-            self._settle.cancel()
         active = self._active
         if active is not None and active.task is not None:
             await self._stop_active_turn(active)
@@ -277,13 +319,11 @@ class AgentRuntime:
             await asyncio.gather(active.task, return_exceptions=True)
 
     def status(self) -> dict[str, str | None]:
+        """`state` is the arbiter's: the same as the last agent.status_changed."""
         provider = self.provider
         status = provider.status() if provider is not None else None
-        state = self._state
-        if status is not None and status.state != "ready":
-            state = AgentState.OFFLINE
         return {
-            "state": state.value,
+            "state": self.status_arbiter.current.state.value,
             "provider": provider.name if provider else self.agent_settings.agent_provider,
             "model": status.model if status else None,
             "detail": status.detail if status else None,
@@ -303,6 +343,15 @@ class AgentRuntime:
             await self.provider.close_session(session_id)
         closed = await self.store.close_session(session_id)
         return closed or session
+
+    async def current_session(self) -> UUID:
+        """The latest open session, shared by voice and chat; a new one if there is none."""
+        async with self._session_lock:
+            sessions, _ = await self.store.list_sessions(SESSION_SCAN, 0)
+            for session in sessions:
+                if session.status == "open":
+                    return session.id
+            return (await self.create_session()).id
 
     async def list_messages(
         self, session_id: UUID, limit: int, offset: int
@@ -324,10 +373,103 @@ class AgentRuntime:
 
     # Turns
 
+    # Voice v2 ports (CONTRACT.md 5bis)
+
+    def set_turn_tap(self, tap: TurnTap | None) -> None:
+        self._tap = tap
+
+    def add_turn_prefix(self, fn: TurnPrefix) -> None:
+        """`fn(session_id, source)` -> text or None. Only for the prompt sent to the model:
+        never stored, never in chat.user_message, never in the system prompt."""
+        self._prefixes.append(fn)
+
+    def active_turn(self) -> ActiveTurnInfo | None:
+        active = self._active
+        if active is None:
+            return None
+        return ActiveTurnInfo(turn_id=active.turn_id, session_id=active.session_id, phase=active.phase)
+
+    async def steer(self, turn_id: UUID, text: str, *, source: Source = "voice") -> bool:
+        """Correct the running turn (same turn_id). False if it is not running or Hermes refuses.
+
+        An accepted correction is what the user said: like any user message it is stored and
+        published as `chat.user_message` (voice and chat share the conversation). A refused
+        one is not: the caller decides whether it becomes a turn of its own.
+        """
+        active, provider = self._active, self.provider
+        if active is None or active.turn_id != turn_id or provider is None or not text.strip():
+            return False
+        waiter: asyncio.Future[bool] = asyncio.get_running_loop().create_future()
+        active.steer_waiters.append(waiter)
+        try:
+            await provider.steer_turn(turn_id, text)
+            accepted = await asyncio.wait_for(asyncio.shield(waiter), STEER_TIMEOUT_S)
+        except Exception as exc:  # noqa: BLE001 - TimeoutError included: not accepted
+            logger.info("steer not accepted", extra={"event": "steer_failed", "kind": type(exc).__name__})
+            return False
+        finally:
+            if waiter in active.steer_waiters:
+                active.steer_waiters.remove(waiter)
+        if accepted:
+            await self._echo_steer(active, text, source)
+        return accepted
+
+    async def _echo_steer(self, active: _ActiveTurn, text: str, source: Source) -> None:
+        try:
+            message = await self.store.add_user_message(active.session_id, active.turn_id, text)
+        except Exception as exc:  # noqa: BLE001 - the correction already reached the agent
+            logger.warning("steer not persisted", extra={"event": "steer_persist_failed", "kind": type(exc).__name__})
+            return
+        self._publish(
+            active,
+            "chat.user_message",
+            ChatUserMessage(
+                message_id=message.id,
+                session_id=active.session_id,
+                turn_id=active.turn_id,
+                text=text,
+                input_source=source,
+                created_at=message.created_at,
+            ),
+        )
+
+    def _call_tap(self, method: str, *args: Any) -> None:
+        tap = self._tap
+        if tap is None:
+            return
+        try:
+            getattr(tap, method)(*args)
+        except Exception as exc:  # noqa: BLE001 - the voice never breaks a turn
+            logger.warning("turn tap failed", extra={"event": "turn_tap_failed", "kind": type(exc).__name__})
+
+    def _turn_prefix(self, session_id: UUID, source: Source) -> str:
+        parts: list[str] = []
+        for fn in self._prefixes:
+            try:
+                part = fn(session_id, source)
+            except Exception as exc:  # noqa: BLE001 - a turn without its prefix beats no turn
+                logger.warning("turn prefix failed", extra={"event": "turn_prefix_failed", "kind": type(exc).__name__})
+                continue
+            if part:
+                parts.append(part)
+        return "\n".join(parts)
+
+    # Turns
+
     async def submit_message(
-        self, session_id: UUID, text: str, client_message_id: UUID | None
+        self,
+        session_id: UUID,
+        text: str,
+        client_message_id: UUID | None,
+        *,
+        source: Source = "text",
+        echoed: bool = False,
     ) -> tuple[UUID, UUID]:
-        """Accept a user message and start its turn. Returns (turn_id, message_id)."""
+        """Accept a user message and start its turn. Returns (turn_id, message_id).
+
+        `echoed`: the text is already stored and shown (an accepted steer that Hermes never
+        consumed); the new turn neither stores it again nor publishes `chat.user_message`.
+        """
         session = await self._require_session(session_id)
         if session.status != "open":
             raise AppError(ErrorCode.CONFLICT.value, "La sesión está cerrada.", 409)
@@ -337,10 +479,10 @@ class AgentRuntime:
                 return existing.turn_id, existing.id
         provider = self._require_provider()
         turn_id = uuid4()
-        active = self._reserve_turn(session_id, turn_id)
+        active = self._reserve_turn(session_id, turn_id, source)
         try:
             message, created = await self.store.begin_turn(
-                session_id, turn_id, text, client_message_id
+                session_id, turn_id, text, client_message_id, store_message=not echoed
             )
         except ActiveTurnExists:
             self._end_turn(active)
@@ -351,22 +493,39 @@ class AgentRuntime:
         if not created:
             self._end_turn(active)
             return message.turn_id or turn_id, message.id
-        if self._settle is not None:
-            self._settle.cancel()
+        if not echoed:
+            self._publish(
+                active,
+                "chat.user_message",
+                ChatUserMessage(
+                    message_id=message.id,
+                    session_id=session_id,
+                    turn_id=turn_id,
+                    text=text,
+                    input_source=source,
+                    created_at=message.created_at,
+                ),
+            )
         self._publish(
             active,
             "agent.turn_started",
-            AgentTurnStarted(session_id=session_id, turn_id=turn_id),
+            AgentTurnStarted(session_id=session_id, turn_id=turn_id, input_source=source),
         )
+        self._call_tap("on_turn_started", turn_id, session_id, source)
         self._publish_state(AgentState.THINKING, turn_id=turn_id)
-        request = TurnRequest(session_id=session_id, turn_id=turn_id, text=text)
+        request = TurnRequest(
+            session_id=session_id,
+            turn_id=turn_id,
+            text=text,
+            prefix=self._turn_prefix(session_id, source),
+        )
         active.task = asyncio.create_task(self._run_turn(provider, request, active))
         return turn_id, message.id
 
     def _publish(self, active: _ActiveTurn, event_type: str, payload: BaseModel) -> None:
         self.hub.publish(event_type, payload, correlation_id=active.correlation_id)
 
-    def _reserve_turn(self, session_id: UUID, turn_id: UUID) -> _ActiveTurn:
+    def _reserve_turn(self, session_id: UUID, turn_id: UUID, source: Source = "text") -> _ActiveTurn:
         """Admission: synchronous, so two requests cannot both get through."""
         if self._active is not None:
             raise _agent_error(ErrorCode.AGENT_BUSY)
@@ -377,7 +536,7 @@ class AgentRuntime:
                 self.turns.begin(session_id, turn_id)
             except TurnBusyError:
                 raise _agent_error(ErrorCode.AGENT_BUSY) from None
-        self._active = _ActiveTurn(session_id=session_id, turn_id=turn_id)
+        self._active = _ActiveTurn(session_id=session_id, turn_id=turn_id, source=source)
         return self._active
 
     def _end_turn(self, active: _ActiveTurn) -> None:
@@ -447,18 +606,42 @@ class AgentRuntime:
             )
         return active.message_id
 
+    async def _emit_text(self, active: _ActiveTurn, clean: str) -> None:
+        """Tag-free text only: this is what the chat, the hub and the DB see."""
+        if not clean:
+            return
+        await self._ensure_message(active)
+        active.text.append(clean)
+        self._publish(
+            active,
+            "agent.message_delta",
+            AgentMessageDelta(session_id=active.session_id, turn_id=active.turn_id, delta=clean),
+        )
+
     async def _handle_event(self, active: _ActiveTurn, event: Any) -> None:
         ids = {"session_id": active.session_id, "turn_id": active.turn_id}
         if isinstance(event, Thinking):
+            active.phase = "generating"
             self._publish_state(AgentState.THINKING, turn_id=active.turn_id)
         elif isinstance(event, MessageDelta):
-            await self._ensure_message(active)
-            active.text.append(event.text)
+            active.phase = "generating"
+            self._call_tap("on_raw_delta", active.turn_id, event.text)  # before the stripper
             self._publish_state(AgentState.SPEAKING, turn_id=active.turn_id)
-            self._publish(
-                active, "agent.message_delta", AgentMessageDelta(**ids, delta=event.text)
-            )
+            await self._emit_text(active, active.stripper.feed(event.text))
+        elif isinstance(event, Steered):
+            for waiter in active.steer_waiters:
+                if not waiter.done():
+                    waiter.set_result(event.accepted)
+                    if event.accepted:
+                        active.echoed_steers += 1  # before any terminal: see _close_turn
+                    break
+            if event.accepted:
+                if active.message_id is not None:
+                    await self._emit_text(active, active.stripper.flush() + STEER_SEPARATOR)
+            self._call_tap("on_steered", active.turn_id, event.accepted)
         elif isinstance(event, ToolStarted):
+            active.phase = "executing"
+            self._call_tap("on_tool_started", active.turn_id, event.tool)
             self._publish_state(AgentState.EXECUTING, turn_id=active.turn_id)
             self._publish(
                 active,
@@ -477,6 +660,7 @@ class AgentRuntime:
                     error=event.error,
                 ),
             )
+            active.phase = "generating"
             self._publish_state(AgentState.THINKING, turn_id=active.turn_id)
 
     async def _close_turn(
@@ -484,7 +668,18 @@ class AgentRuntime:
     ) -> None:
         """Commit, free the slot, and only then tell the GUI it may send again."""
         outcome, error_code, message_status, state = self._outcome_of(terminal)
-        text = terminal.text if isinstance(terminal, TurnCompleted) else "".join(active.text)
+        tail = active.stripper.flush()
+        if tail:
+            try:
+                await self._emit_text(active, tail)
+            except Exception:  # noqa: BLE001 - the terminal text below carries it anyway
+                active.text.append(tail)
+        for waiter in active.steer_waiters:
+            if not waiter.done():
+                waiter.set_result(False)
+        # Expression tags are spoken, never stored nor shown (V-15): the terminal text too.
+        completed_text = strip_tags(terminal.text) if isinstance(terminal, TurnCompleted) else None
+        text = completed_text if completed_text is not None else "".join(active.text)
         try:
             if isinstance(terminal, TurnCompleted):
                 await self._ensure_message(active)
@@ -507,7 +702,7 @@ class AgentRuntime:
             self._publish(
                 active,
                 "agent.message_completed",
-                AgentMessageCompleted(**ids, message_id=active.message_id, text=terminal.text),
+                AgentMessageCompleted(**ids, message_id=active.message_id, text=text),
             )
         if isinstance(terminal, TurnFailed):
             self._publish(
@@ -521,10 +716,35 @@ class AgentRuntime:
                 ),
             )
         self._publish(active, "agent.turn_finished", AgentTurnFinished(**ids, outcome=outcome))
+        tap_outcome: Outcome = outcome if outcome in ("completed", "cancelled") else "failed"
+        self._call_tap("on_terminal", active.turn_id, tap_outcome)
+        # success/error/interrupted are transients in the arbiter; then back to idle or offline.
         self._publish_state(state, reason=outcome, turn_id=active.turn_id)
-        self._settle = asyncio.get_running_loop().call_later(
-            SETTLE_DELAY_S, self._sync_provider_state
-        )
+        self._sync_provider_state()
+        if isinstance(terminal, TurnCompleted) and terminal.pending_steer:
+            if active.echoed_steers:
+                self._follow_up(active.session_id, terminal.pending_steer, active.source)
+            else:
+                # Accepted only after `steer()` gave up (timeout): its caller already queued
+                # the text as a turn of its own, so reopening it here would run it twice.
+                logger.info("pending steer left to its caller", extra={"event": "steer_follow_up_skipped"})
+
+    def _follow_up(self, session_id: UUID, text: str, source: Source) -> None:
+        """A correction Hermes accepted but never consumed becomes the next turn. It is
+        already in the chat (`_echo_steer`), so the new turn does not repeat it."""
+
+        async def run() -> None:
+            try:
+                await self.submit_message(session_id, text, None, source=source, echoed=True)
+            except Exception as exc:  # noqa: BLE001 - lost, like a message sent while busy
+                logger.warning(
+                    "pending steer not resubmitted",
+                    extra={"event": "steer_follow_up_failed", "kind": type(exc).__name__},
+                )
+
+        task = asyncio.create_task(run())
+        self._follow_ups.add(task)
+        task.add_done_callback(self._follow_ups.discard)
 
     @staticmethod
     def _outcome_of(
@@ -564,12 +784,5 @@ class AgentRuntime:
         reason: str | None = None,
         turn_id: UUID | None = None,
     ) -> None:
-        """Publishes changes, and always the end of a turn: the GUI needs that signal."""
-        if state == self._state and reason is None:
-            return
-        previous, self._state = self._state, state
-        self.hub.publish(
-            "agent.status_changed",
-            AgentStatusChanged(state=state, previous=previous, turn_id=turn_id, reason=reason),
-            correlation_id=str(turn_id) if turn_id else None,
-        )
+        """The agent's signal to the arbiter, the only one that publishes agent.status_changed."""
+        self.status_arbiter.signal("agent", state, turn_id=turn_id, reason=reason)

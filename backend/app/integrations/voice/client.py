@@ -1,4 +1,5 @@
-"""asyncio client of the voice IPC socket (voice/CONTRACT.md, section IPC).
+"""asyncio client of the voice IPC socket (voice/CONTRACT.md, section IPC; envelope of
+`drakter_contracts.voice_ipc.IpcMessage`: ``{kind: evt|cmd|ok|err, id, type, payload}``).
 
 Never logs line contents: events carry transcripts.
 """
@@ -24,9 +25,6 @@ _CONNECT_TIMEOUT: Final = 2.0
 _RETRY_MIN: Final = 0.1
 _RETRY_MAX: Final = 2.0
 _EVENT_QUEUE_SIZE: Final = 1024
-# Mouth levels are stale right away: when the consumer lags they are the first to go.
-_LEVEL_EVENT: Final = "voice.playback_level"
-_LEVEL_DROP_AT: Final = 32
 
 EventHandler = Callable[[str, Mapping[str, object]], Awaitable[None]]
 LinkHandler = Callable[[], Awaitable[None]]
@@ -37,7 +35,7 @@ class VoiceUnavailableError(Exception):
 
 
 class VoiceIPCError(Exception):
-    """The voice process answered ``ok: false``."""
+    """The voice process answered ``err{code, message}``."""
 
     def __init__(self, code: str, message: str) -> None:
         super().__init__(code)
@@ -47,7 +45,7 @@ class VoiceIPCError(Exception):
 
 def _encode_command(request_id: str, name: str, args: Mapping[str, object]) -> bytes:
     line = json.dumps(
-        {"kind": "cmd", "id": request_id, "name": name, "args": dict(args)},
+        {"kind": "cmd", "id": request_id, "type": name, "payload": dict(args)},
         ensure_ascii=False,
         separators=(",", ":"),
     ).encode("utf-8", "replace")
@@ -72,7 +70,7 @@ class VoiceClient:
     """One connection at a time, re-established on its own until ``close``.
 
     ``on_connected`` runs on every new connection before anyone else may send
-    commands: that is where the microphone gets forced off. If it raises, the
+    commands: that is where the current `voice.config` is pushed. If it raises, the
     connection is dropped and retried.
     """
 
@@ -228,7 +226,7 @@ class VoiceClient:
                 logger.warning("Voice line invalid", extra={"event": "voice_line_invalid"})
                 return
             kind = message.get("kind")
-            if kind == "res":
+            if kind in ("ok", "err"):
                 self._resolve(message)
             elif kind == "evt":
                 await self._enqueue(message)
@@ -237,22 +235,20 @@ class VoiceClient:
         future = self._pending.get(message.get("id"))  # type: ignore[arg-type]
         if future is None or future.done():
             return
-        if message.get("ok") is True:
-            result = message.get("result")
-            future.set_result(result if isinstance(result, dict) else {})
+        payload = message.get("payload")
+        if message.get("kind") == "ok":
+            future.set_result(payload if isinstance(payload, dict) else {})
             return
-        error = message.get("error")
+        error = payload
         error = error if isinstance(error, dict) else {}
         future.set_exception(
             VoiceIPCError(str(error.get("code", "unknown")), str(error.get("message", "")))
         )
 
     async def _enqueue(self, message: Mapping[str, Any]) -> None:
-        name = message.get("name")
-        payload = message.get("payload")
+        name = message.get("type")
+        payload = message.get("payload", {})
         if not isinstance(name, str) or not isinstance(payload, dict):
-            return
-        if name == _LEVEL_EVENT and self._events.qsize() >= _LEVEL_DROP_AT:
             return
         await self._events.put((name, payload))
 
@@ -270,7 +266,7 @@ class VoiceClient:
 
 
 async def shutdown_stale(path: Path, *, timeout: float = 3.0) -> bool:
-    """Stop a process left by a backend that died hard: it could hold the microphone open."""
+    """Stop a process left by a backend that died hard: it would hold the socket and models."""
     if not path.is_socket():
         return False
     try:

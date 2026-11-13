@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import pkgutil
 from collections.abc import AsyncIterator, Callable, Iterator
 from contextlib import asynccontextmanager
 from importlib import import_module
+from pathlib import Path
 from types import ModuleType
+from typing import Any
 
 from fastapi import APIRouter, FastAPI
 
@@ -67,6 +70,50 @@ def _install_services(app: FastAPI, settings: Settings) -> None:
         reminders.ReminderTicker(settings.db_path, publish=hub.publish) if reminders else None
     )
     wire_security(app, settings)
+    _install_voice(app, settings, runtime)
+
+
+def runtime_dir() -> Path:
+    """Same rule as voice/config.py: the voice socket is `<this>/voice.sock`."""
+    raw = os.environ.get("XDG_RUNTIME_DIR")
+    return (Path(raw) if raw else Path(f"/run/user/{os.getuid()}")) / "drakter"
+
+
+def _install_voice(app: FastAPI, settings: Settings, runtime: Any) -> None:
+    """Voice v2 (WP5): the orchestrator is the runtime's TurnTap. It starts in the lifespan."""
+    app.state.voice = None
+    if runtime is None:
+        return
+    from app.integrations.voice.audit import VoiceAudit
+    from app.integrations.voice.router import router as voice_router
+    from app.integrations.voice.service import VoiceOrchestrator
+    from app.integrations.voice.settings import load_voice_settings
+
+    app.include_router(voice_router)
+    orchestrator = VoiceOrchestrator(
+        load_voice_settings(),
+        runtime=runtime,
+        audit=VoiceAudit(settings.db_path),
+        data_dir=settings.data_dir,
+        runtime_dir=runtime_dir(),
+        db_path=settings.db_path,
+    )
+    runtime.add_turn_prefix(orchestrator.heard.prefix)
+    app.state.voice = orchestrator
+
+
+async def _start_jobs(app: FastAPI) -> Any:
+    """Drakter Jobs (WP7). `install_jobs` registers its own turn prefix. A finished job is
+    announced with a phrase once voice is silent (never as an assistant message)."""
+    from app.jobs.manager import install_jobs
+
+    manager = await install_jobs(app)
+    voice = app.state.voice
+    if voice is not None:
+        manager.on_job_finished = lambda job: voice.say_phrase(
+            "job_done" if job.state == "completed" else "job_failed", "when_silent"
+        )
+    return manager
 
 
 def create_app(
@@ -87,9 +134,16 @@ def create_app(
             await asyncio.to_thread(recover_interrupted, settings)
             await start_security(app)
             runtime, reminders = app.state.agent_runtime, app.state.reminders
+            voice = app.state.voice
+            jobs = None
             if runtime:
                 await runtime.start()
             try:
+                if runtime:
+                    jobs = await _start_jobs(app)
+                if voice:
+                    ensure_private_dir(runtime_dir())
+                    await voice.start()  # sets the runtime's TurnTap
                 if reminders:
                     await reminders.start()
                 try:
@@ -99,6 +153,10 @@ def create_app(
                     if reminders:
                         await reminders.stop()
             finally:
+                if voice:
+                    await voice.stop()
+                if jobs:
+                    await jobs.stop()
                 if runtime:
                     await runtime.stop()
                 await stop_security(app)

@@ -1,17 +1,20 @@
 [project]
 name = "drakter-voice"
-version = "0.1.0"
-description = "Pipeline de voz local de Drakter (proceso y venv separados del backend)"
+version = "0.2.0"
+description = "Proceso de voz de Drakter sobre Pipecat (venv propio, supervisado por el backend)"
 license = "Apache-2.0"
-requires-python = ">=3.12,<3.14"
-dependencies = ["numpy>=2,<3", "onnxruntime>=1.20,<2"]
-
-[project.optional-dependencies]
-stt = ["faster-whisper==1.2.1"]
-kokoro = ["kokoro-onnx==0.6.1"]
-wakeword = ["openwakeword==0.6.0"]
-# Piper (GPL-3.0-or-later) no es un extra a propósito: va en su propio entorno
-# y solo se invoca como proceso externo. Ver voice/tts/piper.py.
+requires-python = ">=3.12,<3.13"
+# Versiones fijadas por docs/DECISIONS.md (voz v2). El lock completo está en
+# voice/requirements.lock y lo aplica scripts/install-voice.sh.
+# drakter-contracts se instala aparte, en editable, desde contracts/python.
+dependencies = [
+  "pipecat-ai[webrtc,fish,kokoro]==1.16.0",
+  "moonshine-voice==0.1.6",
+  "openwakeword==0.4.0",
+  # pipecat.transports.smallwebrtc.request_handler importa fastapi (HTTPException)
+  # y el extra [webrtc] no lo incluye. No se levanta ningún servidor HTTP.
+  "fastapi",
+]
 
 [tool.uv]
 package = false

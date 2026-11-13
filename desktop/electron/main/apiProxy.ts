@@ -4,7 +4,7 @@
  */
 import { request } from 'node:http'
 import type { ApiCallResult } from '../shared/bridge'
-import { ALLOWED_ROUTES, type HttpMethod } from '../shared/operations'
+import { ALLOWED_ROUTES, OPERATIONS, type HttpMethod, type OperationName } from '../shared/operations'
 import type { BackendHost } from './host-types'
 import { describeError, logError } from './log'
 
@@ -252,8 +252,56 @@ export function extractErrorCode(body: unknown): string {
   return 'http_error'
 }
 
-export async function callOperation(host: BackendHost, payload: unknown): Promise<ApiCallResult> {
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+const PATH_PARAMS: Readonly<Record<string, RegExp>> = { job_id: UUID_PATTERN }
+
+function isOperationName(value: unknown): value is OperationName {
+  return typeof value === 'string' && Object.hasOwn(OPERATIONS, value)
+}
+
+/**
+ * Traduce una operación con nombre (`{op, params?, body?}`) al par método/ruta de
+ * `OPERATIONS`. Solo admite los parámetros de ruta conocidos, validados aquí
+ * (`job_id` debe ser un UUID). `null` si no es válida.
+ */
+function resolveOperation(payload: Record<string, unknown>): { method: HttpMethod; path: string; body?: unknown } | null {
+  if (Object.keys(payload).some((key) => !['op', 'params', 'body'].includes(key))) return null
+  if (!isOperationName(payload.op)) return null
+  const operation = OPERATIONS[payload.op]
+  const params = payload.params ?? {}
+  if (!isPlainObject(params)) return null
+  let path: string = operation.path
+  const used = new Set<string>()
+  for (const name of path.match(/\{[^}]+\}/g) ?? []) {
+    const key = name.slice(1, -1)
+    const value = params[key]
+    const pattern = PATH_PARAMS[key]
+    if (typeof value !== 'string' || pattern === undefined || !pattern.test(value)) return null
+    path = path.replace(name, value.toLowerCase())
+    used.add(key)
+  }
+  if (Object.keys(params).some((key) => !used.has(key))) return null
+  return { method: operation.method, path, body: payload.body }
+}
+
+/** Para main (bandeja, atajo): misma validación que una petición del renderer. */
+export function callNamedOperation(
+  host: BackendHost,
+  op: OperationName,
+  body?: unknown,
+  params?: Readonly<Record<string, string>>
+): Promise<ApiCallResult> {
+  return callOperation(host, { op, params, body })
+}
+
+export async function callOperation(host: BackendHost, rawPayload: unknown): Promise<ApiCallResult> {
   try {
+    let payload = rawPayload
+    if (isPlainObject(payload) && 'op' in payload) {
+      const resolved = resolveOperation(payload)
+      if (resolved === null) return invalid()
+      payload = resolved.body === undefined ? { method: resolved.method, path: resolved.path } : resolved
+    }
     if (!isPlainObject(payload) || typeof payload.method !== 'string' || !METHODS.has(payload.method)) {
       return invalid()
     }

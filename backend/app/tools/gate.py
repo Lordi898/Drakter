@@ -21,7 +21,11 @@ from app.tools.spec import RiskClass, ToolContext, ToolSpec
 
 
 def effective_risk(spec: ToolSpec, *, tainted: bool) -> RiskClass:
-    """A WRITE in a tainted session needs the same confirmation as a CONFIRM (F08)."""
+    """A WRITE in a tainted session needs the same confirmation as a CONFIRM (F08).
+
+    This covers `jobs_start` and `jobs_cancel` too (V-26). A call from a job lane carries
+    `ctx.job_id`; the lane's observer copies it to `confirmation.requested.job_id`.
+    """
     if spec.risk is RiskClass.WRITE and tainted:
         return RiskClass.CONFIRM
     return spec.risk

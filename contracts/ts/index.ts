@@ -1704,10 +1704,6 @@ export interface VoiceError {
   turn_id: string | null;
 }
 
-export interface VoiceListeningStarted {
-  trigger: "wakeword" | "push_to_talk";
-}
-
 export interface VoiceModeIn {
   mode: "standby" | "conversation";
 }
@@ -1733,11 +1729,6 @@ export interface VoicePlayback {
   sentence_index: number;
 }
 
-export interface VoicePlaybackLevel {
-  utterance_id: string;
-  level: number;
-}
-
 /** Perfil de voz activo. Lleva el nombre del perfil, nunca su ID de Fish. */
 export interface VoiceProfileChanged {
   profile: string;
@@ -1760,19 +1751,6 @@ export interface VoiceStatusOut {
   profile: string;
   wake_enabled: boolean;
   metrics_last: Record<string, unknown> | null;
-}
-
-export interface VoiceTranscription {
-  utterance_id: string;
-  text: string;
-}
-
-export interface VoiceUtterance {
-  utterance_id: string;
-}
-
-export interface VoiceWakewordDetected {
-  score: number | null;
 }
 
 export interface WeekdayStat {
@@ -1833,15 +1811,6 @@ export interface EventPayloads {
   "voice.state": VoiceState;
   "voice.playback": VoicePlayback;
   "voice.error": VoiceError;
-  "voice.wakeword_detected": VoiceWakewordDetected;
-  "voice.listening_started": VoiceListeningStarted;
-  "voice.speech_ended": VoiceUtterance;
-  "voice.transcription_partial": VoiceTranscription;
-  "voice.transcription_completed": VoiceTranscription;
-  "voice.playback_started": VoiceUtterance;
-  "voice.playback_level": VoicePlaybackLevel;
-  "voice.playback_stopped": VoiceUtterance;
-  "voice.playback_interrupted": VoiceUtterance;
   "voice.profile_changed": VoiceProfileChanged;
 }
 

@@ -1502,7 +1502,7 @@
  {
   "name": "jobs_start",
   "domain": "jobs",
-  "description": "Lanza un trabajo largo en segundo plano con un título corto y un encargo completo y autosuficiente; usted sigue atendiendo al usuario. Solo hay un carril: si está ocupado, devuelve jobs_full.",
+  "description": "Lanza un trabajo largo en segundo plano con un título corto y un encargo completo y autosuficiente; usted sigue atendiendo al usuario. Al terminar, Drakter avisa solo (frase hablada y notificación) y el resumen le llega a usted en el turno siguiente: no hace falta que el usuario pregunte. Solo hay un carril: si está ocupado, devuelve jobs_full.",
   "permission": "jobs.write",
   "risk": "write",
   "idempotent": false,

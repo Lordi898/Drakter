@@ -1,7 +1,7 @@
 import { useState, type KeyboardEvent } from 'react'
 import { SendHorizontal, Square } from 'lucide-react'
 import { ChatTranscript } from '@/chat/ChatTranscript'
-import { ConfirmationHost } from '@/chat/ConfirmationDialog'
+import { SpeakerToggle } from '@/chat/SpeakerToggle'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
@@ -52,13 +52,13 @@ export function ChatComposer({ className }: { className?: string }) {
   return (
     <div className={cn('flex flex-col gap-2', className)}>
       <ChatTranscript />
-      <ConfirmationHost />
       {notice ? (
         <p id="chat-notice" className="text-sm text-muted-foreground">
           {notice}
         </p>
       ) : null}
       <div className="flex items-end gap-2">
+        <SpeakerToggle />
         <Textarea
           rows={1}
           disabled={offline}

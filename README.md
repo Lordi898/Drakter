@@ -1,6 +1,6 @@
 # Drakter
 
-> **English summary.** Drakter is a local-first personal AI agent with its own desktop app, built for a single user on Linux. An Electron + React desktop talks to a local FastAPI + SQLite backend, which drives a [Hermes Agent](https://github.com/NousResearch/hermes-agent) runtime backed by Claude Haiku 5.5. The agent manages tasks, projects, habits, calendar, subjects, a file storage with full-text search, relations between items and its own memory, always through validated backend tools with explicit confirmation for destructive actions. Status: v0.1.0 pre-release — the v1 scope is integrated and verified module by module; voice, the animated Rive character and the self-improvement screen are still in progress. Documentation is in Spanish. License: [Apache-2.0](LICENSE); the license does not grant rights to the Drakter name.
+> **English summary.** Drakter is a local-first personal AI agent with its own desktop app, built for a single user on Linux. An Electron + React desktop talks to a local FastAPI + SQLite backend, which drives a [Hermes Agent](https://github.com/NousResearch/hermes-agent) runtime backed by Claude Haiku 5.5. The agent manages tasks, projects, habits, calendar, subjects, a file storage with full-text search, relations between items and its own memory, always through validated backend tools with explicit confirmation for destructive actions. Status: v0.1.0 pre-release — the v1 scope is integrated and verified module by module; voice v2 (Pipecat + WebRTC loopback) is integrated, while the animated Rive character and the self-improvement screen are still in progress. Documentation is in Spanish. License: [Apache-2.0](LICENSE); the license does not grant rights to the Drakter name.
 
 Agente personal de IA con aplicación de escritorio propia. Local-first, para un solo usuario, en Linux primero.
 
@@ -18,7 +18,9 @@ En medio, un backend FastAPI (REST + WebSocket) que es el único dueño de los d
 
 **v0.1.0, pre-release (2026-11-13).** El alcance de la v1 está integrado y verificado módulo a módulo; la app arranca (Electron + backend + Hermes) con Claude Haiku 5.5 real. En las Checklists 0–17 hay 260 de 295 casillas en `[x]` (29 con una reserva ⚠️), 25 sin marcar con ⚠️ y 10 sin código. Pasada integrada final: `scripts/verify-all.sh` 44/44.
 
-Pendiente sobre todo: voz conectada a la app, personaje Rive (hoy hay un provisional en SVG con los mismos estados), OpenViking, pantalla de automejora, `.deb` instalado y mediciones de rendimiento.
+Voz v2 (Pipecat 1.16.0 + WebRTC por loopback) integrada en la app: activación con Super+J o «Hey Jarvis», conversación, barge-in, trabajos en segundo plano; primer audio 2,36-2,88 s tras callar el usuario y RSS del proceso de voz ~990 MB (máquina de desarrollo, sin GPU). Guía: [`docs/usage/voz.md`](docs/usage/voz.md).
+
+Pendiente sobre todo: personaje Rive (hoy hay un provisional en SVG con los mismos estados), OpenViking, pantalla de automejora, `.deb` instalado y mediciones de rendimiento.
 
 <details>
 <summary>Estado por bloque</summary>
@@ -39,7 +41,7 @@ Pendiente sobre todo: voz conectada a la app, personaje Rive (hoy hay un provisi
 | Relaciones (CL11) | `backend/app/services/relations.py`, `desktop/src/modules/relationships/` | 13/14 | Verificado el servicio, los tipos, las validaciones, las consultas y la integridad; leer, buscar y crear desde el agente con Haiku real. ⚠️ Borrar desde el agente sin recomprobar con el modelo |
 | Memoria (CL12) | `memory/`, `backend/app/integrations/memory/` | 20/22 | Verificado el adaptador SQLite + FTS5 y su ciclo (extraer, clasificar, deduplicar, contradicciones, caducidad); olvidar o aprobar recuerdos pasa por confirmación. ⚠️ OpenViking desactivado |
 | Skills y herramientas (CL13) | `agent/skills/`, `backend/app/tools/` | 7/15 | 78 herramientas por MCP con parámetros, permisos y errores verificados. ⚠️ Las Skills están inertes en Hermes (`skill_manage` desactivado) |
-| Voz (CL14) | `voice/` | 13/18 | Verificado como proceso aislado: VAD, Whisper small, Kokoro, Voice Manager, reproducción e interrupciones. ⚠️ Sin conectar a la app, sin wake word ni Piper |
+| Voz (CL14) | `voice/`, `backend/app/integrations/voice/`, `desktop/src/voice/` | ver `IMPLEMENTATION_STATUS.md` | Voz v2: Pipecat 1.16.0, WebRTC por loopback, Moonshine, openWakeWord («Hey Jarvis»), Smart Turn, Fish con Kokoro de respaldo. Detalle en [`voice/README.md`](voice/README.md) |
 | Automejora (CL15) | `improvement/`, `backend/app/services/improvement_*.py` | 11/11 | Verificado el ciclo (feedback, propuestas, evaluación aislada, rama Git, revertir) y que no puede cambiar nada sin aprobación. ⚠️ Sin pantalla de automejora |
 | Seguridad (CL16) | `backend/app/permissions/`, `tests/security/` | 14/15 | Revisión adversarial hecha (banco final 169 BLOCKED / 12 BREACH / 0 ERROR). ⚠️ Brechas de diseño conocidas: ver [SECURITY.md](SECURITY.md) |
 | Optimización y lanzamiento (CL17) | `desktop/electron-builder.*`, `docs/installation/` | 3/17 | Guías de instalación al día; AppImage generado con el backend congelado. ⚠️ `.deb` sin regenerar ni instalar, sin mediciones de rendimiento |
@@ -58,7 +60,7 @@ Detalle por casilla en [`docs/IMPLEMENTATION_STATUS.md`](docs/IMPLEMENTATION_STA
 - **Hermes Agent** instalado en ese venv (`hermes-python` en el `PATH` o `DRAKTER_HERMES_PYTHON`). Sin Hermes la app abre, pero el chat y el agente no funcionan.
 - Una **clave de API de Anthropic** para usar el modelo real. Sin ella, el agente puede usar el stub de desarrollo (`tools/dev-llm-stub`) en lugar del modelo; Hermes sigue siendo necesario.
 
-Se ha desarrollado en un portátil con 14 GB de RAM y gráfica integrada; la voz local es la parte más exigente.
+Se ha desarrollado en un portátil con 14 GB de RAM y gráfica integrada; la voz local es la parte más exigente. Para la voz, `uv` y los modelos en `~/.local/share/drakter/models/` (ver [`docs/installation/voz.md`](docs/installation/voz.md)).
 
 ## Instalación
 
@@ -102,10 +104,13 @@ Variables que se leen de `~/.config/drakter/.env`:
 | `DRAKTER_MODEL_NAME` | `claude-haiku-5-5` | Modelo del agente |
 | `DRAKTER_HERMES_PYTHON` | `hermes-python` (en el `PATH`) | Python del venv de Hermes |
 | `DRAKTER_DEV_STUB_URL` | `http://127.0.0.1:28517` | Stub de desarrollo; solo `http` en loopback |
-| `DRAKTER_VOICE_*`, `DRAKTER_STT_*`, `DRAKTER_TTS_*`, `DRAKTER_VAD_*`, `DRAKTER_WAKEWORD_*`, `DRAKTER_AUDIO_*`, `DRAKTER_PIPER_*` | voz desactivada | Proceso de voz (ver [`docs/installation/voz.md`](docs/installation/voz.md)) |
+| `DRAKTER_VOICE_ENABLED` | `true` | Activa el proceso de voz; con `false` no se lanza |
+| `DRAKTER_VOICE_PYTHON` | `~/.local/share/drakter/venvs/voice/bin/python` | Python del venv de voz (ruta absoluta) |
+| `DRAKTER_VOICE_<CAMPO>` | ver `voice/config.py` | Cualquier campo de `VoiceConfig` (`DRAKTER_VOICE_STT_MODEL`, `DRAKTER_VOICE_TTS`…); también en `~/.config/drakter/voice.toml` (ver [`voice/README.md`](voice/README.md)) |
+| `FISH_API_KEY` | — | Clave de Fish Audio para la voz; sin ella habla Kokoro (local) |
 | `DRAKTER_IMPROVEMENT_REPO` | — | Repositorio de pruebas de la automejora; sin él, evaluar queda bloqueado |
 
-`OPENVIKING_ENDPOINT`, `OPENVIKING_API_KEY` y `FISH_API_KEY` están reservadas: nada las lee todavía. Más: [clave de API](docs/installation/clave-api.md).
+`OPENVIKING_ENDPOINT` y `OPENVIKING_API_KEY` están reservadas: nada las lee todavía. Más: [clave de API](docs/installation/clave-api.md).
 
 ## Arranque
 
@@ -120,6 +125,8 @@ scripts/dev.sh [all|desktop]              # escritorio en primer plano
 - El backend no se arranca aparte: lo lanza el proceso principal de Electron, con las credenciales por stdin y un puerto efímero.
 - `drakter-local.sh` deja la app y el stub desacoplados de la terminal. Logs y cómo parar sin dejar procesos: [`docs/RUN_STATE.md`](docs/RUN_STATE.md).
 - Pasada integrada completa (backend + stub + Electron): `scripts/verify-all.sh`.
+
+**Arrancar con voz.** Instala el entorno una vez con `scripts/install-voice.sh` (desde el checkout principal) y el atajo con `scripts/install-shortcut.sh install` (Super+J); comprueba con `~/.local/share/drakter/venvs/voice/bin/python -m voice check`. Después arranca con `scripts/drakter-local.sh start anthropic` o con `scripts/drakter`: ambos pasan a Electron `--allow-loopback-in-peer-connection`, necesario para el WebRTC por loopback (la voz funciona también sin red). `scripts/drakter activate` equivale a Super+J. Uso: [`docs/usage/voz.md`](docs/usage/voz.md); instalación: [`docs/installation/voz.md`](docs/installation/voz.md); diseño: [`voice/README.md`](voice/README.md).
 
 **Sandbox de Electron.** Si AppArmor restringe los espacios de nombres sin privilegios (`kernel.apparmor_restrict_unprivileged_userns=1`, el caso de Ubuntu reciente), Electron aborta con un error de `chrome-sandbox`. En desarrollo: `ELECTRON_DISABLE_SANDBOX=1 DRAKTER_DEV_NO_SANDBOX=1 scripts/dev.sh`. En producción el sandbox es obligatorio. Detalle en [`docs/installation/sandbox-electron.md`](docs/installation/sandbox-electron.md).
 
@@ -157,7 +164,7 @@ Más en [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 ├── scripts/        arranque, comprobación del entorno, pasada integrada e instalación de skills
 ├── tests/          pasada e2e y banco de seguridad
 ├── tools/          dev-llm-stub
-└── voice/          servicio de voz
+└── voice/          proceso de voz (Pipecat)
 ```
 
 ## Documentación

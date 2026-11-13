@@ -1,0 +1,39 @@
+# Capa 0 de la voz (V-10): listas cerradas, sin LLM. Las usa voice/conversation/layer0.py.
+# Se comparan en minúsculas, sin tildes ni signos. Una frase cuenta si aparece entera y el resto
+# del enunciado son solo muletillas (`fillers`). Añadir una expresión es editar este archivo.
+
+# Muletillas que pueden acompañar a cualquier frase sin cambiar su sentido.
+fillers = ["vale", "gracias", "ya", "bueno", "pues", "venga", "ok", "okey", "oye", "hey", "jarvis",
+           "senor", "imanol", "magana", "por", "favor", "porfa", "eh", "ahora"]
+
+[stop]
+# Cortan solo la voz del bot. Si el bot está hablando, basta con que la primera palabra sea una de
+# `first_word` ("para" solo cuenta aislado o como primera palabra, nunca en medio: "no para de llover").
+first_word = ["para", "calla", "callate", "basta", "silencio", "stop", "alto"]
+phrases = ["para ya", "ya basta", "ya vale", "vale ya", "deja de hablar", "no sigas", "corta",
+           "para para", "cierra el pico"]
+
+[rest]
+# Vuelven a reposo (standby), también con el bot callado.
+phrases = ["descansa", "deja de escuchar", "eso es todo", "a dormir", "puedes descansar",
+           "modo reposo", "ya puedes descansar", "no escuches"]
+
+[close]
+# Cierre de la conversación (despedida); también pasa a reposo.
+phrases = ["adios", "hasta luego", "hasta manana", "buenas noches", "nos vemos", "chao", "hasta otra",
+           "hasta despues"]
+
+[backchannel]
+# Asentimientos: se descartan sin más, salvo que el bot esté esperando una respuesta.
+# Cuenta si TODAS las palabras del enunciado están aquí.
+words = ["aja", "aha", "ajam", "mm", "mmm", "mhm", "hm", "hmm", "ya", "vale", "si", "ok", "okey",
+         "claro", "entiendo", "ah", "oh", "eh", "em", "ehm", "bien", "genial", "perfecto", "guay",
+         "exacto", "cierto", "acuerdo", "de", "venga", "bueno", "uh", "gracias"]
+
+[wake]
+# Confirmación textual de la palabra de activación (la usa voice/bridge.py). El STT transcribe
+# «Jarvis» de muchas formas ("jarbes" con voz sintética): añadir una variante es editar esta lista.
+# Cuentan también como muletillas en la capa 0.
+words = ["jarvis", "jarbes", "jarbis", "jarves", "jarvi", "jarbi", "yarvis", "yarbis", "harvis",
+         "charvis", "chervis", "harvish", "jarvish", "yarvish", "jervis", "yervis", "jarviz", "jarbiz", "travis", "darvis"]
+lead = ["hey", "ey", "hei", "ei", "jey", "oye", "eh", "a"]

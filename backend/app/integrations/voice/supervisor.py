@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ast
 import asyncio
 import logging
 import os
@@ -10,6 +11,8 @@ import time
 from collections.abc import Awaitable, Callable, Mapping
 from pathlib import Path
 from typing import Final
+
+from app.integrations.voice.settings import REPO_ROOT
 
 logger = logging.getLogger("drakter.voice.supervisor")
 
@@ -24,40 +27,38 @@ _AUDIO: Final = (
     "PULSE_SINK",
     "PULSE_SOURCE",
 )
-# Every name read by voice/config.py:load_config except the two paths set by build_env.
-VOICE_CONFIG_VARS: Final = (
-    "DRAKTER_VOICE_MODELS_DIR",
-    "DRAKTER_STT_PROVIDER",
-    "DRAKTER_STT_MODEL",
-    "DRAKTER_STT_DEVICE",
-    "DRAKTER_STT_COMPUTE_TYPE",
-    "DRAKTER_STT_LANGUAGE",
-    "DRAKTER_STT_BEAM_SIZE",
-    "DRAKTER_STT_THREADS",
-    "DRAKTER_TTS_PROVIDER",
-    "DRAKTER_TTS_FALLBACK",
-    "DRAKTER_TTS_VOICE",
-    "DRAKTER_TTS_THREADS",
-    "DRAKTER_PIPER_PYTHON",
-    "DRAKTER_PIPER_VOICE",
-    "DRAKTER_VAD_PROVIDER",
-    "DRAKTER_VAD_THRESHOLD",
-    "DRAKTER_VAD_SILENCE_MS",
-    "DRAKTER_VAD_PREROLL_MS",
-    "DRAKTER_VOICE_MAX_UTTERANCE_S",
-    "DRAKTER_WAKEWORD_ENABLED",
-    "DRAKTER_WAKEWORD_PROVIDER",
-    "DRAKTER_WAKEWORD_MODEL",
-    "DRAKTER_WAKEWORD_THRESHOLD",
-    "DRAKTER_VOICE_BARGE_IN",
-    "DRAKTER_VOICE_BARGE_IN_THRESHOLD",
-    "DRAKTER_VOICE_BARGE_IN_MIN_MS",
-    "DRAKTER_AUDIO_BACKEND",
-    "DRAKTER_AUDIO_INPUT",
-    "DRAKTER_AUDIO_OUTPUT",
-    "DRAKTER_VOICE_LEVEL_HZ",
-    "DRAKTER_VOICE_OUTPUT_LATENCY_MS",
-)
+# `voice/config.py` reads `DRAKTER_VOICE_<FIELD>` for every `VoiceConfig` field, plus
+# `DRAKTER_VOICE_NULL`. The names come from that file (parsed, never imported), so a new
+# field passes without touching this one. `runtime_dir` and `data_dir` stay out: the backend
+# sets them (`DRAKTER_RUNTIME_DIR`, `DRAKTER_DATA_DIR`) so that the socket is the one it dials.
+_VOICE_CONFIG_PY: Final = REPO_ROOT / "voice" / "config.py"
+_BACKEND_OWNED: Final = frozenset({"runtime_dir", "data_dir"})
+
+
+def voice_config_vars(config_py: Path = _VOICE_CONFIG_PY) -> tuple[str, ...]:
+    """Exact environment names `voice.config.load_config` understands."""
+    try:
+        tree = ast.parse(config_py.read_text(encoding="utf-8"))
+    except (OSError, SyntaxError) as exc:
+        logger.error("Voice config fields not read",
+                     extra={"event": "voice_config_unreadable", "error": type(exc).__name__})
+        return ("DRAKTER_VOICE_NULL",)
+    fields = [
+        node.target.id
+        for cls in tree.body
+        if isinstance(cls, ast.ClassDef) and cls.name == "VoiceConfig"
+        for node in cls.body
+        if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name)
+    ]
+    names = [f"DRAKTER_VOICE_{name.upper()}" for name in fields if name not in _BACKEND_OWNED]
+    return (*names, "DRAKTER_VOICE_NULL", "DRAKTER_VOICE_PIPECAT_LOG")
+
+
+VOICE_CONFIG_VARS: Final = voice_config_vars()
+# Secrets the voice process needs. Taken only by exact name; never logged.
+VOICE_SECRETS: Final = ("FISH_API_KEY",)
+# Where voice.toml / voces.toml and the models live; the child resolves them itself.
+_XDG: Final = ("XDG_CONFIG_HOME", "XDG_DATA_HOME")
 
 _BACKOFF_BASE_S: Final = 1.0
 _BACKOFF_CAP_S: Final = 60.0
@@ -77,12 +78,12 @@ def build_env(
 ) -> dict[str, str]:
     """Build the child's environment from scratch.
 
-    ``file_values`` only contributes voice configuration: the per-user ``.env``
-    also holds API keys, so nothing else may come out of it.
+    ``file_values`` only contributes voice configuration and ``VOICE_SECRETS``: the
+    per-user ``.env`` also holds other API keys (Anthropic), which must not reach voice.
     """
     source = os.environ if environ is None else environ
-    env = {name: source[name] for name in (*_INHERITED, *_AUDIO) if name in source}
-    for name in VOICE_CONFIG_VARS:
+    env = {name: source[name] for name in (*_INHERITED, *_AUDIO, *_XDG) if name in source}
+    for name in (*VOICE_CONFIG_VARS, *VOICE_SECRETS):
         if name in source:
             env[name] = source[name]
         elif file_values and name in file_values:
@@ -177,6 +178,7 @@ class VoiceSupervisor:
                 str(self._python),
                 "-m",
                 "voice",
+                "run",
                 cwd=self._root,
                 env=self._env,
                 stdin=asyncio.subprocess.DEVNULL,

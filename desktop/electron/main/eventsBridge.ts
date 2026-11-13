@@ -9,7 +9,8 @@ const RETRY_MIN_MS = 500
 const RETRY_MAX_MS = 30_000
 const WS_SUBPROTOCOL = 'drakter.v1'
 
-export function createEventsBridge(host: BackendHost): EventsBridge {
+/** `onEventType`: aviso del tipo de cada evento (p. ej. enfocar ante una confirmación). */
+export function createEventsBridge(host: BackendHost, onEventType?: (type: string) => void): EventsBridge {
   let socket: WebSocket | null = null
   let port: Electron.MessagePortMain | null = null
   let retryTimer: NodeJS.Timeout | null = null
@@ -67,10 +68,11 @@ export function createEventsBridge(host: BackendHost): EventsBridge {
     forward(data)
   }
 
-  /** Solo lee `seq` y `boot_id`; el renderer sigue validando el evento. */
+  /** Solo lee `seq`, `boot_id` y `type`; el renderer sigue validando el evento. */
   function rememberPosition(text: string): void {
     try {
-      const envelope = JSON.parse(text) as { seq?: unknown; boot_id?: unknown }
+      const envelope = JSON.parse(text) as { seq?: unknown; boot_id?: unknown; type?: unknown }
+      if (onEventType && typeof envelope.type === 'string') onEventType(envelope.type)
       if (typeof envelope.boot_id !== 'string' || !Number.isSafeInteger(envelope.seq)) return
       lastSeq = envelope.seq as number
       lastBootId = envelope.boot_id

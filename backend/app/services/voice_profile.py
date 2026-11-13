@@ -185,6 +185,9 @@ def save_active(db_path: Path, name: str) -> str | None:
     except Exception:  # noqa: BLE001
         logger.error("voice profile save failed", extra={"event": "voice_profile_save_failed"})
         raise VoiceProfileError("settings_unavailable", "Ajustes no disponibles.") from None
+    from app.services.settings import notify_setting_changed  # lazy: settings imports this module
+
+    notify_setting_changed(SETTING_KEY, name)  # V-31: voice_set_profile reaches voice.config
     return previous.value if previous else None
 
 

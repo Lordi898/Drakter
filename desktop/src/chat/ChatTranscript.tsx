@@ -1,5 +1,5 @@
 import { memo, useLayoutEffect, useRef } from 'react'
-import { Check, Loader2, RotateCcw, X } from 'lucide-react'
+import { Check, Loader2, Mic, RotateCcw, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { useDrakterState } from '@/stores/agent'
@@ -40,7 +40,7 @@ const MessageItem = memo(function MessageItem({ message, canRetry }: { message: 
 
   return (
     <li className={cn('flex max-w-[85%] flex-col gap-1', fromUser ? 'items-end self-end' : 'items-start')}>
-      <span className="sr-only">{fromUser ? 'Tú:' : 'Drakter:'}</span>
+      <span className="sr-only">{fromUser ? (message.viaVoice ? 'Tú (por voz):' : 'Tú:') : 'Drakter:'}</span>
 
       {message.tools.length > 0 ? (
         <ul className="flex flex-col gap-0.5">
@@ -59,6 +59,7 @@ const MessageItem = memo(function MessageItem({ message, canRetry }: { message: 
               : 'voice-drakter border border-border bg-card text-card-foreground'
           )}
         >
+          {message.viaVoice ? <Mic aria-hidden="true" className="mr-1 inline size-3 align-[-0.1em] opacity-70" /> : null}
           {message.content}
           {message.status === 'streaming' ? (
             <span

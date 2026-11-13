@@ -1,67 +1,81 @@
 # Usar la voz
 
-> **Estado:** `voice/` y `backend/app/integrations/voice/` están en `drakter/integracion` (`2e05ba6`), y Electron permite las rutas `/api/v1/voice/*`, pero el router de voz no se monta en `backend/app/main.py` y no hay botón de voz en `desktop/src`: hoy no se puede usar desde la app. Las notas «Pendiente» del cuerpo se escribieron sobre `drakter/build` (`2da8bef`) y alguna puede estar ya resuelta. NO COMPROBADO en la app real (ver «Estado de la integración» en [README](README.md)).
+Hablas a Drakter y te contesta en voz alta. El reconocimiento de voz y la activación son locales; la voz de Drakter la genera Fish Audio (con red) o Kokoro (local). Instalación previa: [Instalar la voz](../installation/voz.md). Voces y perfiles: [Perfiles de voz](voces.md).
 
-Hablas a Drakter y te contesta en voz alta. Todo es local: ni el audio ni las transcripciones se guardan ni se registran. Instalación previa: [Instalar la voz](../installation/voz.md). Las voces de Fish Audio y cómo cambiarlas: [Perfiles de voz](voces.md).
+## Cómo funciona en una línea
 
-## Activar y desactivar
+Drakter tiene dos modos. En **reposo** solo escucha la palabra de activación y no transcribe nada. En **conversación** te transcribe y contesta. Cuando acabas, vuelve solo a reposo.
 
-1. La voz viene apagada: `DRAKTER_VOICE_ENABLED=false` por defecto.
-2. Para activarla pon `DRAKTER_VOICE_ENABLED=true` (entorno o `~/.config/drakter/.env`) y reinicia el backend.
-3. Para desactivarla, vuelve a `false` y reinicia. Con `false` el servicio no hace nada y el estado de voz es `disabled`.
-4. Si `DRAKTER_VOICE_PYTHON` está mal, el backend arranca pero la voz queda `misconfigured`.
+## Activar
 
-## Micrófono
+- **Super+J.** Es un atajo de GNOME que ejecuta `scripts/drakter activate`. Se instala una vez con `scripts/install-shortcut.sh install` (ver la guía de instalación). También puedes ejecutar `scripts/drakter activate` a mano.
+- **«Hey Jarvis».** Di «Hey Jarvis» y, si quieres, la orden en la misma frase: «Hey Jarvis, ¿qué tengo hoy?». Se puede apagar en Ajustes → Voz («Activar con la palabra Jarvis»).
+- **Bandeja del sistema.** Menú del icono de Drakter → «Activar voz».
 
-- Arranca **apagado**. Hay que encenderlo expresamente (`POST /api/v1/voice/mic` con `{"enabled": true}`).
-- Encenderlo se anota en auditoría (solo que se pidió, sin audio). Si la auditoría falla, el micrófono se queda apagado.
-- Apagarlo cierra la captura de verdad y cancela la escucha en curso.
+La ventana puede estar oculta en la bandeja: la escucha sigue. Con la app cerrada no hay escucha.
 
-## Hablar
+## Conversación y vuelta a reposo
 
-El modo por defecto es **pulsar para hablar**: la captura solo está abierta durante tu intervención.
+Dentro de la conversación no hace falta repetir «Jarvis». Vuelve a reposo cuando:
 
-1. Enciende el micrófono.
-2. Inicia la escucha (`POST /api/v1/voice/listen/start`). Si Drakter está hablando, primero se interrumpe.
-3. Habla. Se cierra sola tras `DRAKTER_VAD_SILENCE_MS` (800 ms) de silencio, o a los `DRAKTER_VOICE_MAX_UTTERANCE_S` (30 s).
-4. Para cerrar a mano: `POST /api/v1/voice/listen/stop`. Para descartar sin transcribir: `POST /api/v1/voice/listen/cancel`.
-5. El texto transcrito va al agente y la respuesta se habla por frases según llega.
-
-**Pendiente:** no hay pantalla ni botón de voz en `desktop/src` (ni en la rama de origen ni en 2da8bef); hoy solo existen estas rutas HTTP (solo con el token de escritorio), y en 2da8bef el backend no las sirve.
-
-## Palabra de activación
-
-No existe. No hay modelo para "Drakter": los de openWakeWord son para otras palabras y con licencia no comercial, así que solo se carga un modelo propio ONNX (`DRAKTER_WAKEWORD_MODEL`) y nunca se descarga. Sin él, `DRAKTER_WAKEWORD_PROVIDER=null` y solo hay pulsar para hablar. Con `wakeword.set` sin proveedor real el resultado es un error `invalid_request`. **Pendiente:** entrenar un modelo propio.
+- pasa un rato sin que hables tras la respuesta (Drakter te pregunta antes si sigues ahí);
+- dices **«descansa»**, «deja de escuchar», «eso es todo» o similares;
+- te despides: «adiós», «hasta luego», «buenas noches»…
 
 ## Interrumpir
 
-- `POST /api/v1/voice/interrupt` corta reproducción, cola y síntesis. Es idempotente.
-- Iniciar una escucha nueva también interrumpe.
-- Interrumpir por voz mientras Drakter habla (barge-in) está desactivado (`DRAKTER_VOICE_BARGE_IN=false`): lo que se capta mientras habla se descarta, para no transcribir su propio eco. Actívalo solo tras probar `mic_check.py --barge-in`.
+- **«Para»**, «calla», «basta», «silencio»: corta solo la voz. Drakter sigue en la conversación.
+- **Hablar encima** (barge-in): al detectar voz mientras habla, Drakter baja el volumen y, si lo que dices son varias palabras que no son eco, se calla y te escucha. Con una sola palabra suelta no te corta.
+- Los **asentimientos** («aja», «mm», «vale», «claro») se ignoran: no interrumpen ni cuentan como respuesta.
+- **Reanudar:** di «siga» o «como le decía». Drakter sabe lo último que llegaste a oír y lo que quedó sin decir, y retoma desde ahí.
 
-## Estados
+## Altavoz y micrófono
 
-Ciclo: `idle`, `listening`, `transcribing`, `waiting`, `speaking`, `idle`. En el personaje: escuchando = `listening`; transcribiendo o esperando = `thinking`; hablando = `speaking`; interrumpido = `interrupted`; error no recuperable = `error`. La boca recibe niveles de volumen, no audio.
+- **Icono de altavoz** (junto al cuadro del chat): silencia la voz de Drakter. El chat sigue funcionando por escrito y el micrófono no se cierra.
+- **Punto junto al altavoz:** estado del micrófono. `off` (apagado), `standby` (esperando la palabra de activación) o `live` (escuchando).
+- **Bandeja → «Silenciar micrófono» / «Activar micrófono»:** cierra o reabre la captura de verdad, sin reiniciar nada. Con el micrófono cerrado ni el atajo ni «Hey Jarvis» funcionan hasta que lo actives.
+- Con la ventana oculta, el micrófono sigue escuchando la palabra de activación.
 
-## Lo que pide confirmación
+## Voces
 
-Nada se aprueba por voz. Las confirmaciones de acciones solo se aprueban desde la interfaz; decir "sí" no vale. No existe ruta para hacer hablar a Drakter fuera de las respuestas del agente.
+La voz la elige el perfil activo de `~/.config/drakter/voces.toml` (por defecto `natural`). Puedes pedírselo en el chat o por voz: «cambia tu voz a la neutral». Cómo crear perfiles y poner los IDs de Fish: [Perfiles de voz](voces.md).
+
+## Confirmaciones: nunca por voz
+
+Las acciones destructivas o masivas se confirman **solo en pantalla**. Decir «sí» no vale. Drakter te avisa («Necesito su confirmación en pantalla») y trae la ventana al frente.
+
+## Trabajos en segundo plano
+
+Si le pides algo largo, Drakter puede hacerlo en segundo plano («Lo hago en segundo plano, señor»). Los trabajos salen en el panel de contexto con su estado, y puedes preguntar por ellos o cancelarlos. Solo hay un trabajo a la vez: si está ocupado, te lo dice. Al terminar recibes una notificación y un aviso hablado («he terminado el trabajo»); el resumen se lo cuenta al siguiente turno. Si el trabajo necesita confirmar algo, la confirmación aparece en pantalla.
+
+## Frases fijas: genera tu caché
+
+Los avisos cortos («Entendido», «Un momento», «Sigo con ello»…) suenan desde una caché de audio para responder al instante. La caché inicial se generó sin tu perfil de voz. Regenérala **con tu perfil, antes del 30-11-2026**, desde la raíz del repositorio:
+
+```bash
+~/.local/share/drakter/venvs/voice/bin/python -m voice phrases
+```
+
+Opciones: `--profile <nombre>`, `--only fish|kokoro`, `--force` (regenera aunque exista). Necesita `FISH_API_KEY` y red para la parte de Fish; la de Kokoro es local. Pasada la fecha, Fish ya no se usa y solo se necesita la de Kokoro.
+
+## Sin red y después del 30-11-2026
+
+- **Sin red:** el WebRTC va por `127.0.0.1`, así que la conexión entre la app y el proceso de voz sigue funcionando. Lo que cae es Fish: Drakter avisa **una sola vez** («paso a mi voz local») y sigue con Kokoro. El reconocimiento de voz y «Hey Jarvis» no necesitan red. El agente (Claude) sí la necesita para responder.
+- **Después del 30-11-2026:** el modelo gratuito `s2.1-pro-free` de Fish deja de usarse, salvo que pongas `allow_paid = true` en el `voces.toml` (con cobro). Desde esa fecha todo habla con Kokoro, sin aviso de cambio.
+
+## Privacidad
+
+El audio y las transcripciones **no se guardan** en ningún sitio. Solo se guarda `~/.local/share/drakter/voice/metrics.jsonl`, con tiempos y contadores, sin texto. Lo que dices llega al agente como un mensaje del chat y queda en el historial del chat igual que si lo hubieras escrito. Lo que se envía a Fish para sintetizar es el texto de la respuesta, no tu voz.
 
 ## Qué tienes que probar tú
 
-1. Instala y haz la prueba guiada de [voz (instalación)](../installation/voz.md): `mic_check.py`, `--voices`, `--barge-in`.
-2. Cuando se integre, enciende micrófono, pulsa para hablar, di una frase en español y comprueba que el texto es correcto y que la respuesta suena.
-3. Interrumpe a mitad de respuesta y comprueba que corta.
-4. Apaga el micrófono y comprueba que no hay captura.
-5. Mide la latencia con `bench_engines.py` y decide `small` o `medium`.
+1. Super+J y «Hey Jarvis, ¿qué hora es?» con altavoces (no auriculares): comprueba que no se interrumpe con su propio eco.
+2. «Para» a mitad de respuesta y «siga» después.
+3. Cortar la red y comprobar el aviso único y el paso a Kokoro.
+4. Latencia percibida de la primera palabra: primer audio (normalmente un acuse) 2,36-2,88 s tras callar; primer audio de la respuesta en sí, depende de Haiku (primer delta típico 1,8-4,2 s); TTFA de Fish 0,71-0,96 s y de Kokoro 0,72 s (medido en la máquina de desarrollo).
 
 ## Problemas frecuentes
 
-- Estado `not_responding`: el proceso de voz no contesta (en la rama faltan `voice/manager.py` y `voice/__main__.py`).
-- `invalid_request` (409) al iniciar escucha: micrófono apagado.
-- `voice_unavailable` (503): voz desactivada, mal configurada o caída. Tras 8 fallos seguidos el supervisor deja de reiniciarla.
-- Error `voice.error` en etapa `stt` o `tts`: vuelve a `idle`; el texto sigue visible en el chat.
-
-## Pendiente
-
-- Pantalla de voz en el escritorio, palabra de activación propia, integración en `main.py`, y todo lo anterior sin comprobar en hardware real.
+- **No pasa nada con Super+J:** ejecuta `scripts/drakter activate` a mano; si funciona, repite `scripts/install-shortcut.sh install`.
+- **No conecta sin red:** la app debe arrancarse con `scripts/drakter` o `scripts/drakter-local.sh`, que añaden el switch de WebRTC por loopback.
+- **Mensaje de error de voz o punto de micrófono en `off`:** abre la bandeja y activa el micrófono; si persiste, ejecuta `python -m voice check` ([instalación](../installation/voz.md)).

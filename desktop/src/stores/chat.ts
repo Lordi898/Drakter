@@ -25,6 +25,8 @@ export interface ChatMessage {
   readonly content: string
   readonly status: ChatMessageStatus
   readonly turnId: string | null
+  /** Solo en mensajes del usuario dictados por voz. */
+  readonly viaVoice?: boolean
   readonly error?: string
   /** En mensajes `failed` del agente: si el backend dijo que reintentar tiene sentido. */
   readonly retryable?: boolean
@@ -166,10 +168,61 @@ function finishTurn(turnId: string, outcome: 'completed' | 'failed' | 'cancelled
   setMessages(next)
 }
 
+/** La voz usa la sesión del backend (`current_session()`): el renderer la adopta de los eventos. */
+function adoptSession(id: string): void {
+  if (sessionId === id) return
+  const hadSession = sessionId !== null
+  sessionId = id
+  if (hadSession || messages.length === 0) void rehydrate()
+}
+
+function onUserMessage(p: {
+  message_id: string
+  session_id: string
+  turn_id: string
+  text: string
+  input_source: 'text' | 'voice'
+}): void {
+  adoptSession(p.session_id)
+  const viaVoice = p.input_source === 'voice'
+  // Ya existe por message_id (optimista o rehidratado): solo se completa con el turno.
+  const byId = messages.find((m) => m.role === 'user' && m.id === p.message_id)
+  // Optimista aún sin turno (la respuesta REST no ha llegado): mismo texto, enviándose.
+  const pending = byId
+    ? undefined
+    : messages.find((m) => m.role === 'user' && m.status === 'sending' && m.turnId === null && m.content === p.text)
+  // Optimista de texto que ya tiene turno (id = client_message_id). No aplica a la voz: no hay
+  // optimista, y una corrección por voz (steer) llega con el turn_id del turno que corrige.
+  const byTurn = viaVoice ? undefined : messages.find((m) => m.role === 'user' && m.turnId === p.turn_id)
+  const known = byId ?? pending ?? byTurn
+  if (known) {
+    if (known.turnId === null || (viaVoice && !known.viaVoice)) {
+      setMessages(messages.map((m) => (m === known ? { ...m, turnId: p.turn_id, ...(viaVoice ? { viaVoice } : {}) } : m)))
+    }
+    return
+  }
+  setMessages([
+    ...messages,
+    {
+      id: p.message_id,
+      role: 'user',
+      content: p.text,
+      status: 'complete',
+      turnId: p.turn_id,
+      ...(viaVoice ? { viaVoice } : {}),
+      tools: []
+    }
+  ])
+}
+
 function handleEvent(event: ServerEvent): void {
   switch (event.type) {
+    case 'chat.user_message':
+      onUserMessage(event.payload)
+      return
     case 'agent.turn_started': {
-      const { turn_id } = event.payload
+      const { turn_id, session_id } = event.payload
+      adoptSession(session_id)
       if (!endedTurns.has(turn_id)) setActiveTurn(turn_id)
       return
     }
@@ -299,6 +352,7 @@ async function rehydrate(): Promise<void> {
   rehydrating = true
   try {
     const stored = await listSessionMessages(id)
+    const voiceIds = new Set(messages.flatMap((m) => (m.viaVoice ? [m.id] : [])))
     const storedTurns = new Set(stored.flatMap((m) => (m.turn_id ? [m.turn_id] : [])))
     const fromServer: ChatMessage[] = stored
       .filter((m) => m.role !== 'system')
@@ -308,6 +362,7 @@ async function rehydrate(): Promise<void> {
         content: m.text,
         status: STORED_STATUS[m.status],
         turnId: m.turn_id ?? null,
+        ...(voiceIds.has(m.id) ? { viaVoice: true } : {}),
         tools: []
       }))
     // Lo local que el servidor aún no refleja (envíos en curso, fallos, respuesta en vuelo) se conserva.

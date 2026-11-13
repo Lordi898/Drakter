@@ -14,6 +14,7 @@ import { logError } from './log'
 import { isTrustedRendererUrl } from './renderer-url'
 import { isSandboxDisabled } from './sandbox'
 import { addStorageLocation, deleteStorageLocation, updateStorageLocation } from './storageRoots'
+import { setTrayMicOpen } from './tray'
 import { getMainWindow } from './window'
 
 function assertTrustedSender(event: IpcMainInvokeEvent): void {
@@ -108,6 +109,7 @@ export function registerIpcHandlers(backend: BackendHost, events: EventsBridge):
   handle(IPC_CHANNELS.updateStorageLocation, (payload) => updateStorageLocation(backend, payload))
   handle(IPC_CHANNELS.deleteStorageLocation, (payload) => deleteStorageLocation(backend, payload))
   handle(IPC_CHANNELS.openEvents, (_payload, sender) => events.attach(sender))
+  handle(IPC_CHANNELS.voiceMicState, (payload) => setTrayMicOpen(payload === true))
   backend.onConnection((connection) => {
     getMainWindow()?.webContents.send(IPC_CHANNELS.connectionChanged, connection)
   })

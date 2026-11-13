@@ -17,6 +17,9 @@ class TurnRequest:
     session_id: UUID
     turn_id: UUID
     text: str
+    # Ephemeral turn prefixes (channel, heard note, jobs): only for the model's turn prompt,
+    # never stored by Drakter nor used for memory retrieval.
+    prefix: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -45,3 +48,8 @@ class AgentProvider(Protocol):
         ...
 
     async def cancel(self, turn_id: UUID) -> None: ...
+
+    async def steer_turn(self, turn_id: UUID, text: str) -> None:
+        """Ask the running turn to take `text` as a correction. The answer arrives in the
+        turn's stream as `Steered`; nothing arrives if the turn is not running."""
+        ...

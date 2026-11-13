@@ -33,7 +33,9 @@ export const IPC_CHANNELS = {
   /** Main → preload: cambios del estado del backend. */
   connectionChanged: 'drakter:connection-changed',
   /** Main → renderer: alternar el micrófono desde la bandeja (voz v2). */
-  voiceMicToggle: 'voice:mic-toggle'
+  voiceMicToggle: 'voice:mic-toggle',
+  /** Renderer → main: el micrófono quedó abierto o cerrado (etiqueta de la bandeja). */
+  voiceMicState: 'voice:mic-state'
 } as const
 
 export interface AppInfo {
@@ -118,6 +120,8 @@ export interface VoiceApi {
   status(): Promise<ApiResult<VoiceStatusOut>>
   /** Canal main→renderer `voice:mic-toggle` (bandeja). Devuelve la baja. */
   onMicToggle(callback: () => void): () => void
+  /** Canal renderer→main `voice:mic-state`: la bandeja refleja si el micrófono está abierto. */
+  reportMicState(open: boolean): Promise<void>
 }
 
 /** `window.api.jobs`: trabajos en segundo plano. */
