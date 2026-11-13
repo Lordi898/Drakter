@@ -15,6 +15,8 @@ Drakter está en pre-release. Solo recibe arreglos de seguridad la rama `main` (
 
 Usa el reporte privado de vulnerabilidades de GitHub: [Report a vulnerability](https://github.com/Lordi898/Drakter/security/advisories/new) (pestaña *Security* del repositorio). Solo lo ve el propietario.
 
+> Mientras el repositorio sea privado, GitHub no ofrece el reporte privado a terceros: si tienes acceso como colaborador, avisa al propietario (@Lordi898) por un canal privado. El reporte privado se activará al hacer público el repositorio.
+
 Incluye, si puedes:
 
 - Qué componente afecta (`backend/`, `desktop/`, agente/Hermes, memoria, almacén, voz…) y el commit o versión.
