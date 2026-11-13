@@ -21,7 +21,7 @@ Cadena de integración: **`drakter/integracion` → `drakter/build` → `main` (
 | `drakter/build` | Ancestro de `drakter/integracion` (en `815976f`). Se adelantará al terminar el cierre. |
 | `main` | Ancestro de `drakter/build`; solo el commit inicial (`098e2df`). Se adelantará en local al final. |
 
-Las ramas `ao/<sesión>/root` de los finalizadores son de trabajo; sus commits entran en `drakter/integracion` cuando `drakter-32` los fusiona. Pendientes de fusión al escribir esto: `5dd55b1` (permisos de automejora para el agente), `b8086ce` (Skills), `f364b48` (memoria en cada turno de Hermes), `dda565b`, `b31d1e8` y `6ba869a` (contratos alineados con lo montado), `b531106` (prefijo `workspace_` en los ejecutores de tareas: sin él, un `delete_task` del agente aprobado no borra). Las casillas que dependen de ellos llevan ⚠️ «pendiente de fusión».
+Las ramas `ao/<sesión>/root` de los finalizadores son de trabajo; sus commits entran en `drakter/integracion` cuando `drakter-32` los fusiona. Pendientes de fusión al escribir esto: `5dd55b1` (permisos de automejora para el agente), `b8086ce` (Skills), `f364b48` (memoria en cada turno de Hermes), `0ab1639` (escenarios de evals), `dda565b`, `b31d1e8` y `6ba869a` (contratos alineados con lo montado), `b531106` (prefijo `workspace_` en los ejecutores de tareas: sin él, un `delete_task` del agente aprobado no borra). Las casillas que dependen de ellos llevan ⚠️ «pendiente de fusión».
 
 ## Cómo arrancar y parar
 
@@ -99,6 +99,6 @@ Historial Git de los repos que estaban anidados en el checkout del usuario:
 
 ## Siguiente paso
 
-1. Terminar la recomprobación con Haiku real: conversación, personalidad, selección y encadenado de herramientas (evals) y memoria.
+1. Terminar la recomprobación con Haiku real: conversación completa por Hermes, memoria y herramientas por módulo. Selección y encadenado de herramientas ya pasan con el modelo real (evals).
 2. Montar `SearchPalette`.
 3. Cablear `BackendToolGate` en el runtime del agente (`drakter-34`).

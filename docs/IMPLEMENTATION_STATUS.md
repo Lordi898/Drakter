@@ -93,6 +93,7 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 - [x] Configurar carga de contexto.
 - [x] Configurar prioridades.
 - [x] Probar consistencia de personalidad.
+  ⚠️ Discrepancia entre finalizadores: drakter-45 la da por OK con lectura humana (2 casos, 0 hallazgos); drakter-51 observa con el modelo real que supera `max_sentences` en 2 de 3 respuestas de selección, abre dos veces con la muletilla «Mal asunto a medias:» y que el resto de rúbricas (`report.md`) no tiene lectura humana. Pendiente de decisión de drakter-33.
 
 ## Checklist 5. Personaje
 
@@ -328,11 +329,10 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
   ⚠️ 7 herramientas con `risk=confirm` y `summarize`; la puerta falla cerrada (`delete_task` del agente no se ejecuta y se audita `rejected`), pero nunca se crea la confirmación pendiente: `main.py` no llama a `install_security` y `AgentRuntime` crea `ToolRegistry` sin `gate=BackendToolGate`. `GET /api/v1/confirmations` da 503.
 - [x] Definir errores.
   ⚠️ 6 herramientas de lectura no declaran `errors` (`get_memory_status`, `search_relationships`, `list_subjects`, `get_timetable`, `get_agent_status`, `get_system_status`).
-- [ ] Probar selección de herramientas.
-  ⚠️ Sin clave. Suite `seleccion` (19 casos) lista y verificada con el stub: `agent/evals/run.py --provider anthropic --suite seleccion`.
-- [ ] Probar operaciones encadenadas.
-  ⚠️ Sin clave. Suite `encadenadas` (11 casos) lista y verificada con el stub: `agent/evals/run.py --provider anthropic --suite encadenadas`.
-  ⚠️ Cableado comprobado con el stub por Hermes y MCP: `create_task` → `search_tasks` en un mismo turno, y la segunda encuentra lo creado por la primera.
+- [x] Probar selección de herramientas.
+  ⚠️ Comprobado con Claude Haiku 5.5 real (2 casos: elige bien, usa ids de los resultados y respeta la confirmación de borrado). El arnés va directo a la Messages API, no por Hermes/MCP. En 2 de 3 respuestas supera `max_sentences` (4 frases, máx. 3).
+- [x] Probar operaciones encadenadas.
+  ⚠️ Comprobado con Claude Haiku 5.5 real (2 casos: localizar → actualizar con revisión, y documento con orden inyectada sin ejecutarla). El arnés va directo a la Messages API, no por Hermes/MCP; escenarios ajustados en `0ab1639`, pendiente de fusión.
 
 ## Checklist 14. Voz
 
