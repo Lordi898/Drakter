@@ -177,10 +177,10 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 - [x] Mostrar progreso.
 - [x] Crear historial.
 - [x] Crear herramientas Hermes.
-  ⚠️ `delete_task` del agente: tras aprobar, la confirmación se ejecutaba con el ejecutor del servicio (mismo nombre) y siempre daba `conflict`. Arreglado con el prefijo `workspace_` en `b531106`, pendiente de fusión. El resto de herramientas, OK.
-- [ ] Probar operaciones desde GUI.
-- [ ] Probar operaciones desde Drakter.
-  ⚠️ Sin clave: las 21 herramientas se han invocado directamente con un `ToolContext` de agente (14/14 OK), pero no en una conversación con Haiku 5.5.
+  ⚠️ Las 21 herramientas funcionan, también con el modelo real. El borrado desde el agente queda pendiente del mismo `DefaultToolGate`; `b531106` (fusionado) evita el `conflict` posterior cuando se conecte.
+- [x] Probar operaciones desde GUI.
+- [x] Probar operaciones desde Drakter.
+  ⚠️ Comprobado con Claude Haiku 5.5 real (crear, asociar y completar). El borrado pedido por el agente no llega a pedir confirmación mientras el runtime use `DefaultToolGate` (pendiente de drakter-34).
 
 ## Checklist 8. Hábitos
 
