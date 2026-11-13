@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import json
 import os
+import secrets
+import select
 import shutil
 import signal
 import socket
@@ -50,11 +52,9 @@ class Stack:
     failed: set[str] = field(default_factory=set)  # arrancó mal: FALLA, no NO COMPROBADO
     api: Api | None = None
     tokens: list[str] = field(default_factory=list)  # uno por arranque del backend
-    backend_port: int = 0
     stub_port: int = 0
     cdp_port: int = 0
-    hermes_port: int = 0
-    tools_port: int = 0
+    recorder: hermes.ToolRecorder | None = None
     headless: bool = False
 
     def __post_init__(self) -> None:
@@ -62,17 +62,12 @@ class Stack:
         self.home = work / "home"
         self.config_home = work / "xdg-config"
         self.data_dir = work / "data"
-        self.runtime_dir = work / "run"
         self.sandbox = work / "sandbox"
         self.logs_dir = work / "logs"
-        for path in (work, self.home, self.config_home, self.data_dir, self.runtime_dir,
+        for path in (work, self.home, self.config_home, self.config_home / "drakter", self.data_dir,
                      work / "xdg-data", work / "xdg-cache", self.sandbox, self.logs_dir):
             path.mkdir(parents=True, exist_ok=True, mode=0o700)
             path.chmod(0o700)
-
-    @property
-    def session_file(self) -> Path:
-        return self.runtime_dir / "session.json"
 
     # --- estado -----------------------------------------------------------------
 
@@ -101,31 +96,39 @@ class Stack:
         work = self.layout.work
         env.update(HOME=str(self.home), XDG_CONFIG_HOME=str(self.config_home),
                    XDG_DATA_HOME=str(work / "xdg-data"), XDG_CACHE_HOME=str(work / "xdg-cache"),
-                   XDG_RUNTIME_DIR=str(self.runtime_dir), PYTHONDONTWRITEBYTECODE="1",
+                   PYTHONDONTWRITEBYTECODE="1",
                    NO_PROXY="127.0.0.1,localhost")
         return env
 
-    def backend_env(self) -> dict[str, str]:
-        env = self.base_env()
-        env.update(DRAKTER_ENV="development", DRAKTER_PORT=str(self.backend_port),
-                   DRAKTER_DATA_DIR=str(self.data_dir), DRAKTER_RUNTIME_DIR=str(self.runtime_dir),
-                   DRAKTER_LOG_LEVEL="INFO")
+    def write_env_file(self) -> None:
+        """`.env` aislado de la pasada: es lo único que llega también al backend de Electron,
+        cuyo host solo hereda una lista blanca de variables."""
+        lines = {"DRAKTER_ENV": "development", "DRAKTER_DATA_DIR": str(self.data_dir),
+                 "DRAKTER_LOG_LEVEL": "INFO"}
         if self.available("stub") and self.available("hermes"):
-            values = {"stub_url": f"http://127.0.0.1:{self.stub_port}",
-                      "hermes_command": str(self.layout.hermes_venv / "bin" / "hermes"),
-                      "hermes_port": self.hermes_port, "tools_port": self.tools_port}
+            values = {"stub_url": f"http://127.0.0.1:{self.recorder.port}",
+                      "hermes_python": str(self.layout.hermes_venv / "bin" / "python")}
             for key, value in self.layout.config["backend_env_with_stub"].items():
-                env[key] = value.format(**values)
-        return env
+                lines[key] = value.format(**values)
+        path = self.config_home / "drakter" / ".env"
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w") as handle:
+            handle.writelines(f"{key}={value}\n" for key, value in lines.items())
+
+    def backend_env(self) -> dict[str, str]:
+        return self.base_env() | {"DRAKTER_DATA_DIR": str(self.data_dir)}
 
     # --- procesos ---------------------------------------------------------------
 
-    def _spawn(self, name: str, argv: list[str], cwd: Path, env: dict[str, str]) -> subprocess.Popen:
+    def _spawn(self, name: str, argv: list[str], cwd: Path, env: dict[str, str],
+               control: bool = False) -> subprocess.Popen:
         log_path = self.logs_dir / f"{name}.log"
         self.logs[name] = log_path
         with log_path.open("ab") as log:
-            proc = subprocess.Popen(argv, cwd=cwd, env=env, stdin=subprocess.DEVNULL, stdout=log,
-                                    stderr=subprocess.STDOUT, start_new_session=True)
+            proc = subprocess.Popen(argv, cwd=cwd, env=env, bufsize=0, start_new_session=True,
+                                    stdin=subprocess.PIPE if control else subprocess.DEVNULL,
+                                    stdout=subprocess.PIPE if control else log,
+                                    stderr=log if control else subprocess.STDOUT)
         self.procs[name] = proc
         return proc
 
@@ -139,7 +142,8 @@ class Stack:
         found = hermes.problems(venv, self.layout.config["hermes"]["commit"], self.base_env())
         if found:
             return self._failed("hermes", "; ".join(found))
-        self.hermes_port, self.tools_port = free_port(), free_port()
+        if not (self.layout.backend_dir / hermes.RUNNER).is_file():
+            return self._absent("hermes", f"el backend no incluye el runner {hermes.RUNNER}")
         self.state["hermes"] = "ok"
         return True
 
@@ -159,6 +163,7 @@ class Stack:
             try:
                 with _OPENER.open(url, timeout=1) as reply:
                     if json.load(reply).get("dev_stub") is True:
+                        self.recorder = hermes.ToolRecorder(self.stub_port)
                         self.state["stub"] = "ok"
                         return True
             except OSError:
@@ -170,22 +175,39 @@ class Stack:
             return self._absent("backend", f"no existe backend en {self.layout.backend_dir}")
         if not self.layout.python.is_file():
             return self._absent("backend", f"no existe {self.layout.python}")
-        self.backend_port = free_port()
-        proc = self._spawn("backend", [str(self.layout.python), "-m", "app"],
-                           self.layout.backend_dir, self.backend_env())
+        ui, approver = secrets.token_urlsafe(32), secrets.token_urlsafe(32)
+        self.tokens += [ui, approver]
+        proc = self._spawn("backend", [str(self.layout.python), "-m", "app"], self.layout.backend_dir,
+                           self.backend_env(), control=True)
+        # D-14: credenciales por stdin, que sigue abierto; su EOF apaga el backend.
+        proc.stdin.write(json.dumps({"v": 1, "ui": ui, "approver": approver}).encode() + b"\n")
+        try:
+            port = self._announced_port(proc)
+        except (TimeoutError, ValueError, KeyError) as exc:
+            return self._failed("backend", f"sin anuncio de puerto: {exc}; ver backend.log")
+        self.api = Api(port, ui, approver)
+        if self.api.request("GET", "/health").status != 200:
+            return self._failed("backend", "/health no responde 200")
+        self.state["backend"] = "ok"
+        return True
+
+    @staticmethod
+    def _announced_port(proc: subprocess.Popen) -> int:
         deadline = time.monotonic() + BACKEND_TIMEOUT
-        while time.monotonic() < deadline:
-            if proc.poll() is not None:
-                return self._failed("backend", f"salió con código {proc.returncode}; ver backend.log")
-            if self.session_file.is_file():
-                session = json.loads(self.session_file.read_text())
-                self.api = Api(session["port"], session["token"])
-                self.tokens.append(session["token"])
-                if self.api.request("GET", "/health", auth=False).status == 200:
-                    self.state["backend"] = "ok"
-                    return True
-            time.sleep(0.2)
-        return self._failed("backend", f"sin /health tras {BACKEND_TIMEOUT} s")
+        line = b""
+        while b"\n" not in line:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise TimeoutError(f"{BACKEND_TIMEOUT} s")
+            if select.select([proc.stdout], [], [], min(remaining, 0.5))[0]:
+                chunk = proc.stdout.read(256)
+                if not chunk:
+                    raise ValueError(f"salió con código {proc.wait(5)}")
+                line += chunk
+        announced = json.loads(line)
+        if announced["v"] != 1:
+            raise ValueError(f"versión {announced['v']}")
+        return int(announced["port"])
 
     def start_desktop(self) -> bool:
         desktop = self.layout.desktop_dir
@@ -207,7 +229,8 @@ class Stack:
         if self.headless:
             argv += ["--ozone-platform=headless", "--ozone-override-screen-size=1280,820"]
         argv.append(str(desktop))
-        proc = self._spawn("desktop", argv, desktop, self.base_env())
+        proc = self._spawn("desktop", argv, desktop, self.base_env() | {
+            "DRAKTER_DATA_DIR": str(self.data_dir)})
         time.sleep(1)
         if proc.poll() is not None:
             return self._failed("desktop", f"salió con código {proc.returncode}; ver desktop.log")
@@ -218,6 +241,12 @@ class Stack:
         proc = self.procs.get(name)
         if proc is None:
             return None
+        if proc.stdin is not None and not proc.stdin.closed:
+            proc.stdin.close()  # EOF: apagado ordenado del backend (D-14)
+            try:
+                proc.wait(STOP_TIMEOUT)
+            except subprocess.TimeoutExpired:
+                pass
         if proc.poll() is None:
             try:
                 os.killpg(proc.pid, signal.SIGTERM)
@@ -231,7 +260,12 @@ class Stack:
 
     def stop_all(self) -> dict[str, int | None]:
         # Electron primero: el backend debe sobrevivir a su cliente, no al revés.
-        return {name: self.stop(name) for name in ("desktop", "backend", "stub")}
+        codes = {name: self.stop(name) for name in ("desktop", "backend", "stub")}
+        if self.recorder is not None:
+            self.recorder.shutdown()
+            self.recorder.server_close()
+            self.recorder = None
+        return codes
 
     def backend_cli(self, *args: str) -> subprocess.CompletedProcess:
         """`python -m app.database.cli` contra la base aislada de esta pasada."""

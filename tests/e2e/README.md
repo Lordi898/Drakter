@@ -14,7 +14,9 @@ cd desktop && npm ci && cd ..
 scripts/verify-all.sh --hermes-venv /ruta/al/venv-de-hermes
 ```
 
-El venv de Hermes es propio, con Python >= 3.14 y `aiohttp`, y debe tener instalado el commit `b200f5bc`. El preflight lo comprueba por commit (`direct_url.json`), no por texto de versión. Un venv incorrecto es FALLA; sin venv, NO COMPROBADO. En ambos casos no se ejecuta ninguna conversación.
+El venv de Hermes es propio, con Python >= 3.14 y el commit `b200f5bc` instalado. El preflight lo comprueba por commit (`direct_url.json`), no por texto de versión, y exige el runner `backend/app/integrations/hermes/runner/drakter_runner.py`. No hay gateway. Un venv incorrecto es FALLA; sin venv o sin runner, NO COMPROBADO. En ambos casos no se ejecuta ninguna conversación.
+
+`agent.tools` se comprueba desde fuera: un proxy del arnés entre backend y stub registra los `tools[]` de cada petición al modelo, y `conversacion.lista_blanca` exige que todos cumplan `tool_pattern` de `config.toml`.
 
 Si `desktop/out` es anterior a las fuentes, ejecuta `npm run build`, que es una compilación pesada. Con Electron se abre una ventana real en el escritorio mientras dura la pasada, salvo con `--headless`.
 
@@ -39,7 +41,11 @@ El informe queda en `$TMPDIR/report-<fecha>/` (`report.md`, `report.json`, `capt
 
 ## Aislamiento
 
-Cada pasada usa datos, configuración, `HOME` y puertos propios en `$TMPDIR/verify-*`. El entorno se construye por lista blanca, así que ni `~/.config/drakter/.env` ni las claves del entorno llegan a los procesos.
+Cada pasada usa datos, configuración, `HOME` y puertos propios en `$TMPDIR/verify-*`. El entorno se construye por lista blanca, así que ni `~/.config/drakter/.env` ni las claves del entorno llegan a los procesos. La configuración del stub va en un `.env` propio de la pasada, porque el host de Electron solo hereda una lista blanca de variables.
+
+## Arranque (D-14)
+
+En la fase sin ventana, el arnés hace el papel de Electron: pasa los tokens `ui` y `approver` por stdin, recibe el puerto por stdout y apaga con EOF. La instancia es exclusiva, así que lo para antes de abrir Electron, que lanza su propio backend sobre los mismos datos. Por eso las comprobaciones de escritorio no usan la API del arnés.
 
 `--no-sandbox` y `--remote-debugging-port` se usan solo aquí: `chrome-sandbox` no es SUID en esta máquina y no hay sudo. Están prohibidos en artefactos, y el sandbox real queda sin probar en esta pasada.
 

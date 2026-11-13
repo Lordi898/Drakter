@@ -49,7 +49,8 @@ def run_flow(flow: dict[str, Any], ctx: Any) -> str:
     for index, step in enumerate(flow["step"]):
         name = step.get("name", f"paso {index + 1}")
         method, path = step["method"], expand(step["path"], variables)
-        reply = ctx.api.request(method, path, json_body=expand(step.get("json"), variables))
+        reply = ctx.api.request(method, path, json_body=expand(step.get("json"), variables),
+                                role=step.get("role", "ui"))
         if (index == 0 or step.get("unrouted_ok")) and reply.error_code in UNROUTED:
             raise NotChecked(f"ruta no integrada: {method} {path} → {reply.status}")
         expected = step.get("expect", [200])

@@ -13,6 +13,7 @@ import time
 import uuid
 from dataclasses import dataclass, field
 
+from harness import hermes
 from harness.model import NotChecked, check
 
 UNROUTED = {"http_404", "http_405"}
@@ -205,3 +206,17 @@ def injection(ctx):
     assert_witness_alive(witness)
     state = _held_back(turn)
     return f"el modelo simulado obedeció la inyección y la orden quedó {state}; testigo intacto"
+
+
+@check("conversacion.lista_blanca", "El modelo solo recibe herramientas de la lista blanca",
+       needs=("backend", "stub", "hermes"), uses_stub=True)
+def allowlist(ctx):
+    # Se ejecuta tras los turnos anteriores y mira cada petición que llegó al modelo.
+    requests = ctx.stack.recorder.requests
+    if not requests:
+        raise NotChecked("ninguna petición llegó al modelo: sin tools[] que inspeccionar")
+    offered = sum(len(request.get("tools") or []) for request in requests)
+    assert offered, f"{len(requests)} peticiones sin ninguna herramienta: el MCP no se cargó"
+    extra = hermes.outside_allowlist(requests, ctx.stack.layout.config["hermes"]["tool_pattern"])
+    assert not extra, f"herramientas fuera de la lista blanca: {extra}"
+    return f"{len(requests)} peticiones al modelo; todas sus herramientas cumplen la lista blanca"

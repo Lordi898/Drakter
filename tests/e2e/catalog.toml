@@ -7,8 +7,7 @@
 # Fuente: drakter/agente-hermes backend/app/integrations/hermes/CONTRACT.md §4 (chat) y
 # drakter/contratos contracts/README.md §7 (eventos).
 [conversation]
-# PROVISIONAL: contracts/README.md §7 dice que `WS /api/v1/events` sustituye a `/ws` y a
-# `/api/v1/chat/events`; si el integrador conserva otra, cambiar solo esta línea.
+# backend/CONTRACT.md: `WS /api/v1/events`, rol `ui`.
 ws_path = "/api/v1/events"
 sessions_path = "/api/v1/chat/sessions"
 session_id_field = "id"
@@ -221,6 +220,7 @@ assert = { title = "e2e borrable {run}" }
 [[flow.step]]
 name = "confirmar el borrado"
 unrouted_ok = true
+role = "approver"  # solo este token aprueba (backend/CONTRACT.md, matriz)
 method = "POST"
 path = "/api/v1/confirmations/{confirmation_id}/approve"
 expect = [200]

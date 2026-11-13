@@ -1,19 +1,23 @@
 """Lo que solo se comprueba con todo parado."""
 from __future__ import annotations
 
-import signal
+import fcntl
 
 from harness.model import check
 
 
-@check("parada.limpia", "El backend para sin dejar sesión", phase="post")
+@check("parada.limpia", "El backend para con EOF y nadie retiene la base", phase="post")
 def clean(ctx):
-    code = ctx.state["exit_codes"].get("backend")
-    # Uvicorn apaga limpio y después relanza la señal capturada: -SIGTERM es el caso normal.
-    # La prueba de apagado limpio es que el lifespan borró el archivo de sesión.
-    assert code in (0, -signal.SIGTERM), f"el backend salió con {code}"
-    assert not ctx.stack.session_file.exists(), "session.json sigue en disco"
-    return f"código {code} y session.json eliminado por el lifespan"
+    code = ctx.state["backend_exit"]
+    assert code == 0, f"el backend salió con {code} tras EOF por stdin"
+    lock = ctx.stack.data_dir / "drakter.db.lock"
+    if lock.exists():  # flock no bloqueante: si falla, queda un backend huérfano, quizá de Electron
+        with lock.open() as handle:
+            try:
+                fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError as exc:
+                raise AssertionError("un backend huérfano sigue reteniendo la base") from exc
+    return "código 0 tras EOF y bloqueo de instancia libre"
 
 
 @check("parada.token_fuera_de_logs", "El token no aparece en ningún log", phase="post")
