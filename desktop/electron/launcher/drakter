@@ -20,7 +20,9 @@ if [[ ! -x "$ELECTRON_BIN" ]]; then
   exit 1
 fi
 
-ARGS=()
+# Voz v2 (spike WP8a): sin este switch Chromium no ofrece candidatos 127.0.0.1 y sin red
+# no hay WebRTC con voice/. Debe ir en argv: appendSwitch en main llega tarde.
+ARGS=(--allow-loopback-in-peer-connection)
 if [[ "${DRAKTER_DEV_NO_SANDBOX:-}" == "1" ]]; then
   echo "drakter: AVISO: arrancando SIN sandbox (solo desarrollo)" >&2
   ARGS+=(--no-sandbox)
@@ -36,5 +38,9 @@ else
     exit 1
   fi
 fi
+
+# `drakter activate` (atajo Super+J): si Drakter ya está abierto, la instancia nueva solo
+# entrega `activate` por `second-instance` y sale; main hace POST /voice/activate sin enfocar.
+# El argumento pasa tal cual en "$@".
 
 exec "$ELECTRON_BIN" "$DESKTOP_DIR" "${ARGS[@]}" "$@"

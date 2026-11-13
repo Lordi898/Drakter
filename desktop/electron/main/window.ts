@@ -9,6 +9,12 @@ const CRASH_LOOP_WINDOW_MS = 30_000
 const ERR_ABORTED = -3
 
 let mainWindow: BrowserWindow | null = null
+/** Solo una salida explícita (Salir de la bandeja, señal, `app.quit`) cierra la ventana. */
+let quitting = false
+
+export function markQuitting(): void {
+  quitting = true
+}
 
 export function getMainWindow(): BrowserWindow | null {
   return mainWindow
@@ -74,7 +80,10 @@ export function createMainWindow(): BrowserWindow {
       webSecurity: true,
       webviewTag: false,
       allowRunningInsecureContent: false,
-      experimentalFeatures: false
+      experimentalFeatures: false,
+      // Voz v2: con la ventana oculta en la bandeja el micrófono y el audio siguen vivos.
+      backgroundThrottling: false,
+      autoplayPolicy: 'no-user-gesture-required'
     }
   })
   mainWindow = window
@@ -86,6 +95,12 @@ export function createMainWindow(): BrowserWindow {
   }
 
   window.once('ready-to-show', () => window.show())
+  // Cerrar oculta en la bandeja: la voz sigue escuchando hasta que se sale de verdad.
+  window.on('close', (event) => {
+    if (quitting) return
+    event.preventDefault()
+    window.hide()
+  })
   window.on('closed', () => {
     if (mainWindow === window) mainWindow = null
   })
