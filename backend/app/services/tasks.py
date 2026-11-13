@@ -179,7 +179,12 @@ def _publish(ctx: ServiceContext, kind: str, entities: Iterable[tuple[str, int]]
         try:
             ctx.ports.events.publish(
                 f"workspace.entity_{kind}",
-                {"entity_type": "task", "entity_id": entity_id, "revision": revision},
+                {
+                    "entity_type": "task",
+                    "entity_id": entity_id,
+                    "revision": revision,
+                    "actor_type": ctx.actor.actor_type,
+                },
             )
         except Exception:
             logger.exception("event_publish_failed", extra={"entity_id": entity_id})
