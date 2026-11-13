@@ -201,4 +201,51 @@ def wire_security(app: FastAPI, settings: Settings) -> ActionService:
     if runtime is not None:
         # Agent tools reach the same gate through `ToolContext.state`.
         setattr(runtime.tool_state, PORTS_STATE_KEY, ports)
+        wire_agent_tools(runtime, actions)
     return actions
+
+
+def _approved_context(state: Any) -> Callable[[], Any]:
+    """Context for a tool handler that runs on the user's approval, outside any turn."""
+
+    def make() -> Any:
+        from app.tools.spec import ToolContext
+
+        return ToolContext(
+            turn_id=uuid4(), session_id=uuid4(), call_id="approved", principal="agent",
+            state=state,
+        )
+
+    return make
+
+
+def wire_agent_tools(runtime: Any, actions: ActionService) -> None:
+    """The agent's ToolRegistry goes through ActionService and audits into `audit_events`.
+
+    Before `start_security` freezes the registry. A CONFIRM tool (or a WRITE in a tainted
+    session) leaves a pending confirmation; on approval its handler runs, which is written
+    for exactly that moment (`delete_leaf_task`, `forget_authorized`, `ApprovedByDispatcher`).
+    Actions already registered by a module under the tool's name (calendar deletions) are
+    reused. A tool that cannot be adapted stays unregistered, so the gate denies it.
+    """
+    from app.permissions.tool_gate import BackendAuditSink, BackendToolGate, tool_action_spec
+    from app.tools.gate import GateDecision
+
+    runtime.tool_wiring = {
+        "gate": BackendToolGate(actions, GateDecision),
+        "audit": BackendAuditSink(actions),
+    }
+    runtime._load_tools()
+    if runtime.registry is None:
+        return
+    make_context = _approved_context(runtime.tool_state)
+    for spec in runtime.registry.catalog():
+        if actions.registry.get(spec.name) is not None:
+            continue
+        try:
+            actions.registry.register(tool_action_spec(spec, make_context))
+        except Exception as exc:  # noqa: BLE001 - one bad tool must not stop the boot
+            logger.error(
+                "agent tool not adapted; it will be denied",
+                extra={"event": "tool_not_adapted", "tool": spec.name, "kind": type(exc).__name__},
+            )

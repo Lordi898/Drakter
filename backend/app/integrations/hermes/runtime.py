@@ -102,6 +102,8 @@ class AgentRuntime:
         self.store = SqliteChatStore(settings.db_path)
         self.registry: Any | None = None
         self.turns: Any | None = None
+        # `gate` and `audit` for ToolRegistry; `permissions/wiring.py` sets the real ones.
+        self.tool_wiring: dict[str, Any] = {}
         self.provider: AgentProvider | None = None
         # What ToolContext.state exposes; tools only read `agent_runtime` and `settings`.
         self.tool_state = SimpleNamespace(agent_runtime=self, settings=settings)
@@ -142,12 +144,15 @@ class AgentRuntime:
             self._boot_task = asyncio.create_task(self._boot_supervisor(supervisor))
 
     def _load_tools(self) -> None:
+        """Idempotent: the security wiring loads them early to register their actions."""
+        if self.registry is not None:
+            return
         try:
             from app.tools.registry import ToolRegistry, load_builtin_tools
             from app.tools.turns import TurnTracker
 
             turns = TurnTracker()
-            registry = ToolRegistry(turns)
+            registry = ToolRegistry(turns, **self.tool_wiring)
             load_builtin_tools(registry)
         except Exception as exc:  # noqa: BLE001 - a bad tool module leaves the agent offline
             logger.error(

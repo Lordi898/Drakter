@@ -72,7 +72,7 @@ def _audit_result(event: Any) -> str | None:
     if outcome == "ok":
         return "success"
     if outcome == "confirmation_required":
-        return "confirmation_required"
+        return None  # ActionService already audited it, with its confirmation_id
     return "denied" if getattr(event, "phase", None) == "rejected" else "failed"
 
 
