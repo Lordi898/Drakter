@@ -32,6 +32,12 @@ class VoiceSettings(BaseSettings):
     voice_enabled: bool = False
     voice_python: Path | None = None
     voice_project_root: Path = Field(default=_REPO_ROOT)
+    # Provisional, uncalibrated (plan §4.4). Written turns are read aloud up to this many
+    # characters, closing on a sentence end, then `rest_on_screen` (V-30).
+    speak_max_chars_text: int = Field(default=350, ge=50, le=20_000)
+    # Same meaning as VoiceConfig.bargein_min_words: below this, a turn heard while the
+    # agent is busy does not redirect it (V-22).
+    bargein_min_words: int = Field(default=3, ge=1, le=20)
 
     @field_validator("voice_python", "voice_project_root", mode="after")
     @classmethod
