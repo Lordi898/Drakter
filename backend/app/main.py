@@ -22,6 +22,7 @@ from app.database.migrator import migrate
 from app.events import EventHub
 from app.permissions.setup import start_security, stop_security
 from app.permissions.wiring import wire_security
+from app.services.improvement_proposals import recover_interrupted
 
 
 def _discover_routers() -> Iterator[APIRouter]:
@@ -82,6 +83,8 @@ def create_app(
         configure_logging(settings.log_level, settings.logs_dir)
         with exclusive_instance(settings.db_path):
             await asyncio.to_thread(migrate, settings.db_path, settings.backups_dir)
+            # Evaluations cut short by a stop go back to draft before anything can resume them.
+            await asyncio.to_thread(recover_interrupted, settings)
             await start_security(app)
             runtime, reminders = app.state.agent_runtime, app.state.reminders
             if runtime:
