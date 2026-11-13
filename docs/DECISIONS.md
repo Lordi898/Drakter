@@ -585,3 +585,18 @@ Decisiones técnicas, cambios de tecnología y motivos.
 - **Alternativas descartadas:** renombrar las herramientas del agente (rompe el catálogo y la lista blanca); una puerta propia del módulo (segundo camino paralelo a `ActionService`).
 - **Motivo:** un nombre identifica una sola acción en `pending_confirmations`.
 - **Impacto:** `backend/app/permissions/wiring.py` (`b531106`, pendiente de fusión); Checklist 7 (eliminar tareas, herramientas Hermes).
+
+## [2026-11-13] Fecha-hora local sin segundos
+- **Contexto:** `contracts/README.md` §2 y `drakter_contracts.common.LocalDateTime` exigían `YYYY-MM-DDTHH:MM:SS`. El calendario (esquemas, herramientas del agente, `HABITS_CALENDAR_CONTRACT.md`, `occurrence_id`) y el desktop (`localIso`) usan `YYYY-MM-DDTHH:MM`, y la API rechaza los segundos con 422.
+- **Decisión:** el contrato pasa a `YYYY-MM-DDTHH:MM`.
+- **Alternativas descartadas:** cambiar el calendario a segundos (toca datos guardados, `occurrence_id`, herramientas y GUI sin ganar nada).
+- **Motivo:** el código construido y consumido es coherente entre sí; el desfasado era el contrato.
+- **Impacto:** `contracts/README.md` §2, `contracts/python/drakter_contracts/common.py`; `contracts/ts` no cambia.
+
+## [2026-11-13] routes.md refleja lo montado en drakter/integracion
+- **Contexto:** la columna Estado de `contracts/api/routes.md` y su sección de desviaciones describían ramas anteriores a la integración (routers sin montar, `/ws`, tareas sin router…). Además faltaban 12 rutas de automejora ya montadas.
+- **Decisión:** el Estado se calcula contra la app real (`construida`, `escrita, sin montar`, `(sin construir)`); las desviaciones solo recogen lo que sigue abierto; se documentan las 17 rutas de automejora.
+- **Alternativas descartadas:** mantener el estado por frente (inservible tras integrar).
+- **Motivo:** que el contrato sea la fuente fiable de lo que existe.
+- **Comprobado:** 175 pares método+ruta de la app real frente a `routes.md`: 0 rutas en código sin contrato y 0 filas «construida» sin código; `gen_ts.py` regenera `contracts/ts/index.ts` idéntico.
+- **Impacto:** `contracts/api/routes.md` (`dda565b`, `b31d1e8`, `6ba869a`, pendientes de fusión); al regenerar `desktop/electron/shared/routes.generated.ts` entran 12 rutas de automejora, incluidas `apply` y `revert` (decisión de desktop/integrador).
