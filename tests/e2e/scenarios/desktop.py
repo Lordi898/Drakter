@@ -303,7 +303,11 @@ def confirmation(ctx):
             continue
         _mark(cdp, destructive, "destroy", timeout=2)
         row = cdp.evaluate("(() => { const b = document.querySelector('[data-e2e=destroy]');"
-                           " const r = b.closest('li, tr, article, [role=row]'); return r ? r.innerText.trim() : ''; })()")
+                           " const r = b.closest('li, tr, article, [role=row], section[aria-label]');"
+                           " if (!r) return '';"
+                           # Panel de detalle (p. ej. Asignaturas): el dato testigo es su encabezado.
+                           " const h = r.matches('section') ? r.querySelector('h1, h2, h3') : null;"
+                           " return (h || r).innerText.trim(); })()")
         assert row, f"{section}: el botón destructivo no está dentro de un elemento identificable"
         label = cdp.evaluate("(() => { const b = document.querySelector('[data-e2e=destroy]');"
                              " return (b.innerText || b.getAttribute('aria-label') || '').trim(); })()")
