@@ -63,13 +63,21 @@ Todas permisivas: MIT, BSD-3-Clause, Apache-2.0, PSF-2.0 y MIT-0 (`fastapi`, `st
 | Componente | Licencia | Cómo se usa |
 |---|---|---|
 | [Hermes Agent](https://github.com/NousResearch/hermes-agent) v0.22.7 | MIT | Venv propio, instalado desde git; el backend lo lanza como proceso |
-| Voz: `numpy`, `onnxruntime` | BSD-3-Clause, MIT | Dependencias de `voice/` |
-| Voz (extras): `faster-whisper`, `kokoro-onnx` | MIT | Opcionales |
-| Voz (extra): `openwakeword` | Apache-2.0 (código) | Opcional. ⚠️ Sus modelos preentrenados se publican con licencia no comercial (CC BY-NC-SA 4.0); revisar antes de distribuirlos |
-| Piper TTS | GPL-3.0-or-later | Entorno aparte y solo como proceso externo, a propósito (`voice/tts/piper.py`) |
+| Voz v2: [Pipecat](https://github.com/pipecat-ai/pipecat) `pipecat-ai[webrtc,fish,kokoro]==1.16.0` | BSD-2-Clause | Venv de voz propio (`~/.local/share/drakter/venvs/voice`) |
+| Voz v2: `aiortc` (WebRTC) | BSD-3-Clause | Transporte `SmallWebRTCTransport` de Pipecat |
+| Voz v2: PyAV (`av`) | BSD-3-Clause; **sus wheels incluyen FFmpeg (LGPL-2.1+)** | Dependencia de aiortc; se usa como biblioteca dinámica sin modificar |
+| Voz v2: `moonshine-voice==0.1.6` | MIT (código) | STT. ⚠️ La licencia del modelo en castellano (`small-streaming-es`) es ambigua: válida para uso personal, revisar antes de distribuir |
+| Voz v2: Smart Turn v3.2 (`LocalSmartTurnAnalyzerV3`) | BSD-2-Clause | Fin de turno, modelo ONNX incluido en Pipecat |
+| Voz v2: Silero VAD | MIT | `SileroVADAnalyzer`, modelo del wheel de Pipecat |
+| Voz v2: Kokoro (`kokoro-onnx`, pesos Kokoro-82M) | MIT (código), Apache-2.0 (pesos) | TTS local de respaldo |
+| Voz v2: `openwakeword==0.4.0` | Apache-2.0 (código) | Palabra de activación. ⚠️ El modelo `hey_jarvis_v0.1.onnx` es **CC BY-NC-SA 4.0** (no comercial): válido para uso personal, revisar antes de distribuir |
+| Voz v2: `scikit-learn` | BSD-3-Clause | Dependencia de openWakeWord |
+| Voz v2: `sounddevice` | MIT | Entra como dependencia de `moonshine-voice`; no se importa |
+| Voz v2: Fish Audio (servicio) | Términos del servicio | API remota, modelo `s2.1-pro-free` solo hasta el 30-11-2026 |
+| Voz v1 (se retira): `numpy`, `onnxruntime`, `faster-whisper`, Piper TTS | BSD-3-Clause, MIT, MIT, GPL-3.0-or-later | Se borran con la voz v2 (Piper, solo como proceso externo mientras exista) |
 | OpenViking | AGPL-3.0 | Desactivado en v1; no se instala |
 
-Los modelos (Whisper, Kokoro, Silero VAD, voces de Piper) no se versionan: se descargan aparte y cada uno tiene su licencia.
+Los modelos (Moonshine, Kokoro, openWakeWord, Smart Turn, Silero VAD) no se versionan: viven en `~/.local/share/drakter/models/`, se instalan aparte y cada uno tiene su licencia.
 
 ## Cómo mantener este documento
 
