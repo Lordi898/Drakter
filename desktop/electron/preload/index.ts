@@ -60,6 +60,18 @@ function subscribe(topic: ApiTopic, callback: Listener): () => void {
   }
 }
 
+function onMicToggle(callback: () => void): () => void {
+  const listener = (): void => callback()
+  ipcRenderer.on(IPC_CHANNELS.voiceMicToggle, listener)
+  return () => {
+    ipcRenderer.removeListener(IPC_CHANNELS.voiceMicToggle, listener)
+  }
+}
+
+/** Provisional (WP0): pasa por `apiCall`, que main valida contra `ALLOWED_ROUTES`. WP8a lo sustituye. */
+const call = (method: string, path: string, body?: unknown) =>
+  ipcRenderer.invoke(IPC_CHANNELS.apiCall, { method, path, body })
+
 const api: DrakterApi = {
   call: (method, path, body, options) =>
     ipcRenderer.invoke(IPC_CHANNELS.apiCall, { method, path, body, options }),
@@ -69,7 +81,18 @@ const api: DrakterApi = {
   addStorageLocation: (label) => ipcRenderer.invoke(IPC_CHANNELS.addStorageLocation, label),
   updateStorageLocation: (id, changes) =>
     ipcRenderer.invoke(IPC_CHANNELS.updateStorageLocation, { id, changes }),
-  deleteStorageLocation: (id) => ipcRenderer.invoke(IPC_CHANNELS.deleteStorageLocation, id)
+  deleteStorageLocation: (id) => ipcRenderer.invoke(IPC_CHANNELS.deleteStorageLocation, id),
+  voice: {
+    offer: (body) => call('POST', '/api/v1/voice/offer', body),
+    activate: (body) => call('POST', '/api/v1/voice/activate', body),
+    mode: (body) => call('POST', '/api/v1/voice/mode', body),
+    status: () => call('GET', '/api/v1/voice/status'),
+    onMicToggle
+  },
+  jobs: {
+    list: () => call('GET', '/api/v1/jobs'),
+    cancel: (jobId) => call('POST', `/api/v1/jobs/${encodeURIComponent(jobId)}/cancel`)
+  }
 }
 
 const bridge: DrakterBridge = {

@@ -16,3 +16,18 @@ export interface AllowedRoute {
 }
 
 export const ALLOWED_ROUTES: readonly AllowedRoute[] = GENERATED_ROUTES.map(([method, path]) => ({ method, path }))
+
+/**
+ * Operaciones con nombre (plan de voz v2 §4.3). Cada una es un par método/ruta
+ * de `ALLOWED_ROUTES`; `{job_id}` se sustituye por un UUID validado en main.
+ */
+export const OPERATIONS = {
+  'voice.offer': { method: 'POST', path: '/api/v1/voice/offer' },
+  'voice.activate': { method: 'POST', path: '/api/v1/voice/activate' },
+  'voice.mode': { method: 'POST', path: '/api/v1/voice/mode' },
+  'voice.status': { method: 'GET', path: '/api/v1/voice/status' },
+  'jobs.list': { method: 'GET', path: '/api/v1/jobs' },
+  'jobs.cancel': { method: 'POST', path: '/api/v1/jobs/{job_id}/cancel' }
+} as const satisfies Record<string, AllowedRoute>
+
+export type OperationName = keyof typeof OPERATIONS

@@ -2,6 +2,16 @@
  * Contrato del puente preload ↔ renderer. Es lo ÚNICO que el renderer ve del
  * sistema: `window.drakter`. Todo mensaje se valida en el proceso principal.
  */
+import type {
+  JobList,
+  JobOut,
+  VoiceActivateIn,
+  VoiceModeIn,
+  VoiceOfferIn,
+  VoiceOfferOut,
+  VoiceState,
+  VoiceStatusOut
+} from '../../../contracts/ts'
 import type { HttpMethod } from './operations'
 
 export type { HttpMethod } from './operations'
@@ -21,7 +31,9 @@ export const IPC_CHANNELS = {
   /** Main → preload: entrega el `MessagePort` de eventos. */
   eventsPort: 'drakter:events-port',
   /** Main → preload: cambios del estado del backend. */
-  connectionChanged: 'drakter:connection-changed'
+  connectionChanged: 'drakter:connection-changed',
+  /** Main → renderer: alternar el micrófono desde la bandeja (voz v2). */
+  voiceMicToggle: 'voice:mic-toggle'
 } as const
 
 export interface AppInfo {
@@ -91,6 +103,30 @@ export interface StorageLocationChanges {
 }
 
 /**
+ * Resultado tipado de una operación: igual que `ApiCallResult`, con `data` ya
+ * del tipo del contrato (sin validar en el renderer: lo valida el backend).
+ */
+export type ApiResult<T> =
+  | { readonly ok: true; readonly status: number; readonly data: T }
+  | { readonly ok: false; readonly status: number; readonly code: string; readonly body: unknown }
+
+/** `window.api.voice` (voz v2). El micrófono no pasa por aquí: es local al renderer. */
+export interface VoiceApi {
+  offer(body: VoiceOfferIn): Promise<ApiResult<VoiceOfferOut>>
+  activate(body: VoiceActivateIn): Promise<ApiResult<VoiceState>>
+  mode(body: VoiceModeIn): Promise<ApiResult<VoiceState>>
+  status(): Promise<ApiResult<VoiceStatusOut>>
+  /** Canal main→renderer `voice:mic-toggle` (bandeja). Devuelve la baja. */
+  onMicToggle(callback: () => void): () => void
+}
+
+/** `window.api.jobs`: trabajos en segundo plano. */
+export interface JobsApi {
+  list(): Promise<ApiResult<JobList>>
+  cancel(jobId: string): Promise<ApiResult<JobOut>>
+}
+
+/**
  * `window.api`: ÚNICA interfaz del renderer con el backend (D-14). El renderer no
  * tiene token, puerto ni red. Main valida método y ruta contra `ALLOWED_ROUTES` y
  * añade la credencial; `path` puede llevar query (`/api/v1/tasks?status=open`).
@@ -107,6 +143,8 @@ export interface DrakterApi {
   updateStorageLocation(id: string, changes: StorageLocationChanges): Promise<ApiCallResult | null>
   /** Devuelve 409 `confirmation_required`; se sigue con `requestApproval`. */
   deleteStorageLocation(id: string): Promise<ApiCallResult>
+  readonly voice: VoiceApi
+  readonly jobs: JobsApi
 }
 
 /** `window.drakter`: solo servicios de escritorio, sin relación con el backend. */
