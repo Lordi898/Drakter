@@ -64,12 +64,12 @@ scripts/drakter-local.sh stop
 - **Contrato frente a API:** paginación por `offset` en memoria, chat y automejora (el contrato pide `cursor`); `forget` de memoria con `confirmation_id` en el cuerpo y `POST /memory/{id}/approve` sin 409; los modelos de `contracts/python`/`contracts/ts` difieren de la API en hábitos, proyectos, carpetas, etiquetas y `metadata`. No rompe la GUI (solo usa el contrato TS en chat, confirmaciones y eventos), pero conviene alinear y regenerar.
 - **Calendario:** el selector de zona horaria arranca en el primer valor de la lista (`Africa/Abidjan`) mientras `default_timezone` no esté fijado en Configuración.
 - **Deriva de catálogo:** el backend avisa (`tool_catalog_drift`) de herramientas que difieren de `contracts/tools/catalog.json` (p. ej. `get_related_items` debe pasar a `returns_untrusted: true`). No bloquea.
-- **Borrar relaciones (sin confirmar):** en un arnés de prueba de calendario, `DELETE /relationships/{id}` con el pipeline de confirmación montado dio 500 `Action failed`; falta comprobarlo en la app real (módulo de relaciones).
 - **Sin comprobar en pantalla:** la visualización de relaciones y las vistas diaria y mensual del calendario no se han visto funcionar en Electron.
 - **Pasada e2e:** el arnés no espera a `agent/status = idle` antes de conversar (Hermes tarda 3-6 s), así que `conversacion.*` da 503 `agent_unavailable`; los guiones `herramienta-permitida`, `accion-destructiva` e `inyeccion-documento` piden `read_file`/`terminal`, que Drakter nunca ofrece. `desktop.arranca` falla en todas las pasadas porque `tests/e2e/harness/stack.py` no pasa `DRAKTER_DEV_NO_SANDBOX=1` (con la variable arranca; cambio pedido a `drakter-32`). Además, el catálogo (`tests/e2e/catalog.toml`) usa `GET /api/v1/audit` y la ruta real es `/api/v1/activity`.
 
 ### Cerrados en el cierre
 
+- **Borrar relaciones:** el 500 visto en un arnés de calendario no se reproduce en la app real (`05381dd`): `DELETE /relationships/{id}` → 409 → aprobar → 200 `executed`.
 - **Calendario y asignaturas (CL9):** eventos, bloques, solapamientos, zonas horarias (cambio de hora), asignaturas, horarios recurrentes y sesiones comprobados; recursos de asignatura por relaciones (`bbee4c4`); `POST /calendar/events` acepta `:00` final (`f16753f`).
 - **Búsqueda global:** `SearchPalette` (Ctrl+K) y el aviso de notificaciones están montados en `AppShell`; con `7787e9b` hay una sola ruta `GET /api/v1/search` y encuentra tareas, proyectos, hábitos, eventos y asignaturas (antes daba 0 resultados).
 - **`drakter-local.sh stop` no paraba la app:** el pid se guardaba mal porque `setsid` hace fork; corregido en `f0f084b`.
