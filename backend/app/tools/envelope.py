@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 from typing import Any, Final
 from uuid import UUID
 
+from app.core.text import strip_invisible
 from drakter_contracts.tools import (
     ToolConfirmationRequired,
     ToolErrorBody,
@@ -18,16 +19,6 @@ from drakter_contracts.tools import (
 
 # Bidi controls, zero-width characters and Unicode tags hide text from a human reader.
 # ZWJ and ZWNJ stay: they are required by emoji and several scripts.
-_HIDDEN_CHARS: Final = dict.fromkeys(
-    [
-        *range(0x202A, 0x202F),
-        *range(0x2066, 0x206A),
-        0x200B,
-        0x2060,
-        0xFEFF,
-        *range(0xE0000, 0xE0080),
-    ]
-)
 
 
 def tool_ok(data: dict[str, Any]) -> ToolOk:
@@ -72,5 +63,5 @@ def untrusted_envelope(
         retrieved_at=datetime.now(UTC),
         content_hash=hashlib.sha256(content.encode("utf-8", "surrogatepass")).hexdigest(),
         truncated=truncated,
-        content=content.translate(_HIDDEN_CHARS),
+        content=strip_invisible(content),
     ).model_dump(mode="json")

@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any
 from uuid import UUID, uuid4
 
+from app.core.text import strip_invisible
 from app.database.connection import connect
 from app.integrations.memory.models import (
     L0_MAX_CHARS,
@@ -49,13 +50,13 @@ def _collapse(text: str) -> str:
 
 def content_hash(text: str) -> str:
     """sha256 of the content normalized: NFKC, lowercase, collapsed spaces."""
-    normalized = _collapse(unicodedata.normalize("NFKC", text).lower())
+    normalized = _collapse(unicodedata.normalize("NFKC", strip_invisible(text)).lower())
     return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
 
 
 def normalize_subject(text: str) -> str:
     """Conflict key: NFKC, lowercase, no diacritics, collapsed spaces."""
-    decomposed = unicodedata.normalize("NFKD", unicodedata.normalize("NFKC", text).lower())
+    decomposed = unicodedata.normalize("NFKD", unicodedata.normalize("NFKC", strip_invisible(text)).lower())
     stripped = "".join(ch for ch in decomposed if not unicodedata.combining(ch))
     return _collapse(unicodedata.normalize("NFKC", stripped))
 
