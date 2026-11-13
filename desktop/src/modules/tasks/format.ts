@@ -101,6 +101,32 @@ export function actorLabel(actor: HistoryEntry['actor_type']): string {
   }
 }
 
+// Pretéritos de las frases de historial en segunda persona, para «Tú …».
+const SECOND_PERSON: Readonly<Record<string, string>> = {
+  creó: 'creaste',
+  modificó: 'modificaste',
+  completó: 'completaste',
+  reabrió: 'reabriste',
+  archivó: 'archivaste',
+  restauró: 'restauraste',
+  eliminó: 'eliminaste',
+  cambió: 'cambiaste',
+  añadió: 'añadiste',
+  quitó: 'quitaste',
+  intentó: 'intentaste',
+  pidió: 'pediste',
+  realizó: 'realizaste',
+  pudo: 'pudiste'
+}
+
+/** Conjuga la frase (en tercera persona) para el actor: «Tú creaste», «Drakter creó». */
+export function forActor(actor: HistoryEntry['actor_type'], phrase: string): string {
+  if (actor !== 'user') return phrase
+  return phrase.replace(/^(no )?(\p{L}+)/u, (whole, no: string | undefined, verb: string) =>
+    verb in SECOND_PERSON ? `${no ?? ''}${SECOND_PERSON[verb]}` : whole
+  )
+}
+
 const ACTION_LABELS: Readonly<Record<string, string>> = {
   'task.create': 'creó la tarea',
   'task.update': 'modificó la tarea',
@@ -146,7 +172,7 @@ export function describeHistory(entry: HistoryEntry): HistoryLine {
     when: formatInstant(entry.occurred_at),
     actor: actorLabel(entry.actor_type),
     isAgent: entry.actor_type === 'agent',
-    summary,
+    summary: forActor(entry.actor_type, summary),
     details
   }
 }
