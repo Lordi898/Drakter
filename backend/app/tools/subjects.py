@@ -5,6 +5,7 @@ from __future__ import annotations
 import sqlite3
 from datetime import date
 
+from drakter_contracts.tools import AuditPolicy
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.schemas.calendar import RecurrenceExceptionOut
@@ -131,6 +132,11 @@ _SESSION_AUDIT = {
     "room": "omit",
 }  # fmt: skip
 
+
+def _audit(args_model: type[BaseModel]) -> dict[str, AuditPolicy]:
+    """The module-wide policy, restricted to this tool's arguments (the registry rejects unknown names)."""
+    return {name: rule for name, rule in _SESSION_AUDIT.items() if name in args_model.model_fields}
+
 TOOLS: tuple[ToolSpec, ...] = (
     ToolSpec(
         name="create_subject",
@@ -198,7 +204,7 @@ TOOLS: tuple[ToolSpec, ...] = (
         risk=RiskClass.WRITE,
         handler=service_handler("create_class_session", _create_class_session),
         errors=_ERRORS,
-        audit=_SESSION_AUDIT,
+        audit=_audit(CreateClassSessionArgs),
     ),
     ToolSpec(
         name="update_class_session",
@@ -210,7 +216,7 @@ TOOLS: tuple[ToolSpec, ...] = (
         risk=RiskClass.WRITE,
         handler=service_handler("update_class_session", _update_class_session),
         errors=_ERRORS,
-        audit=_SESSION_AUDIT,
+        audit=_audit(UpdateClassSessionArgs),
     ),
     ToolSpec(
         name="delete_class_session",

@@ -7,6 +7,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Annotated, Any, TypeVar
 
+from drakter_contracts.tools import AuditPolicy
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.core.errors import AppError
@@ -108,20 +109,25 @@ _LOG = {"entity_id": "log", "source_id": "log", "target_id": "log", "relationshi
         "relationship_type": "log", "direction": "log", "entity_type": "log", "limit": "log",
         "cursor": "omit", "metadata": "hash"}
 
+
+def _audit(args_model: type[BaseModel]) -> dict[str, AuditPolicy]:
+    """The module-wide policy, restricted to this tool's arguments (the registry rejects unknown names)."""
+    return {name: rule for name, rule in _LOG.items() if name in args_model.model_fields}
+
 TOOLS: tuple[ToolSpec, ...] = (
     ToolSpec(
         name="get_related_items",
         description="List the items related to an entity, in both directions, with their titles.",
         domain="relationships", args_model=RelatedArgs, result_model=RelatedItems,
         permission="relationships.read", risk=RiskClass.READ, handler=_related,
-        errors=("not_found",), idempotent=True, returns_untrusted=True, audit=_LOG,
+        errors=("not_found",), idempotent=True, returns_untrusted=True, audit=_audit(RelatedArgs),
     ),
     ToolSpec(
         name="search_relationships",
         description="Search stored relationships by source, target, entity type or relationship type.",
         domain="relationships", args_model=SearchArgs, result_model=RelationshipPage,
         permission="relationships.read", risk=RiskClass.READ, handler=_search,
-        idempotent=True, audit=_LOG,
+        idempotent=True, audit=_audit(SearchArgs),
     ),
     ToolSpec(
         name="create_relationship",
@@ -129,13 +135,13 @@ TOOLS: tuple[ToolSpec, ...] = (
         domain="relationships", args_model=RelationshipCreate, result_model=RelationshipOut,
         permission="relationships.write", risk=RiskClass.WRITE, handler=_create,
         errors=("not_found", "conflict", "relationship_not_allowed", "hierarchy_cycle"),
-        audit=_LOG,
+        audit=_audit(RelationshipCreate),
     ),
     ToolSpec(
         name="delete_relationship",
         description="Delete a relationship between two entities. Needs user confirmation.",
         domain="relationships", args_model=DeleteArgs, result_model=Deleted,
         permission="relationships.delete", risk=RiskClass.CONFIRM, handler=_delete,
-        errors=("not_found", "confirmation_unavailable"), audit=_LOG, summarize=_summarize_delete,
+        errors=("not_found", "confirmation_unavailable"), audit=_audit(DeleteArgs), summarize=_summarize_delete,
     ),
 )

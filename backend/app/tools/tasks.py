@@ -308,7 +308,7 @@ TOOLS: tuple[ToolSpec, ...] = (
     ),
     _spec(
         "get_task", "Devuelve una tarea con subtareas y dependencias.", TaskIdArgs, TaskDetail,
-        _get_task, "tasks.read", R_, _ERR_READ, dict(_ID_AUDIT), idempotent=True,
+        _get_task, "tasks.read", R_, _ERR_READ, {"task_id": "log"}, idempotent=True,
     ),
     _spec(
         "update_task", "Modifica campos de una tarea.", UpdateTaskArgs, TaskOut, _update_task,

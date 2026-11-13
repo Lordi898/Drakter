@@ -6,6 +6,7 @@ import sqlite3
 from collections.abc import Callable
 from typing import Annotated, Any, TypeVar
 
+from drakter_contracts.tools import AuditPolicy
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.core.errors import AppError
@@ -68,24 +69,29 @@ def _remove(ctx: ToolContext, args: TagAssignmentArgs) -> TagAssignmentResult:
 
 _LOG = {"entity_id": "log", "tag": "hash", "q": "hash", "limit": "log", "cursor": "omit"}
 
+
+def _audit(args_model: type[BaseModel]) -> dict[str, AuditPolicy]:
+    """The module-wide policy, restricted to this tool's arguments (the registry rejects unknown names)."""
+    return {name: rule for name, rule in _LOG.items() if name in args_model.model_fields}
+
 TOOLS: tuple[ToolSpec, ...] = (
     ToolSpec(
         name="list_tags", description="List the existing tags with their usage count.",
         domain="tags", args_model=ListTagsArgs, result_model=svc.TagPage,
         permission="tags.read", risk=RiskClass.READ, handler=_list,
-        errors=("validation_error", "invalid_cursor"), idempotent=True, audit=_LOG,
+        errors=("validation_error", "invalid_cursor"), idempotent=True, audit=_audit(ListTagsArgs),
     ),
     ToolSpec(
         name="add_tag",
         description="Attach a tag (created if missing) to a task, project, habit, event, subject or resource.",
         domain="tags", args_model=TagAssignmentArgs, result_model=TagAssignmentResult,
         permission="tags.write", risk=RiskClass.WRITE, handler=_add,
-        errors=("not_found", "validation_error", "conflict"), idempotent=True, audit=_LOG,
+        errors=("not_found", "validation_error", "conflict"), idempotent=True, audit=_audit(TagAssignmentArgs),
     ),
     ToolSpec(
         name="remove_tag", description="Remove a tag from an item. Neither the tag nor the item is deleted.",
         domain="tags", args_model=TagAssignmentArgs, result_model=TagAssignmentResult,
         permission="tags.write", risk=RiskClass.WRITE, handler=_remove,
-        errors=("not_found", "validation_error"), idempotent=True, audit=_LOG,
+        errors=("not_found", "validation_error"), idempotent=True, audit=_audit(TagAssignmentArgs),
     ),
 )

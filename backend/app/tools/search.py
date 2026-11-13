@@ -16,7 +16,8 @@ from drakter_contracts.models.system import SearchHitOut
 from app.database.connection import connect
 from app.services.search import SearchPage, search_global
 from app.services.search_schemas import MAX_QUERY_CHARS, SearchEntityType
-from app.tools.spec import RiskClass, ToolContext, ToolSpec, untrusted_envelope
+from app.tools.envelope import untrusted_envelope
+from app.tools.spec import RiskClass, ToolContext, ToolSpec
 
 MAX_TOOL_RESULTS = 25
 _AUDIT = {"query": "hash", "types": "log", "limit": "log"}
