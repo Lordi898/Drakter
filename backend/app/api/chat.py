@@ -114,4 +114,7 @@ async def cancel_turn(turn_id: UUID, runtime: Runtime) -> CancelResponse:
 
 @router.get("/agent/status")
 async def agent_status(runtime: Runtime) -> AgentStatusResponse:
-    return AgentStatusResponse(**runtime.status())
+    """`state` is `runtime.status_arbiter.current`: the same as the last agent.status_changed."""
+    status = runtime.status()
+    status["state"] = runtime.status_arbiter.current.state.value
+    return AgentStatusResponse(**status)

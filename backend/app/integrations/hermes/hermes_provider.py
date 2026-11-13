@@ -23,6 +23,7 @@ from app.integrations.hermes.events import (
     TERMINAL_EVENTS,
     AgentEvent,
     MessageDelta,
+    Steered,
     Thinking,
     ToolCompleted,
     ToolSource,
@@ -73,6 +74,8 @@ class _Supervisor(Protocol):
     ) -> AsyncIterator[dict[str, Any]]: ...
 
     async def stop_turn(self, turn_id: UUID, grace_s: float = 5) -> None: ...
+
+    async def steer_turn(self, turn_id: UUID, text: str) -> bool: ...
 
 
 @dataclass(slots=True)
@@ -192,6 +195,13 @@ class HermesProvider:
         # In the background: stop_turn may take its whole grace and the API must not wait.
         self._spawn(self._stop_quietly(turn_id))
 
+    async def steer_turn(self, turn_id: UUID, text: str) -> None:
+        """The runner answers with `steered` in the turn stream; a lost op just times out upstream."""
+        turn = self._turns.get(turn_id)
+        if turn is None or turn.finished or turn.cancel_requested or self._supervisor is None:
+            return
+        await self._supervisor.steer_turn(turn_id, text)
+
     async def stream_turn(self, request: TurnRequest) -> AsyncIterator[AgentEvent]:
         now = time.monotonic()
         turn = _Turn(
@@ -249,7 +259,10 @@ class HermesProvider:
         if bundle.tainted and self._turns_tracker is not None:
             self._turns_tracker.mark_tainted(request.session_id)
         trusted = [s.text for s in bundle.sections if s.level in _INSTRUCTION_LEVELS and s.text]
-        return bundle.turn_prompt, "\n\n".join([self._instructions.strip(), *trusted])
+        # Ephemeral prefixes (channel, heard note, jobs) go only to the turn prompt: the
+        # instructions stay byte-stable between turns (V-21).
+        prompt = f"{request.prefix}\n\n{bundle.turn_prompt}" if request.prefix else bundle.turn_prompt
+        return prompt, "\n\n".join([self._instructions.strip(), *trusted])
 
     async def _consume(
         self, request: TurnRequest, turn: _Turn, instructions: str
@@ -380,10 +393,17 @@ class HermesProvider:
                 error=bool(data.get("error")) or bool(data.get("interrupted")),
                 source=_tool_source(data.get("tool")),
             )
+        if name == "steered":
+            return Steered(accepted=data.get("accepted") is True)
         if name == "completed":
             output = data.get("output")
             text = output if isinstance(output, str) and output else "".join(turn.text)
-            return TurnCompleted(text=text, usage=_clean_usage(data.get("usage")))
+            pending = data.get("pending_steer")
+            return TurnCompleted(
+                text=text,
+                usage=_clean_usage(data.get("usage")),
+                pending_steer=pending if isinstance(pending, str) and pending.strip() else None,
+            )
         if name == "cancelled":
             return TurnCancelled()
         if name == "failed":

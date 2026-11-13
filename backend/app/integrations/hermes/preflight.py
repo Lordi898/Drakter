@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import hashlib
 import http.client
 import json
 import os
@@ -42,6 +43,7 @@ PROBE_TOOL: Final = "preflight_probe"
 PROBE_RESULT: Final = "PREFLIGHT-OK-5e1c"
 INSTRUCTIONS: Final = "Instrucciones estables de la sesión de preflight."
 SOUL_MARKER: Final = "Reglas de seguridad de Drakter"
+VOICE_MARKER: Final = "# VOICE"  # agent/identity/VOICE.md, with the speech markup block expanded
 CANARY: Final = "PREFLIGHT-CANARY-CONTEXT-FILE"
 SCENARIO: Final = "drakter-preflight"
 TURN_TIMEOUT_S: Final = 180.0
@@ -275,6 +277,31 @@ async def check_stop(supervisor: HermesSupervisor, recorder: Recorder, report: R
     )
 
 
+async def check_steer(supervisor: HermesSupervisor, recorder: Recorder, report: Report) -> None:
+    """Voice v2 (V-22): `steer` while the model streams answers `steered` in the same turn."""
+    recorder.chunk_delay_s = SLOW_CHUNK_DELAY_S
+    turn_id = str(uuid4())
+    events: list[dict[str, Any]] = []
+
+    async def consume() -> None:
+        async for event in supervisor.run_turn(turn_id, str(uuid4()), "[stub:conversacion] corrige", INSTRUCTIONS):
+            events.append(event)
+
+    task = asyncio.create_task(consume())
+    async with asyncio.timeout(TURN_TIMEOUT_S):
+        while not any(event.get("ev") == "delta" for event in events):
+            await asyncio.sleep(0.01)
+        sent = await supervisor.steer_turn(turn_id, "mejor responde en una frase")
+        await task
+    recorder.chunk_delay_s = 0.0
+    steered = [event for event in events if event.get("ev") == "steered"]
+    report.check(
+        sent and len(steered) == 1 and events[-1].get("ev") in ("completed", "cancelled", "failed"),
+        "steer responde steered en el mismo turno",
+        f"accepted={steered[0].get('accepted') if steered else '?'}, terminal={events[-1].get('ev') if events else '?'}",
+    )
+
+
 def _group_alive(pgid: int) -> bool:
     try:
         os.killpg(pgid, 0)
@@ -328,19 +355,29 @@ async def exercise(
     report.check(probe.names[:1] == [PROBE_TOOL], "llamada MCP con ${DRAKTER_MCP_URL} y ${DRAKTER_MCP_TOKEN}")
     system = system_text(first[0])
     report.check(SOUL_MARKER in system, "SOUL.md en el prompt de sistema")
+    report.check(
+        VOICE_MARKER in system and "<!-- speech_markup" not in system,
+        "VOICE.md en el prompt de sistema, con las etiquetas de expresión",
+    )
     report.check(INSTRUCTIONS in system, "instructions en el prompt de sistema")
     report.check(CANARY not in system, "sin archivos de contexto en el prompt")
 
     before = len(recorder.snapshot())
     await run_probe_turn(supervisor, session_id, "[stub:conversacion] segundo turno")
     second = [request for request in recorder.snapshot(before) if request.get("tools")]
-    stable = bool(second) and system_text(second[0]) == system and second[0]["tools"] == first[0]["tools"]
-    report.check(stable, "system y tools idénticos entre turnos (H-21)")
+    digest = hashlib.sha256(system.encode()).hexdigest()
+    second_digest = hashlib.sha256(system_text(second[0]).encode()).hexdigest() if second else "-"
+    print(f"hash de las instructions: {digest[:16]} / {second_digest[:16]}", flush=True)
+    stable = bool(second) and second_digest == digest and second[0]["tools"] == first[0]["tools"]
+    report.check(stable, "hash del system y tools idénticos entre turnos (H-21, V-21)")
+    config = json.loads((data_dir / "hermes" / "config.yaml").read_text(encoding="utf-8"))
+    report.check(config["agent"].get("reasoning_effort") == "low", "reasoning_effort low en el primer plano")
     grew = bool(second) and len(second[0]["messages"]) > len(first[0]["messages"])
     report.check(grew, "el segundo turno lleva el historial")
 
     alive = gateway_processes(pid, str(data_dir)) + scheduler_threads(pid)
     report.check(not alive, "ningún gateway ni scheduler vivo", "; ".join(alive))
+    await check_steer(supervisor, recorder, report)
     await check_stop(supervisor, recorder, report)
     pid = supervisor.child_pid or pid
     await supervisor.stop()
