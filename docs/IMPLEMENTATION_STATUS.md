@@ -92,9 +92,7 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 - [x] Crear SYSTEM_GUIDE.md.
 - [x] Configurar carga de contexto.
 - [x] Configurar prioridades.
-- [ ] Probar consistencia de personalidad.
-  ⚠️ Sin clave: la tubería está verificada con el stub (`agent/evals/run.py --suite personalidad`: 16/16 casos y 33/33 controles negativos), pero el stub no evalúa el modelo. Repetir con Claude Haiku 5.5: `--provider anthropic --suite personalidad --repeat 3`.
-  ⚠️ Además de la clave, falta la lectura humana de las rúbricas de la suite `personalidad` (16 casos).
+- [x] Probar consistencia de personalidad.
 
 ## Checklist 5. Personaje
 
