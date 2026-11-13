@@ -82,13 +82,12 @@ assert = { name = "e2e habito {run}", timezone = "Europe/Madrid", id = "{id}" }
 id = "modulo.calendario"
 title = "Calendario: crear evento, leer de vuelta y comprobar un campo"
 # Fuente: drakter/habitos-calendario backend/HABITS_CALENDAR_CONTRACT.md y schemas/calendar.py.
-# PROVISIONAL: api/calendar.py aún no existe en esa rama. Confirmar el 201 y que POST responde
-# EventWriteResult {event, conflicts}, de ahí `event.id`.
+# Confirmado al integrar: 201 con EventWriteResult {event, conflicts}; horas locales YYYY-MM-DDTHH:MM.
 [[flow.step]]
 name = "crear evento"
 method = "POST"
 path = "/api/v1/calendar/events"
-json = { title = "e2e evento {run}", timezone = "Europe/Madrid", local_start = "2026-06-01T10:00:00", local_end = "2026-06-01T11:00:00" }
+json = { title = "e2e evento {run}", timezone = "Europe/Madrid", local_start = "2026-06-01T10:00", local_end = "2026-06-01T11:00" }
 expect = [200, 201]
 assert = { "event.title" = "e2e evento {run}" }
 capture = { id = "event.id" }

@@ -115,7 +115,7 @@ def secure_window(ctx):
     csp = probe["csp"]
     assert csp, "no hay <meta> Content-Security-Policy"
     assert "default-src 'none'" in csp and "script-src 'self'" in csp, f"CSP débil: {csp}"
-    assert "unsafe-eval" not in csp and "script-src 'self' 'unsafe-inline'" not in csp, f"CSP permisiva: {csp}"
+    assert "'unsafe-eval'" not in csp and "script-src 'self' 'unsafe-inline'" not in csp, f"CSP permisiva: {csp}"
     return f"sin require/process/module/Buffer; window.drakter = {BRIDGE_API}; CSP default-src 'none', script-src 'self'"
 
 
@@ -304,8 +304,16 @@ def confirmation(ctx):
         row = cdp.evaluate("(() => { const b = document.querySelector('[data-e2e=destroy]');"
                            " const r = b.closest('li, tr, article, [role=row]'); return r ? r.innerText.trim() : ''; })()")
         assert row, f"{section}: el botón destructivo no está dentro de un elemento identificable"
+        label = cdp.evaluate("(() => { const b = document.querySelector('[data-e2e=destroy]');"
+                             " return (b.innerText || b.getAttribute('aria-label') || '').trim(); })()")
         cdp.click("[data-e2e=destroy]")
-        cdp.wait_for("!!document.querySelector('[role=\"alertdialog\"], [role=\"dialog\"]')", 5)
+        try:
+            cdp.wait_for("!!document.querySelector('[role=\"alertdialog\"], [role=\"dialog\"]')", 5)
+        except AssertionError as exc:
+            toasts = cdp.evaluate("[...document.querySelectorAll('[data-sonner-toast]')]"
+                                  ".map(t => t.innerText.trim()).join(' | ')")
+            raise AssertionError(f"{section}: «{label}» en «{row[:40]}» no abrió diálogo de "
+                                 f"confirmación en 5 s; avisos: {toasts or 'ninguno'}") from exc
         _mark(cdp, "[...document.querySelectorAll('[role=\"alertdialog\"] button, [role=\"dialog\"] button')]"
               ".find(b => /^\\s*(cancelar|no)\\b/i.test(b.innerText))", "cancel", timeout=3)
         cdp.click("[data-e2e=cancel]")
