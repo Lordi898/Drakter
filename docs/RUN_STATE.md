@@ -66,12 +66,10 @@ scripts/drakter-local.sh stop
 - **Restaurar copias con la app en marcha:** `/api/v1/backups/**` está montado y borrar va por `ActionService`, pero restaurar no tiene ruta: `restore_backup` necesita el bloqueo de instancia que ya tiene el backend. Hoy se restaura con el backend parado (`python -m app.database.cli restore`). Necesita un diseño propio.
 - **Paginación por `offset`** en memoria, chat y automejora: desviación aceptada en v1 (el contrato pide `cursor`).
 - **Eventos sin emisor:** `agent.expression_changed`, `storage.index_progress` y `workspace.relationship_*`.
-- **Seguridad, brechas abiertas del banco red-team** (cribado de drakter-42: 170 BLOCKED / 11 BREACH / 19 N/A / 0 ERROR; recuento final pendiente de drakter-34):
-  - INJ-11 e INJ-25, diseño pendiente: los recuerdos viajan dentro del texto del turno; hace falta un campo de contexto aparte en `TurnRequest`; mitigado porque tainted se propaga y fuerza confirmación (`df258b1`, `1588c04`).
-  - CONF-46/INJ-26: la contaminación de la sesión vive solo en memoria y se pierde al reiniciar el backend.
-  - INJ-24 (WRITE sin `summarize` adaptada con resumen por defecto), INJ-05 (título y URL remotos fuera del sobre en `read_resource`) y FILE-DB-02 (TOCTOU en `connect`, riesgo bajo).
-  - DESK-20, ya acotado: el renderer solo puede rechazar propuestas de automejora (aprobar se retiró) y aprobar o rechazar recuerdos.
-  - INJ-14 cerrado e INJ-32 arreglado en código (`1588c04`); DESK-04, DESK-16 y la sonda de INJ-32 son falsos positivos o pruebas desfasadas.
+- **Seguridad, brechas del red-team conocidas al cierre** (recuento final pendiente de drakter-34 sobre `183cc25`):
+  - ⚠️ de diseño: CONF-46/INJ-26 (la contaminación no persiste al reiniciar), INJ-11/25 (`TurnRequest` sin canal de datos; mitigado por la propagación de tainted) y FILE-DB-02 (TOCTOU de bajo riesgo).
+  - En curso: INJ-05 (drakter-42).
+  - No son brechas abiertas: DESK-04 y DESK-16 (falsos positivos), DESK-20 (resuelto por `89a87b5`), INJ-24 (contradicción del banco ya decidida) e INJ-32 (arreglado en código; falta ajustar la sonda).
 - **Instalador:** el AppImage se genera con el backend congelado corregido (`39503a7`), pero el `.deb` no se ha regenerado tras ese arreglo (`fpm` falló con `/tmp` lleno; regenerar con más de 3 GB libres, `flock` y `TMPDIR` en disco, ver `docs/installation/paquete-deb.md`), no se ha instalado ni se ha abierto la ventana empaquetada sin `--no-sandbox`. Sin icono propio ni proceso de versión (0.1.0).
 - **Sin medir:** RAM/CPU general, latencia de Hermes, y STT/TTS en reposo. Sin pasada de optimización de SQLite, FTS5, memoria ni carga de interfaz (el renderer es un único JS de 1,63 MB).
 - **Hora de los avisos de eventos:** el aviso dice «Empieza a las HH:MM» en la zona del evento, mientras Hoy muestra la hora en la zona del usuario. Solo difiere si el evento tiene otra zona.
@@ -82,7 +80,7 @@ scripts/drakter-local.sh stop
 ### Cerrados en el cierre
 
 - **Escritorio (CL1):** Electron 45 con backend real, React 19, TypeScript, Tailwind 4, shadcn/ui, ventana, 10 secciones, área central, panel contextual, notificaciones, configuración y gestión de errores vistos en la app; `ALLOWED_ROUTES` regenerado desde el contrato (`89a87b5`) y la GUI no puede aplicar ni revertir mejoras.
-- **Confirmaciones pedidas por el agente:** su registro de herramientas usa `BackendToolGate` (`b722aca`, `42a0a17`): las acciones CONFIRM crean la confirmación pendiente que se aprueba en la app, y quedan en `audit_events`. Falta recomprobar el borrado desde el agente en cada módulo.
+- **Confirmaciones pedidas por el agente:** su registro de herramientas usa `BackendToolGate` (`b722aca`, `42a0a17`): las acciones CONFIRM crean la confirmación pendiente que se aprueba en la app, y quedan en `audit_events`. Comprobado con el modelo real en tareas.
 - **Hoy, búsqueda, Ajustes y notificaciones vistos en Electron:** Hoy carga como pantalla inicial (antes se quedaba en «no conectado» si cargaba antes que el backend; arreglado en `76270ca`), Ctrl+K agrupa resultados de tareas, eventos, proyectos y asignaturas, y los recordatorios salen como aviso emergente, campana y centro de notificaciones.
 - **Revisión adversarial de seguridad:** hecha (drakter-34). Banco de 200 ataques de 125/27/47/1 a 169/12/19/0 (BLOCKED/BREACH/N/A/ERROR). Arreglados: auditoría que registraba rechazos como éxito, fugas en logs (LEAK-02/03/05), caracteres invisibles en el sobre y en memoria (INJ-03/16/40/41), restauración con `-wal` huérfano (FILE-DB-07) y endurecimiento de `pending_confirmations` (`0012`). Electron sin hallazgos reales.
 - **Eventos de tareas y proyectos:** `workspace.entity_*` lleva `actor_type` (`88aa3c3`); ya no falla la validación en cada mutación.
@@ -122,6 +120,6 @@ Historial Git de los repos que estaban anidados en el checkout del usuario:
 ## Siguiente paso
 
 1. Informe de escritorio (Checklist 1) y pasada completa de drakter-49: pruebas de aceptación, vistas diaria y mensual del calendario y recuperación del backend.
-2. Repaso de drakter-34 sobre la punta: brechas INJ-11/14/22/25 con `build_context` conectado y borrado pedido por el agente en cada módulo.
+2. Recuento final del banco red-team de drakter-34 sobre `183cc25`.
 3. Regenerar e instalar el `.deb` y abrir la ventana empaquetada sin `--no-sandbox`.
 4. Fuera de este cierre: rediseño de voz sobre Pipecat, rediseño de personalidad (estilo) y `.riv` del personaje.

@@ -746,3 +746,16 @@ Decisiones técnicas, cambios de tecnología y motivos.
 - **Motivo:** CONTRACT de memoria, regla 2: los terceros siempre `THIRD_PARTY`.
 - **Comprobado:** `check_memory_rules.py` 40/40, smoke de memoria 21/21, INJ-31 sigue BLOCKED; banco 170 BLOCKED / 11 BREACH.
 - **Impacto:** `backend/app/tools/memory.py`, `backend/app/integrations/memory/service.py`, `context/builder.py` (`1588c04`); sonda INJ-32 del banco a actualizar.
+
+## [2026-11-13] Brechas del red-team conocidas al cierre
+- **Contexto:** tras el cableado de seguridad y los arreglos del cierre, el banco `tests/security/run.py` deja 11 BREACH (cribado de drakter-42 y revisión de drakter-34).
+- **Decisión (drakter-33):**
+  - Falsos positivos: DESK-04 (permiso de micrófono solo de audio, intencionado) y DESK-16 (`target=` es una prop de React).
+  - Resuelto: DESK-20 (`89a87b5`: el renderer ya no puede aprobar propuestas de automejora).
+  - Ya decidido: INJ-24, contradicción del propio banco con CONF-54 (ver «Contradicción INJ-24 / CONF-54 del banco red-team»).
+  - Arreglado en código, falta ajustar la sonda: INJ-32 (`1588c04`).
+  - En curso: INJ-05 (drakter-42).
+  - Quedan con ⚠️ de diseño: CONF-46/INJ-26 (la contaminación de la sesión no persiste al reiniciar), INJ-11/25 (`TurnRequest` sin canal de datos aparte; mitigado porque tainted se propaga y fuerza confirmación, `df258b1`, `1588c04`) y FILE-DB-02 (TOCTOU en `connect`, bajo riesgo).
+- **Alternativas descartadas:** cerrar las de diseño en este cierre (exigen migración nueva, cambiar el contrato `TurnRequest` y el runner: fuera de alcance).
+- **Motivo:** el cierre solo termina lo empezado; lo que queda está mitigado o es de bajo riesgo.
+- **Impacto:** Checklist 16 («Proteger operaciones destructivas», «Revisar datos sensibles»), `RUN_STATE.md`. El recuento final lo da drakter-34 sobre `183cc25`.

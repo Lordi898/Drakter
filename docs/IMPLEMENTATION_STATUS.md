@@ -178,10 +178,8 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 - [x] Mostrar progreso.
 - [x] Crear historial.
 - [x] Crear herramientas Hermes.
-  ⚠️ Las 21 herramientas funcionan, también con el modelo real. El borrado desde el agente queda pendiente del mismo `DefaultToolGate`; `b531106` (fusionado) evita el `conflict` posterior cuando se conecte.
 - [x] Probar operaciones desde GUI.
 - [x] Probar operaciones desde Drakter.
-  ⚠️ Comprobado con Claude Haiku 5.5 real (crear, asociar y completar). El borrado pedido por el agente no llega a pedir confirmación mientras el runtime use `DefaultToolGate` (pendiente de drakter-34).
 
 ## Checklist 8. Hábitos
 
@@ -324,7 +322,7 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
   ⚠️ Arreglado: faltaba `storage.write` y se denegaban 4 herramientas del almacén (ya concedido en `drakter/integracion`). `improvement.read`/`improvement.write` se conceden con las dos escrituras en `RiskClass.CONFIRM` (`5dd55b1`); hoy esas escrituras quedan denegadas porque el runtime usa `DefaultToolGate` (ver «Definir confirmaciones»).
   Nota: con el modelo real (prueba de relaciones de drakter-41), el agente llamó por iniciativa propia a create/list/get_improvement_proposal y record_improvement_feedback sin que se le pidiera. Es seguro (las escrituras exigen confirmación), pero hay que revisar las descripciones de esas herramientas o las instrucciones de cuándo proponer mejoras; se deja para el rediseño de la personalidad y la conversación.
 - [x] Definir confirmaciones.
-  ⚠️ Las herramientas CONFIRM del agente pasan ya por `BackendToolGate` y crean la confirmación pendiente, con auditoría en `audit_events` (`b722aca`, `42a0a17`, drakter-34). El borrado pedido por el agente no se ha recomprobado módulo a módulo; olvidar un recuerdo sigue con `DenyAllGate`.
+  ⚠️ Las herramientas CONFIRM del agente pasan por `BackendToolGate` y crean la confirmación pendiente, con auditoría en `audit_events` (`b722aca`, `42a0a17`); comprobado con el modelo real en tareas (borrar → confirmación → aprobar → borrada). Olvidar un recuerdo sigue con `DenyAllGate`.
 - [x] Definir errores.
   ⚠️ 6 herramientas de lectura no declaran `errors` (`get_memory_status`, `search_relationships`, `list_subjects`, `get_timetable`, `get_agent_status`, `get_system_status`).
 - [x] Probar selección de herramientas.
@@ -388,7 +386,7 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 - [x] Validar rutas.
 - [x] Limitar acceso a archivos.
 - [x] Proteger operaciones destructivas.
-  ⚠️ Brechas abiertas del banco red-team (cribado de drakter-42): INJ-11 e INJ-25, diseño pendiente: los recuerdos viajan dentro del texto del turno; hace falta un campo de contexto aparte en `TurnRequest`; mitigado porque tainted se propaga y fuerza confirmación (`df258b1`, `1588c04`). CONF-46/INJ-26: la contaminación vive solo en memoria y se pierde al reiniciar. INJ-24: una herramienta WRITE sin `summarize` llega a la puerta (se adapta con resumen por defecto). INJ-05: título y URL remotos fuera del sobre en `read_resource`. INJ-14 cerrado (`1588c04`); INJ-32 arreglado en código (`1588c04`), la sonda del banco está desfasada. Recuento final: drakter-34.
+  ⚠️ Brechas de diseño del red-team que siguen abiertas: CONF-46/INJ-26 (la contaminación no persiste al reiniciar), INJ-11/25 (`TurnRequest` sin canal de datos; mitigado por la propagación de tainted, `df258b1`, `1588c04`). Ver `DECISIONS.md` «Brechas del red-team conocidas al cierre».
 - [x] Crear auditoría.
 - [x] Crear copias de seguridad.
 - [x] Probar restauración.
@@ -399,7 +397,7 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 - [x] Probar recuperación de Hermes.
 - [x] Probar errores de memoria.
 - [x] Revisar datos sensibles.
-  ⚠️ Sigue abierta FILE-DB-02 (TOCTOU en `connect`; exige escribir en el directorio de datos 0700, riesgo bajo).
+  ⚠️ Sigue abierta FILE-DB-02 (TOCTOU en `connect`, riesgo bajo). INJ-05 (título y URL remotos fuera del sobre en `read_resource`) en curso (drakter-42).
 
 ## Checklist 17. Optimización y lanzamiento
 
