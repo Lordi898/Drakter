@@ -1,7 +1,7 @@
 # Empaquetado de Drakter Desktop
 
 Configuración de electron-builder 26.18.0 (Electron 45, electron-vite 6). Linux primero; Windows preparado pero sin comprobar.
-Estado: **configuración escrita, no ejecutada**. Nada de lo de abajo se ha probado todavía (ver "Comprobaciones de la pasada integrada").
+Estado: **ejecutada en Linux el 2026-11-13** sobre `drakter/integracion` (ver "Comprobaciones de la pasada integrada"). Genera `.deb` y AppImage; falta instalar el `.deb` (requiere sudo) y abrir la ventana empaquetada. Windows sin probar.
 
 Archivos: `electron-builder.yml` (config), `electron-builder.backend.spec` (PyInstaller), `electron-builder.build-backend.mjs` (lanzador del backend).
 
@@ -21,7 +21,7 @@ npx electron-builder --config electron-builder.yml --linux deb AppImage   # Linu
 npx electron-builder --config electron-builder.yml --win nsis             # Windows (en Windows)
 ```
 
-Hace falta `backend/migrations/*.sql` con al menos una migración: el `.spec` aborta si no hay ninguna (hoy solo existe `.gitkeep`).
+El `.spec` aborta si `backend/migrations/` no tiene ningún `.sql`, o si `collect_submodules("app")` no encuentra `app.api.health`: ese hook corre en un subproceso que no ve `pathex`, y sin `backend/` en `sys.path` devolvía una lista vacía y el backend congelado respondía 404 en todas las rutas (corregido).
 El `.spec` pone las migraciones en `_internal/migrations`: `MIGRATIONS_DIR = Path(__file__).resolve().parents[2] / "migrations"` vale `<_MEIPASS>/migrations` porque `__file__` es `<_MEIPASS>/app/database/migrator.pyc`.
 
 El backend queda en `resources/backend/drakter-backend[.exe]` (+ `_internal/`) dentro de la app instalada.
@@ -60,7 +60,7 @@ Nunca `--no-sandbox` ni quitar `chrome-sandbox`.
 
 ## Backup antes de actualizar
 
-Hoy la actualización es manual. Antes de instalar una versión nueva:
+La actualización es manual. Antes de instalar una versión nueva:
 
 ```bash
 cd backend && python -m app.database.cli backup     # copia verificada en <datos>/backups
@@ -81,18 +81,27 @@ Esos comandos son para una instalación desde el repositorio: el backend congela
 
 ## Fuera de esta carpeta (lo debe añadir quien posea esos archivos)
 
-- `desktop/package.json`: `"electron-builder": "26.18.0"` en devDependencies y scripts, p. ej. `"build:backend": "node electron-builder.build-backend.mjs"`, `"pack:linux": "electron-builder --config electron-builder.yml --linux deb AppImage"`, `"pack:win": "electron-builder --config electron-builder.yml --win nsis"`. `@electron/fuses` lo trae electron-builder, no hace falta añadirlo. Para `npx @electron/fuses read` basta usar `npx`.
-- `electron/main`: cuando `app.isPackaged`, lanzar `path.join(process.resourcesPath, 'backend', 'drakter-backend[.exe]')` con `spawn` sin shell, y pararlo al salir. Hoy no existe ese arranque.
-- Icono: `desktop/build/icon.png` (>= 512x512) y `icon.ico` para Windows; sin icono se usa el de Electron.
-- `.gitignore`: `desktop/release/`, `backend/dist/`, `backend/build/`.
+- `desktop/package.json`: no tiene `electron-builder` ni scripts. Hoy se usa `npx --yes electron-builder@26.18.0 ... -c.npmRebuild=false` (sin `npmRebuild=false` intentaría recompilar `node_modules`). Sin `homepage` en `package.json`, el `.deb` falla: el `.yml` la añade con `extraMetadata`.
+- Hecho: `electron/main/backendProcess.ts` lanza `resources/backend/drakter-backend[.exe]` cuando `app.isPackaged`.
+- Icono: `desktop/build/icon.png` (>= 512x512) y `icon.ico` para Windows; sin icono se usa el de Electron. Tampoco hay `desktopName` (aviso de WM_CLASS).
+- `.gitignore`: `desktop/release/`, `backend/dist/`, `backend/build/` (hoy no están ignorados).
+- Construir con `TMPDIR` en disco si `/tmp` es un tmpfs justo: fpm copia ~330 MB y comprime con xz allí.
 
-## Comprobaciones de la pasada integrada
+## Comprobaciones de la pasada integrada (2026-11-13, Linux, sin sudo)
 
-Nada de esto está ejecutado aún.
+Tiempos y memoria de esta máquina con otras pasadas en paralelo (orientativos):
 
-1. `.deb`: `dpkg-deb -c desktop/release/*.deb | grep -E 'chrome-sandbox|resources/backend|apparmor'` (el backend y el perfil AppArmor deben estar; `.env`, mapas y fuentes no). `dpkg-deb -I` para metadatos.
-2. Tras instalar: `ls -l /opt/Drakter/chrome-sandbox` (esperado `4755 root` sin userns, `0755` con userns + perfil) y `ls /etc/apparmor.d/drakter`.
-3. Fuses: `npx @electron/fuses read --app /opt/Drakter/drakter` (esperado: RunAsNode, NodeOptions, NodeCliInspect, GrantFileProtocolExtraPrivileges `Disabled`; CookieEncryption, OnlyLoadAppFromAsar `Enabled`).
-4. Arranque: `drakter` sin `--no-sandbox`; `ps -ef | grep -E 'drakter-backend|no-sandbox'` debe mostrar el backend y ningún `--no-sandbox`; la ventana debe mostrar la interfaz (no en blanco, ver riesgo de fuses) y `GET /` del backend responder en `127.0.0.1`.
-5. Backend suelto: `/opt/Drakter/resources/backend/drakter-backend` crea `session.json` y aplica migraciones sobre una base temporal (`DRAKTER_DATA_DIR`, `DRAKTER_RUNTIME_DIR`).
-6. `npx electron-builder` con el `.yml` real: valida que `${...}`/filtros de `extraResources` y `electronFuses` se aplican.
+| Paso | Tiempo | RSS máx. |
+|---|---|---|
+| `node electron-builder.build-backend.mjs` (PyInstaller 6.22.3) | 22-70 s | 116 MB |
+| `npm run build` (typecheck + electron-vite) | 5 s | 400 MB |
+| `electron-builder --linux deb AppImage` | 38-155 s | 500 MB |
+
+Resultados: backend onedir 45 MB; AppImage ~150 MB; `.deb` 119 MB (instalado 320 MB).
+
+1. `.deb`: `dpkg-deb -c` contiene `opt/Drakter/chrome-sandbox`, `resources/backend/drakter-backend`, `resources/apparmor-profile` y `app.asar`; 0 archivos `.env`, `.pem`, `.key`, `.map`, `.ts/.tsx`. `dpkg-deb -I`: `drakter-desktop 0.1.0 amd64`, `Homepage` y dependencias GTK/NSS. El `postinst` pone `chrome-sandbox` a 4755 sin userns e instala `/etc/apparmor.d/drakter`. **OK.**
+2. Tras instalar (`ls -l /opt/Drakter/chrome-sandbox`, `/etc/apparmor.d/drakter`): **no comprobado**, requiere sudo.
+3. Fuses (`npx @electron/fuses read --app release/linux-unpacked/drakter`): RunAsNode, NodeOptions, NodeCliInspect y GrantFileProtocolExtraPrivileges `Disabled`; CookieEncryption, OnlyLoadAppFromAsar y EmbeddedAsarIntegrityValidation `Enabled`. **OK.**
+4. Arranque de la ventana empaquetada sin `--no-sandbox`: **no comprobado** (necesita el `.deb` instalado para el perfil AppArmor). Sigue abierto el riesgo de ventana en blanco por `file://`.
+5. Backend suelto (`backend/dist/linux/drakter-backend/drakter-backend` con handshake por stdin y `DRAKTER_DATA_DIR` temporal): anuncia el puerto en 0,7-6 s, `/health` 200, `/api/v1/tasks` 401 sin token y 200 con él, `/api/v1/today` 200, aplica las 11 migraciones, RSS ~105 MB y sale con 0 al cerrar stdin. **OK** tras corregir el `.spec`.
+6. `electron-builder` con el `.yml` real: `extraResources`, filtros y `electronFuses` se aplican. **OK.**

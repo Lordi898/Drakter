@@ -16,11 +16,19 @@ MIGRATIONS = BACKEND / "migrations"
 if not any(MIGRATIONS.glob("*.sql")):
     raise SystemExit(f"no hay migraciones .sql en {MIGRATIONS}: el backend no arrancaria")
 
+# collect_submodules corre en un subproceso aislado que hereda sys.path pero no pathex: sin esto
+# "app" no se encuentra, la lista sale vacia sin error y el backend congelado no monta ningun
+# router (app.main los descubre con pkgutil y los importa por nombre).
+sys.path.insert(0, str(BACKEND))
+app_modules = collect_submodules("app")
+if "app.api.health" not in app_modules:
+    raise SystemExit("collect_submodules('app') no encontro app.api.health: el backend no montaria rutas")
+
 hiddenimports = (
     # ws="websockets-sansio" y los protocolos que uvicorn elige por nombre en tiempo de ejecucion.
     collect_submodules("uvicorn")
     + collect_submodules("websockets")
-    + collect_submodules("app")
+    + app_modules
 )
 
 a = Analysis(
