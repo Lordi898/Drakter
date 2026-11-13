@@ -758,4 +758,5 @@ Decisiones técnicas, cambios de tecnología y motivos.
   - Quedan con ⚠️ de diseño: CONF-46/INJ-26 (la contaminación de la sesión no persiste al reiniciar), INJ-11/25 (`TurnRequest` sin canal de datos aparte; mitigado porque tainted se propaga y fuerza confirmación, `df258b1`, `1588c04`) y FILE-DB-02 (TOCTOU en `connect`, bajo riesgo).
 - **Alternativas descartadas:** cerrar las de diseño en este cierre (exigen migración nueva, cambiar el contrato `TurnRequest` y el runner: fuera de alcance).
 - **Motivo:** el cierre solo termina lo empezado; lo que queda está mitigado o es de bajo riesgo.
-- **Impacto:** Checklist 16 («Proteger operaciones destructivas», «Revisar datos sensibles»), `RUN_STATE.md`. El recuento final lo da drakter-34 sobre `183cc25`.
+- **Recuento final (drakter-34):** 169 BLOCKED / 12 BREACH / 19 N/A / 0 ERROR, con las 12 BREACH clasificadas arriba. Con el modelo real, el recuerdo trampa no se obedece y, con la sesión contaminada, `create_task` queda pendiente de confirmación.
+- **Impacto:** Checklist 16 («Proteger operaciones destructivas», «Revisar datos sensibles»), `RUN_STATE.md`.
