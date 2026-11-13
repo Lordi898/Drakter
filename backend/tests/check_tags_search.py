@@ -5,6 +5,7 @@ Uso (desde backend/): TMPDIR=/var/tmp/drakter-almacen-relaciones venv/bin/python
 """
 from __future__ import annotations
 
+import secrets
 import sqlite3
 import sys
 import tempfile
@@ -20,9 +21,9 @@ storage_tool_stub.install()
 
 from fastapi.testclient import TestClient  # noqa: E402
 
-from app.api import relations_tags as tags_api  # noqa: E402
-from app.api import storage as storage_api  # noqa: E402
+from app.core.bootstrap import Credentials  # noqa: E402
 from app.core.config import Settings  # noqa: E402
+from app.core.security import SessionToken  # noqa: E402
 from app.main import create_app  # noqa: E402
 from app.tools import tags as tag_tools  # noqa: E402
 
@@ -39,13 +40,18 @@ def main() -> int:
     check("tools: extra=forbid", all(t.args_model.model_config.get("extra") == "forbid" for t in tag_tools.TOOLS))
     check("tools: esquemas", all(t.args_model.model_json_schema() and t.result_model.model_json_schema()
                                  for t in tag_tools.TOOLS))
+    from app.tools.registry import ToolRegistry  # noqa: PLC0415
+    registry = ToolRegistry()
+    for spec in tag_tools.TOOLS:
+        registry.register(spec)
+    check("tools: el registro real las acepta", len(registry.catalog()) == len(tag_tools.TOOLS))
     root = Path(tempfile.mkdtemp(prefix="drakter-tags-"))
-    settings = Settings(data_dir=root / "data", runtime_dir=root / "run")
-    app = create_app(settings)
-    app.include_router(storage_api.router)
-    app.include_router(tags_api.router)
-    with TestClient(app, base_url=f"http://127.0.0.1:{settings.port}", client=("127.0.0.1", 50000)) as c:
-        c.headers["Authorization"] = f"Bearer {app.state.token.reveal()}"
+    settings = Settings(data_dir=root / "data", runtime_dir=root / "run", _env_file=None)
+    port, session = 18766, secrets.token_urlsafe(32)
+    credentials = Credentials(ui=SessionToken(session), approver=SessionToken(secrets.token_urlsafe(32)))
+    app = create_app(settings, credentials=credentials, port=port, on_ready=lambda: None)
+    with TestClient(app, base_url=f"http://127.0.0.1:{port}", client=("127.0.0.1", 50000)) as c:
+        c.headers["Authorization"] = f"Bearer {session}"
         r = c.post("/api/v1/resources", json={"title": "Apuntes de redes", "resource_type": "note",
                                                "note_body": "Texto", "tags": ["redes"]})
         nid = r.json()["id"]

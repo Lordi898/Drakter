@@ -24,8 +24,15 @@ export interface RelationshipFilters {
 
 export const listRelationshipTypes = () => apiRequest<RelationshipTypeOut[]>(`${BASE}/relationships/types`)
 
-export const searchRelationships = (filters: RelationshipFilters, cursor: string | null, limit = 50) =>
-  apiRequest<RelationshipPage>(`${BASE}/relationships${query({ ...filters, limit, cursor })}`)
+// El backend recibe el tipo de relación como `type`, no como `relationship_type`.
+export const searchRelationships = (
+  { relationship_type, ...filters }: RelationshipFilters,
+  cursor: string | null,
+  limit = 50
+) =>
+  apiRequest<RelationshipPage>(
+    `${BASE}/relationships${query({ ...filters, type: relationship_type, limit, cursor })}`
+  )
 
 export const getRelated = (entityId: string, direction: Direction = 'both', type?: RelationshipKind) =>
   apiRequest<RelatedItems>(

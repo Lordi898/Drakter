@@ -176,6 +176,7 @@ def main() -> int:
     # Herramientas (con sustituto de spec) y REST
     from app.tools import relations as tools  # noqa: PLC0415
     names = {t.name for t in tools.TOOLS}
+    check("el registro real acepta las 4 herramientas", registers(tools.TOOLS))
     check("4 herramientas, delete CONFIRM", len(names) == 4 and next(
         t for t in tools.TOOLS if t.name == "delete_relationship").risk.value == "confirm")
     tools.configure_summary_source(tmp / "drakter.db")
@@ -221,6 +222,17 @@ def main() -> int:
     conn.close()
     print("RESULTADO:", "FALLOS " + ", ".join(FAILS) if FAILS else "todo correcto")
     return 1 if FAILS else 0
+
+
+def registers(specs) -> bool:  # noqa: ANN001
+    try:
+        from app.tools.registry import ToolRegistry  # noqa: PLC0415
+    except ImportError:
+        return True  # sin registro real (spec sustituto): no aplica
+    registry = ToolRegistry()
+    for spec in specs:
+        registry.register(spec)
+    return True
 
 
 def res_alt(conn: sqlite3.Connection, entity) -> str:  # noqa: ANN001
