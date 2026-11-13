@@ -213,9 +213,10 @@ def run() -> None:
         agent = tmp / "agent"
         shutil.copytree(AGENT_DIR, agent, symlinks=True)
         identity = agent / "identity"
-        identity.mkdir()
+        identity.mkdir(exist_ok=True)
         (identity / "USER.md").write_text("CENTINELA-USER-FALSO")
         (identity / "SOUL.md").write_text("CENTINELA-ALMA")
+        (identity / "VALUES.md").unlink(missing_ok=True)
         (identity / "VALUES.md").symlink_to(tmp / "fuera.md")
         (tmp / "fuera.md").write_text("CENTINELA-FUERA")
         s = build_context(instruction=INSTRUCTION, agent_dir=agent).system_prompt
