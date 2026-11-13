@@ -117,7 +117,9 @@ function ConnectedStorage() {
         </NativeSelect>
       </div>
 
-      <div className="grid items-start gap-6 lg:grid-cols-[16rem_minmax(0,1fr)] xl:grid-cols-[16rem_minmax(0,1fr)_24rem]">
+      {/* Columnas según el ancho real del contenido, no de la ventana: las barras laterales lo estrechan. */}
+      <div className="@container">
+      <div className="grid items-start gap-6 @2xl:grid-cols-[16rem_minmax(0,1fr)] @5xl:grid-cols-[16rem_minmax(0,1fr)_24rem]">
         <aside className="flex flex-col gap-6">
           <FolderTree selectedId={folderId} onSelect={setFolderId} reloadKey={reloadKey} />
           <LocationsPanel
@@ -128,7 +130,7 @@ function ConnectedStorage() {
         <main aria-label="Lista de recursos">
           <ResourceList filters={filters} reloadKey={reloadKey} selectedId={selectedId} onSelect={setSelectedId} />
         </main>
-        <aside aria-label="Detalle del recurso" className="lg:col-span-2 xl:col-span-1">
+        <aside aria-label="Detalle del recurso" className="@2xl:col-span-2 @5xl:col-span-1">
           {selectedId ? (
             <ResourceDetail key={selectedId} id={selectedId} onChanged={reload} onClose={() => setSelectedId(null)} />
           ) : (
@@ -137,6 +139,7 @@ function ConnectedStorage() {
             </p>
           )}
         </aside>
+      </div>
       </div>
 
       <CreateResourceDialog
