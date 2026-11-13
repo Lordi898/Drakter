@@ -22,6 +22,9 @@ const ENV_ALLOWLIST = [
   'XDG_DATA_HOME', 'XDG_CONFIG_HOME', 'XDG_RUNTIME_DIR', 'DRAKTER_DATA_DIR'
 ] as const
 
+/** Solo en desarrollo: elegir el stub sin tocar ~/.config/drakter/.env. El backend rechaza dev_stub en producción. */
+const DEV_ENV_ALLOWLIST = ['DRAKTER_MODEL_PROVIDER', 'DRAKTER_DEV_STUB_URL'] as const
+
 /** Un intento de arranque. Cada manejador compara con `current` para ignorar procesos viejos. */
 interface Attempt {
   readonly child: ChildProcess
@@ -80,6 +83,12 @@ function buildEnv(): NodeJS.ProcessEnv {
   for (const key of ENV_ALLOWLIST) {
     const value = process.env[key]
     if (value !== undefined) env[key] = value
+  }
+  if (!app.isPackaged) {
+    for (const key of DEV_ENV_ALLOWLIST) {
+      const value = process.env[key]
+      if (value !== undefined) env[key] = value
+    }
   }
   env.PYTHONUNBUFFERED = '1'
   return env
