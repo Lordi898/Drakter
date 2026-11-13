@@ -446,6 +446,7 @@ Decisiones técnicas, cambios de tecnología y motivos.
 - **Contexto:** la `ANTHROPIC_API_KEY` de `~/.config/drakter/.env` recibe 401 `invalid x-api-key`, también en una llamada directa a `GET /v1/models`.
 - **Decisión:** la app se deja arrancada con `tools/dev-llm-stub`. Nada de lo marcado demuestra el comportamiento de Claude Haiku 5.5.
 - **Impacto:** Checklist 3 y 13 de `IMPLEMENTATION_STATUS.md`.
+- **Estado (2026-11-13, más tarde):** hay clave válida. La app del usuario se arranca con el modelo real (`scripts/drakter-local.sh start anthropic`) y las casillas ⚠️ «sin clave» se recomprueban con él; el stub queda para pruebas sin coste.
 
 ## [2026-11-13] Cierre de backend base: seguridad sin cablear en el arranque
 - **Contexto:** al cerrar las Checklists 0/2/6, `app/permissions/setup.py` (confirmaciones y permisos del agente) no se invoca desde `app/main.py`. Cablearlo tal y como indica `permissions/README.md` rompe el arranque porque `load_confirmed_executors` espera `habits_calendar_support.CONFIRMED_ACTIONS`, que no existe.

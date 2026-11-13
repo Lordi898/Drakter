@@ -8,7 +8,7 @@ Foto operativa del cierre. El detalle por casilla está en `IMPLEMENTATION_STATU
 - **Coordinación:** `drakter-33` coordina, `drakter-32` integra y es el único que commitea en `drakter/integracion`. Un finalizador por módulo verifica y deja su informe; el encargado de docs marca casillas a partir de esos informes y de la pasada integrada.
 - **Criterio de casilla:** se marca `[x]` solo lo comprobado y funcionando (`CLAUDE.md` §4). Lo parcial o bloqueado queda `[ ]` con ⚠️ y el motivo.
 - **La app arranca** en el escritorio (Electron + backend + Hermes). Las pantallas Hoy, Drakter (chat), Hábitos, Tareas, Proyectos, Almacén, Calendario, Asignaturas, Relaciones y Configuración cargan sin errores de consola.
-- **Modelo:** el chat funciona de extremo a extremo con `tools/dev-llm-stub` (respuestas `[DEV-STUB]`, unos 2 s). La `ANTHROPIC_API_KEY` de `~/.config/drakter/.env` es rechazada por Anthropic (401 `invalid x-api-key`), así que **no hay prueba con Claude Haiku 5.5 real**.
+- **Modelo:** hay clave de Anthropic válida (`claude-haiku-5-5`). La app del usuario se arranca con el modelo real: `scripts/drakter-local.sh start anthropic`. Los finalizadores están recomprobando con el modelo real las casillas que quedaron ⚠️ «sin clave»; solo se marcan las que confirmen. El stub (`tools/dev-llm-stub`) sigue disponible para pruebas sin coste.
 - **Todo es local:** sin `git push`, sin PR y sin tocar `origin`.
 
 ## Ramas
@@ -26,8 +26,8 @@ Las ramas `ao/<sesión>/root` de los finalizadores son de trabajo; sus commits e
 ## Cómo arrancar y parar
 
 ```sh
-scripts/drakter-local.sh start            # stub de LLM + app, desacoplados de la terminal
-scripts/drakter-local.sh start anthropic  # con Haiku real (necesita clave válida)
+scripts/drakter-local.sh start anthropic  # app con Claude Haiku 5.5 real (arranque normal)
+scripts/drakter-local.sh start            # stub de LLM + app, para pruebas sin modelo
 scripts/drakter-local.sh status
 scripts/drakter-local.sh stop
 ```
@@ -50,7 +50,7 @@ scripts/drakter-local.sh stop
 
 ### Siguen abiertos
 
-- **Clave de Anthropic inválida:** sustituirla en `~/.config/drakter/.env` y arrancar con `start anthropic`. Hasta entonces, todo lo que depende del modelo queda ⚠️ «sin clave».
+- **Pruebas con el modelo real:** las casillas ⚠️ «sin clave» están en recomprobación con la clave válida; hasta que cada finalizador lo confirme siguen sin marcar.
 - **OpenViking (U-1):** desactivado en v1 con memoria SQLite + FTS5. Es una desviación de una decisión del usuario y falta que la confirme.
 - **Personaje Rive:** el `.riv` se diseña a mano y no se ha entregado; tampoco está el runtime de Rive en `package.json`. La Checklist 5 está cerrada sobre el personaje provisional SVG.
 - **Voz:** en v1 solo se estabiliza y documenta; la capa de voz y conversación se rediseñará sobre Pipecat (STT Whisper, TTS Fish Audio). Ver `DECISIONS.md`, 2026-11-13.
@@ -70,6 +70,7 @@ scripts/drakter-local.sh stop
 
 ### Cerrados en el cierre
 
+- **Clave de Anthropic:** sustituida por una válida (`claude-haiku-5-5`); la app arranca con el modelo real.
 - **Almacén (CL10):** catálogo, índice FTS5, lectores (texto, PDF, imágenes, enlaces con bloqueo SSRF), límites de comprimidos y permisos de rutas comprobados (`check_storage_paths.py` 127/127, `check_storage_archives.py` 35/35).
 - **Seguridad cableada en el arranque (`4d2bcd1`):** `main.py` llama a `wire_security`/`start_security`; `check_security.py` 145/145, `check_confirmations.py` 0 fallos y borrado de tareas y proyectos 409 → aprobar → 404. Un único camino de confirmación (`ActionService`, 300 s).
 - **Hermes (CL3):** runner propio sobre Hermes v0.22.7 (`b200f5bc`), sin gateway, herramientas por MCP de loopback; sesiones, mensajes, eventos y recuperación tras SIGKILL del runner (vuelve a `ready` en unos 6 s) comprobados con el stub.
@@ -97,6 +98,6 @@ Historial Git de los repos que estaban anidados en el checkout del usuario:
 
 ## Siguiente paso
 
-1. Clave de Anthropic válida y prueba de conversación, personalidad y herramientas con Haiku real (evals).
+1. Terminar la recomprobación con Haiku real: conversación, personalidad, selección y encadenado de herramientas (evals) y memoria.
 2. Montar `SearchPalette`.
 3. Cablear `BackendToolGate` en el runtime del agente (`drakter-34`).

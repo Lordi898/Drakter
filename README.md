@@ -4,13 +4,13 @@ Agente personal de IA con aplicación de escritorio propia. Local-first, para un
 
 El diseño completo son tres sistemas conectados por APIs internas: Core (agente, personalidad, memoria, herramientas), Desktop (Electron + React) y Workspace (datos en SQLite), con un backend FastAPI en medio.
 
-**Estado (2026-11-13): cierre en curso.** El código de todos los módulos está integrado en `drakter/integracion`; cada módulo se está verificando y en `docs/IMPLEMENTATION_STATUS.md` se marca solo lo comprobado. La app arranca (Electron + backend + Hermes) y el chat responde con el stub de desarrollo; la clave de Anthropic configurada da 401, así que nada se ha probado con el modelo real.
+**Estado (2026-11-13): cierre en curso.** El código de todos los módulos está integrado en `drakter/integracion`; cada módulo se está verificando y en `docs/IMPLEMENTATION_STATUS.md` se marca solo lo comprobado. La app arranca (Electron + backend + Hermes) con Claude Haiku 5.5 real; lo que dependía del modelo se está recomprobando con él.
 
 ## Estado real
 
 Foto del 2026-11-13. Cadena de ramas: `drakter/integracion` → `drakter/build` → `main` (local). Todas las ramas `drakter/*` están ya en `drakter/integracion`. El detalle operativo está en [`docs/RUN_STATE.md`](docs/RUN_STATE.md).
 
-Arranque rápido: `scripts/drakter-local.sh start` (con el stub) o `start anthropic` (con clave válida); parar con `scripts/drakter-local.sh stop`.
+Arranque: `scripts/drakter-local.sh start anthropic` (con el modelo real) o `start` (con el stub); parar con `scripts/drakter-local.sh stop`.
 
 | Bloque | Dónde | Estado verificado |
 |---|---|---|
@@ -18,7 +18,7 @@ Arranque rápido: `scripts/drakter-local.sh start` (con el stub) o `start anthro
 | Backend FastAPI + SQLite (CL2) | `backend/app/` | Verificado, incluido el sistema de permisos: guardia de red y roles, y confirmaciones cableadas en el arranque con un único camino (`ActionService`, 300 s) |
 | Base de datos y migraciones (CL6) | `backend/migrations/` (0001–0011) | Verificado: 36 tablas, integridad referencial, copia y restauración |
 | Escritorio (CL1) | `desktop/` | Visto en la app: ventana, navegación, área central, panel contextual, configuración y gestión de errores; las 10 pantallas cargan contra el backend. ⚠️ Notificaciones y empaquetado en verificación; búsqueda global (Ctrl+K) sin montar |
-| Hermes y chat (CL3) | `backend/app/integrations/`, `agent/` | GUI → backend → Hermes v0.22.7 → respuesta en el chat, **solo con el stub** `tools/dev-llm-stub/`; ⚠️ la clave configurada da 401. Verificados sesiones, envío, recepción, eventos y recuperación tras caída del runner. Las suites de evals (`agent/evals/`, 46 casos) están listas para correr con clave |
+| Hermes y chat (CL3) | `backend/app/integrations/`, `agent/` | GUI → backend → Hermes v0.22.7 → respuesta en el chat, **solo con el stub** `tools/dev-llm-stub/` (recomprobación con Haiku real en curso). Verificados sesiones, envío, recepción, eventos y recuperación tras caída del runner. Las suites de evals (`agent/evals/`, 46 casos) están listas para correr con clave |
 | Skills y herramientas (CL13) | `agent/skills/`, `backend/app/tools/` | 78 herramientas por MCP con parámetros, permisos y errores verificados. ⚠️ Las Skills están inertes en Hermes (se desactiva `skill_manage`); las confirmaciones del agente fallan cerradas sin crear la pendiente; selección sin probar con modelo |
 | Personalidad y contexto (CL4) | `agent/identity/`, `agent/context/`, `agent/knowledge/` | Verificado: 14 archivos compuestos en el `SOUL.md` de Hermes, con la seguridad primero. ⚠️ La consistencia de personalidad está sin probar con modelo (sin clave) |
 | Personaje (CL5) | `desktop/src/character/` | Verificado en el personaje provisional SVG: diseño, 9 estados, transiciones y eventos visuales. ⚠️ Faltan el `.riv`, el runtime de Rive y la sincronización labial con audio |
