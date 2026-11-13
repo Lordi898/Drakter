@@ -411,3 +411,38 @@ Decisiones técnicas, cambios de tecnología y motivos.
 - **Motivo:** prioridad del usuario de uso diario.
 - **⚠️ Estado en código:** a fecha de `815976f`, `desktop/src/navigation/sections.ts` en `drakter/build` tiene 9 secciones con `home` primero, sin Hoy, y `useAppShortcuts.ts` documenta Ctrl+1 a Ctrl+9. En `drakter/desktop-shell` sí consta. Ctrl+K sí está en `SearchPalette.tsx`.
 - **Impacto:** `MASTER_PLAN` §5.3, `PLAN_DISEÑO` §3.2 y §3.3, `desktop/src/navigation/`, `desktop/src/app/useAppShortcuts.ts`.
+
+## [2026-11-13] Integración de las 22 ramas en drakter/integracion
+- **Contexto:** `drakter/build` no tenía unos 140 commits de 21 ramas, y varios worktrees tenían cambios sin commit tras el reinicio de AO.
+- **Decisión:** rama `drakter/integracion` desde `drakter/build` (`815976f`), fusiones `--no-ff` en el orden contratos → backend-base → seguridad → tareas-proyectos → hábitos-calendario → almacén-relaciones → memoria-contexto → agente-hermes → identidad-personaje → voz → automejora → desktop-shell → búsqueda → hoy-ajustes → docs → guías → resto. Sin conflictos textuales. Antes, los cambios pendientes de drakter-12, 16, 20, 22, 24, 30 y 31 se revisaron y se commitearon en su propia rama (el de seguridad, tras pasar `check_confirmations.py` con 0 fallos).
+- **Conflictos semánticos resueltos:** (1) `app/tools/memory|search|storage.py` importaban `untrusted_envelope` de `app.tools.spec`; vive en `app.tools.envelope`. (2) La regla del registro "audit names an unknown argument" (de seguridad/agente) rechazaba los mapas de auditoría compartidos de relaciones, etiquetas, asignaturas, almacén y `get_task`: cada herramienta recibe ahora el mapa del módulo restringido a sus argumentos. (3) El runtime de Hermes creaba `SessionToken()` sin valor (API de agente-hermes) y el núcleo D-14 exige valor: se genera con `secrets.token_urlsafe(32)` y `SessionToken.reveal()` se añade para pasarlo al hijo; sin él, el supervisor habría pasado el texto redactado como token MCP.
+- **Alternativas descartadas:** filtrar los mapas de auditoría en el registro (ocultaría erratas en módulos nuevos).
+- **Motivo:** mínima corrección que respeta los contratos y la regla estricta del registro.
+- **Impacto:** `backend/app/tools/`, `backend/app/core/security.py`, `backend/app/integrations/hermes/runtime.py`.
+
+## [2026-11-13] Conexiones SQLite por petición sin check_same_thread
+- **Contexto:** las dependencias síncronas con `yield` de almacén y de hábitos/calendario/asignaturas abrían la conexión en un hilo del threadpool y FastAPI la usaba o cerraba en otro. Con las peticiones paralelas de la GUI, casi todas daban 500 (`ProgrammingError`).
+- **Decisión:** `connect(..., check_same_thread=False)` solo en esas dependencias de una petición. La conexión no se comparte: dependencia, endpoint y cierre van en secuencia, solo cambian de hilo.
+- **Alternativas descartadas:** pasar los endpoints a `async` o usar el `contextmanager` de tareas (más cambios en módulos ajenos).
+- **Impacto:** `backend/app/database/connection.py`, `backend/app/api/storage.py`, `backend/app/services/habits_calendar_support.py`.
+
+## [2026-11-13] Runner de Hermes con -B
+- **Contexto:** el supervisor lanza el runner con `python -I`, que ignora `PYTHONDONTWRITEBYTECODE`. El primer arranque dejó `__pycache__` en `plugins/drakter_guard/` y `verify_home` rechazó todos los siguientes ("unexpected content").
+- **Decisión:** añadir `-B` a la orden del runner.
+- **Impacto:** `backend/app/integrations/hermes/supervisor.py`.
+
+## [2026-11-13] Arranque local: Electron es dueño del backend; stub elegible en desarrollo
+- **Contexto:** `scripts/dev.sh all` arrancaba un backend propio y leía `Settings.port`, que ya no existe tras D-14 (puerto efímero y credenciales por stdin). Además Electron solo pasa al backend una lista blanca de variables.
+- **Decisión:** `dev.sh all` valida ambos lados y lanza solo Electron; comprueba también el binario de Electron (npm 12 no ejecuta su `install.js`). En desarrollo (app no empaquetada), Electron pasa también `DRAKTER_MODEL_PROVIDER` y `DRAKTER_DEV_STUB_URL`; el backend sigue rechazando `dev_stub` en producción. Nuevo `scripts/drakter-local.sh start|stop|status` que deja stub y app desacoplados de la terminal. Hermes se expone como `~/.local/bin/hermes-python` (envoltorio al venv de `/var/tmp/drakter-agente-hermes/hv/venv`, fuera del repo).
+- **Alternativas descartadas:** escribir `DRAKTER_MODEL_PROVIDER` en `~/.config/drakter/.env` (es del usuario y guarda secretos).
+- **Impacto:** `scripts/dev.sh`, `scripts/drakter-local.sh`, `desktop/electron/main/backendProcess.ts`.
+
+## [2026-11-13] Rutas permitidas de Electron regeneradas desde el contrato
+- **Contexto:** `routes.generated.ts` no tenía `GET /api/v1/today` (Hoy mostraba "no conectado") y aún listaba `/api/v1/system/backups`.
+- **Decisión:** regenerarlo con `electron/scripts/generate-routes.mjs` desde `contracts/api/routes.md`, sin editarlo a mano.
+- **Impacto:** `desktop/electron/shared/routes.generated.ts`.
+
+## [2026-11-13] Clave de Anthropic inválida: pruebas con el stub
+- **Contexto:** la `ANTHROPIC_API_KEY` de `~/.config/drakter/.env` recibe 401 `invalid x-api-key`, también en una llamada directa a `GET /v1/models`.
+- **Decisión:** la app se deja arrancada con `tools/dev-llm-stub`. Nada de lo marcado demuestra el comportamiento de Claude Haiku 5.5.
+- **Impacto:** Checklist 3 y 13 de `IMPLEMENTATION_STATUS.md`.

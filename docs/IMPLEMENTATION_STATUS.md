@@ -2,78 +2,84 @@
 
 Las siguientes listas son el control de trabajo del proyecto y la única lista viva de casillas. Se marcarán cuando la tarea esté implementada y funcione como se espera (`CLAUDE.md` §4). Lo bloqueado se anota con ⚠️. La equivalencia entre checklists, pasos del orden real y fases de cada plan está en `DECISIONS.md`.
 
+> **Pasada integrada 2026-11-13** (`drakter/integracion`): solo se marca lo visto funcionar en la app arrancada (Electron + backend + Hermes con el stub). Detalle en `RUN_STATE.md`.
+
 ## Checklist 0. Arquitectura y preparación
 
-- [ ] Crear repositorio Drakter.
-- [ ] Configurar Git.
-- [ ] Crear estructura de carpetas (cada carpeta se crea cuando entra código).
-- [ ] Crear README.
-- [ ] Crear CHANGELOG.
+- [x] Crear repositorio Drakter.
+- [x] Configurar Git.
+- [x] Crear estructura de carpetas (cada carpeta se crea cuando entra código).
+- [x] Crear README.
+- [x] Crear CHANGELOG.
 - [ ] Documentar arquitectura.
-- [ ] Documentar decisiones técnicas.
+- [x] Documentar decisiones técnicas.
 - [ ] Definir convenciones.
 - [ ] Definir modelos de datos.
-- [ ] Definir API.
+- [x] Definir API.
 - [ ] Definir eventos.
 - [ ] Definir permisos.
 - [ ] Definir configuración.
-- [ ] Preparar entorno de desarrollo.
+- [x] Preparar entorno de desarrollo.
 
 ## Checklist 1. Aplicación de escritorio
 
-- [ ] Configurar Electron.
-- [ ] Configurar React.
-- [ ] Configurar TypeScript.
-- [ ] Configurar Tailwind.
-- [ ] Configurar shadcn/ui.
-- [ ] Crear ventana principal.
-- [ ] Crear navegación lateral.
-- [ ] Crear área central.
-- [ ] Crear panel contextual.
+- [x] Configurar Electron.
+- [x] Configurar React.
+- [x] Configurar TypeScript.
+- [x] Configurar Tailwind.
+- [x] Configurar shadcn/ui.
+- [x] Crear ventana principal.
+- [x] Crear navegación lateral.
+- [x] Crear área central.
+- [x] Crear panel contextual.
 - [ ] Crear notificaciones.
-- [ ] Crear configuración.
-- [ ] Crear gestión de errores.
+- [x] Crear configuración.
+- [x] Crear gestión de errores.
 - [ ] Configurar empaquetado.
 
 ## Checklist 2. Backend
 
-- [ ] Crear FastAPI.
-- [ ] Configurar SQLite.
-- [ ] Configurar migraciones.
-- [ ] Crear API REST.
-- [ ] Crear WebSocket.
-- [ ] Crear servicios.
-- [ ] Crear repositorios.
-- [ ] Crear esquemas.
-- [ ] Crear validaciones.
-- [ ] Crear logs.
-- [ ] Crear gestión de errores.
+- [x] Crear FastAPI.
+- [x] Configurar SQLite.
+- [x] Configurar migraciones.
+- [x] Crear API REST.
+- [x] Crear WebSocket.
+- [x] Crear servicios.
+- [x] Crear repositorios.
+- [x] Crear esquemas.
+- [x] Crear validaciones.
+- [x] Crear logs.
+- [x] Crear gestión de errores.
 - [ ] Crear sistema de permisos.
+  ⚠️ Matriz de roles y confirmaciones comprobadas (`check_confirmations.py`: 0 fallos), pero tareas y proyectos no están cableados a `ActionService`: borrar desde la GUI da 503 `confirmation_unavailable` (falla cerrado).
 
 ## Checklist 3. Hermes
 
-- [ ] Instalar Hermes.
+- [x] Instalar Hermes.
 - [ ] Configurar Claude Haiku 5.5.
+  ⚠️ 2026-11-13: la `ANTHROPIC_API_KEY` de `~/.config/drakter/.env` da 401 `invalid x-api-key` (también en llamada directa a la API). Sin clave válida no hay prueba con el modelo real.
 - [ ] Configurar credenciales.
-- [ ] Conectar Hermes con backend.
-- [ ] Crear adaptador.
-- [ ] Crear sesiones.
-- [ ] Crear envío de mensajes.
-- [ ] Crear recepción de respuestas.
-- [ ] Crear eventos de agente.
+  ⚠️ El backend lee la clave y Hermes la recibe redactada en logs; falta una clave válida (ver arriba).
+- [x] Conectar Hermes con backend.
+- [x] Crear adaptador.
+- [x] Crear sesiones.
+- [x] Crear envío de mensajes.
+- [x] Crear recepción de respuestas.
+- [x] Crear eventos de agente.
 - [ ] Crear gestión de desconexiones.
 - [ ] Crear primera Skill.
 - [ ] Probar conversación completa.
+  ⚠️ Conversación completa GUI → backend → Hermes (b200f5b) → respuesta en el chat comprobada SOLO con `tools/dev-llm-stub` (2 s). Falta con Haiku real.
   ⚠️ Sin clave de API no se cierra: el adaptador usa un doble identificado como mock, y ninguna casilla de conversación, personalidad, selección de herramientas o memoria se marca hasta probarla con clave.
 
 ## Checklist 4. Personalidad y contexto
 
-- [ ] Crear SOUL.md.
-- [ ] Crear PERSONALITY.md.
-- [ ] Crear BEHAVIOR.md.
-- [ ] Crear COMMUNICATION.md.
-- [ ] Crear EMOTIONAL_STYLE.md.
-- [ ] Crear VALUES.md.
+- [x] Crear SOUL.md.
+- [x] Crear PERSONALITY.md.
+- [x] Crear BEHAVIOR.md.
+- [x] Crear COMMUNICATION.md.
+- [x] Crear EMOTIONAL_STYLE.md.
+- [x] Crear VALUES.md.
 - [ ] Crear USER.md.
 - [ ] Crear ENVIRONMENT.md.
 - [ ] Crear PREFERENCES.md.
@@ -93,6 +99,7 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 - [ ] Diseñar boca.
 - [ ] Diseñar expresiones.
 - [ ] Crear proyecto Rive.
+  ⚠️ Se ve el personaje sustituto (SVG) en la pantalla Drakter; el `.riv` real sigue pendiente.
   ⚠️ El `.riv` se diseña a mano en el editor de Rive. Por código solo se cubre el personaje provisional; las casillas de estados, transiciones e integración dependen de ese archivo hasta que el usuario lo entregue.
 - [ ] Crear estado idle.
 - [ ] Crear estado listening.
@@ -111,31 +118,32 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 
 ## Checklist 6. Base de datos y relaciones
 
-- [ ] Crear esquema SQLite.
-- [ ] Crear tabla de tareas.
-- [ ] Crear tabla de proyectos.
-- [ ] Crear tabla de hábitos.
-- [ ] Crear tabla de registros de hábitos.
-- [ ] Crear tabla de eventos.
-- [ ] Crear tabla de bloques de tiempo.
-- [ ] Crear tabla de asignaturas.
-- [ ] Crear tabla de sesiones de clase.
-- [ ] Crear tabla de recursos.
-- [ ] Crear tabla de carpetas.
-- [ ] Crear tabla de etiquetas.
-- [ ] Crear tabla de relaciones.
-- [ ] Crear tabla de auditoría.
-- [ ] Crear identificadores UUID.
+- [x] Crear esquema SQLite.
+- [x] Crear tabla de tareas.
+- [x] Crear tabla de proyectos.
+- [x] Crear tabla de hábitos.
+- [x] Crear tabla de registros de hábitos.
+- [x] Crear tabla de eventos.
+- [x] Crear tabla de bloques de tiempo.
+- [x] Crear tabla de asignaturas.
+- [x] Crear tabla de sesiones de clase.
+- [x] Crear tabla de recursos.
+- [x] Crear tabla de carpetas.
+- [x] Crear tabla de etiquetas.
+- [x] Crear tabla de relaciones.
+- [x] Crear tabla de auditoría.
+- [x] Crear identificadores UUID.
 - [ ] Crear integridad referencial.
-- [ ] Crear migraciones.
+- [x] Crear migraciones.
 - [ ] Probar persistencia.
 
 ## Checklist 7. Tareas y proyectos
 
-- [ ] Crear interfaz de tareas.
-- [ ] Crear tareas.
+- [x] Crear interfaz de tareas.
+- [x] Crear tareas.
 - [ ] Editar tareas.
 - [ ] Eliminar tareas.
+  ⚠️ 503 `confirmation_unavailable`: `tasks_ports.Ports` usa `FailClosedGate` porque nadie fija `app.state.workspace_ports` ni hay ejecutores de tareas/proyectos en `load_confirmed_executors`.
 - [ ] Completar tareas.
 - [ ] Reabrir tareas.
 - [ ] Crear subtareas.
@@ -145,7 +153,7 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 - [ ] Crear fechas límite.
 - [ ] Crear etiquetas.
 - [ ] Crear dependencias.
-- [ ] Crear interfaz de proyectos.
+- [x] Crear interfaz de proyectos.
 - [ ] Crear proyectos.
 - [ ] Editar proyectos.
 - [ ] Archivar proyectos.
@@ -158,7 +166,7 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 
 ## Checklist 8. Hábitos
 
-- [ ] Crear interfaz.
+- [x] Crear interfaz.
 - [ ] Crear hábitos.
 - [ ] Editar hábitos.
 - [ ] Definir frecuencia.
@@ -173,7 +181,7 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 
 ## Checklist 9. Calendario y asignaturas
 
-- [ ] Crear interfaz de calendario.
+- [x] Crear interfaz de calendario.
 - [ ] Crear vista diaria.
 - [ ] Crear vista semanal.
 - [ ] Crear vista mensual.
@@ -194,14 +202,14 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 
 ## Checklist 10. Almacén e indexación
 
-- [ ] Crear interfaz del almacén.
+- [x] Crear interfaz del almacén.
 - [ ] Crear catálogo de recursos.
 - [ ] Crear carpetas.
 - [ ] Crear metadatos.
 - [ ] Crear descripciones opcionales.
 - [ ] Crear etiquetas.
 - [ ] Crear registro de rutas.
-- [ ] Crear índice FTS5.
+- [x] Crear índice FTS5.
 - [ ] Indexar nombres.
 - [ ] Indexar tipos.
 - [ ] Indexar descripciones.
@@ -222,8 +230,8 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 
 ## Checklist 11. Relaciones avanzadas
 
-- [ ] Crear servicio de relaciones.
-- [ ] Crear tipos de relación.
+- [x] Crear servicio de relaciones.
+- [x] Crear tipos de relación.
 - [ ] Crear validaciones.
 - [ ] Crear relaciones entre tareas y proyectos.
 - [ ] Crear relaciones entre tareas y asignaturas.
@@ -266,6 +274,7 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 ## Checklist 13. Skills y herramientas
 
 - [ ] Crear estructura de Skills.
+  ⚠️ Las 78 herramientas cargan en el registro y Hermes arranca con ellas (tras arreglar imports y auditorías en la integración), pero el stub no las usa: selección y encadenado sin probar con modelo real.
 - [ ] Crear Skill de tareas.
 - [ ] Crear Skill de proyectos.
 - [ ] Crear Skill de hábitos.
@@ -320,13 +329,13 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 
 - [ ] Crear permisos por módulo.
 - [ ] Crear permisos por operación.
-- [ ] Crear confirmaciones.
+- [x] Crear confirmaciones.
   ⚠️ Permisos, confirmación pendiente y auditoría se construyen antes de la primera herramienta. Las casillas de esta checklist son revisión y endurecimiento finales.
-- [ ] Proteger credenciales.
+- [x] Proteger credenciales.
 - [ ] Validar rutas.
 - [ ] Limitar acceso a archivos.
 - [ ] Proteger operaciones destructivas.
-- [ ] Crear auditoría.
+- [x] Crear auditoría.
 - [ ] Crear copias de seguridad.
 - [ ] Probar restauración.
 - [ ] Probar desconexiones.

@@ -8,26 +8,26 @@ El diseño completo son tres sistemas conectados por APIs internas: Core (agente
 
 ## Estado real
 
-Foto del 2026-11-04. `drakter/build` es la rama de integración y `main` no se ha tocado.
+Foto del 2026-11-13. `drakter/integracion` reúne `drakter/build` y las 22 ramas de frente; `main` no se ha tocado. Detalle en `docs/RUN_STATE.md`.
 
-| Existe | Dónde | Qué hace |
-|---|---|---|
-| Planificación y control | `docs/` | Plan, hoja de ruta, estado y decisiones |
-| Scripts de desarrollo | `scripts/` | Comprobar el entorno y arrancar |
-| Carcasa de escritorio | `desktop/`, en `drakter/build` | Electron, navegación y páginas de módulos sin datos. Sin conexión al backend: `useDrakterState()` devuelve siempre `offline`, el envío de mensajes está deshabilitado y el personaje es un marco vacío |
-| Identidad | `agent/identity/`, en `drakter/build` | 14 archivos Markdown que aún no carga nada |
-| Boceto del personaje | `desktop/design/character/`, en `drakter/build` | SVG sustituto que la aplicación no carga: `characterRenderer` sigue en `null` |
-| Backend base | Rama `drakter/backend-base`, sin fusionar | FastAPI en `127.0.0.1:8765` con `GET /health`, `GET /api/v1/auth/check` y `WS /ws`. El sistema de migraciones existe, pero no hay ninguna migración ni tablas de dominio. Contrato en `backend/CONTRACT.md` |
-| Stub de LLM para desarrollo | Rama `drakter/dev-stub`, sin fusionar | `tools/dev-llm-stub/`: respuestas guionizadas para probar el cableado de Hermes. No es un modelo |
-
-| No existe | Nota |
+| Funciona (visto en la app) | Nota |
 |---|---|
-| Hermes integrado y Claude Haiku conectado | Ningún código de la aplicación llama a un modelo |
-| Chat con el agente | Solo el campo de texto deshabilitado |
-| Memoria y OpenViking | |
-| Voz | |
-| Tareas, proyectos, hábitos, calendario, asignaturas, almacén, relaciones | Solo páginas vacías en la carcasa |
-| Personaje Rive real | |
+| Escritorio | Electron lanza el backend (handshake por stdin, D-14), navegación lateral, panel contextual, tema y Configuración |
+| Pantallas | Hoy, Drakter, Hábitos, Tareas, Proyectos, Almacén, Calendario, Asignaturas y Relaciones cargan contra el backend sin errores |
+| Backend | FastAPI con migraciones 0001–0011 en SQLite, REST y eventos por WebSocket |
+| Chat | GUI → backend → Hermes v0.22.7 → respuesta en el chat, **solo con `tools/dev-llm-stub`** |
+| Tareas | Crear y archivar desde la GUI |
+| Confirmaciones | Pipeline de seguridad comprobado (`check_confirmations.py`: 0 fallos) |
+
+| Falta o falla | Nota |
+|---|---|
+| Claude Haiku real | La clave de `~/.config/drakter/.env` da 401; sin prueba con el modelo |
+| Borrar tareas y proyectos | 503 `confirmation_unavailable`: su puerta de confirmación no está cableada a `ActionService` |
+| Búsqueda global (Ctrl+K) | `SearchPalette` sin montar |
+| Personaje Rive | Solo el SVG sustituto |
+| Voz, memoria con modelo, automejora | Código integrado, sin probar en la app |
+
+Arranque: `scripts/drakter-local.sh start` (stub) o `start anthropic`; parar con `scripts/drakter-local.sh stop`.
 
 ## Estructura de carpetas
 
@@ -106,17 +106,18 @@ cp -n .env.example ~/.config/drakter/.env
 chmod 600 ~/.config/drakter/.env
 ```
 
-**Después de copiar, borra toda línea que dejes sin valor.** Para el backend `NOMBRE=` es un valor vacío, no una variable ausente: con `DRAKTER_PORT`, `DRAKTER_DATA_DIR`, `DRAKTER_RUNTIME_DIR` o `DRAKTER_LOG_LEVEL` vacías no arranca, y con `DRAKTER_ALLOWED_ORIGINS` vacía no admite ningún origen.
+Las líneas vacías (`NOMBRE=`) se ignoran. El backend ya no tiene puerto fijo: Electron lo lanza y el backend elige un puerto efímero en `127.0.0.1` (D-14).
 
 | Variable | Por defecto | Formato |
 |---|---|---|
-| `DRAKTER_PORT` | `8765` | Entero entre 1024 y 65535 |
 | `DRAKTER_DATA_DIR` | Directorio de datos del usuario | Ruta absoluta |
-| `DRAKTER_RUNTIME_DIR` | Directorio de ejecución del usuario | Ruta absoluta |
 | `DRAKTER_LOG_LEVEL` | `INFO` | `DEBUG`, `INFO`, `WARNING` o `ERROR` |
-| `DRAKTER_ALLOWED_ORIGINS` | `app://drakter` | `scheme://host[:port]` separados por comas |
+| `ANTHROPIC_API_KEY` | — | Clave de Anthropic para Hermes |
+| `DRAKTER_MODEL_PROVIDER` | `anthropic` | `anthropic` o `dev_stub` (no admitido con `DRAKTER_ENV=production`) |
+| `DRAKTER_MODEL_NAME` | `claude-haiku-5-5` | Identificador del modelo |
+| `DRAKTER_HERMES_PYTHON` | `hermes-python` (por `PATH`) | Python del venv de Hermes |
 
-La dirección de escucha es fija, `127.0.0.1`, y no se configura. El resto de variables de `.env.example` están reservadas: nada las lee aún de ese archivo.
+El resto de ajustes del agente están en `backend/app/integrations/hermes/settings.py`.
 
 ## Documentación
 
