@@ -24,7 +24,7 @@ EVALS_DIR = Path(__file__).resolve().parent
 REPO_ROOT = EVALS_DIR.parents[1]
 SCENARIOS_DIR = EVALS_DIR / "scenarios"
 SCHEMAS_PATH = EVALS_DIR / "schemas" / "tool_inputs.json"
-IDENTITY_DIR = REPO_ROOT / "agent" / "identity"
+AGENT_DIR = REPO_ROOT / "agent"
 
 CONTRACTS_REF = "drakter/contratos"
 STUB_REF = "drakter/dev-stub"
@@ -35,9 +35,10 @@ STUB_PATH = "tools/dev-llm-stub"
 
 # Same order as backend/app/integrations/hermes/home.py (_IDENTITY_ORDER).
 IDENTITY_ORDER = (
-    "SOUL.md", "VALUES.md", "PERSONALITY.md", "COMMUNICATION.md", "EMOTIONAL_STYLE.md",
-    "BEHAVIOR.md", "CAPABILITIES.md", "TOOL_GUIDE.md", "WORKSPACE_GUIDE.md", "SYSTEM_GUIDE.md",
-    "ENVIRONMENT.md", "PREFERENCES.md", "USER.md", "CURRENT_CONTEXT.md",
+    "identity/SOUL.md", "identity/VALUES.md", "identity/PERSONALITY.md", "identity/COMMUNICATION.md",
+    "identity/EMOTIONAL_STYLE.md", "identity/BEHAVIOR.md", "knowledge/CAPABILITIES.md",
+    "knowledge/TOOL_GUIDE.md", "knowledge/WORKSPACE_GUIDE.md", "knowledge/SYSTEM_GUIDE.md",
+    "context/ENVIRONMENT.md", "context/PREFERENCES.md", "context/USER.md", "context/CURRENT_CONTEXT.md",
 )
 # Frozen so that relative dates in cases mean the same in every run.
 EVAL_CLOCK = "Fecha y hora actual: lunes 9 de noviembre de 2026, 10:00 (Europe/Madrid)."
@@ -75,13 +76,13 @@ def compose_system(system_file: Path | None) -> tuple[str, dict[str, Any]]:
         text = system_file.read_text(encoding="utf-8")
         return f"{text.strip()}\n\n{EVAL_CLOCK}", {"source": str(system_file), "files": []}
     safety, origin = read_source(SAFETY_PATH, HERMES_REF)
-    missing = [name for name in IDENTITY_ORDER if not (IDENTITY_DIR / name).is_file()]
+    missing = [name for name in IDENTITY_ORDER if not (AGENT_DIR / name).is_file()]
     if missing:
         raise EvalError(f"faltan archivos de identidad: {missing}")
-    parts = [safety.strip()] + [(IDENTITY_DIR / name).read_text(encoding="utf-8").strip() for name in IDENTITY_ORDER]
+    parts = [safety.strip()] + [(AGENT_DIR / name).read_text(encoding="utf-8").strip() for name in IDENTITY_ORDER]
     text = "\n\n".join(parts + [EVAL_CLOCK])
     return text, {
-        "source": f"{origin} + agent/identity/",
+        "source": f"{origin} + agent/{{identity,knowledge,context}}/",
         "files": list(IDENTITY_ORDER),
         "sha256": hashlib.sha256(text.encode()).hexdigest()[:16],
         "chars": len(text),

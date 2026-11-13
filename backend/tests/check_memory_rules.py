@@ -213,7 +213,7 @@ def run() -> None:
         agent = tmp / "agent"
         shutil.copytree(AGENT_DIR, agent, symlinks=True)
         identity = agent / "identity"
-        identity.mkdir(exist_ok=True)
+        identity.mkdir(exist_ok=True)  # agent/identity/ exists since the 14 files were split
         (identity / "USER.md").write_text("CENTINELA-USER-FALSO")
         (identity / "SOUL.md").write_text("CENTINELA-ALMA")
         (identity / "VALUES.md").unlink(missing_ok=True)
