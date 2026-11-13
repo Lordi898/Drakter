@@ -10,6 +10,8 @@ dependencies = [
     "pydantic",
     "pydantic-settings",
     "platformdirs",
+    "httpx",
+    "mcp",
     "drakter-contracts",
     "pypdf",
 ]
