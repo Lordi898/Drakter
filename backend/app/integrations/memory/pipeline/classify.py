@@ -26,12 +26,13 @@ _EVENTS = re.compile(
 
 def classify(text: str) -> tuple[MemoryKind, MemoryCategory]:
     t = text[:5000].casefold()
+    # Habit markers first: "siempre estudio por la noche" is a routine, not a profile fact.
+    if _PATTERNS.search(t):
+        return MemoryKind.PROCEDURAL, MemoryCategory.PATTERNS
     if _PROFILE.search(t):
         return MemoryKind.SEMANTIC, MemoryCategory.PROFILE
     if _PREFERENCES.search(t):
         return MemoryKind.SEMANTIC, MemoryCategory.PREFERENCES
-    if _PATTERNS.search(t):
-        return MemoryKind.PROCEDURAL, MemoryCategory.PATTERNS
     if _CASES.search(t):
         return MemoryKind.EPISODIC, MemoryCategory.CASES
     if _EVENTS.search(t):
