@@ -27,7 +27,7 @@ Arranque: `scripts/drakter-local.sh start anthropic` (con el modelo real) o `sta
 | Almacén (CL10) | `backend/app/services/storage*.py`, `desktop/src/modules/storage/` | Verificado: catálogo, carpetas, etiquetas, índice FTS5, lectura bajo demanda (texto, PDF, imágenes, enlaces), límites de comprimidos y rutas permitidas. ⚠️ Herramientas sin probar con modelo |
 | Calendario y asignaturas | `backend/app/`, `desktop/src/modules/` | En verificación |
 | Relaciones (CL11) | `backend/app/services/relations.py`, `desktop/src/modules/relationships/` | Verificado el servicio, los tipos, las validaciones, las consultas y la integridad. ⚠️ La pantalla falta verla en Electron; herramientas sin probar con modelo |
-| Memoria (CL12) | `memory/`, `backend/app/integrations/memory/` | Verificado el adaptador SQLite + FTS5 y su ciclo (extraer, clasificar, deduplicar, contradicciones, caducidad). ⚠️ No se recupera al turno ni se puede olvidar aún; OpenViking desactivado (U-1, sin confirmar) |
+| Memoria (CL12) | `memory/`, `backend/app/integrations/memory/` | Verificado el adaptador SQLite + FTS5 y su ciclo (extraer, clasificar, deduplicar, contradicciones, caducidad). ⚠️ La recuperación al turno está pendiente de fusión y aún no se puede olvidar; OpenViking desactivado (U-1, sin confirmar) |
 | Voz (CL14) | `voice/` | ⚠️ En v1 solo se estabiliza; rediseño previsto sobre Pipecat |
 | Automejora (CL15) | `improvement/`, `backend/app/services/improvement_*.py` | Verificado el ciclo (feedback, propuestas, evaluación aislada, rama Git, revertir) y que no puede cambiar nada sin aprobación. ⚠️ Sin flujo de aprobación en la app ni pantalla |
 

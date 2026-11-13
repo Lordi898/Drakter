@@ -284,15 +284,15 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 - [x] Implementar y comprobar la clasificación en el Memory Adapter.
 - [x] Implementar y comprobar la deduplicación en el Memory Adapter.
 - [x] Implementar y comprobar la detección de contradicciones en el Memory Adapter.
-- [ ] Configurar y comprobar la memoria de trabajo en Hermes y OpenViking.
-  ⚠️ OpenViking desactivado (U-1). Solo hay plantillas en `memory/working/`; ningún código escribe `DRAKTER_DATA_DIR/memory/working/`. La memoria de trabajo real es la sesión del runner de Hermes.
+- [x] Configurar y comprobar la memoria de trabajo en Hermes y OpenViking.
+  ⚠️ La memoria de trabajo es la sesión propia de Hermes (`session_db`, `persist=True`): comprobado con el stub que el turno 2 lleva el historial del turno 1. OpenViking sigue desactivado (U-1). Depende de `f364b48`, pendiente de fusión.
 - [x] Implementar y comprobar la memoria episódica en el Memory Adapter.
 - [x] Implementar y comprobar la memoria semántica en el Memory Adapter.
 - [x] Implementar y comprobar la memoria procedimental en el Memory Adapter.
-- [ ] Configurar y comprobar la recuperación selectiva.
-  ⚠️ La búsqueda selectiva por herramienta funciona (filtros, límite, solo aprobados y vigentes), pero la recuperación del backend al turno (`MemoryService.memories_for_context` → `context.builder.build_context`) no está conectada al runner de Hermes.
-- [ ] Configurar y comprobar los límites de contexto.
-  ⚠️ `ContextBudget` y su orden de recorte están comprobados en `check_memory_rules.py` (40/40), pero no se aplican aún a un turno real (misma causa que la recuperación selectiva).
+- [x] Configurar y comprobar la recuperación selectiva.
+  ⚠️ Conectada al turno de Hermes en `f364b48` (pendiente de fusión): FTS con el texto del usuario, hasta 8 resultados L1, cercados como `untrusted_data` en la entrada del turno y nunca en el `system`; comprobado con el stub. Falta comprobar con Claude Haiku 5.5 la calidad de la recuperación y que respeta el cercado.
+- [x] Configurar y comprobar los límites de contexto.
+  ⚠️ `build_context` con `ContextBudget` se aplica ya a cada turno real en `f364b48` (pendiente de fusión); comprobado con el stub. Falta la comprobación con el modelo real.
 - [x] Configurar y comprobar los registros de memoria.
 - [x] Crear Skill de memoria.
 - [x] Probar persistencia.
@@ -306,19 +306,19 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 - [x] Crear estructura de Skills.
   ⚠️ Las 78 herramientas cargan en el registro y Hermes arranca con ellas (tras arreglar imports y auditorías en la integración), pero el stub no las usa: selección y encadenado sin probar con modelo real.
 - [ ] Crear Skill de tareas.
-  ⚠️ Creada y coherente con las herramientas reales, pero **inerte**: `home.py` desactiva el toolset `skills` de Hermes porque arrastra `skill_manage` (H-06/F14). Hermes no la carga; el modelo se guía por la descripción y el esquema de cada herramienta MCP. Corregidas las herramientas citadas en `workspace-subjects` y `workspace-storage` (`46bdc88`, pendiente de fusión).
+  ⚠️ Creada y coherente con las herramientas reales, pero **inerte**: `home.py` desactiva el toolset `skills` de Hermes porque arrastra `skill_manage` (H-06/F14). Hermes no la carga; el modelo se guía por la descripción y el esquema de cada herramienta MCP. Corregidas las herramientas citadas en `workspace-subjects` y `workspace-storage` (`b8086ce`, pendiente de fusión).
 - [ ] Crear Skill de proyectos.
-  ⚠️ Creada y coherente con las herramientas reales, pero **inerte**: `home.py` desactiva el toolset `skills` de Hermes porque arrastra `skill_manage` (H-06/F14). Hermes no la carga; el modelo se guía por la descripción y el esquema de cada herramienta MCP. Corregidas las herramientas citadas en `workspace-subjects` y `workspace-storage` (`46bdc88`, pendiente de fusión).
+  ⚠️ Creada y coherente con las herramientas reales, pero **inerte**: `home.py` desactiva el toolset `skills` de Hermes porque arrastra `skill_manage` (H-06/F14). Hermes no la carga; el modelo se guía por la descripción y el esquema de cada herramienta MCP. Corregidas las herramientas citadas en `workspace-subjects` y `workspace-storage` (`b8086ce`, pendiente de fusión).
 - [ ] Crear Skill de hábitos.
-  ⚠️ Creada y coherente con las herramientas reales, pero **inerte**: `home.py` desactiva el toolset `skills` de Hermes porque arrastra `skill_manage` (H-06/F14). Hermes no la carga; el modelo se guía por la descripción y el esquema de cada herramienta MCP. Corregidas las herramientas citadas en `workspace-subjects` y `workspace-storage` (`46bdc88`, pendiente de fusión).
+  ⚠️ Creada y coherente con las herramientas reales, pero **inerte**: `home.py` desactiva el toolset `skills` de Hermes porque arrastra `skill_manage` (H-06/F14). Hermes no la carga; el modelo se guía por la descripción y el esquema de cada herramienta MCP. Corregidas las herramientas citadas en `workspace-subjects` y `workspace-storage` (`b8086ce`, pendiente de fusión).
 - [ ] Crear Skill de calendario.
-  ⚠️ Creada y coherente con las herramientas reales, pero **inerte**: `home.py` desactiva el toolset `skills` de Hermes porque arrastra `skill_manage` (H-06/F14). Hermes no la carga; el modelo se guía por la descripción y el esquema de cada herramienta MCP. Corregidas las herramientas citadas en `workspace-subjects` y `workspace-storage` (`46bdc88`, pendiente de fusión).
+  ⚠️ Creada y coherente con las herramientas reales, pero **inerte**: `home.py` desactiva el toolset `skills` de Hermes porque arrastra `skill_manage` (H-06/F14). Hermes no la carga; el modelo se guía por la descripción y el esquema de cada herramienta MCP. Corregidas las herramientas citadas en `workspace-subjects` y `workspace-storage` (`b8086ce`, pendiente de fusión).
 - [ ] Crear Skill de asignaturas.
-  ⚠️ Creada y coherente con las herramientas reales, pero **inerte**: `home.py` desactiva el toolset `skills` de Hermes porque arrastra `skill_manage` (H-06/F14). Hermes no la carga; el modelo se guía por la descripción y el esquema de cada herramienta MCP. Corregidas las herramientas citadas en `workspace-subjects` y `workspace-storage` (`46bdc88`, pendiente de fusión).
+  ⚠️ Creada y coherente con las herramientas reales, pero **inerte**: `home.py` desactiva el toolset `skills` de Hermes porque arrastra `skill_manage` (H-06/F14). Hermes no la carga; el modelo se guía por la descripción y el esquema de cada herramienta MCP. Corregidas las herramientas citadas en `workspace-subjects` y `workspace-storage` (`b8086ce`, pendiente de fusión).
 - [ ] Crear Skill de almacén.
-  ⚠️ Creada y coherente con las herramientas reales, pero **inerte**: `home.py` desactiva el toolset `skills` de Hermes porque arrastra `skill_manage` (H-06/F14). Hermes no la carga; el modelo se guía por la descripción y el esquema de cada herramienta MCP. Corregidas las herramientas citadas en `workspace-subjects` y `workspace-storage` (`46bdc88`, pendiente de fusión).
+  ⚠️ Creada y coherente con las herramientas reales, pero **inerte**: `home.py` desactiva el toolset `skills` de Hermes porque arrastra `skill_manage` (H-06/F14). Hermes no la carga; el modelo se guía por la descripción y el esquema de cada herramienta MCP. Corregidas las herramientas citadas en `workspace-subjects` y `workspace-storage` (`b8086ce`, pendiente de fusión).
 - [ ] Crear Skill de relaciones.
-  ⚠️ Creada y coherente con las herramientas reales, pero **inerte**: `home.py` desactiva el toolset `skills` de Hermes porque arrastra `skill_manage` (H-06/F14). Hermes no la carga; el modelo se guía por la descripción y el esquema de cada herramienta MCP. Corregidas las herramientas citadas en `workspace-subjects` y `workspace-storage` (`46bdc88`, pendiente de fusión).
+  ⚠️ Creada y coherente con las herramientas reales, pero **inerte**: `home.py` desactiva el toolset `skills` de Hermes porque arrastra `skill_manage` (H-06/F14). Hermes no la carga; el modelo se guía por la descripción y el esquema de cada herramienta MCP. Corregidas las herramientas citadas en `workspace-subjects` y `workspace-storage` (`b8086ce`, pendiente de fusión).
 - [ ] Crear Skill de configuración.
   ⚠️ El archivo existe, pero sus herramientas (`get_configuration`, `propose_configuration_change`) son PROPUESTA y no existen ni en el catálogo ni en el backend. Además está inerte.
 - [x] Definir parámetros.
