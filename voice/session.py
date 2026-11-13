@@ -19,7 +19,7 @@ from drakter_contracts import voice_ipc as ipc
 from pydantic import BaseModel, ValidationError
 
 from voice.config import NULL, VoiceConfig
-from voice.ports import ResolvedProfile, SessionState, TTSProvider, Trigger
+from voice.ports import ResolvedProfile, SessionState, Trigger, TTSProvider
 from voice.registry import create
 
 if TYPE_CHECKING:

@@ -9,7 +9,8 @@ Arranca `python -m voice run --null` con un STT simulado, se conecta como haría
   4. `speak.open/delta/close` produce audio (TTS simulado) y `speak.stop` lo corta;
   5. una segunda oferta (reconexión) monta un pipeline nuevo sin recargar `Shared`.
 
-Uso, desde la raíz del repo:  ~/.local/share/drakter/venvs/voice/bin/python voice/tests/check_pipeline.py [--wav habla.wav]
+Uso, desde la raíz del repo, con el Python del venv de voz (~/.local/share/drakter/venvs/voice):
+    python voice/tests/check_pipeline.py [--wav habla.wav]
 Imprime PASS/FAIL por paso y sale con 1 si algo falla.
 """
 
@@ -135,6 +136,7 @@ class Renderer:
         self.pc = RTCPeerConnection()
         self.pc_id: str | None = None
         self.peak = 0.0  # mayor RMS oído del bot desde el último reset
+        self.pinging = True
         self._mic = _Microphone()
         self._tasks: list[asyncio.Task[None]] = []
 
@@ -160,7 +162,7 @@ class Renderer:
         return answer
 
     async def _ping(self, channel: Any) -> None:
-        while channel.readyState == "open":
+        while channel.readyState == "open" and self.pinging:
             channel.send("ping")
             await asyncio.sleep(1.0)
 
@@ -252,6 +254,7 @@ async def run_checks(wav: Path | None, workdir: Path, report: Report) -> None:
         "DRAKTER_RUNTIME_DIR": str(workdir / "run"),
         "DRAKTER_DATA_DIR": str(workdir / "data"),
         "DRAKTER_VOICE_STT": "voice.tests.check_pipeline:fake_stt",
+        "DRAKTER_VOICE_RTC_PING_TIMEOUT_S": "2",
         "PYTHONPATH": str(ROOT),
     }
     log_path = workdir / "voice.log"
@@ -294,12 +297,32 @@ async def run_checks(wav: Path | None, workdir: Path, report: Report) -> None:
         leaked = [e for e in backend.events[mark:] if e["type"] == "voice.user_turn"]
         report.step(not leaked, "3. en reposo (standby) el audio no produce voice.user_turn")
 
+        # Activación por palabra sin «jarvis» en el texto: falso positivo, vuelve a reposo en silencio.
+        from voice.bridge import strip_wake_word
+
+        report.step(
+            strip_wake_word("Hey, Jarvis, qué hora es") == "qué hora es"
+            and strip_wake_word("Jarvis pon música") == "pon música"
+            and strip_wake_word("Oye Jarvis.") == ""
+            and strip_wake_word("qué hora es, Jarvis") is None,
+            "3. el prefijo «jarvis» / «hey jarvis» se reconoce y se recorta",
+        )
+        await backend.cmd("mode.set", mode="conversation", trigger="wake")
+        mark = len(backend.events)
+        first.say(speech)
+        await backend.wait_event("voice.state", since=mark, mode="standby", timeout=len(speech) / RTC_RATE + 8)
+        leaked = [e for e in backend.events[mark:] if e["type"] == "voice.user_turn"]
+        report.step(not leaked, "3. activación sin «jarvis» en el texto: vuelve a reposo sin emitir turno")
+        first.say(None)  # corta lo que quede del wav y deja cerrar el turno en curso
+        await asyncio.sleep(2.5)
+
         await backend.cmd("mode.set", mode="conversation", trigger="ui")
         await backend.wait_event("voice.state", mode="conversation")
         mark = len(backend.events)
         first.say(speech)
         turn = await backend.wait_event("voice.user_turn", timeout=len(speech) / RTC_RATE + 8, since=mark)
-        report.step(turn["text"] == FAKE_TEXT and turn["trigger"] == "ui" and turn["overlap"] == "none",
+        heard = turn["text"].replace(FAKE_TEXT, "").strip() == ""  # una vez por segmento de VAD del turno
+        report.step(heard and turn["trigger"] == "ui" and turn["overlap"] == "none",
                     "3. el wav produce voice.user_turn",
                     f"audio_ms={turn['audio_ms']} eot_ms={turn['eot_ms']} stt_ms={turn['stt_ms']}")
         phases = [e["payload"]["phase"] for e in backend.events[mark:] if e["type"] == "voice.user_speech"]
@@ -319,6 +342,10 @@ async def run_checks(wav: Path | None, workdir: Path, report: Report) -> None:
         report.step(ack == {"ignored": False} and repeated == {"ignored": True},
                     "4. un seq repetido se ignora (ok{ignored:true})")
         await backend.cmd("turn.phase", turn_id="t1", phase="done")
+        metrics = [e["payload"] for e in backend.events if e["type"] == "voice.metrics"]
+        written = (workdir / "data" / "voice" / "metrics.jsonl").exists()
+        report.step(bool(metrics) and "total_ms" in metrics[-1] and written,
+                    "4. voice.metrics emitido y metrics.jsonl escrito", str(metrics[-1] if metrics else None))
 
         mark = len(backend.events)
         await backend.cmd("speak.open", turn_id="t2", speech_id=2)
@@ -353,6 +380,26 @@ async def run_checks(wav: Path | None, workdir: Path, report: Report) -> None:
         await backend.wait_event("voice.playback", since=mark, state="finished", speech_id=3, timeout=15)
         report.step(second.peak > 0.02, "5. el pipeline nuevo también habla", f"rms máx={second.peak:.3f}")
 
+        # voice.config cambia el estado y reemite el snapshot; un comando inválido devuelve err.
+        mark = len(backend.events)
+        await backend.cmd("voice.config", tts_enabled=True, profile="serio", wake_enabled=False, expression="off")
+        changed = await backend.wait_event("voice.state", since=mark, profile="serio")
+        status = await backend.cmd("status")
+        rejected = False
+        try:
+            await backend.cmd("speak.delta", speech_id="no-es-un-entero")
+        except RuntimeError as exc:
+            rejected = "invalid_request" in str(exc)
+        report.step(changed["profile"] == "serio" and status["state"]["expression"] == "off" and rejected,
+                    "voice.config actualiza el estado; un payload inválido devuelve err")
+
+        # 6. El par deja de mandar ping sin cerrar (pestaña colgada): se detecta y se vuelve a reposo.
+        mark = len(backend.events)
+        second.pinging = False
+        gone = await backend.wait_event("voice.state", since=mark, connected=False, timeout=20)
+        report.step(gone["mode"] == "standby", "6. sin ping del data channel se detecta la desconexión",
+                    f"mode={gone['mode']}")
+
         await backend.cmd("shutdown")
         await asyncio.wait_for(process.wait(), 15)
         report.step(process.returncode == 0 and not socket_path.exists(), "shutdown ordenado",
@@ -366,7 +413,7 @@ async def run_checks(wav: Path | None, workdir: Path, report: Report) -> None:
         if process.returncode is None:
             process.terminate()
             await process.wait()
-        errors = [l for l in log_path.read_text(errors="replace").splitlines() if '"level": "ERROR"' in l]
+        errors = [line for line in log_path.read_text(errors="replace").splitlines() if '"level": "ERROR"' in line]
         report.step(not errors, "sin errores en el log del proceso", f"{len(errors)} errores")
         if report.failed:
             print(f"--- log del proceso de voz ({log_path}) ---")

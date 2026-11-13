@@ -58,7 +58,7 @@ def strip_wake_word(text: str) -> str | None:
         words = words[1:]
     if not words or words[0][1] != _WAKE_WORD:
         return None
-    return " ".join(tokens[words[0][0] + 1 :]).lstrip(" ,.;:!¡?¿")
+    return " ".join(tokens[words[0][0] + 1 :]).lstrip(" ,.;:!?")
 
 
 def _classify(text: str, bot_speaking: bool, awaiting_answer: bool) -> str | None:
