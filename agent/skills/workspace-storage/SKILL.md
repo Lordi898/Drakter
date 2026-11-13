@@ -42,7 +42,7 @@ Se invocan como `mcp__drakter__<nombre>`.
 - `search_resources`
 - `get_resource`
 - `read_resource`
-- `create_resource_metadata`
+- `create_resource`
 - `update_resource_metadata`
 - `index_resource`
 - `refresh_resource_index`
