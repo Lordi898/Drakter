@@ -235,8 +235,8 @@ id = "auditoria.registro"
 title = "Una mutación deja una entrada de auditoría consultable"
 # Fuente del esquema: drakter/seguridad backend/migrations/0008_audit.sql (audit_events: action, entity_id...).
 # Acción `task.create`: tasks_contract.md.
-# PROVISIONAL: no hay ruta REST de auditoría definida en ninguna rama; se asume
-# GET /api/v1/audit con filtros `entity_id` y `limit` y respuesta {items:[{action,...}]}.
+# Ruta real: GET /api/v1/activity (backend/app/api/activity.py) con `entity_id` y `limit`;
+# responde {items: [AuditEventOut], next_cursor}.
 [[flow.step]]
 name = "crear tarea"
 method = "POST"
@@ -248,5 +248,5 @@ capture = { id = "id" }
 name = "consultar auditoría de esa entidad"
 unrouted_ok = true
 method = "GET"
-path = "/api/v1/audit?entity_id={id}&limit=5"
+path = "/api/v1/activity?entity_id={id}&limit=5"
 assert = { "items.0.action" = "task.create", "items.0.entity_id" = "{id}" }
