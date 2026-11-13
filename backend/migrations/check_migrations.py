@@ -29,6 +29,9 @@ REQUIRED_TRIGGERS = {
     "trg_pc_identity", "trg_pc_born_pending", "trg_pc_closed", "trg_pc_decided_once",
     "trg_search_ai", "trg_search_ad", "trg_search_au",
     "trg_memory_records_ai", "trg_memory_records_au", "trg_memory_records_ad",
+    *(f"improvement_proposals_{t}" for t in ("insert_guard", "immutable", "approval_fields", "transitions", "no_delete")),
+    *(f"improvement_evaluations_{t}" for t in ("insert_guard", "no_update", "no_delete")),
+    *(f"improvement_events_{t}" for t in ("insert_guard", "no_update", "no_delete")),
 }
 
 
