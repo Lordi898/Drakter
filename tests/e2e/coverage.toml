@@ -427,6 +427,16 @@ checks = ["modulo.calendario"]
 
 [[item]]
 checklist = 9
+text = "Crear vista diaria."
+checks = ["desktop.calendario_vistas"]
+
+[[item]]
+checklist = 9
+text = "Crear vista mensual."
+checks = ["desktop.calendario_vistas"]
+
+[[item]]
+checklist = 9
 text = "Crear asignaturas."
 checks = ["modulo.asignaturas"]
 

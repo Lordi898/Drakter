@@ -291,6 +291,30 @@ def character(ctx):
     return f"estados observados durante la conversación: {' → '.join(distinct)}"
 
 
+@check("desktop.calendario_vistas", "Calendario: las vistas Día y Mes se abren y pintan su cuadrícula",
+       phase="desktop", needs=("desktop",))
+def calendar_views(ctx):
+    cdp = _cdp(ctx)
+    _go(cdp, "#/calendar")
+    days = "document.querySelectorAll('main [role=\"group\"][aria-label^=\"Horario de \"]').length"
+    cells = ("[...document.querySelectorAll('main button[aria-label^=\"Abrir \"]')]"
+             ".filter(b => !b.closest('[role=\"group\"][aria-label^=\"Horario de \"]')).length")
+    found = {}
+    for label, shot in (("Día", "calendario-dia"), ("Mes", "calendario-mes")):
+        button = ("[...document.querySelectorAll('main [role=\"group\"][aria-label=\"Vista\"] button')]"
+                  f".find(b => b.innerText.trim() === {_q(label)})")
+        _mark(cdp, button, f"view-{shot}", timeout=5)
+        cdp.click(f"[data-e2e=view-{shot}]")
+        cdp.wait_for(f"document.querySelector('[data-e2e=view-{shot}]')?.getAttribute('aria-pressed') === 'true'", 5)
+        if label == "Día":
+            found[label] = cdp.wait_for(f"(() => {{ const n = {days}; return n === 1 ? n : 0; }})()", 5)
+        else:
+            found[label] = cdp.wait_for(f"(() => {{ const n = {cells}; return n >= 28 && {days} === 0 ? n : 0; }})()", 5)
+        _shot(ctx, shot)
+    return (f"Día: {found['Día']} columna horaria; Mes: {found['Mes']} celdas de día; "
+            "capturas/calendario-dia.png y calendario-mes.png")
+
+
 @check("desktop.confirmacion", "Una acción destructiva pide confirmación y cancelar conserva el dato",
        phase="desktop", needs=("desktop",))
 def confirmation(ctx):
@@ -320,7 +344,7 @@ def confirmation(ctx):
             raise AssertionError(f"{section}: «{label}» en «{row[:40]}» no abrió diálogo de "
                                  f"confirmación en 5 s; avisos: {toasts or 'ninguno'}") from exc
         _mark(cdp, "[...document.querySelectorAll('[role=\"alertdialog\"] button, [role=\"dialog\"] button')]"
-              ".find(b => /^\\s*(cancelar|no)\\b/i.test(b.innerText))", "cancel", timeout=3)
+              ".find(b => /^\\s*(cancelar|no|cerrar|rechazar)\\b/i.test(b.innerText))", "cancel", timeout=3)
         cdp.click("[data-e2e=cancel]")
         cdp.wait_for("!document.querySelector('[role=\"alertdialog\"], [role=\"dialog\"]')", 5)
         assert row in _main_text(cdp), f"{section}: tras cancelar el dato desapareció: {row!r}"
