@@ -126,10 +126,12 @@ def _get_subject_resources(
 
 
 _SESSION_AUDIT = {
-    "subject_id": "log", "session_id": "log", "weekday": "log", "starts_local_time": "log",
-    "ends_local_time": "log", "timezone": "log", "valid_from": "log", "valid_until": "log",
-    "room": "omit",
+    "weekday": "log", "starts_local_time": "log", "ends_local_time": "log", "timezone": "log",
+    "valid_from": "log", "valid_until": "log", "room": "omit",
 }  # fmt: skip
+# El registro rechaza claves de auditoría que no son argumentos de la herramienta.
+_CREATE_SESSION_AUDIT = {"subject_id": "log", **_SESSION_AUDIT}
+_UPDATE_SESSION_AUDIT = {"session_id": "log", **_SESSION_AUDIT}
 
 TOOLS: tuple[ToolSpec, ...] = (
     ToolSpec(
@@ -198,7 +200,7 @@ TOOLS: tuple[ToolSpec, ...] = (
         risk=RiskClass.WRITE,
         handler=service_handler("create_class_session", _create_class_session),
         errors=_ERRORS,
-        audit=_SESSION_AUDIT,
+        audit=_CREATE_SESSION_AUDIT,
     ),
     ToolSpec(
         name="update_class_session",
@@ -210,7 +212,7 @@ TOOLS: tuple[ToolSpec, ...] = (
         risk=RiskClass.WRITE,
         handler=service_handler("update_class_session", _update_class_session),
         errors=_ERRORS,
-        audit=_SESSION_AUDIT,
+        audit=_UPDATE_SESSION_AUDIT,
     ),
     ToolSpec(
         name="delete_class_session",
@@ -255,7 +257,10 @@ TOOLS: tuple[ToolSpec, ...] = (
     ),
     ToolSpec(
         name="get_subject_resources",
-        description="Recursos vinculados a una asignatura. Vacío hasta que exista el módulo de relaciones.",
+        description=(
+            "Recursos vinculados a una asignatura por relaciones: id, tipo, disponibilidad y "
+            "tipo de relación. Para el título o el contenido usa get_resource."
+        ),
         domain="subjects",
         args_model=GetSubjectArgs,
         result_model=service.SubjectResources,
