@@ -1,8 +1,9 @@
 """Proposal lifecycle: drafting, isolated evaluation, approval, apply and revert.
 
-Drakter proposes; only a user with a gate-issued confirmation can approve or
-revert. Approval is bound by a digest to the exact patch and evaluation, and each
-state change is one conditional UPDATE plus its event in a single transaction.
+Drakter proposes; approving and reverting are `ActionService` confirmations
+(`improvement_actions`), which only the approver credential can grant. Approval
+is bound by a digest to the exact patch and evaluation, and each state change
+is one conditional UPDATE plus its event in a single transaction.
 """
 
 from __future__ import annotations
@@ -34,7 +35,7 @@ from app.services.improvement_policy import is_protected
 from app.services.improvement_ports import (
     ApprovalRequest,
     AuditSink,
-    ConfirmationGate,
+    LogAuditSink,
     Principal,
     require_user,
 )
@@ -58,6 +59,8 @@ ACTION_REVERT: Final = "improvement.revert"
 _ENTITY: Final = "improvement_proposal"
 _RESTORE_ACTOR: Final = Principal(kind="system", id="restore")
 _RECOVERY_ACTOR: Final = Principal(kind="system", id="startup")
+# Who confirmed through `ActionService`: only the approver credential gets there.
+APPROVER: Final = Principal(kind="user", id="approver")
 _MAX_OUTPUT_CHARS: Final = 16384
 _REEVALUABLE: Final = frozenset(
     {"draft", "evaluated_passed", "evaluated_failed", "evaluation_blocked"}
@@ -84,7 +87,6 @@ _SUMMARY_COLUMNS: Final = (
 class FlowContext:
     settings: Settings
     principal: Principal
-    gate: ConfirmationGate
     audit: AuditSink
     correlation_id: str | None = None
 
@@ -490,18 +492,17 @@ def _approval_for(proposal: Proposal, evaluation: Evaluation | None) -> Approval
     return ApprovalRequest(ACTION_APPROVE, proposal.id, digest, f"Aprobar {target}")
 
 
-def request_approval(ctx: FlowContext, proposal_id: str) -> dict[str, str]:
+def prepare_approval(ctx: FlowContext, proposal_id: str) -> ApprovalRequest:
+    """What the user is asked to approve. ``ActionService`` stores and confirms it."""
     with audited(
         ctx.audit, ctx.principal, "improvement.approval_request", _ENTITY, proposal_id,
         ctx.correlation_id,
     ) as scope:
-        require_user(ctx.principal)
         with open_db(ctx.settings.db_path) as conn:
             proposal = _fetch_proposal(conn, proposal_id)
             evaluation = _fetch_evaluation(conn, proposal.current_evaluation_id)
             approval = _approval_for(proposal, evaluation)
             scope.detail.update(requested_action=approval.action, digest=approval.digest)
-            confirmation_id = ctx.gate.request(approval, ctx.principal)
             with transaction(conn):
                 insert_event(
                     conn,
@@ -512,42 +513,58 @@ def request_approval(ctx: FlowContext, proposal_id: str) -> dict[str, str]:
                     to_status=proposal.status,
                     detail={"digest": approval.digest, "requested_action": approval.action},
                 )
-    return {
-        "confirmation_id": confirmation_id,
-        "action": approval.action,
-        "digest": approval.digest,
-    }
+    return approval
 
 
-def approve(ctx: FlowContext, proposal_id: str, confirmation_id: str) -> dict[str, Any]:
-    with audited(
-        ctx.audit, ctx.principal, "improvement.approve", _ENTITY, proposal_id,
-        ctx.correlation_id,
-    ) as scope:
-        require_user(ctx.principal)
-        with open_db(ctx.settings.db_path) as conn:
-            proposal = _fetch_proposal(conn, proposal_id)
-            evaluation = _fetch_evaluation(conn, proposal.current_evaluation_id)
-            approval = _approval_for(proposal, evaluation)
-            scope.detail.update(requested_action=approval.action, digest=approval.digest)
-            ctx.gate.consume(confirmation_id, approval, ctx.principal)
-            with transaction(conn):
-                _transition(
-                    conn,
-                    proposal.id,
-                    expected=proposal.status,
-                    target="approved",
-                    event="approved",
-                    actor=ctx.principal,
-                    fields={"approved_digest": approval.digest, "approved_at": utc_now()},
-                    guards={"current_evaluation_id": proposal.current_evaluation_id},
-                    detail={
-                        "digest": approval.digest,
-                        "evaluation_id": proposal.current_evaluation_id,
-                        "approved_action": approval.action,
-                    },
-                )
-            return _load_public(conn, proposal.id)
+def approval_fingerprint(conn: sqlite3.Connection, proposal_id: str, revert: bool) -> str:
+    """Status and digest now. ``ActionService`` compares it at approval time.
+
+    Runs on the gate's connection, whose row factory is restored afterwards.
+    """
+    previous = conn.row_factory
+    conn.row_factory = sqlite3.Row
+    try:
+        proposal = _fetch_proposal(conn, proposal_id)
+        evaluation = _fetch_evaluation(conn, proposal.current_evaluation_id)
+    finally:
+        conn.row_factory = previous
+    try:
+        check = _revert_approval if revert else _approval_for
+        approval = check(proposal, evaluation)
+    except AppError as exc:
+        return f"{proposal.status}:{exc.code}"
+    return f"{proposal.status}:{approval.action}:{approval.digest}"
+
+
+def execute_approval(settings: Settings, proposal_id: str, digest: str) -> dict[str, Any]:
+    """Run by ``ActionService`` once the approver confirms. Bound to ``digest``."""
+    with open_db(settings.db_path) as conn:
+        proposal = _fetch_proposal(conn, proposal_id)
+        evaluation = _fetch_evaluation(conn, proposal.current_evaluation_id)
+        approval = _approval_for(proposal, evaluation)
+        if not hmac.compare_digest(approval.digest, digest):
+            raise AppError(
+                "approval_digest_mismatch",
+                "La aprobación no corresponde al contenido actual de la propuesta",
+                409,
+            )
+        with transaction(conn):
+            _transition(
+                conn,
+                proposal.id,
+                expected=proposal.status,
+                target="approved",
+                event="approved",
+                actor=APPROVER,
+                fields={"approved_digest": approval.digest, "approved_at": utc_now()},
+                guards={"current_evaluation_id": proposal.current_evaluation_id},
+                detail={
+                    "digest": approval.digest,
+                    "evaluation_id": proposal.current_evaluation_id,
+                    "approved_action": approval.action,
+                },
+            )
+        return _load_public(conn, proposal.id)
 
 
 def _record_git_failure(
@@ -669,18 +686,17 @@ def _revert_approval(proposal: Proposal, evaluation: Evaluation | None) -> Appro
     )
 
 
-def request_revert(ctx: FlowContext, proposal_id: str) -> dict[str, str]:
+def prepare_revert(ctx: FlowContext, proposal_id: str) -> ApprovalRequest:
+    """What the user is asked to confirm before the branch is removed."""
     with audited(
         ctx.audit, ctx.principal, "improvement.revert_request", _ENTITY, proposal_id,
         ctx.correlation_id,
     ) as scope:
-        require_user(ctx.principal)
         with open_db(ctx.settings.db_path) as conn:
             proposal = _fetch_proposal(conn, proposal_id)
             evaluation = _fetch_evaluation(conn, proposal.current_evaluation_id)
             approval = _revert_approval(proposal, evaluation)
             scope.detail["digest"] = approval.digest
-            confirmation_id = ctx.gate.request(approval, ctx.principal)
             with transaction(conn):
                 insert_event(
                     conn,
@@ -691,46 +707,48 @@ def request_revert(ctx: FlowContext, proposal_id: str) -> dict[str, str]:
                     to_status=proposal.status,
                     detail={"digest": approval.digest},
                 )
-    return {
-        "confirmation_id": confirmation_id,
-        "action": approval.action,
-        "digest": approval.digest,
-    }
+    return approval
 
 
-def revert(ctx: FlowContext, proposal_id: str, confirmation_id: str) -> dict[str, Any]:
+def execute_revert(settings: Settings, proposal_id: str, digest: str) -> dict[str, Any]:
+    """Run by ``ActionService`` once the approver confirms. Bound to ``digest``."""
+    ctx = FlowContext(settings=settings, principal=APPROVER, audit=LogAuditSink())
     with audited(
-        ctx.audit, ctx.principal, "improvement.revert", _ENTITY, proposal_id, ctx.correlation_id
+        ctx.audit, ctx.principal, "improvement.revert", _ENTITY, proposal_id, None
     ) as scope:
-        require_user(ctx.principal)
         with _GIT_LOCK:
-            with open_db(ctx.settings.db_path) as conn:
+            with open_db(settings.db_path) as conn:
                 proposal = _fetch_proposal(conn, proposal_id)
                 evaluation = _fetch_evaluation(conn, proposal.current_evaluation_id)
             approval = _revert_approval(proposal, evaluation)
+            if not hmac.compare_digest(approval.digest, digest):
+                raise AppError(
+                    "approval_digest_mismatch",
+                    "La confirmación no corresponde al contenido actual de la propuesta",
+                    409,
+                )
             assert proposal.applied_branch is not None and proposal.applied_commit is not None
             scope.detail["digest"] = approval.digest
-            ctx.gate.consume(confirmation_id, approval, ctx.principal)
             change = AppliedChange(proposal.applied_branch, proposal.applied_commit)
             scope.attempt()
             try:
-                revert_change(load_lab_config(ctx.settings), change)
+                revert_change(load_lab_config(settings), change)
             except Exception as exc:
                 code = exc.code if isinstance(exc, AppError) else "internal_error"
                 _record_git_failure(ctx, scope, proposal, "revert_failed", code)
                 raise
-            with open_db(ctx.settings.db_path) as conn, transaction(conn):
+            with open_db(settings.db_path) as conn, transaction(conn):
                 _transition(
                     conn,
                     proposal.id,
                     expected="applied",
                     target="reverted",
                     event="reverted",
-                    actor=ctx.principal,
+                    actor=APPROVER,
                     fields={"reverted_at": utc_now()},
                     detail={"commit": change.commit},
                 )
-    return get_proposal(ctx.settings.db_path, proposal_id, include_patch=False)
+    return get_proposal(settings.db_path, proposal_id, include_patch=False)
 
 
 def reject(ctx: FlowContext, proposal_id: str, reason: str) -> dict[str, Any]:

@@ -10,8 +10,13 @@ propio agente o lo haya inducido un documento.
    clasifica.
 2. **Propuesta.** Se documenta la mejora, con su parche si cambia código.
 3. **Evaluación.** `evaluate_patch` juzga el parche en un clon desechable.
-4. **Aprobación.** Una persona aprueba desde la interfaz, ligada al SHA-256 exacto
-   del parche. Tocar rutas protegidas exige aprobación elevada.
+4. **Aprobación.** `approval-request` responde 409 `confirmation_required` y la
+   persona aprueba en `/api/v1/confirmations/{id}/approve` con la credencial
+   `approver`: es el mismo `ActionService` y la misma caducidad (300 s) que el resto.
+   La acción `approve_improvement_proposal` lleva el digest del parche y la
+   evaluación; si la propuesta cambia antes de aprobar, termina en `conflict`.
+   Revertir sigue el mismo camino (`revert-request`, `revert_improvement_proposal`).
+   El agente no tiene estos permisos.
 5. **Publicación.** `apply_patch` repite la validación con un clon nuevo y publica
    solo la rama `improvement/<proposal_id>`.
 6. **Integración.** Una persona revisa y fusiona la rama. Drakter no fusiona nunca.
