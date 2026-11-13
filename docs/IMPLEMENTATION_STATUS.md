@@ -200,11 +200,9 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 ## Checklist 9. Calendario y asignaturas
 
 - [x] Crear interfaz de calendario.
-- [ ] Crear vista diaria.
-  ⚠️ Código presente (`DayView.tsx`, botón Día visible) y typecheck limpio; falta verla en la app: queda para la pasada completa de drakter-49.
+- [x] Crear vista diaria.
 - [x] Crear vista semanal.
-- [ ] Crear vista mensual.
-  ⚠️ Código presente (`MonthView.tsx`, botón Mes visible) y typecheck limpio; falta verla en la app: queda para la pasada completa de drakter-49.
+- [x] Crear vista mensual.
 - [x] Crear eventos.
 - [x] Editar eventos.
 - [x] Eliminar eventos.
