@@ -10,42 +10,51 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
+import tomllib
+import unicodedata
 from collections.abc import Awaitable, Callable, Mapping
+from functools import lru_cache
 from typing import Final, Literal, Protocol
 from uuid import UUID
 
 from drakter_contracts.voice_ipc import EvtLocalCommand, EvtUserTurn
 
+from app.integrations.voice.settings import REPO_ROOT
+
 logger = logging.getLogger("drakter.voice.policy")
 
 Decision = Literal["submitted", "steered", "queued", "dropped", "failed"]
 
-# Used only if voice/conversation/layer0.py (WP4) cannot be imported in the backend venv.
-_FALLBACK_BACKCHANNELS: Final = frozenset(
-    {"vale", "ok", "okay", "sí", "si", "ajá", "aja", "ya", "claro", "mhm", "mm", "eh", "ah",
-     "entiendo", "genial", "perfecto", "bien", "vale vale", "sí sí", "ya ya"}
-)
+# Single source: the closed lists of voice/conversation/layer0.es.toml (WP4). The backend reads
+# the data, not the voice code: its venv does not see `voice/`, and it only needs `backchannel`.
+_LAYER0_TOML: Final = REPO_ROOT / "voice" / "conversation" / "layer0.es.toml"
+_WORD: Final = re.compile(r"[a-z0-9ñ]+")
 
 
-def _load_classify() -> Callable[[str, bool, bool], str | None] | None:
+def _normalize(text: str) -> list[str]:
+    """Same rule as voice.conversation.layer0.normalize: lowercase, no accents nor signs."""
+    t = unicodedata.normalize("NFKD", text.lower())
+    return _WORD.findall("".join(c for c in t if not unicodedata.combining(c)))
+
+
+@lru_cache(maxsize=1)
+def _backchannel_words() -> frozenset[str]:
     try:
-        from voice.conversation.layer0 import classify  # type: ignore[import-not-found]
-    except Exception:  # noqa: BLE001 - backend venv may not see voice/; fall back
-        return None
-    return classify
-
-
-_classify = _load_classify()
+        raw = tomllib.loads(_LAYER0_TOML.read_text(encoding="utf-8"))
+        return frozenset(w for x in raw["backchannel"]["words"] for w in _normalize(str(x)))
+    except (OSError, KeyError, TypeError, tomllib.TOMLDecodeError) as exc:
+        # Without the list nothing is dropped: every short turn reaches the agent.
+        logger.error("Layer 0 lists not loaded",
+                     extra={"event": "voice_layer0_missing", "error": type(exc).__name__})
+        return frozenset()
 
 
 def is_backchannel(text: str) -> bool:
-    if _classify is not None:
-        try:
-            return _classify(text, False, False) == "backchannel"
-        except Exception:  # noqa: BLE001
-            pass
-    norm = " ".join(text.lower().strip(" .,!?¡¿…").split())
-    return norm in _FALLBACK_BACKCHANNELS
+    """`classify(text, …) == "backchannel"` with nobody awaiting an answer: every word is one."""
+    tokens = _normalize(text)
+    words = _backchannel_words()
+    return bool(tokens) and bool(words) and all(t in words for t in tokens)
 
 
 class ActiveTurn(Protocol):

@@ -124,6 +124,8 @@ class _ActiveTurn:
     phase: Literal["generating", "executing"] = "generating"
     stripper: IncrementalStripper = field(default_factory=IncrementalStripper)
     steer_waiters: list[asyncio.Future[bool]] = field(default_factory=list)
+    # corrections accepted while `steer()` waited: that caller stores and shows them
+    echoed_steers: int = 0
 
     @property
     def correlation_id(self) -> str:
@@ -387,8 +389,13 @@ class AgentRuntime:
             return None
         return ActiveTurnInfo(turn_id=active.turn_id, session_id=active.session_id, phase=active.phase)
 
-    async def steer(self, turn_id: UUID, text: str) -> bool:
-        """Correct the running turn (same turn_id). False if it is not running or Hermes refuses."""
+    async def steer(self, turn_id: UUID, text: str, *, source: Source = "voice") -> bool:
+        """Correct the running turn (same turn_id). False if it is not running or Hermes refuses.
+
+        An accepted correction is what the user said: like any user message it is stored and
+        published as `chat.user_message` (voice and chat share the conversation). A refused
+        one is not: the caller decides whether it becomes a turn of its own.
+        """
         active, provider = self._active, self.provider
         if active is None or active.turn_id != turn_id or provider is None or not text.strip():
             return False
@@ -396,13 +403,35 @@ class AgentRuntime:
         active.steer_waiters.append(waiter)
         try:
             await provider.steer_turn(turn_id, text)
-            return await asyncio.wait_for(asyncio.shield(waiter), STEER_TIMEOUT_S)
+            accepted = await asyncio.wait_for(asyncio.shield(waiter), STEER_TIMEOUT_S)
         except Exception as exc:  # noqa: BLE001 - TimeoutError included: not accepted
             logger.info("steer not accepted", extra={"event": "steer_failed", "kind": type(exc).__name__})
             return False
         finally:
             if waiter in active.steer_waiters:
                 active.steer_waiters.remove(waiter)
+        if accepted:
+            await self._echo_steer(active, text, source)
+        return accepted
+
+    async def _echo_steer(self, active: _ActiveTurn, text: str, source: Source) -> None:
+        try:
+            message = await self.store.add_user_message(active.session_id, active.turn_id, text)
+        except Exception as exc:  # noqa: BLE001 - the correction already reached the agent
+            logger.warning("steer not persisted", extra={"event": "steer_persist_failed", "kind": type(exc).__name__})
+            return
+        self._publish(
+            active,
+            "chat.user_message",
+            ChatUserMessage(
+                message_id=message.id,
+                session_id=active.session_id,
+                turn_id=active.turn_id,
+                text=text,
+                input_source=source,
+                created_at=message.created_at,
+            ),
+        )
 
     def _call_tap(self, method: str, *args: Any) -> None:
         tap = self._tap
@@ -434,8 +463,13 @@ class AgentRuntime:
         client_message_id: UUID | None,
         *,
         source: Source = "text",
+        echoed: bool = False,
     ) -> tuple[UUID, UUID]:
-        """Accept a user message and start its turn. Returns (turn_id, message_id)."""
+        """Accept a user message and start its turn. Returns (turn_id, message_id).
+
+        `echoed`: the text is already stored and shown (an accepted steer that Hermes never
+        consumed); the new turn neither stores it again nor publishes `chat.user_message`.
+        """
         session = await self._require_session(session_id)
         if session.status != "open":
             raise AppError(ErrorCode.CONFLICT.value, "La sesión está cerrada.", 409)
@@ -448,7 +482,7 @@ class AgentRuntime:
         active = self._reserve_turn(session_id, turn_id, source)
         try:
             message, created = await self.store.begin_turn(
-                session_id, turn_id, text, client_message_id
+                session_id, turn_id, text, client_message_id, store_message=not echoed
             )
         except ActiveTurnExists:
             self._end_turn(active)
@@ -459,18 +493,19 @@ class AgentRuntime:
         if not created:
             self._end_turn(active)
             return message.turn_id or turn_id, message.id
-        self._publish(
-            active,
-            "chat.user_message",
-            ChatUserMessage(
-                message_id=message.id,
-                session_id=session_id,
-                turn_id=turn_id,
-                text=text,
-                input_source=source,
-                created_at=message.created_at,
-            ),
-        )
+        if not echoed:
+            self._publish(
+                active,
+                "chat.user_message",
+                ChatUserMessage(
+                    message_id=message.id,
+                    session_id=session_id,
+                    turn_id=turn_id,
+                    text=text,
+                    input_source=source,
+                    created_at=message.created_at,
+                ),
+            )
         self._publish(
             active,
             "agent.turn_started",
@@ -597,6 +632,8 @@ class AgentRuntime:
             for waiter in active.steer_waiters:
                 if not waiter.done():
                     waiter.set_result(event.accepted)
+                    if event.accepted:
+                        active.echoed_steers += 1  # before any terminal: see _close_turn
                     break
             if event.accepted:
                 if active.message_id is not None:
@@ -685,14 +722,20 @@ class AgentRuntime:
         self._publish_state(state, reason=outcome, turn_id=active.turn_id)
         self._sync_provider_state()
         if isinstance(terminal, TurnCompleted) and terminal.pending_steer:
-            self._follow_up(active.session_id, terminal.pending_steer, active.source)
+            if active.echoed_steers:
+                self._follow_up(active.session_id, terminal.pending_steer, active.source)
+            else:
+                # Accepted only after `steer()` gave up (timeout): its caller already queued
+                # the text as a turn of its own, so reopening it here would run it twice.
+                logger.info("pending steer left to its caller", extra={"event": "steer_follow_up_skipped"})
 
     def _follow_up(self, session_id: UUID, text: str, source: Source) -> None:
-        """A correction Hermes accepted but never consumed becomes the next turn."""
+        """A correction Hermes accepted but never consumed becomes the next turn. It is
+        already in the chat (`_echo_steer`), so the new turn does not repeat it."""
 
         async def run() -> None:
             try:
-                await self.submit_message(session_id, text, None, source=source)
+                await self.submit_message(session_id, text, None, source=source, echoed=True)
             except Exception as exc:  # noqa: BLE001 - lost, like a message sent while busy
                 logger.warning(
                     "pending steer not resubmitted",

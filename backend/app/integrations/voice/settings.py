@@ -6,12 +6,17 @@ from pathlib import Path
 from typing import Final
 
 from dotenv import dotenv_values
-from platformdirs import user_config_dir
+from platformdirs import user_config_dir, user_data_dir
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # backend/app/integrations/voice/settings.py -> repository root.
-_REPO_ROOT: Final = Path(__file__).resolve().parents[4]
+REPO_ROOT: Final = Path(__file__).resolve().parents[4]
+
+
+def default_voice_python() -> Path:
+    """The venv `scripts/install-voice.sh` creates: <data dir>/venvs/voice (py3.12)."""
+    return Path(user_data_dir("drakter")) / "venvs" / "voice" / "bin" / "python"
 
 
 def env_file() -> Path:
@@ -29,9 +34,10 @@ class VoiceSettings(BaseSettings):
         frozen=True,
     )
 
-    voice_enabled: bool = False
-    voice_python: Path | None = None
-    voice_project_root: Path = Field(default=_REPO_ROOT)
+    # Voice v2 is on by default; a missing venv only publishes `voice.error{dependency_missing}`.
+    voice_enabled: bool = True
+    voice_python: Path | None = Field(default_factory=default_voice_python)
+    voice_project_root: Path = Field(default=REPO_ROOT)
     # Provisional, uncalibrated (plan §4.4). Written turns are read aloud up to this many
     # characters, closing on a sentence end, then `rest_on_screen` (V-30).
     speak_max_chars_text: int = Field(default=350, ge=50, le=20_000)

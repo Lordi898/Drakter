@@ -205,9 +205,17 @@ class SqliteChatStore:
         return await self._run(operation)
 
     async def begin_turn(
-        self, session_id: UUID, turn_id: UUID, text: str, client_message_id: UUID | None
+        self,
+        session_id: UUID,
+        turn_id: UUID,
+        text: str,
+        client_message_id: UUID | None,
+        *,
+        store_message: bool = True,
     ) -> tuple[ChatMessage, bool]:
         """Open the turn with its user message. False: duplicate of an earlier message.
+
+        `store_message=False`: the text is already stored (a steer reopened as a turn).
 
         The caller already holds the process-wide turn slot, so a row still `running`
         is a leftover from a turn whose closing write failed, and it must not block.
@@ -242,10 +250,29 @@ class SqliteChatStore:
                 )
             except sqlite3.IntegrityError as exc:
                 raise ActiveTurnExists from exc
-            self._insert_message(conn, message, client_message_id)
+            if store_message:
+                self._insert_message(conn, message, client_message_id)
             return message, True
 
         return await self._transaction(operation)
+
+    async def add_user_message(self, session_id: UUID, turn_id: UUID, text: str) -> ChatMessage:
+        """A user message inside a running turn: an accepted voice correction (steer)."""
+        message = ChatMessage(
+            id=uuid4(),
+            session_id=session_id,
+            turn_id=turn_id,
+            role="user",
+            text=text,
+            status="complete",
+            created_at=now_instant(),
+        )
+
+        def operation(conn: sqlite3.Connection) -> None:
+            self._insert_message(conn, message, None)
+
+        await self._transaction(operation)
+        return message
 
     async def start_assistant_message(self, session_id: UUID, turn_id: UUID) -> UUID:
         message = ChatMessage(

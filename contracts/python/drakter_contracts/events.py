@@ -2,7 +2,7 @@
 
 `version` es la versión del payload de ese `type`; la del protocolo va en el subprotocolo `drakter.v1`.
 `voice.*` es experimental hasta que el frente de voz mida latencia. Voz v2 (Pipecat) usa `voice.state`,
-`voice.playback` y `voice.error`; los `voice.*` antiguos se borran en la integración (WP9).
+`voice.playback`, `voice.error` y `voice.profile_changed`.
 """
 
 from __future__ import annotations
@@ -196,27 +196,7 @@ class SystemResyncRequired(BaseModel):
     reason: Literal["buffer_overflow", "boot_changed", "client_lagging"]
 
 
-# voice.* (experimental, sin audio por este canal)
-class VoiceUtterance(BaseModel):
-    utterance_id: Id
-
-
-class VoiceListeningStarted(BaseModel):
-    trigger: Literal["wakeword", "push_to_talk"]
-
-
-class VoiceWakewordDetected(BaseModel):
-    score: float | None = None
-
-
-class VoiceTranscription(VoiceUtterance):
-    text: str
-
-
-class VoicePlaybackLevel(VoiceUtterance):
-    level: float
-
-
+# voice.* (sin audio por este canal)
 class VoiceProfileChanged(BaseModel):
     """Perfil de voz activo. Lleva el nombre del perfil, nunca su ID de Fish."""
 
@@ -280,16 +260,6 @@ EVENTS: Final[dict[str, type[BaseModel]]] = {
     "voice.state": VoiceState,
     "voice.playback": VoicePlayback,
     "voice.error": VoiceError,
-    # Antiguos (voz v1): siguen hasta WP9 porque `hub.publish` da KeyError con un tipo desconocido.
-    "voice.wakeword_detected": VoiceWakewordDetected,
-    "voice.listening_started": VoiceListeningStarted,
-    "voice.speech_ended": VoiceUtterance,
-    "voice.transcription_partial": VoiceTranscription,
-    "voice.transcription_completed": VoiceTranscription,
-    "voice.playback_started": VoiceUtterance,
-    "voice.playback_level": VoicePlaybackLevel,
-    "voice.playback_stopped": VoiceUtterance,
-    "voice.playback_interrupted": VoiceUtterance,
     "voice.profile_changed": VoiceProfileChanged,
 }
 EXPERIMENTAL_PREFIXES: Final = ("voice.",)

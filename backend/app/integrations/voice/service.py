@@ -221,6 +221,13 @@ class VoiceOrchestrator:
         self._mode = mode  # voice.state confirms it; the answer should not wait for that
         return self.snapshot()
 
+    def say_phrase(self, key: str, when: Literal["now", "when_silent"] = "now") -> None:
+        """`speak.phrase` from elsewhere in the backend (Jobs: `job_done`/`job_failed`).
+        Fire-and-forget through the bridge queue; never raises."""
+        if self._loop is None:
+            return
+        self._bridge.phrase(key, when)
+
     async def status(self) -> VoiceStatusOut:
         base = self.snapshot().model_dump()
         try:

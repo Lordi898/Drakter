@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ast
 import asyncio
 import logging
 import os
@@ -10,6 +11,8 @@ import time
 from collections.abc import Awaitable, Callable, Mapping
 from pathlib import Path
 from typing import Final
+
+from app.integrations.voice.settings import REPO_ROOT
 
 logger = logging.getLogger("drakter.voice.supervisor")
 
@@ -24,24 +27,34 @@ _AUDIO: Final = (
     "PULSE_SINK",
     "PULSE_SOURCE",
 )
-# Exact names of the voice v2 configuration (`VoiceConfig`, env or ~/.config/drakter/voice.toml).
-# ⚠️ Align with voice/config.py (WP1) at integration time: names not listed here do not pass.
-VOICE_CONFIG_VARS: Final = (
-    "DRAKTER_VOICE_MODELS_DIR",
-    "DRAKTER_VOICE_CONFIG",
-    "DRAKTER_STT_MODEL",
-    "DRAKTER_WAKE_THRESHOLD",
-    "DRAKTER_FOLLOWUP_S",
-    "DRAKTER_IDLE_NUDGE_S",
-    "DRAKTER_TURN_STOP_SECS",
-    "DRAKTER_FILLER_AFTER_MS",
-    "DRAKTER_BARGEIN_MIN_WORDS",
-    "DRAKTER_BARGEIN_DECIDE_MS",
-    "DRAKTER_DUCK_GAIN",
-    "DRAKTER_TOOL_PHRASE_GAP_S",
-    "DRAKTER_FISH_FREE_UNTIL",
-    "DRAKTER_ALLOW_PAID",
-)
+# `voice/config.py` reads `DRAKTER_VOICE_<FIELD>` for every `VoiceConfig` field, plus
+# `DRAKTER_VOICE_NULL`. The names come from that file (parsed, never imported), so a new
+# field passes without touching this one. `runtime_dir` and `data_dir` stay out: the backend
+# sets them (`DRAKTER_RUNTIME_DIR`, `DRAKTER_DATA_DIR`) so that the socket is the one it dials.
+_VOICE_CONFIG_PY: Final = REPO_ROOT / "voice" / "config.py"
+_BACKEND_OWNED: Final = frozenset({"runtime_dir", "data_dir"})
+
+
+def voice_config_vars(config_py: Path = _VOICE_CONFIG_PY) -> tuple[str, ...]:
+    """Exact environment names `voice.config.load_config` understands."""
+    try:
+        tree = ast.parse(config_py.read_text(encoding="utf-8"))
+    except (OSError, SyntaxError) as exc:
+        logger.error("Voice config fields not read",
+                     extra={"event": "voice_config_unreadable", "error": type(exc).__name__})
+        return ("DRAKTER_VOICE_NULL",)
+    fields = [
+        node.target.id
+        for cls in tree.body
+        if isinstance(cls, ast.ClassDef) and cls.name == "VoiceConfig"
+        for node in cls.body
+        if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name)
+    ]
+    names = [f"DRAKTER_VOICE_{name.upper()}" for name in fields if name not in _BACKEND_OWNED]
+    return (*names, "DRAKTER_VOICE_NULL")
+
+
+VOICE_CONFIG_VARS: Final = voice_config_vars()
 # Secrets the voice process needs. Taken only by exact name; never logged.
 VOICE_SECRETS: Final = ("FISH_API_KEY",)
 # Where voice.toml / voces.toml and the models live; the child resolves them itself.
