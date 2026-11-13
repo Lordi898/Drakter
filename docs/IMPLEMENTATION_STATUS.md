@@ -338,40 +338,33 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 
 - [ ] Instalar openWakeWord.
   ⚠️ Rediseño previsto sobre Pipecat (STT Whisper, TTS Fish Audio); en v1 `voice/` solo se estabiliza y documenta.
+  ⚠️ `OpenWakeWordProvider` existe, pero no hay modelo para «Drakter» (los preentrenados son CC BY-NC-SA 4.0 y de otras palabras); por defecto `NullWakeWord` (pulsar para hablar). No se instala en el cierre.
 - [ ] Configurar palabra de activación.
   ⚠️ Rediseño previsto sobre Pipecat (STT Whisper, TTS Fish Audio); en v1 `voice/` solo se estabiliza y documenta.
-- [ ] Instalar Silero VAD.
-  ⚠️ Rediseño previsto sobre Pipecat (STT Whisper, TTS Fish Audio); en v1 `voice/` solo se estabiliza y documenta.
-- [ ] Configurar detección de voz.
-  ⚠️ Rediseño previsto sobre Pipecat (STT Whisper, TTS Fish Audio); en v1 `voice/` solo se estabiliza y documenta.
-- [ ] Instalar Faster-Whisper.
-  ⚠️ Rediseño previsto sobre Pipecat (STT Whisper, TTS Fish Audio); en v1 `voice/` solo se estabiliza y documenta.
-- [ ] Probar modelo small.
-  ⚠️ Rediseño previsto sobre Pipecat (STT Whisper, TTS Fish Audio); en v1 `voice/` solo se estabiliza y documenta.
-- [ ] Medir latencia.
-  ⚠️ Rediseño previsto sobre Pipecat (STT Whisper, TTS Fish Audio); en v1 `voice/` solo se estabiliza y documenta.
-- [ ] Evaluar modelo medium.
-  ⚠️ Rediseño previsto sobre Pipecat (STT Whisper, TTS Fish Audio); en v1 `voice/` solo se estabiliza y documenta.
-- [ ] Instalar Kokoro.
-  ⚠️ Rediseño previsto sobre Pipecat (STT Whisper, TTS Fish Audio); en v1 `voice/` solo se estabiliza y documenta.
+  ⚠️ Depende de un modelo propio (`DRAKTER_WAKEWORD_MODEL`); `wakeword.set true` sin proveedor responde `invalid_request`.
+- [x] Instalar Silero VAD.
+- [x] Configurar detección de voz.
+- [x] Instalar Faster-Whisper.
+- [x] Probar modelo small.
+- [x] Medir latencia.
+  ⚠️ Medición lista y ejecutada (`voice/tests/bench_engines.py`, evento `voice.metrics`), pero con la máquina muy cargada (loadavg 9–14): STT small RTF 0,82–1,02; Kokoro primer audio 398–1 282 ms. Hay que repetirla con la máquina en reposo antes de dar cifras de producto.
+- [x] Evaluar modelo medium.
+- [x] Instalar Kokoro.
 - [ ] Instalar Piper.
   ⚠️ Rediseño previsto sobre Pipecat (STT Whisper, TTS Fish Audio); en v1 `voice/` solo se estabiliza y documenta.
-- [ ] Crear Voice Manager.
-  ⚠️ Rediseño previsto sobre Pipecat (STT Whisper, TTS Fish Audio); en v1 `voice/` solo se estabiliza y documenta.
-- [ ] Crear Voice Personality Engine.
-  ⚠️ Rediseño previsto sobre Pipecat (STT Whisper, TTS Fish Audio); en v1 `voice/` solo se estabiliza y documenta.
-- [ ] Crear reproducción de audio.
-  ⚠️ Rediseño previsto sobre Pipecat (STT Whisper, TTS Fish Audio); en v1 `voice/` solo se estabiliza y documenta.
-- [ ] Crear interrupciones.
-  ⚠️ Rediseño previsto sobre Pipecat (STT Whisper, TTS Fish Audio); en v1 `voice/` solo se estabiliza y documenta.
-- [ ] Crear cancelación de audio.
-  ⚠️ Rediseño previsto sobre Pipecat (STT Whisper, TTS Fish Audio); en v1 `voice/` solo se estabiliza y documenta.
+  ⚠️ `PiperTTS` y `FallbackTTS` existen (proceso externo, venv propio), pero no se instaló `piper-tts` ni se probó.
+- [x] Crear Voice Manager.
+- [x] Crear Voice Personality Engine.
+- [x] Crear reproducción de audio.
+- [x] Crear interrupciones.
+- [x] Crear cancelación de audio.
 - [ ] Sincronizar boca.
   ⚠️ Rediseño previsto sobre Pipecat (STT Whisper, TTS Fish Audio); en v1 `voice/` solo se estabiliza y documenta.
-- [ ] Crear gestión de errores.
-  ⚠️ Rediseño previsto sobre Pipecat (STT Whisper, TTS Fish Audio); en v1 `voice/` solo se estabiliza y documenta.
+  ⚠️ La voz emite `voice.playback_level`, pero no llega a la boca: el backend no publica los eventos de voz y `SvgCharacter.setMouth` no hace nada.
+- [x] Crear gestión de errores.
 - [ ] Probar conversación por voz completa.
   ⚠️ Rediseño previsto sobre Pipecat (STT Whisper, TTS Fish Audio); en v1 `voice/` solo se estabiliza y documenta.
+  ⚠️ No es posible hoy: `backend/app/integrations/voice` no está registrado en `main.py` (a propósito, `DRAKTER_VOICE_ENABLED=false` por defecto) y el escritorio no tiene cliente de voz (botón de micrófono desactivado).
 
 ## Checklist 15. Automejora
 
@@ -417,7 +410,8 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 - [ ] Medir latencia de TTS.
 - [ ] Medir latencia de Hermes.
 - [ ] Optimizar consultas SQLite.
-- [ ] Optimizar FTS5.
+- [x] Optimizar FTS5.
+  ⚠️ Comprobado en la búsqueda global: índice de prefijos `prefix='2 3'`, pesos bm25 por columna y `reconcile_structured` con atajo sin cambios. Con 5.000 tareas sintéticas: reconcile inicial 0,95 s, sin cambios 18 ms, consultas de caso peor 190–460 ms. El FTS del almacén se cubre en la Checklist 10.
 - [ ] Optimizar recuperación de memoria.
 - [ ] Optimizar carga de interfaz.
 - [ ] Crear instalador.

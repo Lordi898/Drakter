@@ -617,3 +617,19 @@ Decisiones técnicas, cambios de tecnología y motivos.
 - **Alternativas descartadas:** dejar la casilla en `[ ]` hasta ajustar el estilo (exigiría tocar los textos de identidad, fuera del alcance del cierre).
 - **Motivo:** la consistencia está comprobada; ajustar el estilo es trabajo de personalidad, no de cierre.
 - **Impacto:** `IMPLEMENTATION_STATUS.md` Checklist 4. Sin cambios en `agent/identity/`.
+
+## [2026-11-13] Cierre de la voz propia: verificada y congelada a la espera de Pipecat
+- **Contexto:** cierre del proyecto. El pipeline propio (`voice/`: Silero VAD, Faster-Whisper, Kokoro, Piper de respaldo, Voice Manager e IPC por socket Unix) y el puente del backend (`backend/app/integrations/voice/`) están escritos, pero el puente no está registrado en `main.py` y el desktop no tiene cliente de voz. drakter-1 ha decidido rediseñar la voz sobre Pipecat (STT Whisper, TTS Fish Audio).
+- **Decisión:** el pipeline propio se deja verificado y sin ampliar: arranca como proceso aislado, cumple su contrato IPC y mide latencia (`bench_engines.py`, `voice.metrics`). No se registra en `main.py`, no se instalan Piper ni openWakeWord y no se toca la GUI. Whisper `small` se mantiene por defecto porque, medido en esta máquina, `medium` es ~4× más lento y usa más del doble de RAM.
+- **Alternativas descartadas:** conectarlo ya a `main.py`, el agente y el desktop (es funcionalidad nueva y se perdería con el cambio a Pipecat); usar Whisper `medium` por defecto (inviable en esta CPU).
+- **Motivo:** cerrar sin ampliar lo que se va a sustituir y sin dejar nada roto.
+- **Comprobado:** `python -m voice` arranca y responde al contrato IPC (`status`, `speak`, `interrupt`, `listen.cancel`); `voice/tests/check_pipeline.py` 12/12; transcripción real con Whisper small correcta.
+- **Impacto:** Checklist 14 (13 casillas verificadas; ⚠️ en wake word, Piper, sincronizar boca y conversación completa). Checklist 17 «Medir latencia de STT/TTS»: el método está listo, pero hay que repetir la medición con la máquina en reposo.
+
+## [2026-11-13] Una sola ruta de búsqueda global
+- **Contexto:** `app/api/relations_tags.py` (rama almacén-relaciones) y `app/api/search.py` (rama búsqueda) declaraban ambos `GET /api/v1/search`. El descubrimiento de routers monta por orden alfabético, así que ganaba el de relaciones, que no llama a `reconcile_structured`: tareas, proyectos, hábitos, eventos y asignaturas nunca llegaban al índice.
+- **Decisión:** se elimina la ruta de `relations_tags.py`. La búsqueda global es `app/api/search.py` + `services/search.py` (`search_global`), coherente con la entrada "Búsqueda con reconcile_structured".
+- **Alternativas descartadas:** añadir la reconciliación a `storage_search_all` (dos implementaciones del mismo contrato; su extracto con `[ ]` no encaja con `SearchHitOut` que espera el desktop).
+- **Motivo:** un único punto de entrada y de escritura del índice.
+- **Comprobado:** con la app real, 33/33 (búsqueda por prefijo de los 5 tipos, `content_trust=untrusted`, sintaxis FTS hostil → 200, cursor sin solapes, archivados excluidos).
+- **Impacto:** `backend/app/api/relations_tags.py` (`7787e9b`); `backend/app/services/storage_search_all.py` queda sin uso; CL 10 «Implementar búsqueda».

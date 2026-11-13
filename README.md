@@ -17,7 +17,7 @@ Arranque: `scripts/drakter-local.sh start anthropic` (con el modelo real) o `sta
 | Arquitectura y preparación (CL0) | raíz, `contracts/`, `docs/`, `scripts/` | Verificado |
 | Backend FastAPI + SQLite (CL2) | `backend/app/` | Verificado, incluido el sistema de permisos: guardia de red y roles, y confirmaciones cableadas en el arranque con un único camino (`ActionService`, 300 s) |
 | Base de datos y migraciones (CL6) | `backend/migrations/` (0001–0011) | Verificado: 36 tablas, integridad referencial, copia y restauración |
-| Escritorio (CL1) | `desktop/` | Visto en la app: ventana, navegación, área central, panel contextual, configuración y gestión de errores; las 10 pantallas cargan contra el backend. ⚠️ Notificaciones y empaquetado en verificación; búsqueda global (Ctrl+K) sin montar |
+| Escritorio (CL1) | `desktop/` | Visto en la app: ventana, navegación, área central, panel contextual, configuración y gestión de errores; las 10 pantallas cargan contra el backend. Búsqueda global (Ctrl+K), notificaciones locales, Hoy y Ajustes funcionan contra el backend. ⚠️ Empaquetado en verificación |
 | Hermes y chat (CL3) | `backend/app/integrations/`, `agent/` | GUI → backend → Hermes v0.22.7 → respuesta en el chat, **solo con el stub** `tools/dev-llm-stub/` (recomprobación con Haiku real en curso). Verificados sesiones, envío, recepción, eventos y recuperación tras caída del runner. Las suites de evals (`agent/evals/`, 46 casos) están listas para correr con clave |
 | Skills y herramientas (CL13) | `agent/skills/`, `backend/app/tools/` | 78 herramientas por MCP con parámetros, permisos y errores verificados. ⚠️ Las Skills están inertes en Hermes (se desactiva `skill_manage`); las confirmaciones del agente fallan cerradas sin crear la pendiente; selección y encadenado comprobados con Haiku real (evals) |
 | Personalidad y contexto (CL4) | `agent/identity/`, `agent/context/`, `agent/knowledge/` | Verificado: 14 archivos compuestos en el `SOUL.md` de Hermes, con la seguridad primero, y consistencia de personalidad comprobada con Claude Haiku 5.5 real. Los matices de estilo pasan al rediseño de personalidad |
@@ -28,7 +28,7 @@ Arranque: `scripts/drakter-local.sh start anthropic` (con el modelo real) o `sta
 | Calendario y asignaturas | `backend/app/`, `desktop/src/modules/` | En verificación |
 | Relaciones (CL11) | `backend/app/services/relations.py`, `desktop/src/modules/relationships/` | Verificado el servicio, los tipos, las validaciones, las consultas y la integridad. ⚠️ La pantalla falta verla en Electron; herramientas sin probar con modelo |
 | Memoria (CL12) | `memory/`, `backend/app/integrations/memory/` | Verificado el adaptador SQLite + FTS5 y su ciclo (extraer, clasificar, deduplicar, contradicciones, caducidad). ⚠️ La recuperación al turno está pendiente de fusión y aún no se puede olvidar; OpenViking desactivado (U-1, sin confirmar) |
-| Voz (CL14) | `voice/` | ⚠️ En v1 solo se estabiliza; rediseño previsto sobre Pipecat |
+| Voz (CL14) | `voice/` | Verificado como proceso aislado: VAD, Whisper small, Kokoro, Voice Manager, reproducción e interrupciones. ⚠️ Sin conectar a la app (no hay conversación por voz), sin wake word ni Piper; rediseño previsto sobre Pipecat |
 | Automejora (CL15) | `improvement/`, `backend/app/services/improvement_*.py` | Verificado el ciclo (feedback, propuestas, evaluación aislada, rama Git, revertir) y que no puede cambiar nada sin aprobación. ⚠️ Sin flujo de aprobación en la app ni pantalla |
 
 ## Estructura de carpetas
