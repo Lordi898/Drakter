@@ -32,10 +32,11 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 - [x] Crear navegación lateral.
 - [x] Crear área central.
 - [x] Crear panel contextual.
-- [ ] Crear notificaciones.
+- [x] Crear notificaciones.
 - [x] Crear configuración.
 - [x] Crear gestión de errores.
-- [ ] Configurar empaquetado.
+- [x] Configurar empaquetado.
+  Nota: con esta configuración drakter-50 generó el AppImage; lo pendiente del `.deb` está en la Checklist 17 «Crear instalador».
 
 ## Checklist 2. Backend
 

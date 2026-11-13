@@ -46,7 +46,7 @@ scripts/drakter-local.sh stop
 
 - `backend/.venv` (Python 3.12): `cd backend && uv sync --frozen`. `uv` está en `~/.local/bin`.
 - `desktop/node_modules`: `cd desktop && npm ci && node node_modules/electron/install.js` (npm 12 no ejecuta el script que descarga Electron).
-- Hermes v0.22.7 (`b200f5b`, Python 3.14) en `/var/tmp/drakter-agente-hermes/hv/venv`, expuesto como `~/.local/bin/hermes-python` (o `DRAKTER_HERMES_PYTHON`). `/var/tmp` sobrevive a reinicios, pero no es una ubicación definitiva.
+- Hermes v0.22.7 (`b200f5b`, Python 3.14) en `/var/tmp/drakter-agente-hermes/hv/venv`, expuesto como `~/.local/bin/hermes-python`, o con `DRAKTER_HERMES_PYTHON` en `~/.config/drakter/.env` (no en el entorno de `dev.sh`: Electron no la pasa al backend). `/var/tmp` sobrevive a reinicios, pero no es una ubicación definitiva.
 - Sandbox de Electron desactivado solo en desarrollo (`DRAKTER_DEV_NO_SANDBOX=1`, `ELECTRON_DISABLE_SANDBOX=1`): AppArmor restringe userns y `chrome-sandbox` no es `root:4755` (requiere `sudo`, ver `docs/installation/sandbox-electron.md`).
 
 ## Bloqueos
@@ -70,11 +70,13 @@ scripts/drakter-local.sh stop
 - **Instalador:** el AppImage se genera con el backend congelado corregido (`39503a7`), pero el `.deb` no se ha regenerado tras ese arreglo (`fpm` falló con `/tmp` lleno; regenerar con más de 3 GB libres, `flock` y `TMPDIR` en disco, ver `docs/installation/paquete-deb.md`), no se ha instalado ni se ha abierto la ventana empaquetada sin `--no-sandbox`. Sin icono propio ni proceso de versión (0.1.0).
 - **Sin medir:** RAM/CPU general, latencia de Hermes, y STT/TTS en reposo. Sin pasada de optimización de SQLite, FTS5, memoria ni carga de interfaz (el renderer es un único JS de 1,63 MB).
 - **Hora de los avisos de eventos:** el aviso dice «Empieza a las HH:MM» en la zona del evento, mientras Hoy muestra la hora en la zona del usuario. Solo difiere si el evento tiene otra zona.
+- **Pruebas paralelas de Electron:** con otra instancia abierta, `requestSingleInstanceLock` cierra la nueva sin ventana; las pruebas usan `--user-data-dir` propio. Con Hermes sin preparar, `GET /api/v1/confirmations?status=pending` da 503 y la GUI muestra «No se pudieron leer las confirmaciones pendientes» (no rompe).
 - **Sin comprobar en pantalla:** las vistas diaria y mensual del calendario no se han visto funcionar en Electron.
 - **Pasada e2e:** el arnés no espera a `agent/status = idle` antes de conversar (Hermes tarda 3-6 s), así que `conversacion.*` da 503 `agent_unavailable`; los guiones `herramienta-permitida`, `accion-destructiva` e `inyeccion-documento` piden `read_file`/`terminal`, que Drakter nunca ofrece. `desktop.arranca` falla en todas las pasadas porque `tests/e2e/harness/stack.py` no pasa `DRAKTER_DEV_NO_SANDBOX=1` (con la variable arranca; cambio pedido a `drakter-32`). Además, el catálogo (`tests/e2e/catalog.toml`) usa `GET /api/v1/audit` y la ruta real es `/api/v1/activity`.
 
 ### Cerrados en el cierre
 
+- **Escritorio (CL1):** Electron 45 con backend real, React 19, TypeScript, Tailwind 4, shadcn/ui, ventana, 10 secciones, área central, panel contextual, notificaciones, configuración y gestión de errores vistos en la app; `ALLOWED_ROUTES` regenerado desde el contrato (`89a87b5`) y la GUI no puede aplicar ni revertir mejoras.
 - **Confirmaciones pedidas por el agente:** su registro de herramientas usa `BackendToolGate` (`b722aca`, `42a0a17`): las acciones CONFIRM crean la confirmación pendiente que se aprueba en la app, y quedan en `audit_events`. Falta recomprobar el borrado desde el agente en cada módulo.
 - **Hoy, búsqueda, Ajustes y notificaciones vistos en Electron:** Hoy carga como pantalla inicial (antes se quedaba en «no conectado» si cargaba antes que el backend; arreglado en `76270ca`), Ctrl+K agrupa resultados de tareas, eventos, proyectos y asignaturas, y los recordatorios salen como aviso emergente, campana y centro de notificaciones.
 - **Revisión adversarial de seguridad:** hecha (drakter-34). Banco de 200 ataques de 125/27/47/1 a 169/12/19/0 (BLOCKED/BREACH/N/A/ERROR). Arreglados: auditoría que registraba rechazos como éxito, fugas en logs (LEAK-02/03/05), caracteres invisibles en el sobre y en memoria (INJ-03/16/40/41), restauración con `-wal` huérfano (FILE-DB-07) y endurecimiento de `pending_confirmations` (`0012`). Electron sin hallazgos reales.
