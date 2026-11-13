@@ -166,7 +166,13 @@ class AgentRuntime:
                 "hermes not prepared",
                 extra={"event": "hermes_prepare_failed", "kind": type(exc).__name__},
             )
-        provider = HermesProvider(self.agent_settings, supervisor, REPO_ROOT)
+        provider = HermesProvider(
+            self.agent_settings,
+            supervisor,
+            REPO_ROOT,
+            memory=lambda: getattr(self.tool_state, "memory_service", None),
+            turns=self.turns,
+        )
         await provider.start()
         self.provider = provider
         self._sync_provider_state()
