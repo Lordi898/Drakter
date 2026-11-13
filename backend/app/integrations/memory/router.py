@@ -3,13 +3,16 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import Annotated
+from typing import Annotated, Any
 from uuid import UUID
 
+from drakter_contracts.common import Origin
 from fastapi import APIRouter, Depends, Query, Request
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.core.config import Settings
+from app.core.errors import AppError
+from app.integrations.memory.actions import APPROVE_MEMORY_GUI, FORGET_MEMORY_GUI, MemoryTargetArgs
 from app.integrations.memory.audit import JsonlAudit
 from app.integrations.memory.models import (
     L0_MAX_CHARS,
@@ -37,6 +40,8 @@ from app.integrations.memory.pipeline.extract import RuleExtractor
 from app.integrations.memory.ports import DenyAllGate
 from app.integrations.memory.service import USER, MemoryService
 from app.integrations.memory.store_sqlite import SqliteMemoryAdapter
+from app.permissions.models import ActorContext
+from app.permissions.models import Principal as PermissionPrincipal
 
 router = APIRouter(prefix="/api/v1/memory", tags=["memory"])
 
@@ -99,10 +104,19 @@ class ResolveBody(BaseModel):
     kept: UUID | None = None
 
 
-class ForgetBody(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    confirmation_id: str | None = Field(default=None, max_length=128)
+def _confirmable(request: Request, action: str, memory_id: UUID, service: MemoryService) -> Any:
+    """409 `confirmation_required`; it runs in `/confirmations/{id}/approve`. No pipeline, no action."""
+    service.get(memory_id)  # 404 before leaving a pending row
+    actions = getattr(request.app.state, "actions", None)
+    spec = actions.registry.get(action) if actions is not None else None
+    if spec is None:
+        raise AppError("confirmation_unavailable", "No se puede confirmar ahora mismo. No se ha cambiado nada.", 503)
+    actor = ActorContext(
+        principal=PermissionPrincipal.UI,
+        origin=Origin.REST,
+        correlation_id=request.scope.get("state", {}).get("request_id") or "",
+    )
+    return actions.unwrap(actions.execute_or_request(actor, spec, MemoryTargetArgs(id=memory_id)))
 
 
 @router.get("", response_model=MemoryPage)
@@ -175,8 +189,10 @@ def correct_memory(memory_id: UUID, patch: MemoryPatch, service: Service) -> Mem
 
 
 @router.post("/{memory_id}/approve", response_model=MemoryRecord)
-def approve_memory(memory_id: UUID, service: Service) -> MemoryRecord:
-    return service.approve(memory_id, USER)
+def approve_memory(memory_id: UUID, request: Request, service: Service) -> Any:
+    if any(memory_id in (c.memory_a, c.memory_b) for c in service.conflicts(open_only=True)):
+        raise AppError("memory_conflict_open", "Resolve the open conflict first.", 409)
+    return _confirmable(request, APPROVE_MEMORY_GUI, memory_id, service)
 
 
 @router.post("/{memory_id}/reject", response_model=MemoryRecord)
@@ -185,5 +201,5 @@ def reject_memory(memory_id: UUID, service: Service) -> MemoryRecord:
 
 
 @router.post("/{memory_id}/forget", response_model=ForgetReport)
-def forget_memory(memory_id: UUID, body: ForgetBody, service: Service) -> ForgetReport:
-    return service.forget(memory_id, body.confirmation_id, USER)
+def forget_memory(memory_id: UUID, request: Request, service: Service) -> Any:
+    return _confirmable(request, FORGET_MEMORY_GUI, memory_id, service)
