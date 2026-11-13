@@ -18,7 +18,7 @@ python agent/evals/run.py --provider anthropic --suite personalidad --case <id>
 
 Salida: `report.json` y `report.md` en un directorio bajo `$TMPDIR` (o `--out`). Códigos: `0` bien, `1` algún fallo, `2` bloqueado (sin credenciales o escenarios inválidos).
 
-Cada caso ofrece al modelo las herramientas de `schemas/tool_inputs.json` (esquemas reales; regenerar con `tools/extract_schemas.py`) y como `system` las reglas de seguridad más `agent/identity/` en el orden de `home.py`. Antes de integrar, catálogo, stub y reglas se leen de sus ramas (`git show`); después, del árbol.
+Cada caso ofrece al modelo las herramientas de `schemas/tool_inputs.json` (esquemas reales; regenerar con `tools/extract_schemas.py`) y como `system` las reglas de seguridad más los 14 archivos de `agent/identity/`, `agent/knowledge/` y `agent/context/` en el orden de `home.py`. Antes de integrar, catálogo, stub y reglas se leen de sus ramas (`git show`); después, del árbol.
 
 ## Por qué los casos llevan controles negativos
 
@@ -77,7 +77,7 @@ Un caso guionizado acierta por construcción, así que su `ok` no demuestra nada
 - **Sin voz.** No hay aún forma de señalar el canal, así que las reglas de voz de `COMMUNICATION.md` no se evalúan.
 - **Consistencia.** Con `--repeat N` cada caso corre en N sesiones nuevas y el informe da los caminos de herramientas distintos. Con el stub siempre sale 1: no significa nada.
 - **Reglas de texto.** `style.*` y `must_not_match` son búsquedas de texto: detectan lo prohibido, no prueban que la voz sea buena. Un aprobado mecánico en personalidad no sustituye a leer las respuestas.
-- **Esquemas.** 71 de 78 herramientas: las 7 sin código no se ofrecen. `generated_from` indica de qué commits salieron; algunos worktrees estaban sin commitear, así que hay que regenerar tras la integración.
+- **Esquemas.** 74 de 78 herramientas: las que no tienen código no se ofrecen. `generated_from` indica el commit de `drakter/integracion` del que salieron; tras cambiar argumentos de una herramienta, regenerar desde el árbol integrado (mismo `args_model.model_json_schema()` que usa `mcp_bridge.py`).
 
 ## Coste con clave
 

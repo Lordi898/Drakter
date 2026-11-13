@@ -839,7 +839,8 @@
         {
          "id": "5e1a0000-0000-4000-8000-000000000151",
          "title": "Renovar el pasaporte",
-         "status": "pending"
+         "status": "pending",
+         "revision": 1
         }
        ],
        "total": 1
@@ -945,7 +946,8 @@
         {
          "name": "delete_task",
          "input": {
-          "task_id": "5e1a0000-0000-4000-8000-000000000151"
+          "task_id": "5e1a0000-0000-4000-8000-000000000151",
+          "expected_revision": 1
          }
         }
        ]
@@ -1004,7 +1006,8 @@
         {
          "id": "5e1a0000-0000-4000-8000-000000000161",
          "title": "Comprar el regalo de Raquel",
-         "status": "pending"
+         "status": "pending",
+         "revision": 1
         }
        ],
        "total": 1
@@ -1085,7 +1088,8 @@
       {
        "name": "delete_task",
        "input": {
-        "task_id": "5e1a0000-0000-4000-8000-000000000161"
+        "task_id": "5e1a0000-0000-4000-8000-000000000161",
+        "expected_revision": 1
        }
       }
      ]
@@ -1120,7 +1124,8 @@
         {
          "name": "delete_task",
          "input": {
-          "task_id": "5e1a0000-0000-4000-8000-000000000161"
+          "task_id": "5e1a0000-0000-4000-8000-000000000161",
+          "expected_revision": 1
          }
         }
        ]

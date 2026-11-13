@@ -24,7 +24,8 @@ EVALS_DIR = Path(__file__).resolve().parent
 REPO_ROOT = EVALS_DIR.parents[1]
 SCENARIOS_DIR = EVALS_DIR / "scenarios"
 SCHEMAS_PATH = EVALS_DIR / "schemas" / "tool_inputs.json"
-IDENTITY_DIR = REPO_ROOT / "agent" / "identity"
+# After integration the identity files live in three folders (see memory/context/rules.py).
+IDENTITY_DIRS = tuple(REPO_ROOT / "agent" / name for name in ("identity", "knowledge", "context"))
 
 CONTRACTS_REF = "drakter/contratos"
 STUB_REF = "drakter/dev-stub"
@@ -75,14 +76,15 @@ def compose_system(system_file: Path | None) -> tuple[str, dict[str, Any]]:
         text = system_file.read_text(encoding="utf-8")
         return f"{text.strip()}\n\n{EVAL_CLOCK}", {"source": str(system_file), "files": []}
     safety, origin = read_source(SAFETY_PATH, HERMES_REF)
-    missing = [name for name in IDENTITY_ORDER if not (IDENTITY_DIR / name).is_file()]
+    found = {name: next((d / name for d in IDENTITY_DIRS if (d / name).is_file()), None) for name in IDENTITY_ORDER}
+    missing = [name for name, path in found.items() if path is None]
     if missing:
         raise EvalError(f"faltan archivos de identidad: {missing}")
-    parts = [safety.strip()] + [(IDENTITY_DIR / name).read_text(encoding="utf-8").strip() for name in IDENTITY_ORDER]
+    parts = [safety.strip()] + [found[name].read_text(encoding="utf-8").strip() for name in IDENTITY_ORDER]
     text = "\n\n".join(parts + [EVAL_CLOCK])
     return text, {
-        "source": f"{origin} + agent/identity/",
-        "files": list(IDENTITY_ORDER),
+        "source": f"{origin} + agent/{{identity,knowledge,context}}/",
+        "files": [str(found[name].relative_to(REPO_ROOT)) for name in IDENTITY_ORDER],
         "sha256": hashlib.sha256(text.encode()).hexdigest()[:16],
         "chars": len(text),
     }
