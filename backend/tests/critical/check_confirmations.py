@@ -51,7 +51,11 @@ def check(name: str, ok: object, detail: object = "") -> None:
 
 class Args(ContractModel):
     key: str
-    password: str = "s3cret-value"
+    note: str = "s3cret-value"
+
+
+class Secret(ContractModel):
+    password: str
 
 
 class Bulk(ContractModel):
@@ -202,6 +206,10 @@ async def main(root: Path) -> None:
     check("variante con barras dobles tampoco", code in (403, 404), code)
     code, _ = await asgi(app, "POST", f"{base}/reject", ui)
     check("token ui no rechaza: 403", code == 403, code)
+    code, body = await asgi(app, "POST", f"{base}/approve\n", ui, body_ok)
+    check("salto de línea final no burla la matriz al aprobar", code in (403, 404), (code, body))
+    code, body = await asgi(app, "POST", f"{base}/reject\n", ui)
+    check("salto de línea final no burla la matriz al rechazar", code in (403, 404), (code, body))
     code, _ = await asgi(app, "POST", f"{base}/approve", {**main_process, "origin": "app://drakter"}, body_ok)
     check("con Origin: 403 aunque traiga approver", code == 403, code)
     code, _ = await asgi(app, "POST", f"{base}/approve", main_process, {"params_hash": "zz"})
@@ -210,7 +218,7 @@ async def main(root: Path) -> None:
     check("campo extra: 422", code == 422, code)
     code, body = await asgi(app, "GET", base, ui)
     check("la GUI ve la pendiente, sin args_hash", code == 200 and body["params_hash"] == hash_ and "args_hash" not in body, (code, body))
-    check("la GUI no ve argumentos fuera de la lista blanca", "password" not in json.dumps(body), body)
+    check("la GUI no ve argumentos fuera de la lista blanca", "s3cret-value" not in json.dumps(body), body)
     code, _ = await asgi(app, "GET", base, main_process)
     check("approver no lee: la matriz es exacta", code == 403, code)
     for principal in (Principal.AGENT, Principal.UI):
@@ -241,6 +249,10 @@ async def main(root: Path) -> None:
     code, _ = await asgi(app, "POST", f"/api/v1/confirmations/{other}/approve", main_process,
                          {"params_hash": actions.detail(conn, UUID(other))["params_hash"]})
     check("rechazada no se aprueba: 409", code == 409, code)
+
+    print("-- el resumen no engaña")
+    from app.services.actions import _displayable
+    check("relleno invisible neutralizado y corte marcado", "\u3164" not in _displayable("a\u3164b") and _displayable("x" * 900).endswith("…") and len(_displayable("x" * 900)) == 500)
 
     print("-- concurrencia")
     race = dispatch("demo_delete", {"key": "c"}, agent(), actions=actions)["action_id"]
@@ -309,7 +321,8 @@ async def main(root: Path) -> None:
         "sin extra=forbid": {"args_model": type("Loose", (ContractModel,), {"model_config": {"extra": "ignore"}})},
         "sin resumen": {"risk": RiskClass.CONFIRM, "summarize": None},
         "lectura que escribe": {"permission": "demo.read", "risk": RiskClass.WRITE},
-        "auditar un secreto": {"audit": {"password": "log"}},
+        "guardar un secreto": {"args_model": Secret},
+        "lectura sin permiso de lectura": {"risk": RiskClass.READ},
     }.items():
         try:
             base_args = {"name": "bad_spec", "permission": "demo.write", "risk": RiskClass.WRITE,
@@ -323,6 +336,32 @@ async def main(root: Path) -> None:
         check("registro cerrado tras arrancar", False)
     except RuntimeError:
         check("registro cerrado tras arrancar", True)
+
+    print("-- hallazgos de la revisión adversarial")
+    try:
+        check("agente sin turno, en cualquier origen", dispatch("demo_read", {"key": "x"}, ActorContext(Principal.AGENT, Origin.REST, "c"), actions=actions)["error"]["code"] == "no_active_turn")
+    except KeyError:
+        check("agente sin turno, en cualquier origen", False)
+    conn.execute("INSERT INTO settings (key, value, updated_at) VALUES ('bulk_threshold', '100', '2026-01-01T00:00:00.000Z')")
+    result = dispatch("demo_bulk", {"count": 99}, agent(), actions=actions)
+    check("un ajuste no sube el umbral", result["status"] == "confirmation_required", result)
+    turn = str(uuid4())
+    with ThreadPoolExecutor(8) as pool:
+        burst = list(pool.map(lambda _: dispatch("demo_bulk", {"count": 9}, agent(turn), actions=actions)["status"], range(16)))
+    check("el acumulado no se reparte entre llamadas paralelas", burst.count("ok") == 1, burst)
+    negative = ActionSpec("demo_negative", "demo.write", RiskClass.WRITE, Bulk, lambda c, p: {"ok": True},
+                          summarize=lambda p: "lote", count_affected=lambda c, p: p.count)
+    actions.registry._frozen = False  # noqa: SLF001
+    actions.registry.register(negative)
+    actions.registry.freeze()
+    turn = str(uuid4())
+    dispatch("demo_negative", {"count": -1000}, agent(turn), actions=actions)
+    check("un recuento negativo no baja el acumulado", dispatch("demo_bulk", {"count": 9}, agent(turn), actions=actions)["status"] == "ok" and dispatch("demo_bulk", {"count": 9}, agent(turn), actions=actions)["status"] == "confirmation_required")
+    for _ in range(60):
+        last = dispatch("demo_delete", {"key": "flood"}, agent(), actions=actions)
+    check("tope de pendientes del agente", last["status"] == "error" and last["error"]["code"] == "rate_limited", last)
+    actions.expire_all_pending(conn)
+    conn.execute("DELETE FROM settings WHERE key = 'bulk_threshold'")
 
     print("-- 409 de REST")
     pending = actions.execute_or_request(agent(), SPECS[0], Args(key="rest"))
@@ -432,6 +471,19 @@ async def main(root: Path) -> None:
         check("hash que no corresponde a los args no ejecuta", False)
     except AppError as exc:
         check("hash que no corresponde a los args no ejecuta", exc.code == "conflict" and len(ran) == 1, exc.code)
+    def effect_then_breaks(c, ctx, args):
+        return {"bad": float("nan")}
+    def raises_midway(c, ctx, args):
+        raise OSError("disco")
+    modular._executors.update(effect_then_breaks=effect_then_breaks, raises_midway=raises_midway)  # noqa: SLF001
+    for tool, label in (("effect_then_breaks", "efecto hecho y fallo después"), ("raises_midway", "externo roto a medias")):
+        row_id = foreign_row(tool)
+        try:
+            modular.approve(conn, UUID(row_id), modular.detail(conn, UUID(row_id))["params_hash"], Principal.APPROVER, correlation_id="c")
+            check(f"{label}: outcome_uncertain", False)
+        except AppError:
+            stored = conn.execute("SELECT status, error_code FROM pending_confirmations WHERE id=?", (row_id,)).fetchone()
+            check(f"{label}: outcome_uncertain", stored == ("failed", "outcome_uncertain"), stored)
     envelope = hub.publish("confirmation.requested", events[0][1], correlation_id="c")
     check("el hub real acepta el evento", envelope.type == "confirmation.requested")
     check("TTL de 300 s", actions._ttl == 300)  # noqa: SLF001

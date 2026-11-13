@@ -39,6 +39,7 @@ from pydantic import BaseModel, ValidationError
 
 from app.audit.writer import AuditEvent, filter_params, write
 from app.core.errors import AppError
+from app.core.logging import redact
 from app.database.connection import connect
 from app.permissions.canonical import (
     after,
@@ -61,10 +62,13 @@ from app.permissions.models import (
 
 CONFIRMATION_TTL_SECONDS: Final = 300
 MAX_SUMMARY_LENGTH: Final = 500
+MAX_PENDING_FROM_AGENT: Final = 50
+_BLANK_LETTERS: Final = frozenset("\u115f\u1160\u2800\u3164\uffa0")
 DEFAULT_LISTED: Final = 50
 MAX_LISTED: Final = 200
 _DECIDED_VIA: Final = "desktop"
 _SYSTEM_CORRELATION: Final = "system"
+_UNCERTAIN: Final = "outcome_uncertain"
 _COLUMNS: Final = (
     "id, tool_name, actor_type, origin, turn_id, correlation_id, args_json, args_hash, "
     "targets_json, summary, affected_count, risk, status, created_at, expires_at, "
@@ -125,9 +129,13 @@ def _as_data(outcome: Any) -> dict[str, Any]:
 def _displayable(text: str) -> str:
     """Drop control and bidi characters: a summary must read as what it stores."""
     cleaned = "".join(
-        " " if unicodedata.category(char) in ("Cc", "Cf", "Zl", "Zp") else char for char in text
+        " " if unicodedata.category(char) in ("Cc", "Cf", "Zl", "Zp") or char in _BLANK_LETTERS
+        else char
+        for char in text
     )
-    return cleaned[:MAX_SUMMARY_LENGTH]
+    if len(cleaned) > MAX_SUMMARY_LENGTH:
+        return f"{cleaned[:MAX_SUMMARY_LENGTH - 1]}…"
+    return cleaned
 
 
 class ActionService:
@@ -194,6 +202,12 @@ class ActionService:
                         reason=decision.reason,
                     )
                 if decision.verdict is Verdict.CONFIRM:
+                    if self._too_many_pending(conn, ctx):
+                        conn.execute("ROLLBACK")
+                        return self._refuse(
+                            conn, ctx, spec, ErrorCode.RATE_LIMITED.value,
+                            "Too many pending confirmations", args=args, digest=digest,
+                        )
                     return self._request(conn, ctx, spec, params, canonical, digest, affected)
                 event = self._event(spec, "success", args, digest, affected)
                 if spec.external:
@@ -217,7 +231,6 @@ class ActionService:
                 return self._refuse(
                     conn, ctx, spec, code, message, args=args, digest=digest, result="failed"
                 )
-            self._count_for_turn(ctx, spec, affected)
             return ToolOk(data=dict(outcome))
         finally:
             conn.close()
@@ -237,6 +250,12 @@ class ActionService:
             conn.execute("BEGIN IMMEDIATE")
             try:
                 decision, affected = self._decide(conn, ctx, spec, params)
+                if decision.verdict is Verdict.CONFIRM and self._too_many_pending(conn, ctx):
+                    conn.execute("ROLLBACK")
+                    return Verdict.DENY, self._refuse(
+                        conn, ctx, spec, ErrorCode.RATE_LIMITED.value,
+                        "Too many pending confirmations", args=args, digest=digest,
+                    )
                 if decision.verdict is Verdict.CONFIRM:
                     return Verdict.CONFIRM, self._request(
                         conn, ctx, spec, params, canonical, digest, affected
@@ -258,7 +277,6 @@ class ActionService:
                     reason=decision.reason,
                 )
                 return Verdict.DENY, refused
-            self._count_for_turn(ctx, spec, affected)
             return Verdict.ALLOW, None
         finally:
             conn.close()
@@ -266,7 +284,7 @@ class ActionService:
     def _decide(
         self, conn: sqlite3.Connection, ctx: ActorContext, spec: ActionSpec, params: BaseModel
     ) -> tuple[Decision, int]:
-        affected = spec.count_affected(conn, params) if spec.count_affected else 1
+        affected = max(spec.count_affected(conn, params), 0) if spec.count_affected else 1
         decision = self._engine.evaluate(
             ctx.principal,
             spec,
@@ -275,7 +293,22 @@ class ActionService:
             tainted=ctx.tainted,
             bulk_threshold=self._bulk_threshold(conn),
         )
+        if decision.verdict is Verdict.ALLOW:
+            # Reserved here, under BEGIN IMMEDIATE: parallel calls cannot share the margin.
+            # A failed action stays counted, which errs on the side of confirming.
+            self._count_for_turn(ctx, spec, affected)
         return decision, affected
+
+    @staticmethod
+    def _too_many_pending(conn: sqlite3.Connection, ctx: ActorContext) -> bool:
+        """A flood of requests must not bury the one the user has to read."""
+        if ctx.principal is not Principal.AGENT:
+            return False
+        row = conn.execute(
+            "SELECT count(*) FROM pending_confirmations WHERE status = 'pending' "
+            "AND actor_type = 'agent'"
+        ).fetchone()
+        return row[0] >= MAX_PENDING_FROM_AGENT
 
     @staticmethod
     def _bulk_threshold(conn: sqlite3.Connection) -> int:
@@ -371,7 +404,10 @@ class ActionService:
             raise _error(ErrorCode.PERMISSION_DENIED, "Approver required")
 
         row: dict[str, Any] | None = None
-        claimed = False
+        claimed = False  # This call won the row.
+        rollback_keeps_claim = False  # The savepoint below the claim is still there.
+        external = False
+        finished = False  # An external effect ran to its end.
         conn.execute("BEGIN IMMEDIATE")
         try:
             row = self._row(conn, action_id)
@@ -388,6 +424,7 @@ class ActionService:
                                   str(action_id), row)
                 raise _error(code, "Confirmation cannot be approved")
             assert row is not None
+            ctx = replace(ctx, turn_id=row["turn_id"])
 
             moment = format_instant(self._clock())
             won = conn.execute(
@@ -407,12 +444,16 @@ class ActionService:
                 "AND status = 'approved'",
                 (row["id"],),
             )
+            conn.execute("SAVEPOINT claimed_action")
+            rollback_keeps_claim = True
 
             run, external = self._prepare(conn, ctx, row)
             if external:
                 write(conn, ctx, self._row_event(row, "confirmation.approved", "success"))
                 conn.execute("COMMIT")
+                rollback_keeps_claim = False
                 outcome = run()
+                finished = True
                 if conn.in_transaction:
                     raise RuntimeError("An executor left a transaction open")
                 conn.execute("BEGIN IMMEDIATE")
@@ -430,7 +471,8 @@ class ActionService:
         except AppError as exc:
             # Only the call that won the row may close it: a loser must not touch it.
             if claimed:
-                self._fail(conn, ctx, row, exc.code)
+                self._fail(conn, ctx, row, _UNCERTAIN if finished else exc.code,
+                           rollback_keeps_claim)
             elif conn.in_transaction:
                 conn.execute("ROLLBACK")
             raise
@@ -439,8 +481,10 @@ class ActionService:
                 if conn.in_transaction:
                     conn.execute("ROLLBACK")
                 raise
-            code, _ = self._describe(exc)
-            self._fail(conn, ctx, row, code)
+            # An external effect that did not end cleanly may have happened: never "failed"
+            # alone, which invites repeating it.
+            code = _UNCERTAIN if external else self._describe(exc)[0]
+            self._fail(conn, ctx, row, code, rollback_keeps_claim)
             raise _error(ErrorCode.INTERNAL_ERROR, "Action failed") from None
         self._publish_resolved(row["id"], "executed", None, correlation_id)
         return ActionResult(row["id"], "executed", data)
@@ -490,18 +534,19 @@ class ActionService:
             fresh = [row for row in rows if row["id"] not in self._announced]
             self._announced = {row["id"] for row in rows}
             for row in fresh:
-                self._publish(
-                    "confirmation.requested",
-                    ConfirmationRequested(
+                try:
+                    event = ConfirmationRequested(
                         action_id=UUID(row["id"]),
                         turn_id=UUID(row["turn_id"]) if row["turn_id"] else None,
                         tool=row["tool_name"],
                         summary=row["summary"],
                         affected_count=row["affected_count"],
                         expires_at=row["expires_at"],
-                    ),
-                    row["correlation_id"],
-                )
+                    )
+                except ValueError:
+                    logger.warning("Malformed row", extra={"event": "confirmation_not_announced"})
+                    continue
+                self._publish("confirmation.requested", event, row["correlation_id"])
         return len(fresh)
 
     def expire_due(self, conn: sqlite3.Connection) -> int:
@@ -545,11 +590,11 @@ class ActionService:
             for row in unfinished:
                 conn.execute(
                     "UPDATE pending_confirmations SET status = 'failed', "
-                    "error_code = 'outcome_uncertain' WHERE id = ?",
-                    (row["id"],),
+                    "error_code = ? WHERE id = ?",
+                    (_UNCERTAIN, row["id"]),
                 )
                 write(conn, ctx, self._row_event(row, "confirmation.reconciled", "failed",
-                                                 "outcome_uncertain"))
+                                                 _UNCERTAIN))
             conn.execute("COMMIT")
         except BaseException:
             if conn.in_transaction:
@@ -693,19 +738,20 @@ class ActionService:
         ctx: ActorContext,
         row: Mapping[str, Any] | None,
         code: str,
+        keep_claim: bool,
     ) -> None:
-        """Roll back, then close the row in its own transaction: no retry stays open."""
-        if conn.in_transaction:
-            conn.execute("ROLLBACK")
+        """Undo the effect and close the claimed row, without ever releasing the write lock
+        while it can be kept: no other call may see the row open in between.
+        """
         if row is None:
             return
-        conn.execute("BEGIN IMMEDIATE")
         try:
-            conn.execute(
-                "UPDATE pending_confirmations SET status = 'approved', decided_at = ?, "
-                "decided_via = ? WHERE id = ? AND status = 'pending'",
-                (format_instant(self._clock()), _DECIDED_VIA, row["id"]),
-            )
+            if keep_claim:
+                conn.execute("ROLLBACK TO claimed_action")
+            else:
+                if conn.in_transaction:
+                    conn.execute("ROLLBACK")
+                conn.execute("BEGIN IMMEDIATE")
             conn.execute(
                 "UPDATE pending_confirmations SET status = 'failed', error_code = ? "
                 "WHERE id = ? AND status IN ('approved', 'executing')",
@@ -886,7 +932,7 @@ class ActionService:
             "decided_at": row["decided_at"],
             "decided_via": row["decided_via"],
             "executed_at": row["executed_at"],
-            "result": json.loads(row["result_json"]) if row["result_json"] else None,
+            "result": redact(json.loads(row["result_json"])) if row["result_json"] else None,
             "error_code": row["error_code"],
         }
 

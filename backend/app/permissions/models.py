@@ -107,8 +107,13 @@ class ActionSpec:
             raise ValueError(f"{self.name}: invalid permission {self.permission}")
         if self.args_model.model_config.get("extra") != "forbid":
             raise ValueError(f"{self.name}: args_model must set extra='forbid'")
-        if self.permission.endswith(".read") and self.risk is not RiskClass.READ:
-            raise ValueError(f"{self.name}: a read permission cannot write")
+        if self.permission.endswith(".read") != (self.risk is RiskClass.READ):
+            raise ValueError(f"{self.name}: read risk and read permission go together")
+        if self.risk is not RiskClass.READ:
+            # Arguments are stored as they are in `pending_confirmations` and in backups.
+            for name in self.args_model.model_fields:
+                if _SENSITIVE_FIELD.search(name):
+                    raise ValueError(f"{self.name}: {name} cannot be stored")
         # Anything that may reach a confirmation needs a backend-made summary.
         if self.risk is not RiskClass.READ and self.summarize is None:
             raise ValueError(f"{self.name}: a summary is required")

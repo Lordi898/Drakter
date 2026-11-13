@@ -24,8 +24,6 @@ from app.permissions.models import (
 )
 
 DEFAULT_BULK_THRESHOLD: Final = 10
-# A setting can lower the threshold; a raised one must not switch confirmation off.
-MAX_BULK_THRESHOLD: Final = 100
 _GRANT: Final = re.compile(r"[a-z][a-z0-9_]*\.([a-z][a-z0-9_]*|\*)")
 
 
@@ -75,7 +73,8 @@ class PermissionEngine:
             return Decision(Verdict.ALLOW, "read")
 
         # Strict union of the rules: the most demanding one wins, undo never exempts.
-        threshold = max(2, min(bulk_threshold, MAX_BULK_THRESHOLD))
+        # A setting can only lower it: a raised one must not switch confirmation off.
+        threshold = max(2, min(bulk_threshold, DEFAULT_BULK_THRESHOLD))
         if spec.risk is RiskClass.CONFIRM:
             return Decision(Verdict.CONFIRM, "declared")
         if spec.permission.endswith((".delete", ".execute", ".admin")):
