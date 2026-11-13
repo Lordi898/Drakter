@@ -248,7 +248,7 @@ Router escrito en `backend/app/integrations/voice/router.py` (`voice/CONTRACT.md
 
 ## Automejora
 
-`backend/app/services/improvement_api.py`, montado por `backend/app/api/improvement.py` (DECISIONS «Esquema de automejora: manda el del servicio», migración 0012). Drakter propone; aplicar exige una propuesta aprobada, y aprobar o revertir exige una confirmación. Nada cambia producción, permisos, confirmaciones ni auditoría sin aprobación.
+`backend/app/services/improvement_api.py`, montado por `backend/app/api/improvement.py` (DECISIONS «Esquema de automejora: manda el del servicio», migración 0012). Drakter propone; aplicar exige una propuesta aprobada. Aprobar y revertir pasan por `ActionService` (`services/improvement_actions.py`): `approval-request` y `revert-request` responden 409 y el approver decide en `/confirmations/{id}/approve`. Nada cambia producción, permisos, confirmaciones ni auditoría sin aprobación.
 
 | Método | Ruta | Entrada | Respuesta | Estado | Riesgo | Dueño |
 |---|---|---|---|---|---|---|
@@ -260,11 +260,9 @@ Router escrito en `backend/app/integrations/voice/router.py` (`voice/CONTRACT.md
 | POST | `/api/v1/improvement/proposals` | `ProposalCreate` | 201 propuesta | construida | write | automejora (20) |
 | GET | `/api/v1/improvement/proposals/{id}` | - | propuesta y evaluaciones | construida | read | automejora (20) |
 | POST | `/api/v1/improvement/proposals/{id}/evaluate` | - | evaluación | construida | write | automejora (20) |
-| POST | `/api/v1/improvement/proposals/{id}/approval-request` | - | `{confirmation_id,...}` de la puerta propia | construida, ver desviaciones | write | automejora (20) |
-| POST | `/api/v1/improvement/proposals/{id}/approve` | `{confirmation_id}` | propuesta aprobada | construida, ver desviaciones | confirm | automejora (20) |
+| POST | `/api/v1/improvement/proposals/{id}/approval-request` | - | 409 `confirmation_required`; se aprueba en `/confirmations/{id}/approve` | construida | confirm | automejora (20) |
 | POST | `/api/v1/improvement/proposals/{id}/apply` | - | propuesta aplicada (solo si está aprobada) | construida | write | automejora (20) |
-| POST | `/api/v1/improvement/proposals/{id}/revert-request` | - | `{confirmation_id,...}` de la puerta propia | construida, ver desviaciones | write | automejora (20) |
-| POST | `/api/v1/improvement/proposals/{id}/revert` | `{confirmation_id}` | propuesta revertida | construida, ver desviaciones | confirm | automejora (20) |
+| POST | `/api/v1/improvement/proposals/{id}/revert-request` | - | 409 `confirmation_required`; se revierte en `/confirmations/{id}/approve` | construida | confirm | automejora (20) |
 | POST | `/api/v1/improvement/proposals/{id}/reject` | `{reason}` | propuesta | construida | write | automejora (20) |
 | GET | `/api/v1/improvement/reports/summary` | `from`, `to` | resumen | construida | read | automejora (20) |
 | POST | `/api/v1/improvement/reports/export` | `ReportExportBody` | 201 ruta del informe | construida | write | automejora (20) |
@@ -297,9 +295,8 @@ El contrato pide `{items,next_cursor,total?}` con `limit`/`cursor`. Estos listad
 
 | Frente | archivo:línea | Qué hace | Qué debe hacer |
 |---|---|---|---|
-| memoria (18) | `backend/app/integrations/memory/router.py:105,187-188` | `forget` recibe `confirmation_id` en el cuerpo | Sin cuerpo; 409 con `confirmation` en el sobre |
-| memoria (18) | `backend/app/integrations/memory/router.py:177-179` | `POST /memory/{id}/approve` aprueba directamente | 409 y camino único: consolidar un recuerdo candidato exige confirmación |
-| automejora (20) | `backend/app/services/improvement_api.py:139-161`, `services/improvement_proposals.py:493-533,672-713`, `services/improvement_ports.py:119-121` | Puerta propia: `approval-request`/`revert-request` devuelven `confirmation_id` y `approve`/`revert` lo reciben en el cuerpo. La puerta sale de `app.state.confirmation_gate`, que nadie asigna, así que siempre es `DenyAllGate` (503 `confirmation_unavailable`: falla cerrada, pero no se puede aprobar nada) | Pasar por el pipeline único de `ActionService` (README §5 y DECISIONS «Caducidad única de confirmaciones: 300 s»): 409 y ejecución en `/confirmations/{id}/approve` |
+| memoria (18) | `backend/app/integrations/memory/router.py:105,188-189` | `forget` recibe `confirmation_id` en el cuerpo | Sin cuerpo; 409 con `confirmation` en el sobre |
+| memoria (18) | `backend/app/integrations/memory/router.py:178-179` | `POST /memory/{id}/approve` aprueba directamente | 409 y camino único: consolidar un recuerdo candidato exige confirmación |
 | hoy-ajustes | `backend/app/api/settings.py:35,40`, consumidas por `desktop/src/pages/today/requests.ts:29,33` | `/settings/backups`, copias SQLite sueltas (`database/backup.create_backup`), segunda superficie junto a los bundles de `/api/v1/backups` | Que la GUI pase a `/api/v1/backups` y retirar estas rutas |
 
 ### Eventos del catálogo que nadie emite o nadie escucha
@@ -308,7 +305,7 @@ Solo documentados: en v1 no se implementan emisores ni oyentes nuevos (decisión
 
 | Evento | Estado |
 |---|---|
-| `workspace.entity_*` | Se descartan todos: `services/tasks.py:181` y `services/projects.py:108` publican `{entity_type, entity_id, revision}` sin `actor_type`, que `WorkspaceEntityChange` exige; `HubEventSink` (`permissions/wiring.py:114`) registra `event_publish_failed` en cada mutación. Debe añadirse `actor_type` (`ctx.actor.actor_type`) y, si se conoce, `changed_fields`. Además el desktop no escucha `workspace.*` |
+| `workspace.entity_*` | Tareas y proyectos ya los emiten con `actor_type` (`services/tasks.py:186`, `services/projects.py:113`); el resto de módulos no los emite, y el desktop no escucha `workspace.*` |
 | `workspace.relationship_*` | Ningún emisor en el backend |
 | `agent.expression_changed`, `storage.index_progress` | Ningún emisor en el backend |
 | `voice.*` | Los emite la integración de voz, que no se arranca |
