@@ -104,6 +104,10 @@ class BackendBridgeProcessor(FrameProcessor):
         # Habla del bot: el último speech abierto por el backend
         self._speech_id: int | None = None
         self._open = False  # entre speak.open y speak.close
+        # Contexto de respuesta abierto aguas abajo. Se abre con el primer texto, no con
+        # speak.open: una frase fija (TTSSpeakFrame) dentro de un contexto abierto deja a
+        # Fish sin audio para la respuesta (comprobado en WP9).
+        self._ctx = False
         self._cut = False  # lo cortó una interrupción: sus deltas se ignoran
         self._seq: int | None = None
         self._stripper = IncrementalStripper()
@@ -193,12 +197,13 @@ class BackendBridgeProcessor(FrameProcessor):
         stopped = utt.stopped or time.monotonic()
 
         trigger = session.consume_trigger()
-        if trigger == "wake":
-            # openWakeWord va a umbral bajo: la confirmación es el texto.
-            rest = strip_wake_word(text)
-            if rest is None:
-                await session.set_mode("standby", "wake")  # falso positivo: sin sonido
-                return
+        # openWakeWord va a umbral bajo: la confirmación es el texto. En conversación,
+        # un «hey jarvis» inicial también se quita (no llega al chat).
+        rest = strip_wake_word(text)
+        if trigger == "wake" and rest is None:
+            await session.set_mode("standby", "wake")  # falso positivo: sin sonido
+            return
+        if rest is not None:
             text = rest
             if not text:
                 return
@@ -233,14 +238,14 @@ class BackendBridgeProcessor(FrameProcessor):
 
     # ── habla: comandos speak.* del backend ─────────────────────────────────
     async def speak_open(self, turn_id: str, speech_id: int) -> None:
-        if self._open and not self._cut:  # el anterior quedó sin cerrar
+        if self._ctx and not self._cut:  # el anterior quedó sin cerrar
             await self.push_frame(LLMFullResponseEndFrame())
+        self._ctx = False
         state = self._session.state
         state.turn_id, state.speech_id = turn_id, speech_id
         self._speech_id, self._open, self._cut, self._seq = speech_id, True, False, None
         self._stripper = IncrementalStripper()
         self._session.speech_text = ""
-        await self.push_frame(LLMFullResponseStartFrame())
 
     async def speak_delta(self, speech_id: int, seq: int, text: str) -> bool:
         """Devuelve `True` si se ignora: speech desconocido, cortado, cerrado o `seq` repetido."""
@@ -253,14 +258,18 @@ class BackendBridgeProcessor(FrameProcessor):
         self._session.speech_text += clean
         spoken = clean if self._session.state.expression == "off" else text
         if spoken:
+            if not self._ctx:
+                self._ctx = True
+                await self.push_frame(LLMFullResponseStartFrame())
             await self.push_frame(LLMTextFrame(spoken))
         return False
 
     async def speak_flush(self, speech_id: int) -> None:
         """Cierra la frase parcial (p. ej. al empezar una herramienta) sin cerrar el speech."""
         if speech_id == self._speech_id and self._open and not self._cut:
-            await self.push_frame(LLMFullResponseEndFrame())
-            await self.push_frame(LLMFullResponseStartFrame())
+            if self._ctx:  # se reabre con el siguiente texto
+                self._ctx = False
+                await self.push_frame(LLMFullResponseEndFrame())
 
     async def speak_close(self, speech_id: int) -> None:
         if speech_id != self._speech_id or not self._open:
@@ -268,7 +277,9 @@ class BackendBridgeProcessor(FrameProcessor):
         self._open = False
         if not self._cut:
             self._session.speech_text += self._stripper.flush()
-            await self.push_frame(LLMFullResponseEndFrame())
+            if self._ctx:
+                self._ctx = False
+                await self.push_frame(LLMFullResponseEndFrame())
 
     async def speak_stop(self, speech_id: int | None, reason: str) -> None:
         if speech_id is None or speech_id == self._speech_id:
@@ -283,6 +294,7 @@ class BackendBridgeProcessor(FrameProcessor):
         """Regla de corte: cualquier interrupción corta el speech abierto."""
         if self._open:
             self._cut = True
+        self._ctx = False  # la interrupción descarta el contexto aguas abajo
 
     async def turn_phase(self, phase: str) -> None:
         """Mientras el agente piensa o ejecuta, el silencio del usuario no cuenta como inactividad."""

@@ -1,146 +1,109 @@
-# Drakter Voice
+# Drakter Voice (v2)
 
-Pipeline de voz local de Drakter: escucha (VAD, pulsar para hablar), transcribe (STT), habla (TTS) y avisa de los niveles para la boca del personaje. Corre en su propio proceso y venv, arrancado por el backend. No conoce Hermes, la BD ni las confirmaciones: recibe texto para decir y entrega texto transcrito. Contrato completo en `CONTRACT.md`.
+Proceso de voz de Drakter: Pipecat 1.16.0 con WebRTC por loopback. Escucha (activación, VAD, STT), decide los turnos y el barge-in, y habla (Fish Audio con Kokoro local de respaldo). No conoce Hermes, la BD ni las confirmaciones: recibe texto para decir y entrega texto transcrito. Contrato completo del proceso en `CONTRACT.md`; el diseño, en las decisiones V-01 a V-38 de `docs/DECISIONS.md`. Guía de uso: [`docs/usage/voz.md`](../docs/usage/voz.md); instalación: [`docs/installation/voz.md`](../docs/installation/voz.md).
 
-## Arquitectura
+## Procesos
 
-1. `voice/vad/`: `SileroVAD` (ONNX, sin torch) y `EnergyVAD` como reserva sin modelo.
-2. `voice/wakeword/`: `NullWakeWord` por defecto; `OpenWakeWordProvider` solo con modelo propio.
-3. `voice/stt/`: `FasterWhisperSTT`, solo CPU, `int8`.
-4. `voice/tts/`: `KokoroTTS` principal, `PiperTTS` de respaldo como proceso externo, unidos por `FallbackTTS`.
-5. `voice/audio/`: captura y altavoz mediante procesos externos de PipeWire o ALSA; `NullCapture`/`NullSink` sin hardware.
-6. `voice/personality/`: normaliza el texto, lo trocea en frases y decide los parámetros de voz que el motor soporta de verdad.
-7. `voice/manager.py`: máquina de estados `idle > listening > transcribing > waiting > speaking`; VAD, STT y TTS en hilos distintos.
-8. `voice/ipc.py`: socket Unix `<runtime_dir>/voice.sock` (JSON por líneas, 0600). No viaja audio por él.
-9. `voice/metrics.py`: marcas de tiempo por turno (`voice.metrics`), sin texto.
-10. Nada se graba ni se descarga solo: si falta un modelo, error `model_missing` con la ruta esperada.
-
-## Instalación
-
-Python 3.12, con `uv`, desde `voice/`:
-
-```bash
-cd voice
-uv venv --python 3.12 .venv
-uv sync --extra stt --extra kokoro          # alternativa: uv pip install "faster-whisper==1.2.1" "kokoro-onnx==0.6.1" numpy onnxruntime
-# openWakeWord solo si tienes un modelo propio:  uv sync --extra stt --extra kokoro --extra wakeword
+```
+Renderer (Chromium)  getUserMedia con AEC3/NS/AGC ──WebRTC 127.0.0.1 (ice_servers=[]) + data channel con ping──► voice/
+        │ señalización: window.api → main → backend (POST /api/v1/voice/offer) → IPC rtc.offer
+Backend FastAPI      VoiceOrchestrator ⇄ socket UDS ⇄ voice/   (supervisa el proceso; Hermes queda fuera)
+voice/               python -m voice run (py3.12, venv propio)
 ```
 
-Piper (GPL-3.0-or-later) va en un entorno aparte y solo se invoca como proceso:
+- El audio nunca pasa por el backend: va del renderer a `voice/` por WebRTC. Por el socket solo viajan JSON.
+- Hay un `PipelineWorker` por conexión WebRTC (`SmallWebRTCRequestHandler` en modo `SINGLE`). Los modelos pesados se cargan una vez por proceso (`SharedModels`) y el estado de sesión (`Session`, modo, perfil) vive fuera del pipeline, así que recargar el renderer no recarga modelos.
+- `channels/webrtc.py` añade 127.0.0.1 a los candidatos ICE (aioice lo excluye) y vigila el ping del data channel (`rtc_ping_timeout_s`). Electron debe arrancar con `--allow-loopback-in-peer-connection`; `scripts/drakter` ya lo pone.
 
-```bash
-uv venv --python 3.12 ~/.local/share/drakter/voice/piper-venv
-uv pip install --python ~/.local/share/drakter/voice/piper-venv/bin/python piper-tts
-export DRAKTER_PIPER_PYTHON=~/.local/share/drakter/voice/piper-venv/bin/python
+## Pipeline
+
+Lo monta `pipeline.py` (`build`), en este orden:
+
+```
+transport.input() → WakeGate → VADProcessor(Silero) → STT (Moonshine streaming)
+  → UserTurnProcessor (único; inicio: DrakterStartStrategy, fin: Smart Turn v3.2)
+  → BackendBridgeProcessor → SpeechGuard → cadena TTS (Fish | Kokoro)
+  → PhrasePlayer → transport.output() [DuckMixer] → PlaybackTracker
 ```
 
-## Modelos
+- `WakeGate` (openWakeWord, `hey_jarvis`) es solo una puerta de audio; en `standby` el STT no recibe audio. La confirmación textual de «jarvis» la hace el puente sobre el turno final.
+- `DrakterStartStrategy` implementa «bajar primero, decidir después»: con el bot hablando baja el volumen (`DuckMixer`) y solo abre turno si la transcripción parcial confirma al menos `bargein_min_words` palabras que no sean eco.
+- `BackendBridgeProcessor` (`bridge.py`) aplica la capa 0 (`conversation/layer0.py` y `layer0.es.toml`: «para», «descansa», cierres, asentimientos) y, si el turno procede, emite `voice.user_turn` al backend. Las respuestas del agente llegan como `speak.*` y se convierten en frames de texto para el TTS.
+- La cadena TTS (`providers/tts/failover.py`) conmuta de Fish a Kokoro por errores de autenticación, cuota, petición inválida o 3 fallos seguidos, con un único aviso hablado. Fish se corta por fecha (`fish_free_until`) salvo `allow_paid`.
+- `PlaybackTracker` va después de la salida: cuenta lo que se oyó, no lo sintetizado. Al interrumpir, el backend recibe `heard_tail` y `pending_head`.
+- `PhrasePlayer` emite frases fijas desde la caché PCM (`agent/identity/voice_phrases.es.toml`).
+- `metrics.py` escribe un `metrics.jsonl` por turno solo con tiempos y contadores, nunca texto.
 
-`<models>` es `DRAKTER_VOICE_MODELS_DIR`, o por defecto `~/.local/share/drakter/voice/models`. Los comandos de descarga son manuales (la voz nunca descarga nada) y **no se han ejecutado desde este README**: compruébalos con tu versión de las herramientas.
+## IPC con el backend (UDS JSONL)
 
-| Motor | Ruta | Cómo obtenerlo |
+`<runtime_dir>/voice.sock` (permisos 0600, `SO_PEERCRED`). Una línea JSON por mensaje, con `kind` en `evt | cmd | ok | err` (`ipc.py`). Los modelos Pydantic están en `contracts/python/drakter_contracts/voice_ipc.py` y son la fuente de verdad. Un `err` lleva `payload = {code, message}`; códigos: `invalid_request`, `rtc_failed`, `internal_error`. El backend (`backend/app/integrations/voice/`) es el único que habla con el hub de eventos, la BD y las confirmaciones; `voice/` solo emite eventos IPC.
+
+## Proveedores y cómo añadir uno
+
+`registry.py` tiene una tabla estática y perezosa `TABLE[(tipo, nombre)] = "modulo:fabrica"`; nada se importa hasta `create`. Los nombres son campos de `VoiceConfig`.
+
+| Tipo | Por defecto | Fábrica |
 |---|---|---|
-| Whisper | `<models>/whisper` | `hf download Systran/faster-whisper-small --cache-dir <models>/whisper` (y `...-medium` para probar `medium`). El nombre `small`/`medium` se resuelve en esa caché. También vale una carpeta con el modelo y `DRAKTER_STT_MODEL=<ruta absoluta>`. |
-| Kokoro | `<models>/kokoro` | `kokoro-v1.0.int8.onnx` y `voices-v1.0.bin` de las releases de `thewh1teagle/kokoro-onnx` (`model-files-v1.0`), por ejemplo con `curl -L -o <archivo> <url de la release>`. |
-| Piper | `<models>/piper` | `es_ES-davefx-medium.onnx` y `es_ES-davefx-medium.onnx.json` del repositorio `rhasspy/piper-voices` (`es/es_ES/davefx/medium/`), por ejemplo con `hf download rhasspy/piper-voices --include 'es/es_ES/davefx/medium/*' --local-dir <tmp>` y copiando los dos archivos. |
-| Silero VAD | incluido en `faster-whisper` | Opcional: `<models>/silero/silero_vad_v6.onnx` lo sustituye. Sin modelo, `EnergyVAD`. |
-| Wake word | `DRAKTER_WAKEWORD_MODEL` | Modelo propio ONNX. |
+| `stt` | `moonshine` | `voice.providers.stt.moonshine_streaming:create` |
+| `vad` | `silero` | `voice.providers.vad.silero:create` |
+| `turn_start` | `drakter` | `voice.conversation.start_strategy:create` |
+| `turn_stop` | `smart_turn` | `voice.providers.turn.smart_turn:create` |
+| `wake` | `openwakeword` | `voice.providers.wake.openwakeword_gate:create` |
+| `tts` (lista) | `fish`, `kokoro` | `voice.providers.tts.fish:create`, `voice.providers.tts.kokoro:create` |
+| `tts_chain` | `failover` | `voice.providers.tts.failover:create` |
+| `mixer` | `duck` | `voice.conversation.duck:create` |
+| `channel` | `webrtc` | `voice.channels.webrtc:create` |
+| cualquiera | `null` | `voice.providers.null:create` (proveedor vacío) |
 
-Licencias de las voces: revisa la ficha de cada voz (la de `es_ES-davefx` en `rhasspy/piper-voices` y la de las voces de Kokoro) antes de distribuir nada; este README no las da por buenas.
+Para añadir un proveedor hay dos caminos, sin tocar el núcleo:
 
-**Wake word.** No hay modelo para «Drakter»: los preentrenados de openWakeWord son para otras palabras y su licencia es CC BY-NC-SA 4.0 (no comercial), así que el proveedor solo carga un modelo propio y nunca descarga ninguno. Hasta entonces `wakeword_provider=null` y el modo es pulsar para hablar. Entrenar uno propio queda pendiente; ver la documentación del proyecto openWakeWord si se quiere hacer.
+1. Escribe una fábrica `create(cfg, ...)` que devuelva la clase del puerto correspondiente (firmas en `ports.py`) y añade una línea a `TABLE`.
+2. O pon directamente `"paquete.modulo:fabrica"` como valor del campo (por ejemplo `stt = "mi_paquete.stt:create"` en `voice.toml`): `resolve` usa tal cual cualquier nombre que contenga `:`.
 
-## Variables de entorno
+`python -m voice check` comprueba que cada fábrica se importa y que existen sus modelos.
 
-Valores por defecto copiados de `voice/config.py` (`load_config()`).
+## Configuración
 
-| Variable | Defecto |
-|---|---|
-| `DRAKTER_RUNTIME_DIR` | `$XDG_RUNTIME_DIR/drakter` (o `/run/user/<uid>/drakter`) |
-| `DRAKTER_DATA_DIR` | `~/.local/share/drakter` |
-| `DRAKTER_VOICE_MODELS_DIR` | `<data_dir>/voice/models` |
-| `DRAKTER_STT_PROVIDER` | `faster_whisper` |
-| `DRAKTER_STT_MODEL` | `small` |
-| `DRAKTER_STT_DEVICE` | `cpu` (solo se admite `cpu`) |
-| `DRAKTER_STT_COMPUTE_TYPE` | `int8` |
-| `DRAKTER_STT_LANGUAGE` | `es` |
-| `DRAKTER_STT_BEAM_SIZE` | `1` |
-| `DRAKTER_STT_THREADS` | `4` |
-| `DRAKTER_TTS_PROVIDER` | `kokoro` |
-| `DRAKTER_TTS_FALLBACK` | `piper` (vacío lo desactiva) |
-| `DRAKTER_TTS_VOICE` | `ef_dora` |
-| `DRAKTER_TTS_THREADS` | `4` |
-| `DRAKTER_PIPER_PYTHON` | sin definir |
-| `DRAKTER_PIPER_VOICE` | `es_ES-davefx-medium` |
-| `DRAKTER_VAD_PROVIDER` | `silero` |
-| `DRAKTER_VAD_THRESHOLD` | `0.5` |
-| `DRAKTER_VAD_SILENCE_MS` | `800` |
-| `DRAKTER_VAD_PREROLL_MS` | `320` |
-| `DRAKTER_VOICE_MAX_UTTERANCE_S` | `30` |
-| `DRAKTER_WAKEWORD_ENABLED` | `false` |
-| `DRAKTER_WAKEWORD_PROVIDER` | `null` |
-| `DRAKTER_WAKEWORD_MODEL` | sin definir |
-| `DRAKTER_WAKEWORD_THRESHOLD` | `0.5` |
-| `DRAKTER_VOICE_BARGE_IN` | `false` |
-| `DRAKTER_VOICE_BARGE_IN_THRESHOLD` | `0.8` |
-| `DRAKTER_VOICE_BARGE_IN_MIN_MS` | `320` |
-| `DRAKTER_AUDIO_BACKEND` | `auto` (`auto`, `pipewire`, `alsa`, `null`) |
-| `DRAKTER_AUDIO_INPUT` | vacío (dispositivo por defecto) |
-| `DRAKTER_AUDIO_OUTPUT` | vacío (dispositivo por defecto) |
-| `DRAKTER_VOICE_LEVEL_HZ` | `15` |
-| `DRAKTER_VOICE_OUTPUT_LATENCY_MS` | `0` |
+`config.py` define `VoiceConfig` (dataclass inmutable) con todos los campos y sus valores por defecto. Precedencia, de menor a mayor:
 
-## Licencias
+1. Valores por defecto.
+2. `~/.config/drakter/voice.toml` (respeta `XDG_CONFIG_HOME`), con claves planas que se llaman como el campo. Una clave desconocida da error.
+3. Variables `DRAKTER_VOICE_<CAMPO>` en mayúsculas (`DRAKTER_VOICE_STT_MODEL=tiny`, `DRAKTER_VOICE_TTS=kokoro`, `DRAKTER_VOICE_FISH_FREE_UNTIL=2026-11-30`). Las listas van separadas por comas.
 
-- Piper: GPL-3.0-or-later. Por eso va en un entorno aparte y solo como proceso externo (`voice/tts/piper.py`); nada de Piper se importa en este proceso.
-- openWakeWord: código Apache-2.0; los modelos preentrenados, CC BY-NC-SA 4.0. Aquí solo se usa con modelo propio.
-- Kokoro-82M (pesos): Apache-2.0. `kokoro-onnx`: MIT.
-- Faster-Whisper: MIT. Silero VAD: MIT.
-- Cada voz o modelo concreto puede tener su propia licencia: mira su ficha.
+Además: `DRAKTER_RUNTIME_DIR` (directorio del socket), `DRAKTER_DATA_DIR` (raíz de datos), `DRAKTER_VOICE_NULL=1` (todos los proveedores vacíos) y `DRAKTER_VOICE_PIPECAT_LOG` (nivel de log de Pipecat, `WARNING` por defecto). La clave `FISH_API_KEY` la lee el proveedor Fish del entorno; el backend se la pasa al hijo. Los ajustes de usuario (`voice_tts_enabled`, `voice_wake_enabled`, `voice_profile`, `voice_expression`) no se configuran aquí: llegan por el comando IPC `voice.config`.
 
-## Comprobación pendiente
+Los umbrales (`bargein_min_words`, `bargein_decide_ms`, `duck_gain`, `idle_nudge_s`, `followup_s`, `wake_threshold`…) son provisionales y sin calibrar. Las variantes de «jarvis» que acepta el puente viven en `conversation/layer0.es.toml`, sección `[wake]`. Añadir una variante es editar ese archivo.
 
-Los tres scripts viven en `voice/tests/`. Se ejecutan desde la raíz del repositorio con el Python del venv de voz. Ninguno guarda audio ni imprime transcripciones en los archivos que escribe.
+## Comandos
+
+Desde la raíz del repo y con el Python del venv de voz (`~/.local/share/drakter/venvs/voice/bin/python`):
 
 ```bash
-PY=voice/.venv/bin/python        # o el intérprete del venv de voz que uses
-export TMPDIR=/var/tmp/drakter-voz   # no escribir en /tmp
-
-# 1. Sin hardware ni modelos: turno completo, interrupción, cancelación y mic.set false
-$PY voice/tests/check_pipeline.py
-
-# 2. Latencia real (con la máquina en reposo; guarda loadavg y RSS junto a cada cifra).
-#    Necesita un WAV propio con voz en español y los modelos en su sitio.
-$PY voice/tests/bench_engines.py --stt-model small  --wav frase.wav --tts kokoro --out $TMPDIR/small_kokoro.json
-$PY voice/tests/bench_engines.py --stt-model medium --wav frase.wav --out $TMPDIR/medium.json
-$PY voice/tests/bench_engines.py --tts piper --out $TMPDIR/piper.json
-#    Opciones: --threads N, --reps N, --min-available-mb N (se niega a empezar por debajo)
-
-# 3. Con micrófono: guiada, pide confirmación antes de abrirlo
-$PY voice/tests/mic_check.py                # dispositivos, nivel, VAD, turno STT -> TTS
-$PY voice/tests/mic_check.py --barge-in     # eco del altavoz en el micrófono
-$PY voice/tests/mic_check.py --voices       # oír Kokoro y Piper en español
+python -m voice run                  # el proceso de voz (lo lanza el backend; --null = proveedores vacíos)
+python -m voice check                # proveedores importables y modelos en disco; sin audio ni red
+python -m voice phrases [--profile P] [--only fish|kokoro] [--no-voice] [--force] [--check]
 ```
 
-Estado: los scripts compilan y `--help` funciona. Al escribirlos no existían aún `voice/manager.py`, `voice/registry.py`, `voice/metrics.py` ni `voice/audio/player.py`; por eso `check_pipeline.py` declara NO COMPROBADO hasta que exista el gestor, y `mic_check.py` y el benchmark (que usa el registro, o las clases directas si falta) no se han ejecutado contra motores reales.
+`phrases` genera la caché de frases fijas con el perfil activo (o `--profile`). Con `--check` solo valida el TOML de frases.
 
-Queda ⚠️ a cargo del usuario:
+## Comprobaciones
 
-- ⚠️ Micrófono real: elegir dispositivo y comprobar nivel y VAD (`mic_check.py`).
-- ⚠️ Eco y barge-in: `--barge-in` con tus altavoces; `DRAKTER_VOICE_BARGE_IN` sigue en `false` hasta entonces.
-- ⚠️ Calidad de las voces en español: `--voices` (Kokoro `ef_dora` frente a Piper `es_ES-davefx-medium`) y licencia de cada voz.
-- ⚠️ `medium` frente a `small`: ejecutar el benchmark con ambos sobre el mismo WAV y decidir con los datos.
-- ⚠️ Latencia en esta máquina y, si existe otra, en la máquina objetivo: repetir el benchmark allí.
-- ⚠️ Wake word: sin modelo propio, no se puede probar.
+Sin suite de tests: tres comprobaciones rápidas, del mismo venv.
 
-## Datos previos (drakter-5)
+```bash
+python voice/tests/check_pipeline.py [--wav habla.wav]            # arranque, oferta WebRTC (aiortc), turno de usuario, speak.*, reconexión, métricas
+python -m voice.providers.stt.check_wp2 <wav> [--model small|tiny] # STT, Smart Turn y openWakeWord sobre un wav
+python -m voice.conversation.check_conversation                   # capa 0, barge-in, eco y ruido sobre un UserTurnProcessor real
+```
 
-Medidos por drakter-5 con la máquina cargada (no en reposo), con Kokoro `ef_dora` en CPU; son orientativos, no un objetivo. Copiados de `results/kokoro_a_t4.json` (4 hilos, carga `load_start` 6.72, `avail_mb_start` 1435 MB, `rss_after_load.VmHWM` 195 MB, `load_s` 1.01), primera repetición:
+Cada una imprime PASS/FAIL por paso y sale con 1 si algo falla. Latencias y consumo medidos: {{CIFRA: cierre del STT, TTFA de Fish y de Kokoro, latencia total de un turno y RSS del proceso de voz, medidos por el usuario}}.
 
-| Frase | Caracteres | `wall` (s) | `dur` (s) | `rtf` | `load` |
-|---|---|---|---|---|---|
-| corta | 20 | 0.951 | 1.365 | 0.697 | 6.72 |
-| media | 100 | 4.507 | 5.547 | 0.813 | 7.94 |
-| larga | 306 | 11.913 | 16.811 | 0.709 | 7.79 |
+## Instalación y modelos
 
-Rehacer estas medidas en reposo con `bench_engines.py`; las de esta tabla no son una referencia de la máquina sin carga.
+`scripts/install-voice.sh` (desde el checkout principal) crea el venv `~/.local/share/drakter/venvs/voice` con Python 3.12, instala `voice/requirements.lock` y `contracts/python` en editable, y comprueba que los modelos existen. Pasos y requisitos en [`docs/installation/voz.md`](../docs/installation/voz.md).
+
+Los modelos están en `~/.local/share/drakter/models/` (`moonshine/`, `smart-turn/`, `openwakeword/`, `kokoro/`, `silero/`). El código no descarga nada en ejecución: si falta un modelo, `check` y el arranque dicen la ruta esperada. Los runtimes y modelos nunca van en `/tmp`.
+
+## Privacidad
+
+Ni el audio ni las transcripciones se guardan. Los logs de Pipecat se limitan a `WARNING` (en `DEBUG` imprimirían el texto) y el formateador de logs omite trazas. Solo persisten `metrics.jsonl` (sin texto) y la caché de frases fijas, en `~/.local/share/drakter/voice/`.

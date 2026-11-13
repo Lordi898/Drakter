@@ -167,8 +167,12 @@ class PhrasePlayer(FrameProcessor):  # type: ignore[misc,valid-type]
         now = time.monotonic()
         if turn_id == self._tool_turn or now - self._tool_at < gap:
             return
+        # Solo tiene sentido en un silencio de espera: si el bot ya habla o el usuario habla,
+        # se descarta (encolarla «en silencio» la haría sonar después de la respuesta).
+        if self._ctl.state.bot_speaking or self._user_speaking:
+            return
         self._tool_turn, self._tool_at = turn_id, now
-        await self.play("tool_generic", "when_silent")
+        await self.play("tool_generic", "now")
 
     def cancel(self) -> None:
         self._cancel_filler()

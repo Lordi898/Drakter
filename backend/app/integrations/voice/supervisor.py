@@ -51,7 +51,7 @@ def voice_config_vars(config_py: Path = _VOICE_CONFIG_PY) -> tuple[str, ...]:
         if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name)
     ]
     names = [f"DRAKTER_VOICE_{name.upper()}" for name in fields if name not in _BACKEND_OWNED]
-    return (*names, "DRAKTER_VOICE_NULL")
+    return (*names, "DRAKTER_VOICE_NULL", "DRAKTER_VOICE_PIPECAT_LOG")
 
 
 VOICE_CONFIG_VARS: Final = voice_config_vars()
