@@ -15,7 +15,24 @@ from typing import Final, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-SETTING_KEYS: Final = frozenset({"default_timezone", "voice_profile"})
+SETTING_KEYS: Final = frozenset({
+    "default_timezone",
+    "voice_profile",  # nombre o alias de voces.toml; defecto "natural"
+    "voice_tts_enabled",  # "true" | "false"; defecto "true". Punto único de silencio (V-29)
+    "voice_wake_enabled",  # "true" | "false"; defecto "true"
+    "voice_expression",  # "off" | "llm"; defecto "llm"
+})
+SETTING_DEFAULTS: Final[dict[str, str]] = {
+    "voice_profile": "natural",
+    "voice_tts_enabled": "true",
+    "voice_wake_enabled": "true",
+    "voice_expression": "llm",
+}
+SETTING_CHOICES: Final[dict[str, frozenset[str]]] = {
+    "voice_tts_enabled": frozenset({"true", "false"}),
+    "voice_wake_enabled": frozenset({"true", "false"}),
+    "voice_expression": frozenset({"off", "llm"}),
+}
 
 KeyState = Literal["configured", "missing", "unknown"]
 DevModeState = Literal["active", "inactive", "unknown"]

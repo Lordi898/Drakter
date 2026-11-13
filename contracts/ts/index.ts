@@ -47,6 +47,8 @@ export type IndexStatus = "none" | "pending" | "indexed" | "failed" | "skipped";
 
 export type InputSource = "text" | "voice";
 
+export type JobState = "running" | "completed" | "failed" | "cancelled";
+
 export type MemoryCategory = "profile" | "preferences" | "entities" | "events" | "cases" | "patterns";
 
 export type MemoryConflictStatus = "open" | "resolved";
@@ -323,6 +325,16 @@ export interface ChatSession {
   status: "open" | "closed";
 }
 
+/** Mensaje del usuario ya guardado, escrito o dictado. El renderer adopta `session_id`. */
+export interface ChatUserMessage {
+  message_id: string;
+  session_id: string;
+  turn_id: string;
+  text: string;
+  input_source: "text" | "voice";
+  created_at: string;
+}
+
 export interface ClassSessionCreate {
   weekday: number;
   starts_local_time: string;
@@ -360,6 +372,66 @@ export interface ClassSessionUpdate {
   valid_until?: string | null;
   interval_weeks?: number | null;
   room?: string | null;
+}
+
+/** `status` y `shutdown` no llevan payload. */
+export type CmdEmpty = Record<string, never>;
+
+export interface CmdModeSet {
+  mode: "standby" | "conversation";
+  trigger: "wake" | "hotkey" | "ui" | "followup";
+}
+
+export interface CmdRtcOffer {
+  sdp: string;
+  type?: "offer";
+  pc_id?: string | null;
+  restart_pc?: boolean | null;
+}
+
+export interface CmdSpeakClose {
+  speech_id: number;
+  outcome: "completed" | "cancelled" | "failed";
+}
+
+/** Texto crudo con etiquetas. Duplicado o speech cortado → `ok{ignored: true}`. */
+export interface CmdSpeakDelta {
+  speech_id: number;
+  seq: number;
+  text: string;
+}
+
+export interface CmdSpeakFlush {
+  speech_id: number;
+}
+
+/** Abre un tramo de habla. `speech_id` es monótono por proceso de backend. */
+export interface CmdSpeakOpen {
+  turn_id: string;
+  speech_id: number;
+}
+
+export interface CmdSpeakPhrase {
+  key: "ack_1" | "ack_2" | "ack_3" | "wait_1" | "wait_2" | "wait_3" | "tool_generic" | "confirm_on_screen" | "rest_on_screen" | "busy" | "job_started" | "job_done" | "job_failed" | "tts_fallback" | "offline" | "idle_nudge" | "goodbye";
+  when?: "now" | "when_silent";
+}
+
+export interface CmdSpeakStop {
+  speech_id?: number | null;
+  reason: "barge_in" | "user" | "mute" | "new_turn" | "steered";
+}
+
+export interface CmdTurnPhase {
+  turn_id: string;
+  phase: "thinking" | "executing" | "done";
+  tool?: string | null;
+}
+
+export interface CmdVoiceConfig {
+  tts_enabled: boolean;
+  profile: string;
+  wake_enabled: boolean;
+  expression: "off" | "llm";
 }
 
 export interface ComponentHealth {
@@ -419,6 +491,7 @@ export interface ConfirmationRequested {
   summary: string;
   affected_count: number | null;
   expires_at: string;
+  job_id: string | null;
 }
 
 /** HTTP 409 con `error.code == "confirmation_required"`. Nunca 2xx. */
@@ -514,6 +587,75 @@ export interface EventEnvelope {
   version: number;
   correlation_id: string | null;
   payload: Record<string, unknown>;
+}
+
+export interface EvtError {
+  code: string;
+  stage: "transport" | "stt" | "turn" | "tts" | "ipc" | "wake";
+  recoverable: boolean;
+  turn_id: string | null;
+}
+
+export interface EvtLocalCommand {
+  command: "stop_speech" | "rest" | "close";
+  utt_id: string;
+}
+
+/** Sin texto. `agent_ttft_ms` lo mide el backend. */
+export interface EvtMetrics {
+  turn_id: string | null;
+  endpointing_ms: number | null;
+  stt_ms: number | null;
+  tts_ttfa_ms: number | null;
+  total_ms: number | null;
+  false_ducks: number | null;
+}
+
+/** `heard_tail`/`pending_head` solo con `state="interrupted"`: texto hablado, no el del chat. */
+export interface EvtPlayback {
+  turn_id: string;
+  speech_id: number;
+  state: "started" | "sentence_done" | "finished" | "interrupted";
+  sentence_index: number;
+  heard_tail: string | null;
+  pending_head: string | null;
+}
+
+export interface EvtReady {
+  pipecat: string;
+  stt: string;
+  tts: string;
+  wake: boolean;
+}
+
+export interface EvtState {
+  connected: boolean;
+  mode: "standby" | "conversation";
+  tts: "fish" | "local";
+  profile: string;
+}
+
+/** Una vez por arranque. `from` es palabra reservada en Python: el atributo es `from_`. */
+export interface EvtTtsFallback {
+  from: "fish";
+  to: "local";
+  reason: "auth" | "quota" | "rate_limit" | "network" | "expired" | "unknown";
+}
+
+export interface EvtUserSpeech {
+  utt_id: string;
+  phase: "started" | "stopped";
+}
+
+export interface EvtUserTurn {
+  utt_id: string;
+  text: string;
+  lang: "es";
+  trigger: "wake" | "hotkey" | "ui" | "followup";
+  overlap: "none" | "bot_speaking" | "agent_busy";
+  audio_ms: number;
+  stt_ms: number;
+  eot_ms: number;
 }
 
 export interface FolderCreate {
@@ -719,6 +861,105 @@ export interface ImprovementProposalUpdate {
   title?: string | null;
   summary?: string | null;
   status?: "approved" | "rejected" | null;
+}
+
+export interface IpcErr {
+  code: string;
+  message: string;
+}
+
+export interface IpcMessage {
+  kind: "evt" | "cmd" | "ok" | "err";
+  id: string;
+  type: string;
+  payload: Record<string, unknown>;
+}
+
+export interface JobFinished {
+  job_id: string;
+  state: "completed" | "failed" | "cancelled";
+  reason: string | null;
+  pending_actions: number;
+  finished_at: string;
+}
+
+export interface JobList {
+  items: JobOut[];
+}
+
+export interface JobOut {
+  job_id: string;
+  title: string;
+  state: JobState;
+  reason: string | null;
+  pending_actions: number;
+  created_at: string;
+  finished_at: string | null;
+  elapsed_s: number;
+  tool_calls: number;
+  last_tool: string | null;
+}
+
+export interface JobProgress {
+  job_id: string;
+  state: "running";
+  elapsed_s: number;
+  tool_calls: number;
+  last_tool: string | null;
+}
+
+export interface JobStarted {
+  job_id: string;
+  title: string;
+  lane: string;
+  created_at: string;
+}
+
+export interface JobStatusItem {
+  job_id: string;
+  title: string;
+  state: JobState;
+  elapsed_s: number;
+  tool_calls: number;
+  last_tool: string | null;
+  pending_actions: number;
+}
+
+export interface JobsAmendArgs {
+  job_id: string;
+  text: string;
+}
+
+export interface JobsAmendResult {
+  accepted: boolean;
+  mode: "redirected" | "queued";
+}
+
+export interface JobsCancelArgs {
+  job_id: string;
+}
+
+export interface JobsCancelResult {
+  job_id: string;
+  state: "cancelled";
+}
+
+export interface JobsStartArgs {
+  title: string;
+  brief: string;
+}
+
+export interface JobsStartResult {
+  job_id: string;
+  state: "running";
+}
+
+export interface JobsStatusArgs {
+  job_id?: string | null;
+}
+
+export interface JobsStatusResult {
+  jobs: JobStatusItem[];
 }
 
 export interface MemoryConflictOut {
@@ -1092,6 +1333,12 @@ export interface ResourceUpdate {
   expected_revision?: number | null;
 }
 
+export interface RtcAnswer {
+  sdp: string;
+  type: "answer";
+  pc_id: string;
+}
+
 /** Búsqueda global (`search_documents`): metadatos y fragmento; sin contenido completo. */
 export interface SearchHitOut {
   entity_type: EntityType;
@@ -1116,6 +1363,15 @@ export interface SettingOut {
 
 export interface SettingUpdate {
   value: string;
+}
+
+export interface SpeakAck {
+  ignored: boolean;
+}
+
+export interface StatusResult {
+  state: Record<string, unknown>;
+  metrics_last: Record<string, unknown> | null;
 }
 
 export interface StorageIndexProgress {
@@ -1437,8 +1693,44 @@ export interface UntrustedEnvelope {
   content: string;
 }
 
+export interface VoiceActivateIn {
+  trigger: "hotkey" | "ui";
+}
+
+export interface VoiceError {
+  code: string;
+  stage: "transport" | "stt" | "turn" | "tts" | "ipc" | "wake";
+  recoverable: boolean;
+  turn_id: string | null;
+}
+
 export interface VoiceListeningStarted {
   trigger: "wakeword" | "push_to_talk";
+}
+
+export interface VoiceModeIn {
+  mode: "standby" | "conversation";
+}
+
+export interface VoiceOfferIn {
+  sdp: string;
+  type?: "offer";
+  pc_id?: string | null;
+  restart_pc?: boolean | null;
+}
+
+export interface VoiceOfferOut {
+  sdp: string;
+  type: "answer";
+  pc_id: string;
+}
+
+/** Progreso de reproducción. Sin texto: lo oído viaja solo por IPC al backend. */
+export interface VoicePlayback {
+  turn_id: string;
+  speech_id: number;
+  state: "started" | "sentence_done" | "finished" | "interrupted";
+  sentence_index: number;
 }
 
 export interface VoicePlaybackLevel {
@@ -1450,6 +1742,24 @@ export interface VoicePlaybackLevel {
 export interface VoiceProfileChanged {
   profile: string;
   previous: string | null;
+}
+
+export interface VoiceState {
+  connected: boolean;
+  mode: "standby" | "conversation";
+  tts: "fish" | "local";
+  profile: string;
+  wake_enabled: boolean;
+}
+
+/** `VoiceState` (el payload de `voice.state`) más las últimas métricas, sin texto. */
+export interface VoiceStatusOut {
+  connected: boolean;
+  mode: "standby" | "conversation";
+  tts: "fish" | "local";
+  profile: string;
+  wake_enabled: boolean;
+  metrics_last: Record<string, unknown> | null;
 }
 
 export interface VoiceTranscription {
@@ -1503,6 +1813,7 @@ export interface EventPayloads {
   "agent.tool_started": AgentToolStarted;
   "agent.tool_completed": AgentToolCompleted;
   "agent.error": AgentError;
+  "chat.user_message": ChatUserMessage;
   "confirmation.requested": ConfirmationRequested;
   "confirmation.resolved": ConfirmationResolved;
   "workspace.entity_created": WorkspaceEntityChange;
@@ -1516,6 +1827,12 @@ export interface EventPayloads {
   "notification.created": NotificationCreated;
   "system.health_changed": SystemHealthChanged;
   "system.resync_required": SystemResyncRequired;
+  "job.started": JobStarted;
+  "job.progress": JobProgress;
+  "job.finished": JobFinished;
+  "voice.state": VoiceState;
+  "voice.playback": VoicePlayback;
+  "voice.error": VoiceError;
   "voice.wakeword_detected": VoiceWakewordDetected;
   "voice.listening_started": VoiceListeningStarted;
   "voice.speech_ended": VoiceUtterance;

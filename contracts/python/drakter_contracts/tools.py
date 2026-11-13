@@ -26,6 +26,7 @@ AuditPolicy = Literal["log", "hash", "omit"]
 TOOL_DOMAINS: Final = (
     "tasks", "projects", "habits", "calendar", "subjects", "storage", "relationships",
     "tags", "search", "memory", "system", "config", "improvement", "voice",
+    "jobs",
 )
 
 

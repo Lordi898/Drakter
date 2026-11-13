@@ -7,6 +7,8 @@
     "habits.write",
     "improvement.read",
     "improvement.write",
+    "jobs.read",
+    "jobs.write",
     "memory.forget",
     "memory.read",
     "memory.write",

@@ -1,7 +1,8 @@
 """Eventos WebSocket v1: un único flujo servidor→cliente en `WS /api/v1/events`.
 
 `version` es la versión del payload de ese `type`; la del protocolo va en el subprotocolo `drakter.v1`.
-`voice.*` es experimental hasta que el frente de voz mida latencia.
+`voice.*` es experimental hasta que el frente de voz mida latencia. Voz v2 (Pipecat) usa `voice.state`,
+`voice.playback` y `voice.error`; los `voice.*` antiguos se borran en la integración (WP9).
 """
 
 from __future__ import annotations
@@ -106,12 +107,49 @@ class ConfirmationRequested(BaseModel):
     summary: str
     affected_count: int | None = None
     expires_at: Instant
+    job_id: Id | None = None  # confirmación pedida desde un trabajo en segundo plano
 
 
 class ConfirmationResolved(BaseModel):
     action_id: Id
     status: Literal["approved", "rejected", "expired", "executed", "failed"]
     error_code: str | None = None
+
+
+# chat.*
+class ChatUserMessage(BaseModel):
+    """Mensaje del usuario ya guardado, escrito o dictado. El renderer adopta `session_id`."""
+
+    message_id: Id
+    session_id: Id
+    turn_id: Id
+    text: str
+    input_source: Literal["text", "voice"] = "text"
+    created_at: Instant
+
+
+# job.* (trabajos en segundo plano; no alimentan el personaje)
+class JobStarted(BaseModel):
+    job_id: Id
+    title: str
+    lane: str
+    created_at: Instant
+
+
+class JobProgress(BaseModel):
+    job_id: Id
+    state: Literal["running"] = "running"
+    elapsed_s: int
+    tool_calls: int
+    last_tool: str | None = None
+
+
+class JobFinished(BaseModel):
+    job_id: Id
+    state: Literal["completed", "failed", "cancelled"]
+    reason: str | None = None
+    pending_actions: int = 0
+    finished_at: Instant
 
 
 # workspace.* (sin contenido; se emiten solo tras COMMIT)
@@ -186,6 +224,31 @@ class VoiceProfileChanged(BaseModel):
     previous: str | None = None
 
 
+# voice.* v2 (Pipecat). Snapshot: se reemite en cada cambio y tras un resync. Sin `mic` (lo calcula el renderer).
+class VoiceState(BaseModel):
+    connected: bool
+    mode: Literal["standby", "conversation"]
+    tts: Literal["fish", "local"]
+    profile: str
+    wake_enabled: bool
+
+
+class VoicePlayback(BaseModel):
+    """Progreso de reproducción. Sin texto: lo oído viaja solo por IPC al backend."""
+
+    turn_id: Id
+    speech_id: int
+    state: Literal["started", "sentence_done", "finished", "interrupted"]
+    sentence_index: int
+
+
+class VoiceError(BaseModel):
+    code: str
+    stage: Literal["transport", "stt", "turn", "tts", "ipc", "wake"]
+    recoverable: bool
+    turn_id: Id | None = None
+
+
 EVENTS: Final[dict[str, type[BaseModel]]] = {
     "agent.status_changed": AgentStatusChanged,
     "agent.expression_changed": AgentExpressionChanged,
@@ -197,6 +260,7 @@ EVENTS: Final[dict[str, type[BaseModel]]] = {
     "agent.tool_started": AgentToolStarted,
     "agent.tool_completed": AgentToolCompleted,
     "agent.error": AgentError,
+    "chat.user_message": ChatUserMessage,
     "confirmation.requested": ConfirmationRequested,
     "confirmation.resolved": ConfirmationResolved,
     "workspace.entity_created": WorkspaceEntityChange,
@@ -210,6 +274,13 @@ EVENTS: Final[dict[str, type[BaseModel]]] = {
     "notification.created": NotificationCreated,
     "system.health_changed": SystemHealthChanged,
     "system.resync_required": SystemResyncRequired,
+    "job.started": JobStarted,
+    "job.progress": JobProgress,
+    "job.finished": JobFinished,
+    "voice.state": VoiceState,
+    "voice.playback": VoicePlayback,
+    "voice.error": VoiceError,
+    # Antiguos (voz v1): siguen hasta WP9 porque `hub.publish` da KeyError con un tipo desconocido.
     "voice.wakeword_detected": VoiceWakewordDetected,
     "voice.listening_started": VoiceListeningStarted,
     "voice.speech_ended": VoiceUtterance,
