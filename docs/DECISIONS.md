@@ -760,3 +760,17 @@ Decisiones técnicas, cambios de tecnología y motivos.
 - **Motivo:** el cierre solo termina lo empezado; lo que queda está mitigado o es de bajo riesgo.
 - **Recuento final (drakter-34):** 169 BLOCKED / 12 BREACH / 19 N/A / 0 ERROR, con las 12 BREACH clasificadas arriba. Con el modelo real, el recuerdo trampa no se obedece y, con la sesión contaminada, `create_task` queda pendiente de confirmación.
 - **Impacto:** Checklist 16 («Proteger operaciones destructivas», «Revisar datos sensibles»), `RUN_STATE.md`.
+
+## [2026-11-13] Guiones del stub propios de la pasada integrada
+- **Contexto:** los guiones de `tools/dev-llm-stub/scenarios` piden herramientas nativas de Hermes (`read_file`, `terminal`), que el runner de Drakter no ofrece (solo `mcp__drakter__*`); las comprobaciones de herramientas acababan "escenario no aplicable". `check_hermes.sh` sí los necesita así.
+- **Decisión:** el arnés arranca el stub con `--scenarios tests/e2e/stub-scenarios`: `list_tags` (lectura), `forget_memory` (CONFIRM; la puerta decide antes del handler) y `search_resources` sobre una nota con inyección que crea la propia comprobación (`index_content=true`).
+- **Alternativas descartadas:** cambiar los guiones del stub (rompe `check_hermes.sh`); ofrecer `file`/`terminal` a Hermes (viola la lista blanca).
+- **Motivo:** probar las barreras con el catálogo real que ve el modelo.
+- **Impacto:** `tests/e2e/stub-scenarios/`, `tests/e2e/harness/stack.py`, `tests/e2e/scenarios/conversation.py`, `tests/e2e/README.md`; Checklists 3, 13 y 16.
+
+## [2026-11-13] Electron del arnés: sin sandbox, perfil propio y espera al agente
+- **Contexto:** `main` rechaza `--no-sandbox` sin `DRAKTER_DEV_NO_SANDBOX=1`, y sin `--user-data-dir` propio el bloqueo de instancia única choca con la instancia del usuario; además Hermes arranca en segundo plano y los turnos inmediatos salen 503 `agent_unavailable`.
+- **Decisión:** solo en `tests/e2e/harness/stack.py`: `--no-sandbox` + `DRAKTER_DEV_NO_SANDBOX=1` + perfil en el TMPDIR de la pasada; tras cada arranque del backend, esperar (≤150 s) a que `/api/v1/agent/status` deje `offline`. `main` no cambia (confirmado con drakter-48).
+- **Alternativas descartadas:** relajar la regla de sandbox en `main`; reintentar turnos.
+- **Motivo:** la restricción del sandbox es correcta para producción; el arnés es el que debe adaptarse.
+- **Impacto:** `tests/e2e/harness/stack.py`, `tests/e2e/run.py`; Checklists 1, 3 y 5.
