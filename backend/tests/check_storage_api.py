@@ -6,6 +6,7 @@ Uso (desde backend/): TMPDIR=/var/tmp/drakter-almacen-relaciones venv/bin/python
 from __future__ import annotations
 
 import re
+import secrets
 import sys
 import tempfile
 from pathlib import Path
@@ -20,8 +21,9 @@ storage_tool_stub.install()
 
 from fastapi.testclient import TestClient  # noqa: E402
 
-from app.api import storage as storage_api  # noqa: E402
+from app.core.bootstrap import Credentials  # noqa: E402
 from app.core.config import Settings  # noqa: E402
+from app.core.security import SessionToken  # noqa: E402
 from app.main import create_app  # noqa: E402
 from app.tools import storage as storage_tools  # noqa: E402
 
@@ -51,11 +53,12 @@ def check_tools() -> None:
 def main() -> int:
     check_tools()
     root = Path(tempfile.mkdtemp(prefix="drakter-storage-api-"))
-    settings = Settings(data_dir=root / "data", runtime_dir=root / "run")
-    app = create_app(settings)
-    app.include_router(storage_api.router)
-    with TestClient(app, base_url=f"http://127.0.0.1:{settings.port}", client=("127.0.0.1", 50000)) as c:
-        c.headers["Authorization"] = f"Bearer {app.state.token.reveal()}"
+    settings = Settings(data_dir=root / "data")
+    port, ui_token = 47811, secrets.token_urlsafe(32)
+    creds = Credentials(ui=SessionToken(ui_token), approver=SessionToken(secrets.token_urlsafe(32)))
+    app = create_app(settings, credentials=creds, port=port, on_ready=lambda: None)
+    with TestClient(app, base_url=f"http://127.0.0.1:{port}", client=("127.0.0.1", 50000)) as c:
+        c.headers["Authorization"] = f"Bearer {ui_token}"
 
         r = c.post("/api/v1/resources", json={"title": "Apuntes de redes", "resource_type": "note",
                                                "note_body": "El protocolo zanahoria usa puertos altos.",

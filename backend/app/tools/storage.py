@@ -27,7 +27,8 @@ from app.schemas.storage import (
 )
 from app.services import storage_catalog, storage_index
 from app.services.storage_ports import Actor, tool_deps
-from app.tools.spec import RiskClass, ToolContext, ToolError, ToolSpec, untrusted_envelope
+from app.tools.envelope import untrusted_envelope
+from app.tools.spec import RiskClass, ToolContext, ToolError, ToolSpec
 
 R = TypeVar("R")
 _HIDDEN_LINK_ERRORS = frozenset({"url_not_allowed", "link_fetch_failed"})
@@ -207,6 +208,11 @@ _LOG = {"q": "log", "resource_id": "log", "folder_id": "log", "parent_folder_id"
 _WRITE_AUDIT = {**_LOG, "title": "log", "note_body": "hash", "description": "hash", "url": "hash",
                 "tags": "hash"}
 
+
+def _audit(args_model: type[BaseModel], policy: dict[str, str]) -> dict[str, str]:
+    """The registry rejects audit keys that are not arguments of the tool."""
+    return {k: v for k, v in policy.items() if k in args_model.model_fields}
+
 TOOLS: tuple[ToolSpec, ...] = (
     ToolSpec(
         name="search_resources",
@@ -218,14 +224,14 @@ TOOLS: tuple[ToolSpec, ...] = (
         domain="storage", args_model=SearchArgs, result_model=SearchPage,
         permission="storage.read", risk=RiskClass.READ, handler=_search,
         errors=("validation_error",), idempotent=True, returns_untrusted=True,
-        audit={**_LOG, "types": "log", "limit": "log", "cursor": "omit"},
+        audit=_audit(SearchArgs, {**_LOG, "types": "log", "limit": "log", "cursor": "omit"}),
     ),
     ToolSpec(
         name="get_resource",
         description="Devuelve los metadatos de un recurso del almacen por su id, sin su contenido.",
         domain="storage", args_model=ResourceIdArgs, result_model=ResourceOut,
         permission="storage.read", risk=RiskClass.READ, handler=_get,
-        errors=("not_found",), idempotent=True, returns_untrusted=True, audit=_LOG,
+        errors=("not_found",), idempotent=True, returns_untrusted=True, audit=_audit(ResourceIdArgs, _LOG),
     ),
     ToolSpec(
         name="read_resource",
@@ -239,14 +245,14 @@ TOOLS: tuple[ToolSpec, ...] = (
         errors=("not_found", "permission_denied", "resource_unavailable", "file_too_large",
                 "archive_limit_exceeded", "unsupported_media_type", "read_failed", "path_not_allowed"),
         idempotent=True, timeout_s=45.0, returns_untrusted=True,
-        audit={**_LOG, "selector": "log", "offset": "log", "max_chars": "log"},
+        audit=_audit(ReadArgs, {**_LOG, "selector": "log", "offset": "log", "max_chars": "log"}),
     ),
     ToolSpec(
         name="list_folders",
         description="Lista las carpetas del almacen, las raiz o las hijas de parent_folder_id.",
         domain="storage", args_model=ListFoldersArgs, result_model=FolderList,
         permission="storage.read", risk=RiskClass.READ, handler=_folders,
-        errors=("not_found",), idempotent=True, returns_untrusted=True, audit=_LOG,
+        errors=("not_found",), idempotent=True, returns_untrusted=True, audit=_audit(ListFoldersArgs, _LOG),
     ),
     ToolSpec(
         name="create_resource",
@@ -256,7 +262,7 @@ TOOLS: tuple[ToolSpec, ...] = (
         domain="storage", args_model=CreateResourceArgs, result_model=ResourceOut,
         permission="storage.write", risk=RiskClass.WRITE, handler=_create,
         errors=("not_found", "validation_error", "conflict"),
-        audit=_WRITE_AUDIT,
+        audit=_audit(CreateResourceArgs, _WRITE_AUDIT),
     ),
     ToolSpec(
         name="update_resource_metadata",
@@ -267,7 +273,7 @@ TOOLS: tuple[ToolSpec, ...] = (
         domain="storage", args_model=UpdateMetadataArgs, result_model=ResourceOut,
         permission="storage.write", risk=RiskClass.WRITE, handler=_update,
         errors=("not_found", "revision_mismatch", "conflict", "validation_error"),
-        audit={**_WRITE_AUDIT, "expected_revision": "log"},
+        audit=_audit(UpdateMetadataArgs, {**_WRITE_AUDIT, "expected_revision": "log"}),
     ),
     ToolSpec(
         name="index_resource",
@@ -279,7 +285,7 @@ TOOLS: tuple[ToolSpec, ...] = (
         permission="storage.write", risk=RiskClass.WRITE, handler=_index,
         errors=("not_found", "permission_denied", "resource_unavailable", "file_too_large",
                 "unsupported_media_type", "read_failed"),
-        idempotent=True, timeout_s=45.0, audit={**_LOG, "include_content": "log"},
+        idempotent=True, timeout_s=45.0, audit=_audit(IndexArgs, {**_LOG, "include_content": "log"}),
     ),
     ToolSpec(
         name="refresh_resource_index",
