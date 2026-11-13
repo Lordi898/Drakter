@@ -1,0 +1,63 @@
+/**
+ * Bandeja del sistema (voz v2). Con la ventana oculta la voz sigue viva; desde aquí
+ * se abre, se activa la conversación, se alterna el micrófono o se sale de verdad.
+ */
+import { app, Menu, nativeImage, Tray, type NativeImage } from 'electron'
+import { IPC_CHANNELS } from '../shared/bridge'
+import { callNamedOperation } from './apiProxy'
+import type { BackendHost } from './host-types'
+import { logError } from './log'
+import { focusMainWindow, getMainWindow, markQuitting } from './window'
+
+const ICON_SIZE = 22
+/** Color del chasis de la ventana (#0c2747) con borde claro para verse en paneles oscuros. */
+const FILL = [0x47, 0x27, 0x0c, 0xff] as const
+const RING = [0xe6, 0xd8, 0xc8, 0xff] as const
+
+let tray: Tray | null = null
+
+/** Círculo dibujado en memoria (BGRA): no hay recursos de icono en el repositorio. */
+function drawIcon(): NativeImage {
+  const buffer = Buffer.alloc(ICON_SIZE * ICON_SIZE * 4)
+  const center = (ICON_SIZE - 1) / 2
+  for (let y = 0; y < ICON_SIZE; y++) {
+    for (let x = 0; x < ICON_SIZE; x++) {
+      const distance = Math.hypot(x - center, y - center)
+      const color = distance <= center - 2 ? FILL : distance <= center ? RING : null
+      if (color) buffer.set(color, (y * ICON_SIZE + x) * 4)
+    }
+  }
+  return nativeImage.createFromBitmap(buffer, { width: ICON_SIZE, height: ICON_SIZE })
+}
+
+export function activateVoice(backend: BackendHost, trigger: 'hotkey' | 'ui'): Promise<void> {
+  return callNamedOperation(backend, 'voice.activate', { trigger }).then((result) => {
+    if (!result.ok) logError('voice', `No se pudo activar la voz (${result.code})`)
+  })
+}
+
+export function createTray(backend: BackendHost): Tray {
+  if (tray) return tray
+  tray = new Tray(drawIcon())
+  tray.setToolTip('Drakter')
+  tray.setContextMenu(
+    Menu.buildFromTemplate([
+      { label: 'Abrir', click: () => focusMainWindow() },
+      { label: 'Activar voz', click: () => void activateVoice(backend, 'ui') },
+      {
+        label: 'Silenciar micrófono',
+        click: () => getMainWindow()?.webContents.send(IPC_CHANNELS.voiceMicToggle)
+      },
+      { type: 'separator' },
+      {
+        label: 'Salir',
+        click: () => {
+          markQuitting()
+          app.quit()
+        }
+      }
+    ])
+  )
+  tray.on('click', () => focusMainWindow())
+  return tray
+}

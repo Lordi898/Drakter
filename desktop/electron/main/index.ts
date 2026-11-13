@@ -7,7 +7,8 @@ import { applyPermissionPolicy } from './permissions'
 import { isTrustedRendererUrl, RENDERER_URL } from './renderer-url'
 import { registerRendererProtocol, registerRendererScheme } from './rendererProtocol'
 import { applySandboxPolicy } from './sandbox'
-import { createMainWindow, focusMainWindow } from './window'
+import { activateVoice, createTray } from './tray'
+import { createMainWindow, focusMainWindow, markQuitting } from './window'
 
 process.on('uncaughtException', (error) => {
   logError('main', 'Excepción no capturada', describeError(error))
@@ -15,6 +16,8 @@ process.on('uncaughtException', (error) => {
 process.on('unhandledRejection', (reason) => {
   logError('main', 'Promesa rechazada sin gestionar', describeError(reason))
 })
+
+const ACTIVATE_ARG = 'activate'
 
 applySandboxPolicy()
 registerRendererScheme()
@@ -50,13 +53,22 @@ function start(): void {
     if (details.reason === 'clean-exit') return
     logError('main', `Proceso ${details.type} caído: ${details.reason} (código ${details.exitCode})`)
   })
-  app.on('second-instance', focusMainWindow)
+  // Primero: cualquier salida (bandeja, señal, app.quit) deja cerrar la ventana de verdad.
+  app.on('before-quit', markQuitting)
   app.on('window-all-closed', () => {
     if (process.platform !== 'darwin') app.quit()
   })
 
   const backend = createBackendHost()
-  const events = createEventsBridge(backend)
+  // `drakter activate` (atajo Super+J) llega como segunda instancia: activa la voz sin enfocar.
+  app.on('second-instance', (_event, argv) => {
+    if (argv.includes(ACTIVATE_ARG)) void activateVoice(backend, 'hotkey')
+    else focusMainWindow()
+  })
+  // Las confirmaciones nunca se hacen por voz (V-34): se enfoca la ventana para decidir en pantalla.
+  const events = createEventsBridge(backend, (type) => {
+    if (type === 'confirmation.requested') focusMainWindow()
+  })
   stopBackendBeforeQuit(async () => {
     events.dispose()
     await backend.stop()
@@ -70,6 +82,7 @@ function start(): void {
     registerIpcHandlers(backend, events)
     backend.start()
     createMainWindow()
+    createTray(backend)
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) createMainWindow()
     })

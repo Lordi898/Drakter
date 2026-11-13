@@ -6,6 +6,7 @@ import {
   type DrakterApi,
   type DrakterBridge
 } from '../shared/bridge'
+import type { OperationName } from '../shared/operations'
 
 type Listener = (event: unknown) => void
 
@@ -68,9 +69,9 @@ function onMicToggle(callback: () => void): () => void {
   }
 }
 
-/** Provisional (WP0): pasa por `apiCall`, que main valida contra `ALLOWED_ROUTES`. WP8a lo sustituye. */
-const call = (method: string, path: string, body?: unknown) =>
-  ipcRenderer.invoke(IPC_CHANNELS.apiCall, { method, path, body })
+/** Operación con nombre de `OPERATIONS`: main resuelve método y ruta y valida `params`. */
+const op = (name: OperationName, body?: unknown, params?: Record<string, string>) =>
+  ipcRenderer.invoke(IPC_CHANNELS.apiCall, { op: name, params, body })
 
 const api: DrakterApi = {
   call: (method, path, body, options) =>
@@ -83,15 +84,15 @@ const api: DrakterApi = {
     ipcRenderer.invoke(IPC_CHANNELS.updateStorageLocation, { id, changes }),
   deleteStorageLocation: (id) => ipcRenderer.invoke(IPC_CHANNELS.deleteStorageLocation, id),
   voice: {
-    offer: (body) => call('POST', '/api/v1/voice/offer', body),
-    activate: (body) => call('POST', '/api/v1/voice/activate', body),
-    mode: (body) => call('POST', '/api/v1/voice/mode', body),
-    status: () => call('GET', '/api/v1/voice/status'),
+    offer: (body) => op('voice.offer', body),
+    activate: (body) => op('voice.activate', body),
+    mode: (body) => op('voice.mode', body),
+    status: () => op('voice.status'),
     onMicToggle
   },
   jobs: {
-    list: () => call('GET', '/api/v1/jobs'),
-    cancel: (jobId) => call('POST', `/api/v1/jobs/${encodeURIComponent(jobId)}/cancel`)
+    list: () => op('jobs.list'),
+    cancel: (jobId) => op('jobs.cancel', undefined, { job_id: jobId })
   }
 }
 
