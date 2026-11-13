@@ -324,7 +324,7 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
   ⚠️ El archivo existe, pero sus herramientas (`get_configuration`, `propose_configuration_change`) son PROPUESTA y no existen ni en el catálogo ni en el backend. Además está inerte.
 - [x] Definir parámetros.
 - [x] Definir permisos.
-  ⚠️ Arreglado: faltaba `storage.write` y se denegaban 4 herramientas del almacén (ya concedido en `drakter/integracion`). `improvement.read`/`improvement.write` se conceden con las dos escrituras en `RiskClass.CONFIRM` (`fa511e7`, pendiente de fusión); hoy esas escrituras quedan denegadas porque el runtime usa `DefaultToolGate` (ver «Definir confirmaciones»).
+  ⚠️ Arreglado: faltaba `storage.write` y se denegaban 4 herramientas del almacén (ya concedido en `drakter/integracion`). `improvement.read`/`improvement.write` se conceden con las dos escrituras en `RiskClass.CONFIRM` (`5dd55b1`, pendiente de fusión); hoy esas escrituras quedan denegadas porque el runtime usa `DefaultToolGate` (ver «Definir confirmaciones»).
 - [ ] Definir confirmaciones.
   ⚠️ 7 herramientas con `risk=confirm` y `summarize`; la puerta falla cerrada (`delete_task` del agente no se ejecuta y se audita `rejected`), pero nunca se crea la confirmación pendiente: `main.py` no llama a `install_security` y `AgentRuntime` crea `ToolRegistry` sin `gate=BackendToolGate`. `GET /api/v1/confirmations` da 503.
 - [x] Definir errores.
@@ -382,7 +382,7 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 - [x] Crear evaluaciones.
 - [x] Crear entorno de pruebas.
 - [ ] Crear flujo de aprobación.
-  ⚠️ La lógica funciona con una puerta de prueba (`request_approval` → `approve` ligado al digest → `apply`), pero falta integrarla en la app: no hay adaptador `ConfirmationGate` sobre `ActionService` (sin cablear en `main.py`), nadie fija `app.state.gui_principal` (por HTTP la GUI cuenta como agente y aprobar/evaluar/aplicar dan 403 `user_required`) y no hay pantalla de automejora en `desktop/src/modules/`. Falla cerrado.
+  ⚠️ La lógica funciona con una puerta de prueba (`request_approval` → `approve` ligado al digest → `apply`), pero falta integrarla en la app. El cableado de seguridad (`4d2bcd1`) no cubre automejora (recomprobado sobre `6d2f78a`): sigue `DenyAllGate` (no hay adaptador `ConfirmationGate` sobre `ActionService`), el guardia no reserva al rol `approver` las rutas de automejora, nadie fija `app.state.gui_principal` (por HTTP la GUI cuenta como agente y aprobar/evaluar/aplicar dan 403 `user_required`) y no hay pantalla de automejora en `desktop/src/modules/`. Falla cerrado.
 - [x] Integrar Git.
 - [x] Crear historial de cambios.
 - [x] Crear informes.
