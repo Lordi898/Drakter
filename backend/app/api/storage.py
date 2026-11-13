@@ -57,7 +57,7 @@ def actor(request: Request) -> Actor:
 
 
 def db(request: Request) -> Iterator[sqlite3.Connection]:
-    conn = connect(request.app.state.settings.db_path)
+    conn = connect(request.app.state.settings.db_path, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     try:
         yield conn

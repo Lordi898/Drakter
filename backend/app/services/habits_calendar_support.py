@@ -69,7 +69,7 @@ def ensure_timezone(name: str) -> ZoneInfo:
 
 def get_db(request: Request) -> Iterator[sqlite3.Connection]:
     """Dependencia FastAPI: una conexión por petición."""
-    conn = connect(request.app.state.settings.db_path)
+    conn = connect(request.app.state.settings.db_path, check_same_thread=False)
     try:
         yield conn
     finally:

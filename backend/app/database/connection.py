@@ -126,9 +126,18 @@ def _configure(conn: sqlite3.Connection, *, migrating: bool) -> None:
 
 
 def connect(
-    db_path: Path, *, create: bool = False, migrating: bool = False
+    db_path: Path,
+    *,
+    create: bool = False,
+    migrating: bool = False,
+    check_same_thread: bool = True,
 ) -> sqlite3.Connection:
-    """Open a hardened connection. Only the migrator may pass `migrating=True`."""
+    """Open a hardened connection. Only the migrator may pass `migrating=True`.
+
+    `check_same_thread=False` is only for one-request FastAPI dependencies: sync
+    dependencies, the endpoint and the teardown may each run on a different
+    threadpool thread, but never at the same time.
+    """
     path = Path(db_path)
     identity = _prepare_database_file(path, create=create)
     secure_sidecars(path)
@@ -137,6 +146,7 @@ def connect(
         uri=True,
         timeout=BUSY_TIMEOUT_MS / 1000,
         isolation_level=None,
+        check_same_thread=check_same_thread,
     )
     try:
         current = os.lstat(path)
