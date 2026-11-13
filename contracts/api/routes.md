@@ -234,7 +234,7 @@ Tabla única de rutas. Manda `contracts/README.md`; después, lo ya construido e
 
 ## Voz
 
-Router escrito en `backend/app/integrations/voice/router.py` (`voice/CONTRACT.md`), sin montar: no está en `app/api/` y `main.py` no lo incluye. Sin ruta para hacer hablar a Drakter; voz no confirma en v1.
+Router escrito en `backend/app/integrations/voice/router.py` (`voice/CONTRACT.md`), sin montar: no está en `app/api/` y `main.py` no lo incluye. En v1 se queda así (DECISIONS «Voz: cierre mínimo, rediseño posterior sobre Pipecat»). Sin ruta para hacer hablar a Drakter; voz no confirma en v1.
 
 | Método | Ruta | Entrada | Respuesta | Estado | Riesgo | Dueño |
 |---|---|---|---|---|---|---|
@@ -248,15 +248,27 @@ Router escrito en `backend/app/integrations/voice/router.py` (`voice/CONTRACT.md
 
 ## Automejora
 
-Router escrito en `backend/app/services/improvement_api.py`, sin montar (no está en `app/api/`). Tiene además rutas que esta tabla no recoge (`feedback` GET y `classification`, `proposals` POST, `evaluate`, `approval-request`, `apply`, `revert-request`, `revert`, `reports/*`, `changelog`): ver desviaciones. Las siguientes salen de las tablas `improvement_*` (migración 0010). Aprobar una propuesta no modifica producción, permisos, confirmaciones ni auditoría sin pasar por `confirmations`.
+`backend/app/services/improvement_api.py`, montado por `backend/app/api/improvement.py` (DECISIONS «Esquema de automejora: manda el del servicio», migración 0012). Drakter propone; aplicar exige una propuesta aprobada, y aprobar o revertir exige una confirmación. Nada cambia producción, permisos, confirmaciones ni auditoría sin aprobación.
 
 | Método | Ruta | Entrada | Respuesta | Estado | Riesgo | Dueño |
 |---|---|---|---|---|---|---|
-| GET | `/api/v1/improvement/proposals` | `status`, `limit`, `cursor` | `{items,next_cursor}` | escrita, sin montar | read | automejora (20) |
-| GET | `/api/v1/improvement/proposals/{id}` | - | propuesta y evaluaciones | escrita, sin montar | read | automejora (20) |
-| POST | `/api/v1/improvement/proposals/{id}/approve` | - | 409 `confirmation_required` | escrita, sin montar, ver desviaciones | confirm | automejora (20) |
-| POST | `/api/v1/improvement/proposals/{id}/reject` | - | propuesta | escrita, sin montar | write | automejora (20) |
-| POST | `/api/v1/improvement/feedback` | `{target, rating, note?}` | 201 | escrita, sin montar | write | automejora (20) |
+| GET | `/api/v1/improvement/feedback` | `limit`, `offset`, `category`, `severity`, `origin` | listado de comentarios | construida, ver desviaciones | read | automejora (20) |
+| POST | `/api/v1/improvement/feedback` | `FeedbackCreate` | 201 comentario | construida | write | automejora (20) |
+| GET | `/api/v1/improvement/feedback/{id}` | - | comentario | construida | read | automejora (20) |
+| PATCH | `/api/v1/improvement/feedback/{id}/classification` | `FeedbackReclassify` | comentario | construida | write | automejora (20) |
+| GET | `/api/v1/improvement/proposals` | `status`, `limit`, `offset` | listado de propuestas | construida, ver desviaciones | read | automejora (20) |
+| POST | `/api/v1/improvement/proposals` | `ProposalCreate` | 201 propuesta | construida | write | automejora (20) |
+| GET | `/api/v1/improvement/proposals/{id}` | - | propuesta y evaluaciones | construida | read | automejora (20) |
+| POST | `/api/v1/improvement/proposals/{id}/evaluate` | - | evaluación | construida | write | automejora (20) |
+| POST | `/api/v1/improvement/proposals/{id}/approval-request` | - | `{confirmation_id,...}` de la puerta propia | construida, ver desviaciones | write | automejora (20) |
+| POST | `/api/v1/improvement/proposals/{id}/approve` | `{confirmation_id}` | propuesta aprobada | construida, ver desviaciones | confirm | automejora (20) |
+| POST | `/api/v1/improvement/proposals/{id}/apply` | - | propuesta aplicada (solo si está aprobada) | construida | write | automejora (20) |
+| POST | `/api/v1/improvement/proposals/{id}/revert-request` | - | `{confirmation_id,...}` de la puerta propia | construida, ver desviaciones | write | automejora (20) |
+| POST | `/api/v1/improvement/proposals/{id}/revert` | `{confirmation_id}` | propuesta revertida | construida, ver desviaciones | confirm | automejora (20) |
+| POST | `/api/v1/improvement/proposals/{id}/reject` | `{reason}` | propuesta | construida | write | automejora (20) |
+| GET | `/api/v1/improvement/reports/summary` | `from`, `to` | resumen | construida | read | automejora (20) |
+| POST | `/api/v1/improvement/reports/export` | `ReportExportBody` | 201 ruta del informe | construida | write | automejora (20) |
+| GET | `/api/v1/improvement/changelog` | `limit`, `offset`, `proposal_id` | historial de cambios aplicados | construida, ver desviaciones | read | automejora (20) |
 
 ## Desviaciones que deben corregirse
 
@@ -268,8 +280,8 @@ Ya resuelto (fusión de drakter-34, `app/permissions/wiring.py`): pipeline de co
 
 | Qué | Dónde | Efecto hoy | Qué debe hacer |
 |---|---|---|---|
-| Routers fuera de `app/api/` | `app/services/backup_api.py`, `app/services/improvement_api.py`, `app/integrations/voice/router.py` | Sus rutas dan 404 `http_404` (estado `escrita, sin montar` en las tablas) | Montarlos desde `_install_services`, como memoria, o moverlos a `app/api/` |
-| Voz sin arrancar | `app/integrations/voice/` (supervisor, puente) no se importa fuera de su paquete | No se emite ningún `voice.*` | Arrancarla en `lifespan` cuando se monte su router |
+| Router de copias fuera de `app/api/` | `app/services/backup_api.py` (automejora ya se monta con `app/api/improvement.py`) | `/api/v1/backups/**` da 404 `http_404`; la única superficie de copias montada es `/settings/backups` | Montarlo como automejora (un `app/api/backups.py` que reexporte `router`), una vez resuelta su puerta propia |
+| Voz sin montar ni arrancar | `app/integrations/voice/router.py` y su supervisor no se usan fuera de su paquete | `/api/v1/voice/**` da 404 y no se emite ningún `voice.*` | Nada en v1: DECISIONS «Voz: cierre mínimo, rediseño posterior sobre Pipecat». Se rehace con el rediseño |
 
 ### Paginación (debe ser `{items,next_cursor,total?}` + `limit`/`cursor`)
 
@@ -277,6 +289,7 @@ Ya resuelto (fusión de drakter-34, `app/permissions/wiring.py`): pipeline de co
 |---|---|---|---|
 | memoria (18) | `backend/app/integrations/memory/router.py:84,115-125` | `limit`, `offset`, `{items,total,limit,offset}` | `cursor` y `next_cursor`; puede conservar `total` |
 | agente/chat (16) | `backend/app/api/chat.py:83,95` | `limit`, `offset` en sesiones y mensajes | `cursor` y `next_cursor` |
+| automejora (20) | `backend/app/services/improvement_api.py` (`feedback`, `proposals`, `changelog`) | `limit`, `offset` | `cursor` y `next_cursor` |
 
 ### Confirmación con flujo propio (debe ser 409 y aprobar en `/confirmations/{id}/approve`)
 
@@ -285,7 +298,7 @@ Ya resuelto (fusión de drakter-34, `app/permissions/wiring.py`): pipeline de co
 | memoria (18) | `backend/app/integrations/memory/router.py:105,187-188` | `forget` recibe `confirmation_id` en el cuerpo | Sin cuerpo; 409 con `confirmation` en el sobre |
 | memoria (18) | `backend/app/integrations/memory/router.py:177-179` | `POST /memory/{id}/approve` aprueba directamente | 409 y camino único: consolidar un recuerdo candidato exige confirmación |
 | automejora (20) | `backend/app/services/backup_api.py:214-227,260` | Puerta propia, rutas `restore-request` y `delete-request`, `confirmation_id` en el cuerpo | Quitar esas dos rutas y la puerta; `restore` y `DELETE` sin cuerpo, 409 y ejecución en `/confirmations/{id}/approve` |
-| automejora (20) | `backend/app/services/improvement_api.py:139-161` | `approval-request` y `revert-request`; `approve` y `revert` con `confirmation_id` en el cuerpo | 409 y ejecución en `/confirmations/{id}/approve`; documentar aquí las rutas extra que se conserven |
+| automejora (20) | `backend/app/services/improvement_api.py:139-161`, `services/improvement_proposals.py:493-533,672-713`, `services/improvement_ports.py:119-121` | Puerta propia: `approval-request`/`revert-request` devuelven `confirmation_id` y `approve`/`revert` lo reciben en el cuerpo. La puerta sale de `app.state.confirmation_gate`, que nadie asigna, así que siempre es `DenyAllGate` (503 `confirmation_unavailable`: falla cerrada, pero no se puede aprobar nada) | Pasar por el pipeline único de `ActionService` (README §5 y DECISIONS «Caducidad única de confirmaciones: 300 s»): 409 y ejecución en `/confirmations/{id}/approve` |
 | hoy-ajustes | `backend/app/api/settings.py:35,40`, consumidas por `desktop/src/pages/today/requests.ts:29,33` | `/settings/backups`, segunda superficie de copias (la única montada hoy) | Usar `/api/v1/backups` cuando se monte `backup_api.py` y retirar estas rutas |
 
 ### Eventos del catálogo que nadie emite o nadie escucha

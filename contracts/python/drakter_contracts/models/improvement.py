@@ -1,3 +1,11 @@
+"""OBSOLETO desde la migración 0012 (DECISIONS «Esquema de automejora: manda el del servicio»).
+
+Estos modelos describen las tablas de 0010, que ya no existen. El esquema, los estados y las
+categorías vigentes son los de `backend/app/services/improvement_models.py` y la API de
+`backend/app/services/improvement_api.py` (`contracts/api/routes.md`, sección Automejora).
+No los uses en código nuevo; se conservan solo para no romper `contracts/ts` hasta rehacerlos.
+"""
+
 from enum import StrEnum
 from typing import Annotated, Literal
 
