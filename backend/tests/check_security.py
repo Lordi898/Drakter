@@ -343,12 +343,13 @@ def http_cases(be: Backend, agent: str) -> None:
     for m, p in protected:
         a, b, c = R(m, p), R(m, p, token=ui), R(m, p, token=ap)
         d = R(m, p, token=agent)
-        check(f"{m} {p}: sin token 401, ui 403 permission_denied, approver pasa (404 http_404), agent 401",
+        # Con las rutas ya montadas, "pasa el guardia" es cualquier respuesta que no sea suya.
+        check(f"{m} {p}: sin token 401, ui 403 permission_denied, approver pasa el guardia, agent 401",
               a.status == 401 and b.status == 403 and b.envelope("permission_denied")
-              and c.status == 404 and c.envelope("http_404") and d.status == 401,
+              and c.status not in (401, 403) and d.status == 401,
               f"none={a.status} ui={b.status} approver={c.status}/{c.error_code()} agent={d.status}")
     r = R("GET", "/api/v1/storage-locations", token=ui)
-    check("GET /api/v1/storage-locations con ui pasa el guardia (404 http_404)", r.status == 404 and r.envelope("http_404"), f"{r.status}")
+    check("GET /api/v1/storage-locations con ui pasa el guardia", r.status not in (401, 403), f"{r.status}")
     r = R("GET", "/api/v1/storage-locations", token=ap)
     check("GET /api/v1/storage-locations con approver: 403 permission_denied", r.status == 403 and r.envelope("permission_denied"), f"{r.status}")
     r = R("GET", "/api/v1/confirmations/x/approve", token=ui)
@@ -536,7 +537,8 @@ def system_cases(be: Backend, tokens: list[str], root: Path) -> None:
     mine = [l.split()[3] for l in ss if len(l.split()) > 3 and l.split()[3].rsplit(":", 1)[-1] == str(port)]
     check("ss -ltn: el puerto solo escucha en 127.0.0.1", bool(mine) and all(a == f"127.0.0.1:{port}" for a in mine), repr(mine))
     own = [l.split()[3] for l in ss if f"pid={pid}," in l or f"pid={pid})" in l]
-    check("ss -ltnp: todos los listeners del proceso son 127.0.0.1:<puerto>", all(a == f"127.0.0.1:{port}" for a in own), repr(own))
+    # El servidor de herramientas del agente abre un segundo puerto efímero, también en loopback.
+    check("ss -ltnp: todos los listeners del proceso están en 127.0.0.1", bool(own) and all(a.startswith("127.0.0.1:") for a in own), repr(own))
     check("puerto anunciado dentro de 1024..65535", 1024 <= port <= 65535, str(port))
 
     fd0 = os.readlink(f"/proc/{pid}/fd/0")

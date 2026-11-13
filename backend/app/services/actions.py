@@ -162,6 +162,14 @@ class ActionService:
         self._turn_lock = threading.Lock()
         self._turn_total: tuple[str | None, int] = (None, 0)
 
+    def add_executor(self, tool: str, executor: ConfirmedExecutor) -> None:
+        """Before `start_security`. Two owners for one tool stop the boot."""
+        if self.registry.frozen:
+            raise RuntimeError("Executors are fixed once security has started")
+        if tool in self._executors:
+            raise ValueError(f"Two executors for {tool}")
+        self._executors[tool] = executor
+
     def open(self) -> sqlite3.Connection:
         conn = connect(self._db_path)
         conn.execute("PRAGMA recursive_triggers=ON")
@@ -488,6 +496,25 @@ class ActionService:
             raise _error(ErrorCode.INTERNAL_ERROR, "Action failed") from None
         self._publish_resolved(row["id"], "executed", None, correlation_id)
         return ActionResult(row["id"], "executed", data)
+
+    def audit_forbidden_decision(
+        self, verb: str, confirmation_id: str | None, correlation_id: str
+    ) -> None:
+        """The guard refused a non-approver on approve/reject: leave the attempt on record."""
+        conn = self.open()
+        try:
+            row = self._row(conn, UUID(confirmation_id)) if confirmation_id else None
+            self._audit_alone(
+                conn,
+                ActorContext(Principal.UI, Origin.REST, correlation_id),
+                f"confirmation.{verb}",
+                "denied",
+                ErrorCode.PERMISSION_DENIED.value,
+                confirmation_id if row is not None else None,  # type: ignore[arg-type]
+                row,
+            )
+        finally:
+            conn.close()
 
     def reject(
         self,

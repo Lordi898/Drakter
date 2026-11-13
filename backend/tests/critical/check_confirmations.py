@@ -229,7 +229,10 @@ async def main(root: Path) -> None:
             check(f"el servicio rechaza a {principal}", exc.status_code == 403)
     check("sigue pendiente y sin ejecutar", status_of(conn, action) == "pending" and calls["demo_delete"] == 0)
     denied = [e for e in list_events(conn, confirmation_id=action) if e["result"] == "denied"]
-    check("los intentos que llegan al servicio quedan auditados", len(denied) == 2, len(denied))
+    # 2 del servicio (agente y ui) y, como mínimo, los 2 que corta el guardia (ui aprueba y rechaza).
+    check("los intentos rechazados quedan auditados", len(denied) >= 4, len(denied))
+    check("también los que corta el guardia",
+          {e["action"] for e in denied} >= {"confirmation.approve", "confirmation.reject"}, denied)
 
     print("-- ligada a parámetros; un solo uso")
     other = dispatch("demo_delete", {"key": "b"}, agent(), actions=actions)["action_id"]

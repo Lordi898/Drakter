@@ -26,6 +26,7 @@ REQUIRED_TRIGGERS = {
     "trg_tasks_no_cycle", "trg_folders_no_cycle", "trg_relationships_no_cycle",
     "trg_audit_no_update", "trg_audit_no_delete", "trg_audit_no_replace",
     "trg_pc_transition", "trg_pc_immutable", "trg_pc_no_delete", "trg_pc_no_replace",
+    "trg_pc_identity", "trg_pc_born_pending", "trg_pc_closed", "trg_pc_decided_once",
     "trg_search_ai", "trg_search_ad", "trg_search_au",
     "trg_memory_records_ai", "trg_memory_records_au", "trg_memory_records_ad",
 }
@@ -102,7 +103,7 @@ def run(root: Path) -> None:
     finally:
         conn.close()
     first = migrate(db, backups)
-    ok("0011 con datos crea copia", first.backup is not None and first.applied == ("0011_settings_value.sql",))
+    ok("0011 con datos crea copia", first.backup is not None and first.applied[:1] == ("0011_settings_value.sql",))
     first_version = first.to_version
     ok("aplica todas las migraciones", first_version == len(list(Path(__file__).parent.glob("0*.sql"))))
     ok("segunda pasada idempotente", migrate(db, backups).applied == ())

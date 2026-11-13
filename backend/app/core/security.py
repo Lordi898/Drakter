@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+import asyncio
 import hmac
 import logging
 import re
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import TYPE_CHECKING, Final, NamedTuple
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
@@ -122,6 +123,8 @@ class SecurityGuardMiddleware:
         headers = _headers_by_name(scope)
         rejection = self._evaluate(scope, headers)
         if rejection is not None:
+            if rejection is _PERMISSION_DENIED:
+                await self._audit_forbidden_decision(scope)
             await self._reject(scope, receive, send, rejection)
         elif scope["type"] == "http":
             await self._forward_with_body_limit(scope, receive, send)
@@ -145,6 +148,33 @@ class SecurityGuardMiddleware:
         if scope["type"] == "http" and _declares_oversized_body(headers):
             return _BODY_TOO_LARGE
         return None
+
+    @staticmethod
+    async def _audit_forbidden_decision(scope: Scope) -> None:
+        """A `ui` caller trying to approve or reject leaves a `denied` audit event."""
+        path = _REPEATED_SLASHES.sub("/", str(scope.get("path")))
+        if not _APPROVAL_PATH.fullmatch(path):
+            return
+        app = scope.get("app")
+        actions = getattr(getattr(app, "state", None), "actions", None)
+        if actions is None:
+            return
+        parts = [part for part in path.split("/") if part]
+        verb, raw_id = parts[-1], parts[-2] if len(parts) >= 5 else ""
+        try:
+            confirmation_id: str | None = str(UUID(raw_id))
+        except ValueError:
+            confirmation_id = None
+        try:
+            await asyncio.to_thread(
+                actions.audit_forbidden_decision,
+                verb,
+                confirmation_id,
+                scope["state"]["request_id"],
+            )
+        except Exception:  # noqa: BLE001 - the 403 stands even if the trail cannot be written
+            logger.exception("Audit of a forbidden decision failed",
+                             extra={"event": "audit_failed"})
 
     def _identify(self, headers: dict[bytes, list[bytes]]) -> Role | None:
         authorization = headers.get(b"authorization", [])

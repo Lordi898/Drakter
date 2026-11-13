@@ -17,6 +17,7 @@ from drakter_contracts.tools import ToolConfirmationRequired, ToolFailed
 from pydantic import BaseModel
 
 from app.audit.writer import AuditEvent, filter_params, write
+from app.permissions.canonical import canonical_json
 from app.permissions.models import ActionSpec, ActorContext, Principal, Verdict
 from app.services.actions import ActionService
 
@@ -40,12 +41,39 @@ def tool_action_spec(tool: Any, make_context: Callable[[], Any]) -> ActionSpec:
         risk=tool.risk,
         args_model=tool.args_model,
         handler=handler,
-        summarize=tool.summarize,
+        # WRITE tools only reach a confirmation through the bulk or taint rules; the
+        # registry already demands a summary for CONFIRM tools.
+        summarize=tool.summarize or _default_summary(tool.name),
         audit=tool.audit,
         resolve_targets=getattr(tool, "resolve_targets", None),
         count_affected=getattr(tool, "count_affected", None),
         external=True,
     )
+
+
+def _default_summary(name: str) -> Callable[[BaseModel], str]:
+    """Built by the backend from the validated arguments, so the approver sees what runs.
+
+    `ActionService` strips control and bidi characters and truncates it.
+    """
+
+    def summarize(params: BaseModel) -> str:
+        shown = canonical_json(params.model_dump(mode="json"))
+        return f"El agente quiere ejecutar «{name}» con {shown}"
+
+    return summarize
+
+
+def _audit_result(event: Any) -> str | None:
+    """Map a `ToolAuditEvent` onto `audit_events.result`. `None`: nothing to store."""
+    outcome = getattr(event, "outcome", None)
+    if outcome == "pending":
+        return None  # the attempt: the `result` or `rejected` event follows
+    if outcome == "ok":
+        return "success"
+    if outcome == "confirmation_required":
+        return "confirmation_required"
+    return "denied" if getattr(event, "phase", None) == "rejected" else "failed"
 
 
 def _actor(ctx: Any, tainted: bool) -> ActorContext:
@@ -96,6 +124,11 @@ class BackendAuditSink:
         await asyncio.to_thread(self._write, event)
 
     def _write(self, event: Any) -> None:
+        result = _audit_result(event)
+        if result is None:
+            # Still fail closed: an unreachable audit store stops the attempt.
+            self._actions.open().close()
+            return
         ctx = ActorContext(
             principal=Principal.AGENT,
             origin=Origin.MCP,
@@ -113,10 +146,13 @@ class BackendAuditSink:
                 ctx,
                 AuditEvent(
                     action=tool,
-                    result=getattr(event, "result", None) or "success",
+                    result=result,
                     tool_name=tool,
                     params=filter_params(args, spec.audit) if spec else None,
-                    error_code=getattr(event, "error_code", None),
+                    error_code=getattr(event, "code", None),
+                    duration_ms=(
+                        round(event.duration_ms) if getattr(event, "duration_ms", None) else None
+                    ),
                 ),
             )
         finally:

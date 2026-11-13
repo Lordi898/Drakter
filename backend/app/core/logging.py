@@ -38,7 +38,8 @@ _WS_AUTH_RE = re.compile(r"drakter\.auth\.[A-Za-z0-9_\-.~+/=]+")
 _SK_RE = re.compile(r"\bsk-[A-Za-z0-9_\-]+")
 _KEY_RE = re.compile(
     r"(?P<kw>authorization|token|secret|password|api[_\-]key|apikey|cookie|credential)"
-    r"[\w\-]{0,64}+(?:\\?[\"'])?[ \t]{0,16}+[:=][ \t]{0,16}+",
+    # `key: value`, `key=value`, and a quoted key followed by `,` (a `(name, value)` pair).
+    r"[\w\-]{0,64}+(?:\\?[\"'][ \t]{0,16}+[:=,]|[ \t]{0,16}+[:=])[ \t]{0,16}+",
     re.IGNORECASE,
 )
 _HEADER_VALUE_RE = re.compile(r"[^\r\n]*")
@@ -77,6 +78,8 @@ def _value_span(text: str, start: int, kw: str) -> tuple[int, int]:
     """Span of the value that begins at ``start`` (quotes excluded)."""
     if start >= len(text):
         return start, start
+    if text[start] in "bB" and text[start + 1 : start + 2] in ('"', "'"):
+        start += 1  # Python bytes literal: b'...'
     if text[start] == "\\" and text[start + 1 : start + 2] in ('"', "'"):
         closer = text[start : start + 2]
         value_start = start + 2
@@ -167,6 +170,28 @@ class JsonFormatter(logging.Formatter):
     """One JSON object per line; redaction runs on the final text."""
 
     def format(self, record: logging.LogRecord) -> str:
+        """Never raises: `Handler.handleError` would print the raw message and arguments."""
+        try:
+            return self._format(record)
+        except Exception:  # noqa: BLE001 - includes RecursionError from a hostile extra
+            try:
+                message = _redact_text(str(record.msg))
+            except Exception:  # noqa: BLE001
+                message = "<unprintable>"
+            return _mask_registered(
+                json.dumps(
+                    {
+                        "ts": datetime.fromtimestamp(record.created, UTC).isoformat(),
+                        "level": record.levelname,
+                        "logger": record.name,
+                        "message": message,
+                        "log_format_error": True,
+                    },
+                    ensure_ascii=False,
+                )
+            )
+
+    def _format(self, record: logging.LogRecord) -> str:
         try:
             message = record.getMessage()
         except Exception:  # noqa: BLE001 - never let logging raise

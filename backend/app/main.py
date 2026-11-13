@@ -20,6 +20,8 @@ from app.core.security import SecurityGuardMiddleware
 from app.database.lock import exclusive_instance
 from app.database.migrator import migrate
 from app.events import EventHub
+from app.permissions.setup import start_security, stop_security
+from app.permissions.wiring import wire_security
 
 
 def _discover_routers() -> Iterator[APIRouter]:
@@ -63,6 +65,7 @@ def _install_services(app: FastAPI, settings: Settings) -> None:
     app.state.reminders = (
         reminders.ReminderTicker(settings.db_path, publish=hub.publish) if reminders else None
     )
+    wire_security(app, settings)
 
 
 def create_app(
@@ -79,6 +82,7 @@ def create_app(
         configure_logging(settings.log_level, settings.logs_dir)
         with exclusive_instance(settings.db_path):
             await asyncio.to_thread(migrate, settings.db_path, settings.backups_dir)
+            await start_security(app)
             runtime, reminders = app.state.agent_runtime, app.state.reminders
             if runtime:
                 await runtime.start()
@@ -94,6 +98,7 @@ def create_app(
             finally:
                 if runtime:
                     await runtime.stop()
+                await stop_security(app)
 
     app = FastAPI(
         title="Drakter",
