@@ -74,7 +74,7 @@ class TodayAgendaEntry(_Out):
     title: str
     kind: str
     all_day: bool
-    display_start: str | None  # 'AAAA-MM-DDTHH:MM:SS' en la zona pedida; null si es de día completo
+    display_start: str | None  # 'AAAA-MM-DDTHH:MM' en la zona pedida; null si es de día completo
     display_end: str | None
     room: str | None
     color: str | None
