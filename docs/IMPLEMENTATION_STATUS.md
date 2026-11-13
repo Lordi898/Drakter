@@ -379,22 +379,26 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 
 ## Checklist 16. Seguridad y fiabilidad
 
-- [ ] Crear permisos por módulo.
-- [ ] Crear permisos por operación.
+- [x] Crear permisos por módulo.
+- [x] Crear permisos por operación.
 - [x] Crear confirmaciones.
-  ⚠️ Permisos, confirmación pendiente y auditoría se construyen antes de la primera herramienta. Las casillas de esta checklist son revisión y endurecimiento finales.
+  ⚠️ Por la GUI funciona (409 → aprobar con `approver` → ejecutado, no reutilizable; CONF-55..71 BLOCKED). Camino del agente: el runtime de Hermes crea `ToolRegistry` con `DefaultToolGate`, así que las 7 herramientas CONFIRM y las escrituras en sesión contaminada se deniegan (`confirmation_unavailable`) en vez de crear una confirmación pendiente. Olvidar un recuerdo usa `DenyAllGate` y falla cerrado. Seguro, pero no completo.
 - [x] Proteger credenciales.
-- [ ] Validar rutas.
-- [ ] Limitar acceso a archivos.
-- [ ] Proteger operaciones destructivas.
+- [x] Validar rutas.
+- [x] Limitar acceso a archivos.
+- [x] Proteger operaciones destructivas.
+  ⚠️ Brechas de diseño del banco red-team que siguen abiertas: contaminación solo en memoria (CONF-46/INJ-26), canal de datos de `TurnRequest` y contaminación de `build_context` (INJ-11/14/25), eco de documentos con `trust=derived` (INJ-32), título y URL remotos fuera del sobre en `read_resource` (INJ-05). El informe las daba por no explotables mientras `build_context` no estuviera conectado; ya lo está (`df258b1`), así que hay que reevaluarlas.
 - [x] Crear auditoría.
-- [ ] Crear copias de seguridad.
-- [ ] Probar restauración.
+- [x] Crear copias de seguridad.
+- [x] Probar restauración.
 - [ ] Probar desconexiones.
+  ⚠️ Backend↔Hermes comprobado (el runner muere y se reconecta solo). La reconexión del WebSocket del escritorio (`eventsBridge.ts`) no se ha observado aislada.
 - [ ] Probar recuperación del backend.
-- [ ] Probar recuperación de Hermes.
-- [ ] Probar errores de memoria.
-- [ ] Revisar datos sensibles.
+  ⚠️ Pendiente: el informe de seguridad deja sin rellenar la prueba en Electron.
+- [x] Probar recuperación de Hermes.
+- [x] Probar errores de memoria.
+- [x] Revisar datos sensibles.
+  ⚠️ Sigue abierta FILE-DB-02 (TOCTOU en `connect`; exige escribir en el directorio de datos 0700, riesgo bajo).
 
 ## Checklist 17. Optimización y lanzamiento
 
@@ -402,20 +406,27 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 - [ ] Medir CPU.
 - [ ] Medir uso de CPU y RAM (no hay VRAM dedicada).
 - [ ] Medir latencia de STT.
+  ⚠️ Método listo (`voice/metrics.py`, `voice/tests/bench_engines.py --wav`). La única medición (informe de voz: Whisper small, RTF 0,82–1,02) se tomó con la máquina muy cargada; hay que repetirla en reposo. Voz congelada a la espera de Pipecat.
 - [ ] Medir latencia de TTS.
+  ⚠️ Método listo (`voice/tests/bench_engines.py --tts kokoro`). La única medición (informe de voz: Kokoro, primer audio 398–1 282 ms) se tomó con la máquina muy cargada; hay que repetirla en reposo. Voz congelada a la espera de Pipecat.
 - [ ] Medir latencia de Hermes.
+  ⚠️ No hay instrumentación de latencia de Hermes (las marcas de `voice/metrics.py` solo cubren la voz); no se crea en este cierre.
 - [ ] Optimizar consultas SQLite.
 - [x] Optimizar FTS5.
   ⚠️ Comprobado en la búsqueda global: índice de prefijos `prefix='2 3'`, pesos bm25 por columna y `reconcile_structured` con atajo sin cambios. Con 5.000 tareas sintéticas: reconcile inicial 0,95 s, sin cambios 18 ms, consultas de caso peor 190–460 ms. El FTS del almacén se cubre en la Checklist 10.
 - [ ] Optimizar recuperación de memoria.
 - [ ] Optimizar carga de interfaz.
 - [ ] Crear instalador.
+  ⚠️ Configuración y build funcionan: PyInstaller (backend congelado de 45 MB, arreglado en `39503a7` porque respondía 404 en todas las rutas), AppImage (~150 MB, con el backend corregido) y `.deb` revisado (sandbox SUID, perfil AppArmor, fuses, sin secretos). Pero el `.deb` no se ha regenerado tras el arreglo (`fpm` falló con `/tmp` lleno), no se ha instalado (requiere sudo) ni se ha abierto la ventana empaquetada sin `--no-sandbox`. Faltan icono propio, `desktopName` y `electron-builder` en `desktop/package.json` (hoy por `npx`). Windows sin probar.
 - [ ] Crear actualización de aplicación.
-- [ ] Crear documentación de instalación.
+- [x] Crear documentación de instalación.
 - [ ] Crear documentación de uso.
+  ⚠️ Las 14 guías de `docs/usage/` tienen la cabecera de estado comprobada contra el código (`276cc11`), pero las notas «Pendiente» del cuerpo no se han revisado una a una y nadie las ha seguido paso a paso en la app.
 - [ ] Crear versión estable.
 - [ ] Crear copia de seguridad inicial.
+  ⚠️ El mecanismo funciona (`python -m app.database.cli migrate|backup|status|restore`, copias 600 con `.sha256`), pero una instalación nueva no hace copia inicial automática y no se ha copiado la base real del usuario (el protocolo prohíbe tocar `~/.local/share/drakter`). En la app instalada se hace desde Configuración → Copias de seguridad.
 - [ ] Realizar pruebas de aceptación.
+  ⚠️ Depende de la pasada completa final de drakter-49 sobre la punta de integración.
 
 ## Checklist 18. Ampliaciones futuras
 

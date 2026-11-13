@@ -682,3 +682,45 @@ Decisiones técnicas, cambios de tecnología y motivos.
 - **Alternativas descartadas:** mantener la puerta propia, que contradice el camino único de README §5. Montar `restore` igualmente: fallaría siempre con `DatabaseInUse`.
 - **Motivo:** decisión de cierre del coordinador (drakter-33): copias es de backend-base, por el pipeline único o sin montar.
 - **Impacto:** `backend/app/api/backups.py`, `services/backup_api.py`, `services/backup_actions.py`, `services/backup_service.py`, `database/backup.py`, `permissions/wiring.py` (registro de la acción, drakter-34), `contracts/api/routes.md`. Checklist 2 y la parte de copias de la 16. `/settings/backups` (copias SQLite sueltas) sigue siendo lo que usa la GUI.
+
+## [2026-11-13] Cableado del flujo de confirmaciones en main
+- **Contexto:** la revisión adversarial encontró que `main.py` no llamaba a `install_security`/`start_security`/`stop_security` y que `install_security` rompía. Todo borrado respondía 503 `confirmation_unavailable`.
+- **Decisión:** `backend/app/permissions/wiring.py` (`wire_security`) instala `ActionService`, registra las `ActionSpec` de calendario y asignaturas, da a tareas y proyectos una puerta real (`PendingConfirmationGate`) sobre `pending_confirmations` y sus ejecutores de lo aprobado, y pone esos puertos en `app.state.workspace_ports` y en `tool_state` del agente. `main.py` llama a `wire_security` en `_install_services`, a `start_security` tras `migrate` y a `stop_security` al apagar. `ActionService.add_executor` admite ejecutores hasta que el registro se congela.
+- **Alternativas descartadas:** cablear cada módulo en `main.py` (más superficie en un archivo compartido).
+- **Motivo:** `CLAUDE.md` §8: las acciones destructivas requieren confirmación, y debe poder confirmarse.
+- **Impacto:** `backend/app/main.py`, `backend/app/permissions/`, `backend/app/services/actions.py`, Checklist 16.
+
+## [2026-11-13] Endurecimiento de pending_confirmations (0012)
+- **Contexto:** el banco red-team (CONF-03/04/06/07) mostró que por SQL directo una fila podía nacer aprobada, cambiar de id o de turno y reescribir su resultado una vez cerrada.
+- **Decisión:** migración `0012_confirmation_hardening.sql` con `trg_pc_identity`, `trg_pc_born_pending`, `trg_pc_closed` y `trg_pc_decided_once`. Pasan a obligatorios en `check_migrations.py`.
+- **Alternativas descartadas:** confiar solo en el código de `ActionService` (no protege de errores de otros módulos).
+- **Motivo:** defensa en profundidad sobre la tabla que autoriza lo destructivo.
+- **Impacto:** `backend/migrations/`, esquema v12.
+
+## [2026-11-13] Una regla de caracteres invisibles para texto no confiable
+- **Contexto:** el sobre de herramientas solo quitaba bidi y U+200B. La memoria comparaba sujetos y contenidos sin quitar invisibles (INJ-03/16/40/41).
+- **Decisión:** `backend/app/core/text.py` (`strip_invisible`) quita Cc salvo `\n` y `\t`, Cf, Cs, Cn, CGJ, rellenos hangul, selectores de variante y el blanco braille. Lo usan `untrusted_envelope`, `sanitize_untrusted`, `content_hash`, `normalize_subject` y la deduplicación.
+- **Alternativas descartadas:** listas por módulo (divergen).
+- **Motivo:** un solo criterio para lo que "no se ve".
+- **Impacto:** `tools/envelope.py`, `integrations/memory/`. Los emojis con ZWJ o VS16 se descomponen dentro del sobre (aceptado).
+
+## [2026-11-13] Contradicción INJ-24 / CONF-54 del banco red-team
+- **Contexto:** INJ-24 pide que `tool_action_spec` rechace herramientas WRITE sin `summarize`; CONF-54 pide que las adapte.
+- **Decisión:** se adaptan con un resumen por defecto construido por el backend desde los argumentos validados ("El agente quiere ejecutar «x» con {…}"), saneado por `_displayable`. INJ-24 queda como BREACH conocida del banco.
+- **Alternativas descartadas:** rechazar (rompe la adaptación de 38 herramientas WRITE).
+- **Motivo:** el aprobador ve qué se ejecuta, y el texto lo pone el backend, no el modelo.
+- **Impacto:** `backend/app/permissions/tool_gate.py`, `tests/security/`.
+
+## [2026-11-13] Revisión adversarial de seguridad cerrada
+- **Contexto:** `RUN_STATE.md` tenía pendiente la revisión adversarial de `drakter/seguridad`.
+- **Decisión:** se da por hecha. Banco de 200 ataques: de 125/27/47/1 (BLOCKED/BREACH/N/A/ERROR) a 169/12/19/0. Quedan abiertas, de diseño: contaminación solo en memoria (CONF-46/INJ-26), canal de datos de `TurnRequest` y contaminación de `build_context` (INJ-11/14/25, no explotables mientras `build_context` no esté conectado), INJ-32, INJ-05 y FILE-DB-02 (TOCTOU, riesgo bajo). Las herramientas CONFIRM del agente siguen denegadas (`DefaultToolGate` en el runtime): falla cerrado.
+- **Motivo:** `CLAUDE.md` §8.
+- **Estado posterior:** `build_context` ya está conectado (`df258b1`), así que INJ-11/14/25 hay que reevaluarlas.
+- **Impacto:** `RUN_STATE.md` (quitar "Seguridad sin revisar"), Checklist 16.
+
+## [2026-11-13] Empaquetado: backend PyInstaller con app.* explícito y electron-builder por npx
+- **Contexto:** primera ejecución real del empaquetado (Checklist 17). El backend congelado no incluía `app.*` porque `collect_submodules` corre en un subproceso aislado sin `pathex`, y respondía 404 en todas las rutas. El `.deb` exigía `homepage`, y `electron-builder` no está en `desktop/package.json`.
+- **Decisión:** el `.spec` añade `backend/` a `sys.path` antes de `collect_submodules("app")` y aborta si falta `app.api.health`. El `.yml` define `homepage` con `extraMetadata`. Se empaqueta con `npx --yes electron-builder@26.18.0 … -c.npmRebuild=false` y, si `/tmp` es un tmpfs justo, con `TMPDIR` en disco.
+- **Alternativas descartadas:** listar a mano los `hiddenimports` de `app` (se desincroniza con cada módulo nuevo); añadir `homepage` a `package.json` (archivo compartido); dejar que electron-builder recompile `node_modules` (compartido entre worktrees).
+- **Motivo:** que el instalador arranque un backend completo y que el build falle en voz alta si vuelve a perder módulos.
+- **Impacto:** `desktop/electron-builder.backend.spec`, `desktop/electron-builder.yml`, `desktop/electron-builder.README.md`, `docs/installation/paquete-deb.md`, Checklist 17 «Crear instalador».
