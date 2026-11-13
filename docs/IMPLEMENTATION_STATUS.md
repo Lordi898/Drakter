@@ -420,8 +420,8 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 - [ ] Crear versión estable.
 - [ ] Crear copia de seguridad inicial.
   ⚠️ El mecanismo funciona (`python -m app.database.cli migrate|backup|status|restore`, copias 600 con `.sha256`), pero una instalación nueva no hace copia inicial automática y no se ha copiado la base real del usuario (el protocolo prohíbe tocar `~/.local/share/drakter`). En la app instalada se hace desde Configuración → Copias de seguridad.
-- [ ] Realizar pruebas de aceptación.
-  ⚠️ Depende de la pasada completa final de drakter-49 sobre la punta de integración.
+- [x] Realizar pruebas de aceptación.
+  Nota: pasada integrada final `scripts/verify-all.sh` sobre `drakter/integracion@183cc25`: 44/44 comprobaciones PASA, 0 FALLA (backend, módulos, confirmaciones, copia y restauración, conversación, escritorio con Electron real y parada limpia). La conversación de esa pasada usa el stub; el modelo real se probó en los informes de Hermes, evals, tareas y relaciones. No cubre el sandbox real de Electron ni el paquete instalado (ver «Crear instalador»).
 
 ## Checklist 18. Ampliaciones futuras
 

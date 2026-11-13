@@ -74,10 +74,10 @@ scripts/drakter-local.sh stop
 - **Sin medir:** RAM/CPU general, latencia de Hermes, y STT/TTS en reposo. Sin pasada de optimización de SQLite, FTS5, memoria ni carga de interfaz (el renderer es un único JS de 1,63 MB).
 - **Hora de los avisos de eventos:** el aviso dice «Empieza a las HH:MM» en la zona del evento, mientras Hoy muestra la hora en la zona del usuario. Solo difiere si el evento tiene otra zona.
 - **Pruebas paralelas de Electron:** con otra instancia abierta, `requestSingleInstanceLock` cierra la nueva sin ventana; las pruebas usan `--user-data-dir` propio. Con Hermes sin preparar, `GET /api/v1/confirmations?status=pending` da 503 y la GUI muestra «No se pudieron leer las confirmaciones pendientes» (no rompe).
-- **Pasada e2e:** el arnés no espera a `agent/status = idle` antes de conversar (Hermes tarda 3-6 s), así que `conversacion.*` da 503 `agent_unavailable`; los guiones `herramienta-permitida`, `accion-destructiva` e `inyeccion-documento` piden `read_file`/`terminal`, que Drakter nunca ofrece. `desktop.arranca` falla en todas las pasadas porque `tests/e2e/harness/stack.py` no pasa `DRAKTER_DEV_NO_SANDBOX=1` (con la variable arranca; cambio pedido a `drakter-32`). Además, el catálogo (`tests/e2e/catalog.toml`) usa `GET /api/v1/audit` y la ruta real es `/api/v1/activity`.
 
 ### Cerrados en el cierre
 
+- **Pasada integrada final (drakter-49):** `scripts/verify-all.sh --headless` sobre `183cc25` sale con 0: 44/44 comprobaciones PASA (pasada 1: 23 PASA, 9 FALLA). El arnés espera al agente, usa `DRAKTER_DEV_NO_SANDBOX=1` y un perfil propio, y guiones propios del stub sobre `mcp__drakter__*`. Informe: `/var/tmp/drakter-cierre/data/e2e-verify-all/pasada8/report.md`.
 - **Recuperación del backend:** con Electron, un SIGKILL al backend se relanza en unos 2 s, con backoff y tope de fallos; al arrancar se reconcilian las confirmaciones y se recuperan las evaluaciones de automejora cortadas (`a1f2b88`).
 - **Escritorio (CL1):** Electron 45 con backend real, React 19, TypeScript, Tailwind 4, shadcn/ui, ventana, 10 secciones, área central, panel contextual, notificaciones, configuración y gestión de errores vistos en la app; `ALLOWED_ROUTES` regenerado desde el contrato (`89a87b5`) y la GUI no puede aplicar ni revertir mejoras.
 - **Confirmaciones pedidas por el agente:** su registro de herramientas usa `BackendToolGate` (`b722aca`, `42a0a17`): las acciones CONFIRM crean la confirmación pendiente que se aprueba en la app, y quedan en `audit_events`. Comprobado con el modelo real en tareas.
@@ -119,6 +119,5 @@ Historial Git de los repos que estaban anidados en el checkout del usuario:
 
 ## Siguiente paso
 
-1. Informe completo de la pasada de drakter-49: pruebas de aceptación.
-2. Regenerar e instalar el `.deb` y abrir la ventana empaquetada sin `--no-sandbox`.
-3. Fuera de este cierre: rediseño de voz sobre Pipecat, rediseño de personalidad (estilo) y `.riv` del personaje.
+1. Regenerar e instalar el `.deb` y abrir la ventana empaquetada sin `--no-sandbox`.
+2. Fuera de este cierre: rediseño de voz sobre Pipecat, rediseño de personalidad (estilo) y `.riv` del personaje.
