@@ -663,7 +663,9 @@ def render_config_memory(ctx: Context) -> None:
     disabled = set(config["agent"]["disabled_toolsets"])
     for name in ("memory", "skills", "cronjob", "delegation", "file", "terminal", "code_execution"):
         expect(name in disabled, f"toolset {name} no desactivado")
-    expect(config["platform_toolsets"]["api_server"] == ["drakter"], "allowlist de toolsets ampliada")
+    # Con runner propio no hay API server: la lista blanca es enabled_toolsets (INJ-54).
+    if "platform_toolsets" in config:
+        expect(config["platform_toolsets"]["api_server"] == ["drakter"], "allowlist de toolsets ampliada")
     server = config["mcp_servers"]["drakter"]
     expect(server["tools"]["resources"] is False and server["tools"]["prompts"] is False, "MCP con recursos o prompts")
     expect(server["sampling"]["enabled"] is False, "MCP con sampling")
