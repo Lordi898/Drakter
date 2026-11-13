@@ -1,7 +1,7 @@
 # Empaquetado de Drakter Desktop
 
 Configuración de electron-builder 26.18.0 (Electron 45, electron-vite 6). Linux primero; Windows preparado pero sin comprobar.
-Estado: **ejecutada en Linux el 2026-11-13** sobre `drakter/integracion` (ver "Comprobaciones de la pasada integrada"). Genera `.deb` y AppImage; falta instalar el `.deb` (requiere sudo) y abrir la ventana empaquetada. Windows sin probar.
+Estado: **ejecutada en Linux el 2026-11-13** sobre `drakter/integracion` `7fd30e1` (ver "Comprobaciones de la pasada integrada"). Genera `.deb` y AppImage; falta instalar el `.deb` (requiere sudo) y abrir la ventana empaquetada. Windows sin probar.
 
 Archivos: `electron-builder.yml` (config), `electron-builder.backend.spec` (PyInstaller), `electron-builder.build-backend.mjs` (lanzador del backend).
 

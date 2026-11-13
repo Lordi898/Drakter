@@ -1,6 +1,6 @@
 # Sandbox de Electron en modo desarrollo (opcional, con sudo)
 
-> **Estado:** contrastada con `drakter/integracion` (`7fd30e1`): `scripts/check-env.sh` (lo avisa en esta máquina), `scripts/dev.sh`, el lanzador y el `.deb` ya construido (ver [paquete-deb.md](paquete-deb.md)). NO COMPROBADO: el paso con sudo no se ha ejecutado, porque esta sesión no tiene sudo.
+> **Estado:** contrastada con `drakter/integracion` (`2e05ba6`): `scripts/check-env.sh` (lo avisa en esta máquina), `scripts/dev.sh`, el lanzador y el `.deb` ya construido (ver [paquete-deb.md](paquete-deb.md)). NO COMPROBADO: el paso con sudo no se ha ejecutado, porque esta sesión no tiene sudo.
 
 Este paso solo importa si lanzas Drakter desde el repositorio: `scripts/dev.sh`, `npm run dev` o `scripts/drakter`. Si instalas el paquete `.deb`, no lo necesitas: véase [paquete-deb.md](paquete-deb.md).
 

@@ -1,6 +1,6 @@
 # Recordatorios
 
-> **Estado:** integrado en `drakter/integracion` (`7fd30e1`): el router `notifications` se registra solo, `ReminderTicker` arranca en el `lifespan` y la interfaz monta `startNotificationFeed` (`AppShell`) y `RemindersNotice` (Configuración). Las notas «Pendiente» del cuerpo se escribieron sobre `drakter/build` (`2da8bef`) y alguna puede estar ya resuelta. NO COMPROBADO en la app real (ver «Estado de la integración» en [README](README.md)).
+> **Estado:** integrado en `drakter/integracion` (`2e05ba6`): el router `notifications` se registra solo, `ReminderTicker` arranca en el `lifespan` y la interfaz monta `startNotificationFeed` (`AppShell`) y `RemindersNotice` (Configuración). Las notas «Pendiente» del cuerpo se escribieron sobre `drakter/build` (`2da8bef`) y alguna puede estar ya resuelta. NO COMPROBADO en la app real (ver «Estado de la integración» en [README](README.md)).
 
 ## Aviso importante
 

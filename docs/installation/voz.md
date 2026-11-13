@@ -1,6 +1,6 @@
 # Instalar la voz
 
-> **Estado:** `voice/` está en `drakter/integracion` (`7fd30e1`), con su propio `pyproject.toml` (extras `stt`, `kokoro`, `wakeword`). En esta máquina solo hay modelo Kokoro en `/var/tmp/drakter-voz/models` y ningún venv de voz con sus extras. El router de voz del backend no se monta todavía. NO COMPROBADO de principio a fin.
+> **Estado:** `voice/` está en `drakter/integracion` (`2e05ba6`), con su propio `pyproject.toml` (extras `stt`, `kokoro`, `wakeword`). En esta máquina solo hay modelo Kokoro en `/var/tmp/drakter-voz/models` y ningún venv de voz con sus extras. El router de voz del backend no se monta todavía. NO COMPROBADO de principio a fin.
 
 La voz es un proceso aparte con su propio entorno Python, que arranca el backend. Escucha, transcribe (Whisper) y habla (Kokoro, con Piper de respaldo), todo en local y en CPU.
 

@@ -1,6 +1,6 @@
 # Instalación de Drakter
 
-Guías para instalar Drakter en esta máquina. Se contrastaron con `drakter/integracion` (`7fd30e1`) el 2026-11-13; el `.deb` se construyó en esta máquina, pero nadie las ha ejecutado de principio a fin: lo que no se ha podido probar lleva `NO COMPROBADO` y lo que falta, `Pendiente`.
+Guías para instalar Drakter en esta máquina. Se contrastaron con `drakter/integracion` (`2e05ba6`) el 2026-11-13; el `.deb` se construyó en esta máquina, pero nadie las ha ejecutado de principio a fin: lo que no se ha podido probar lleva `NO COMPROBADO` y lo que falta, `Pendiente`.
 
 ## Orden de lectura
 

@@ -1,6 +1,6 @@
 # Instalar Drakter en esta máquina
 
-> **Estado:** contrastada con `drakter/integracion` (`7fd30e1`), que reúne todas las ramas `drakter/*`. `scripts/check-env.sh` se ejecutó en esta máquina (9 OK, 1 AVISO de sandbox). El arranque completo con la app real depende de la clave de API: sin ella solo se ha probado con el LLM de pruebas (`scripts/verify-all.sh`).
+> **Estado:** contrastada con `drakter/integracion` (`2e05ba6`), que reúne todas las ramas `drakter/*`. `scripts/check-env.sh` se ejecutó en esta máquina (9 OK, 1 AVISO de sandbox). El arranque completo con la app real depende de la clave de API: sin ella solo se ha probado con el LLM de pruebas (`scripts/verify-all.sh`).
 
 Esta guía deja Drakter listo para ejecutarse en modo desarrollo desde el repositorio. El instalador `.deb` está en [paquete-deb.md](paquete-deb.md).
 

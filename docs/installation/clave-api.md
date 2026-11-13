@@ -1,6 +1,6 @@
 # Clave de API de Anthropic
 
-> **Estado:** contrastada con `drakter/integracion` (`7fd30e1`). La clave la lee `backend/app/integrations/hermes/settings.py` y Ajustes muestra su estado (`desktop/src/settings/AgentStatusSection.tsx`). NO COMPROBADO con una clave real: en las pruebas de cierre no había clave y el chat se probó con el LLM de pruebas.
+> **Estado:** contrastada con `drakter/integracion` (`2e05ba6`). La clave la lee `backend/app/integrations/hermes/settings.py` y Ajustes muestra su estado (`desktop/src/settings/AgentStatusSection.tsx`). NO COMPROBADO con una clave real: en las pruebas de cierre no había clave y el chat se probó con el LLM de pruebas.
 
 Drakter necesita una clave de API de Anthropic para hablar con el modelo. Se guarda solo en tu máquina, en `~/.config/drakter/.env`, fuera del repositorio.
 

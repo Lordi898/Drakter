@@ -1,6 +1,6 @@
 # Uso diario de Drakter
 
-Una guía por módulo. Cada una abre con su estado respecto a `drakter/integracion` (`7fd30e1`), que reúne todas las ramas. El backend monta solo cada `backend/app/api/<módulo>.py`; voz y automejora tienen código, pero sus routers aún no se montan.
+Una guía por módulo. Cada una abre con su estado respecto a `drakter/integracion` (`2e05ba6`), que reúne todas las ramas. El backend monta solo cada `backend/app/api/<módulo>.py`; voz tiene código, pero su router aún no se monta, y automejora no tiene pantalla.
 
 ## Estado de la integración
 

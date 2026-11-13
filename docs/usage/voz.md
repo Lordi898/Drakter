@@ -1,6 +1,6 @@
 # Usar la voz
 
-> **Estado:** `voice/` y `backend/app/integrations/voice/` están en `drakter/integracion` (`7fd30e1`), y Electron permite las rutas `/api/v1/voice/*`, pero el router de voz no se monta en `backend/app/main.py` y no hay botón de voz en `desktop/src`: hoy no se puede usar desde la app. Las notas «Pendiente» del cuerpo se escribieron sobre `drakter/build` (`2da8bef`) y alguna puede estar ya resuelta. NO COMPROBADO en la app real (ver «Estado de la integración» en [README](README.md)).
+> **Estado:** `voice/` y `backend/app/integrations/voice/` están en `drakter/integracion` (`2e05ba6`), y Electron permite las rutas `/api/v1/voice/*`, pero el router de voz no se monta en `backend/app/main.py` y no hay botón de voz en `desktop/src`: hoy no se puede usar desde la app. Las notas «Pendiente» del cuerpo se escribieron sobre `drakter/build` (`2da8bef`) y alguna puede estar ya resuelta. NO COMPROBADO en la app real (ver «Estado de la integración» en [README](README.md)).
 
 Hablas a Drakter y te contesta en voz alta. Todo es local: ni el audio ni las transcripciones se guardan ni se registran. Instalación previa: [Instalar la voz](../installation/voz.md).
 

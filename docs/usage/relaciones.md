@@ -1,6 +1,6 @@
 # Relaciones
 
-> **Estado:** integrado en `drakter/integracion` (`7fd30e1`): pantalla **Relaciones** en la navegación y APIs `relations` y `relations_tags` montadas. Las notas «Pendiente» del cuerpo se escribieron sobre `drakter/build` (`2da8bef`) y alguna puede estar ya resuelta. NO COMPROBADO en la app real (ver «Estado de la integración» en [README](README.md)).
+> **Estado:** integrado en `drakter/integracion` (`2e05ba6`): pantalla **Relaciones** en la navegación y APIs `relations` y `relations_tags` montadas. Las notas «Pendiente» del cuerpo se escribieron sobre `drakter/build` (`2da8bef`) y alguna puede estar ya resuelta. NO COMPROBADO en la app real (ver «Estado de la integración» en [README](README.md)).
 
 Una relación es un vínculo entre dos elementos del espacio de trabajo: tareas, proyectos, hábitos, eventos, bloques de tiempo, asignaturas, clases, recursos y carpetas. Sirve para saber qué usa, qué depende de qué y qué apoya a qué.
 

@@ -1,6 +1,6 @@
 # Automejora
 
-> **Estado:** el código de backend está en `drakter/integracion` (`7fd30e1`) (`backend/app/services/improvement_*.py`), pero su router (`services/improvement_api.py`, `/api/v1/improvement`) no se monta en `backend/app/main.py` y no hay pantalla: hoy no se puede usar desde la app. Las notas «Pendiente» del cuerpo se escribieron sobre `drakter/build` (`2da8bef`) y alguna puede estar ya resuelta. NO COMPROBADO en la app real (ver «Estado de la integración» en [README](README.md)).
+> **Estado:** el código de backend está en `drakter/integracion` (`2e05ba6`) (`backend/app/services/improvement_*.py`), y su router `/api/v1/improvement` se monta (`backend/app/api/improvement.py`) y está en las rutas permitidas de Electron, pero no hay pantalla en `desktop/src`: hoy solo se usa por API o desde el agente. Las notas «Pendiente» del cuerpo se escribieron sobre `drakter/build` (`2da8bef`) y alguna puede estar ya resuelta. NO COMPROBADO en la app real (ver «Estado de la integración» en [README](README.md)).
 
 Drakter puede preparar cambios sobre su propio código a partir de tus quejas o preferencias, pero no los aplica por su cuenta. Tú decides. Nada se fusiona solo.
 
