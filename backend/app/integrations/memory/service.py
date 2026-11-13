@@ -8,6 +8,7 @@ from typing import Any
 from uuid import UUID
 
 from app.core.errors import AppError
+from app.core.text import strip_invisible
 from app.integrations.memory.models import (
     BackendStatus,
     DetailLevel,
@@ -48,7 +49,7 @@ class IngestResult:
     conflicts: list[MemoryConflict] = field(default_factory=list)
 
 
-def _trust_for(source: SourceType, requested: TrustLevel) -> TrustLevel:
+def _trust_for(source: SourceType, requested: TrustLevel, tainted: bool = False) -> TrustLevel:
     """Rule 2 plus a ceiling by origin: nobody self-assigns more trust than the source deserves."""
     if source in _THIRD_PARTY_SOURCES:
         return TrustLevel.THIRD_PARTY
@@ -56,6 +57,9 @@ def _trust_for(source: SourceType, requested: TrustLevel) -> TrustLevel:
         return TrustLevel.USER_CONFIRMED
     if source is SourceType.USER_CONVERSATION:
         return TrustLevel.USER_STATED if requested is TrustLevel.USER_CONFIRMED else requested
+    if tainted:
+        # The model may be relaying a document it read in this session: no laundering into DERIVED.
+        return TrustLevel.THIRD_PARTY
     return TrustLevel.DERIVED if requested in (TrustLevel.USER_CONFIRMED, TrustLevel.USER_STATED) else requested
 
 
@@ -97,7 +101,8 @@ class MemoryService:
 
     # -- ingest ------------------------------------------------------------------
 
-    def ingest(self, draft: MemoryDraft, actor: str) -> IngestResult:
+    def ingest(self, draft: MemoryDraft, actor: str, *, tainted: bool = False) -> IngestResult:
+        """`tainted`: the agent's session already received untrusted content (set by the tool)."""
         source = SourceType.AGENT if actor == AGENT else draft.provenance.source_type
         if actor == AGENT and draft.provenance.source_type is not SourceType.AGENT:
             draft = draft.model_copy(
@@ -108,7 +113,14 @@ class MemoryService:
                     captured_at=draft.provenance.captured_at,
                 )}
             )
-        draft = draft.model_copy(update={"trust": _trust_for(source, draft.trust)})
+        draft = draft.model_copy(update={
+            "trust": _trust_for(source, draft.trust, tainted and actor == AGENT),
+            # Invisible characters would dodge dedupe, conflict detection and a user's rejection.
+            "content": strip_invisible(draft.content),
+            "subject": strip_invisible(draft.subject),
+            "abstract": strip_invisible(draft.abstract),
+            "overview": strip_invisible(draft.overview),
+        })
 
         if contains_secret(draft.content):
             self._log("memory.ingest", actor, "-", "secret_rejected", source=source.value)
