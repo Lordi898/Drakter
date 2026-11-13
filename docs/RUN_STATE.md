@@ -4,8 +4,8 @@ Foto operativa de la construcción. El detalle por tareas está en `IMPLEMENTATI
 
 ## Estado actual (2026-11-04)
 
-- **Rama de trabajo:** `drakter/build` (en `3b1e691` al escribir esto). `main` no se ha tocado. Cada frente trabaja en su rama `drakter/*`.
-- **Fase:** construcción en paralelo e integración en curso. `drakter/build` ya contiene contratos, shell de escritorio, identidad, memoria y `dev-stub`, entre otros; `drakter/agente-hermes` y `drakter/electron-host` no estaban fusionadas. Sin pasada integrada, no se ha marcado ninguna casilla.
+- **Rama de trabajo:** `drakter/build` (en `4a84a5d` al escribir esto). `main` no se ha tocado. Cada frente trabaja en su rama `drakter/*`.
+- **Fase:** construcción en paralelo e integración en curso. `drakter/build` ya contiene contratos, shell de escritorio, identidad, memoria y `dev-stub`, entre otros; `drakter/agente-hermes` no estaba fusionada del todo. Sin pasada integrada, no se ha marcado ninguna casilla.
 - **Documentos:** los `.md` de `docs/` son la fuente de verdad; los `.docx` se han eliminado.
 - **Tooling versionado:** agentes, skills, `build-orchestrator` y `astraeus` llegan completos a clones y worktrees.
 - **Configuración local:** `worktree.baseRef = head` y `workflowSizeGuideline = unrestricted` en `.claude/settings.local.json`. Ese archivo no se versiona, así que hay que fijarlo en cada checkout nuevo.
@@ -24,9 +24,9 @@ Historial Git de los repos que estaban anidados en el checkout del usuario:
 ## Bloqueos y desajustes abiertos
 
 - **Sin clave de API:** nada se ha probado con el modelo real.
-- **Identidad:** `drakter/build` tiene 22 archivos en `agent/` en lugar de 14, y `rules.py` lee `context/` y `knowledge/`.
-- **Hermes:** la decisión es runner propio sin gateway, y el código commiteado aún lanza el gateway.
-- **Electron:** falta `options` en `call`.
+- **OpenViking (U-1):** desactivado en v1, con memoria SQLite + FTS5. Es una desviación de una decisión del usuario y **falta que la confirme**.
+- **Confirmaciones:** caducidad de 15 minutos en `habits_calendar_support.py` frente a 300 s decididos.
+- **Hermes:** el runner está en `drakter/agente-hermes` (`866ad9d`), aún sin fusionar en `drakter/build`. `contracts/README.md` §1 sigue citando `API_SERVER_KEY`.
 
 El detalle de cada uno está en `DECISIONS.md`.
 

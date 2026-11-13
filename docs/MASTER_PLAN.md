@@ -66,7 +66,7 @@ Los tres estarán conectados mediante APIs internas.
 | Voz TTS principal | Kokoro |
 | Voz TTS alternativa | Piper |
 | Memoria nativa del agente | Memoria nativa de Hermes |
-| Memoria jerárquica (L0/L1/L2) | OpenViking |
+| Memoria jerárquica (L0/L1/L2) | OpenViking (desactivado en v1, ver §10) |
 | Contexto del repositorio de desarrollo (utilidad opcional, fuera del producto) | ByteRover |
 | Habilidades del agente | Hermes Skills |
 | Orquestación futura de voz | LiveKit Agents |
@@ -249,6 +249,8 @@ Sí se permitirá crear libremente los elementos de trabajo que correspondan a c
 
 ### 5.3. Pestañas
 
+> **Desviación:** Hoy es la pantalla inicial, con pestaña propia, y hay 10 pestañas (decisión "Hoy es la pantalla inicial"). La cara sigue en su pestaña.
+
 1. Cara de Drakter.
 2. Hábitos.
 3. Tareas.
@@ -423,27 +425,35 @@ drakter/
 
 └── agent/
 
-└── identity/
+├── identity/
 
-├── SOUL.md
+│   ├── SOUL.md
 
-├── PERSONALITY.md
+│   ├── PERSONALITY.md
 
-├── BEHAVIOR.md
+│   ├── BEHAVIOR.md
 
-├── COMMUNICATION.md
+│   ├── COMMUNICATION.md
 
-├── EMOTIONAL_STYLE.md
+│   ├── EMOTIONAL_STYLE.md
 
-├── VALUES.md
+│   └── VALUES.md
 
-├── USER.md
+│
 
-├── ENVIRONMENT.md
+├── context/
 
-├── PREFERENCES.md
+│   ├── USER.md
 
-├── CURRENT_CONTEXT.md
+│   ├── ENVIRONMENT.md
+
+│   ├── PREFERENCES.md
+
+│   └── CURRENT_CONTEXT.md
+
+│
+
+└── knowledge/
 
 ├── CAPABILITIES.md
 
@@ -453,7 +463,7 @@ drakter/
 
 └── SYSTEM_GUIDE.md
 
-Los 14 archivos viven en `agent/identity/`; `agent/context/` y `agent/knowledge/` no forman parte de la estructura vigente (decisión "Los 14 archivos de identidad viven en agent/identity/"). La fuente es el repositorio: un cargador los compone y los publica en el `HERMES_HOME` del perfil de Drakter. `USER.md` y `PREFERENCES.md` son plantillas sin datos reales; el `USER.md` vivo es el nativo de Hermes (véase §10).
+Los 14 archivos se reparten así: 6 en `agent/identity/` (`SOUL`, `PERSONALITY`, `BEHAVIOR`, `COMMUNICATION`, `EMOTIONAL_STYLE`, `VALUES`), 4 en `agent/context/` (`USER`, `ENVIRONMENT`, `PREFERENCES`, `CURRENT_CONTEXT`) y 4 en `agent/knowledge/` (`CAPABILITIES`, `WORKSPACE_GUIDE`, `TOOL_GUIDE`, `SYSTEM_GUIDE`) (decisión "Identidad repartida en identity/, context/ y knowledge/"). La fuente es el repositorio: un cargador los compone y los publica en el `HERMES_HOME` del perfil de Drakter. `USER.md` y `PREFERENCES.md` son plantillas sin datos reales; el `USER.md` vivo es el nativo de Hermes (véase §10).
 
 ### 8.2. Responsabilidad de cada archivo
 
@@ -597,6 +607,8 @@ Hermes Skills será el mecanismo principal para las capacidades ejecutables.
 
 ## 10. Arquitectura de memoria
 
+> ⚠️ **v1:** la memoria es SQLite + FTS5 tras el Memory Adapter, y el backend la recupera. OpenViking queda desactivado, como opción posterior llamada desde el backend por HTTP, nunca como plugin de Hermes. Todo lo que este §10 dice de `memory.provider`, `viking_*` y las capas L0/L1/L2 pasa a **futuro** (decisión "Memoria v1 en SQLite + FTS5; OpenViking desactivado"). Desviación de una decisión del usuario, pendiente de su confirmación (U-1).
+
 La memoria de Drakter combina **la memoria nativa de Hermes** y **OpenViking**, con la base de datos del Workspace como fuente de verdad de los datos operativos. Decisión del usuario del 2026-11-04 (ver `DECISIONS.md`). Hindsight y Mem0 quedan fuera.
 
 ### 10.1. Reparto de responsabilidades
@@ -611,7 +623,7 @@ La memoria nunca es la fuente de verdad de un dato operativo: guarda la referenc
 
 Hermes solo admite un proveedor de memoria externo activo. Ese lugar lo ocupa OpenViking (`memory.provider: openviking`), y la memoria nativa sigue activa a su lado.
 
-**`USER.md`:** en el repositorio (`agent/identity/USER.md`) solo hay una plantilla sin datos reales. El `USER.md` nativo, en el `HERMES_HOME` del perfil de Drakter, guarda lo esencial y OpenViking guarda lo demás. La plantilla rellenada por el usuario vive fuera del repositorio, en el directorio de datos de Drakter, y solo inicializa el `USER.md` nativo; a partir de ahí manda el nativo (decisión "agent/identity/USER.md es plantilla; el USER.md vivo es el de Hermes").
+**`USER.md`:** en el repositorio (`agent/context/USER.md`) solo hay una plantilla sin datos reales. El `USER.md` nativo, en el `HERMES_HOME` del perfil de Drakter, guarda lo esencial y OpenViking guarda lo demás. La plantilla rellenada por el usuario vive fuera del repositorio, en el directorio de datos de Drakter, y solo inicializa el `USER.md` nativo; a partir de ahí manda el nativo (decisión "agent/identity/USER.md es plantilla; el USER.md vivo es el de Hermes").
 
 ### 10.2. Las tres capas de OpenViking
 
@@ -1444,7 +1456,11 @@ Drakter/
 
 ├── agent/
 
-│   ├── identity/      (los 14 archivos .md)
+│   ├── identity/      (6 archivos de personalidad)
+
+│   ├── context/       (4 archivos, USER y PREFERENCES como plantillas)
+
+│   ├── knowledge/     (4 guías)
 
 │   ├── skills/
 
@@ -1957,9 +1973,9 @@ No son requisitos para la primera versión:
 1. El usuario escribe en la GUI.
 2. React envía el mensaje al backend.
 3. FastAPI identifica la sesión.
-4. El backend entrega a Hermes el mensaje y el contexto de sesión.
+4. El backend compone el contexto y entrega a Hermes el mensaje y ese contexto (ver paso 6).
 5. Hermes corre como proceso aparte, supervisado por FastAPI: un runner propio sobre `AIAgent`, sin gateway.
-6. La recuperación de memoria ocurre **dentro de Hermes** (memoria nativa y herramientas `viking_*` de OpenViking), no antes de él.
+6. El **backend** recupera los recuerdos pertinentes (`builder.py`) y los entrega cercados como dato no confiable, nunca en el prompt de sistema. Es una desviación del flujo original (decisión "El backend recupera los recuerdos"). Si hacen falta más, el agente los pide con una herramienta del backend.
 7. Claude Haiku 5.5 procesa la solicitud.
 8. Hermes decide si necesita herramientas.
 9. Si no necesita herramientas, genera respuesta.
@@ -2002,8 +2018,8 @@ Ejemplo: crear una tarea relacionada con un proyecto, una asignatura y un docume
 3. Se captura audio.
 4. Faster-Whisper transcribe.
 5. El texto se entrega al backend.
-6. Se entrega el contexto de sesión a Hermes.
-7. Hermes procesa la petición y recupera la memoria pertinente.
+6. El backend compone el contexto, recupera los recuerdos pertinentes y los entrega cercados a Hermes.
+7. Hermes procesa la petición.
 8. Se ejecutan herramientas si son necesarias.
 9. Se genera una respuesta.
 10. Voice Personality Engine selecciona parámetros.
@@ -2026,7 +2042,7 @@ Ejemplo: crear una tarea relacionada con un proyecto, una asignatura y un docume
 9. Se actualiza la organización contextual.
 10. Se registra el cambio.
 
-En la siguiente conversación, Hermes recuperará, con las herramientas de OpenViking, únicamente los recuerdos pertinentes.
+En la siguiente conversación, el backend recuperará únicamente los recuerdos pertinentes y los entregará cercados como dato no confiable.
 
 # PARTE XV. PRUEBAS Y CRITERIOS DE CALIDAD
 

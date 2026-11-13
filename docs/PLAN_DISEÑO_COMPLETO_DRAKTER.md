@@ -244,7 +244,7 @@ La aplicación tendrá una barra lateral fija con las siguientes secciones:
 8. Relaciones.
 9. Configuración.
 
-La cara de Drakter será la pantalla principal.
+La pantalla inicial es Hoy, con pestaña propia; la cara sigue en la suya (decisión "Hoy es la pantalla inicial", que desvía este apartado).
 
 También existirá una zona de conversación accesible desde las distintas secciones. El usuario podrá pedir operaciones relacionadas con el módulo que está visualizando.
 
@@ -379,9 +379,9 @@ La personalidad tendrá una estructura separada del razonamiento y de la memoria
 
 ### 5.1. Archivos de personalidad
 
-La personalidad vive en archivos, separada del modelo. Fuente única: `agent/identity/` en el repositorio, con 14 archivos `.md` (`SOUL`, `PERSONALITY`, `BEHAVIOR`, `COMMUNICATION`, `EMOTIONAL_STYLE`, `VALUES`, `USER`, `ENVIRONMENT`, `PREFERENCES`, `CURRENT_CONTEXT`, `CAPABILITIES`, `WORKSPACE_GUIDE`, `TOOL_GUIDE` y `SYSTEM_GUIDE`). Un cargador los compone y los publica en el `HERMES_HOME` de un perfil propio de Drakter, y comprueba el tope de 20.000 caracteres de los archivos de contexto de Hermes. `~/.hermes/SOUL.md` no es la fuente, y la personalidad no se configura con archivos YAML en `config/` (decisión "Los 14 archivos de identidad viven en agent/identity/").
+La personalidad vive en archivos, separada del modelo. Fuente única: el repositorio, con 14 archivos `.md`: 6 en `agent/identity/` (`SOUL`, `PERSONALITY`, `BEHAVIOR`, `COMMUNICATION`, `EMOTIONAL_STYLE`, `VALUES`), 4 en `agent/context/` (`USER`, `ENVIRONMENT`, `PREFERENCES`, `CURRENT_CONTEXT`) y 4 en `agent/knowledge/` (`CAPABILITIES`, `WORKSPACE_GUIDE`, `TOOL_GUIDE`, `SYSTEM_GUIDE`). Un cargador los compone y los publica en el `HERMES_HOME` de un perfil propio de Drakter, y comprueba el tope de 20.000 caracteres de los archivos de contexto de Hermes. `~/.hermes/SOUL.md` no es la fuente, y la personalidad no se configura con archivos YAML en `config/` (decisión "Los 14 archivos de identidad viven en agent/identity/").
 
-`USER.md` y `PREFERENCES.md` del repositorio son plantillas sin datos reales; la plantilla rellenada vive fuera del repositorio y solo inicializa el `USER.md` nativo de Hermes, que a partir de ahí es el vivo (decisión "agent/identity/USER.md es plantilla; el USER.md vivo es el de Hermes").
+`USER.md` y `PREFERENCES.md` del repositorio son plantillas sin datos reales; la plantilla rellenada vive fuera del repositorio y solo inicializa el `USER.md` nativo de Hermes, que a partir de ahí es el vivo (decisión "agent/context/USER.md es plantilla; el USER.md vivo es el de Hermes").
 
 Los parámetros de estilo (humor, formalidad, concisión, expresividad, proactividad, intensidad y velocidad de voz) se expresan en esos archivos de identidad.
 
@@ -620,6 +620,8 @@ Al detectar una interrupción:
 
 ### 8.1. Arquitectura seleccionada
 
+> ⚠️ **v1:** memoria SQLite + FTS5 tras el Memory Adapter. Lo que este documento dice de OpenViking pasa a futuro (decisión "Memoria v1 en SQLite + FTS5; OpenViking desactivado"), desviación pendiente de confirmar por el usuario (U-1).
+
 Memoria integrada de Hermes + OpenViking como proveedor externo principal.
 
 Solo hay un proveedor externo activo: OpenViking.
@@ -705,7 +707,7 @@ Durante una conversación:
 
 1. El agente recibe el mensaje.
 2. Identifica qué contexto necesita.
-3. Consulta memoria relevante (la recuperación ocurre dentro de Hermes, con las herramientas del proveedor; el backend solo entrega mensaje y contexto de sesión).
+3. Recibe del backend los recuerdos relevantes, cercados como dato no confiable y fuera del prompt de sistema; puede pedir más con una herramienta del backend.
 4. Consulta recursos si hace falta.
 5. Recibe resultados resumidos y referencias.
 6. Responde o ejecuta acciones.
@@ -1279,7 +1281,7 @@ Indicadores:
 
 - Estado de Hermes.
 - Estado del backend.
-- Estado de OpenViking.
+- Estado de la memoria.
 - Estado de la base de datos.
 - Estado del micrófono.
 - Estado de STT.
@@ -1312,7 +1314,7 @@ Servicios:
 - Runner de Hermes.
 - Drakter MCP Server.
 - Voice Service.
-- OpenViking.
+- OpenViking (desactivado en v1).
 - SQLite.
 
 Los servicios se podrán iniciar y detener desde la aplicación.
@@ -1329,7 +1331,7 @@ Se realizarán copias de seguridad de:
 
 - Base de datos.
 - Configuración.
-- Archivos de identidad (`agent/identity/`).
+- Archivos de identidad y contexto (`agent/identity/`, `agent/context/`, `agent/knowledge/`).
 - Skills.
 - Índices y metadatos.
 - Configuración de memoria.
@@ -1400,7 +1402,7 @@ Se conservarán versiones recientes y un procedimiento de restauración probado.
 ### Fase 6. Memoria
 
 - Archivos de Hermes.
-- OpenViking.
+- OpenViking (desactivado en v1).
 - Extracción y clasificación configuradas en OpenViking (sin pipeline propio).
 - Recuperación.
 - Evaluación.
@@ -1417,7 +1419,7 @@ Se conservarán versiones recientes y un procedimiento de restauración probado.
 
 ### Fase 8. Personalidad
 
-- Archivos de `agent/identity/` y su cargador.
+- Archivos de `agent/identity/`, `agent/context/` y `agent/knowledge/`, y su cargador.
 - Perfiles vocales.
 - Estados expresivos.
 - Contexto.
@@ -1452,7 +1454,7 @@ Se conservarán versiones recientes y un procedimiento de restauración probado.
 5. Se inicia o verifica el backend FastAPI.
 6. El backend comprueba SQLite.
 7. Se inicia o verifica el runner de Hermes (proceso aparte sobre `AIAgent`, sin gateway, supervisado por FastAPI).
-8. Se inicia o verifica OpenViking.
+8. OpenViking no se inicia en v1 (desactivado).
 9. Se inicia o verifica el servidor MCP.
 10. Se comprueba el servicio de voz.
 11. Se recupera el estado del Workspace.
@@ -1472,9 +1474,9 @@ Si algún servicio falla, Drakter seguirá funcionando en modo degradado cuando 
 5. Se envía el mensaje a Hermes.
 6. Hermes recibe el contexto base.
 7. Hermes evalúa si necesita memoria.
-8. Hermes recupera los recuerdos relevantes con las herramientas de OpenViking (la recuperación ocurre dentro de Hermes).
+8. El backend recupera los recuerdos relevantes y los entrega cercados como dato no confiable.
 9. Se buscan recursos si la petición lo requiere.
-10. El backend entrega el mensaje y el contexto de sesión a Hermes, que recupera la memoria.
+10. El backend entrega a Hermes el mensaje, el contexto de sesión y los recuerdos cercados.
 11. El modelo analiza la instrucción.
 12. Decide si necesita herramientas.
 13. Ejecuta las herramientas necesarias.

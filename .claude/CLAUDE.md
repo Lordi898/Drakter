@@ -12,7 +12,7 @@ Drakter se compone de tres sistemas conectados por APIs internas:
 - **Drakter Desktop**: Electron + React + TypeScript + Tailwind + shadcn/ui + Rive (personaje animado), voz y paneles.
 - **Drakter Workspace**: SQLite (+ FTS5) con tareas, proyectos, hábitos, calendario, asignaturas, almacén y relaciones.
 
-Backend: Python 3.12 + FastAPI (REST + WebSocket), versión elegida por el proyecto. Hermes (tag v0.22.7, `b200f5bc`, instalado desde git, no desde PyPI) corre como subproceso en su propio venv con Python 3.14; OpenViking, en otro entorno (ver `docs/DECISIONS.md`). Local-first, un solo usuario, Linux primero (arquitectura preparada para Windows).
+Backend: Python 3.12 + FastAPI (REST + WebSocket), versión elegida por el proyecto. Hermes (tag v0.22.7, `b200f5bc`, instalado desde git, no desde PyPI) corre como subproceso en su propio venv con Python 3.14; OpenViking está desactivado en v1 (ver `docs/DECISIONS.md`). Local-first, un solo usuario, Linux primero (arquitectura preparada para Windows).
 El detalle completo (arquitectura, módulos, fases, estructura de carpetas) está en `docs/MASTER_PLAN.md`. **No lo copies aquí; consúltalo.**
 
 ---
@@ -49,7 +49,7 @@ Los documentos de control están en `docs/`. Tres son la memoria del proyecto en
 
 ### Riesgos ya identificados (regístralos en DECISIONS.md al llegar a ellos)
 
-- **Memoria:** se usa la memoria nativa de Hermes + OpenViking como único proveedor externo, con sus capas L0/L1/L2 (`MASTER_PLAN.md` §10). Hindsight y Mem0 quedan fuera. Antes de guardar datos reales hay que elegir un embedding multilingüe y validar el modelo que genera L0/L1.
+- **Memoria:** se usa la memoria nativa de Hermes + OpenViking como único proveedor externo, con sus capas L0/L1/L2 (`MASTER_PLAN.md` §10). El backend recupera los recuerdos y los entrega cercados como dato no confiable, nunca en el prompt de sistema; con el runner propio no hay plugin de memoria en Hermes (ver `docs/DECISIONS.md`). **⚠️ Desviación vigente, pendiente de que el usuario la confirme (U-1):** la v1 usa SQLite + FTS5 tras el Memory Adapter, y OpenViking queda desactivado, como opción posterior llamada desde el backend por HTTP. Hindsight y Mem0 quedan fuera. Antes de guardar datos reales hay que elegir un embedding multilingüe y validar el modelo que genera L0/L1.
 - **Rive:** el archivo `.riv` se diseña en el editor visual de Rive y no puede generarse por código. Construye el componente React, el receptor de eventos y un personaje placeholder (SVG/CSS) con la misma API de estados (`idle`, `listening`, `thinking`, `speaking`, `executing`, `success`, `error`, `interrupted`, `offline`). El `.riv` real se enchufa después sin tocar el resto.
 - **Hermes embebido:** Hermes es un framework de agente completo (bucle propio, CLI, gateway). No se usa su gateway: un runner propio crea `AIAgent` en un proceso aparte, con el venv de Hermes, supervisado por FastAPI, y las herramientas las sirve el backend mediante MCP. La decisión está en `docs/DECISIONS.md` y aún no se ha probado en ejecución.
 - **Voz:** la latencia real depende del hardware. La máquina de desarrollo es un i7-8665U con 14 GB de RAM y gráfica integrada, sin VRAM dedicada: se dimensiona para CPU. Deja medición y configuración listas, pero no inventes cifras.
@@ -157,7 +157,7 @@ Ir rápido no significa romper la arquitectura. Estas reglas del plan se mantien
 - Rutas de archivos limitadas a ubicaciones permitidas; límites de tamaño, número y profundidad para comprimidos.
 - La automejora nunca modifica producción, permisos, confirmaciones ni auditoría sin autorización.
 - Secretos y configuración sensible **fuera del repositorio** (`.env` ignorado; solo `.env.example`).
-- La personalidad vive en los 14 archivos de `agent/identity/`, separada del modelo; la voz, separada del razonamiento; el proveedor del modelo, intercambiable.
+- La personalidad vive en `agent/identity/`, separada del modelo; la voz, separada del razonamiento; el proveedor del modelo, intercambiable.
 
 ---
 

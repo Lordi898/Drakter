@@ -32,6 +32,7 @@ Decisiones técnicas, cambios de tecnología y motivos.
 
 ## [2026-11-04] Memoria: nativa de Hermes + OpenViking con capas L0/L1/L2
 - **Contexto:** los documentos se contradecían (`PLAN_DISEÑO` usaba Hermes + OpenViking; `MASTER_PLAN`, `ROADMAP` e `IMPLEMENTATION_STATUS`, OpenViking + Hindsight + Mem0). El usuario decide usar la memoria nativa de Hermes y OpenViking, con sus capas L0, L1 y L2 y su indexación.
+- **⚠️ Actualización:** en v1 esta decisión queda sin aplicar (entrada "Memoria v1 en SQLite + FTS5; OpenViking desactivado"), a falta de que el usuario lo confirme (U-1).
 - **Decisión:** OpenViking ocupa el único lugar de proveedor externo de Hermes mediante su plugin (`memory.provider: openviking`), junto a `MEMORY.md` y `USER.md`. Hindsight y Mem0 salen del plan. El Memory Adapter queda como servicio del backend para la interfaz y la ingesta. Diseño en `MASTER_PLAN.md` §10.
 - **Parte relacional:** verificado en su documentación que OpenViking no ofrece una base relacional de memorias: tiene AGFS, índice vectorial y SQLite/MySQL interno para colas y tareas. La parte relacional de Drakter la cubre SQLite del Workspace.
 - **Alternativas descartadas:** memoria triple (solapa extracción, coste y fuentes de verdad; Hindsight y Mem0 chocan en dependencias); llamar a OpenViking solo desde el adapter (se perdería la integración nativa de herramientas y extracción).
@@ -118,7 +119,7 @@ Decisiones técnicas, cambios de tecnología y motivos.
 ## [2026-11-04] Hardware real y paralelismo acotado
 - **Contexto:** `CLAUDE.md` y `MASTER_PLAN` daban por hechos 32 GB de RAM y 4 GB de VRAM (C-40), y el paralelismo sin límite chocaba con la máquina (C-46).
 - **Decisión:** la máquina de desarrollo y de comprobación es un i7-8665U de 8 hilos con 14 GB de RAM y gráfica integrada Intel UHD 620, sin VRAM dedicada. Voz y OpenViking se dimensionan para CPU; las cifras de rendimiento solo se publican medidas. Las casillas "Medir VRAM" pasan a medir uso de CPU y RAM. El reparto de agentes se mantiene máximo para lectura y edición, con dos frenos: como mucho 2 instalaciones o compilaciones pesadas a la vez y ningún lanzamiento nuevo con `MemAvailable` por debajo de 300 MB.
-- **Comprobado el 2026-11-04 en esta máquina:** `lspci` solo lista la Intel UHD 620, `nvidia-smi` no existe, `MemTotal` da 15.589.436 kB y `lscpu` da 8 CPU. La rama `drakter/verificacion` no tiene commits propios, así que no sirve de evidencia.
+- **Comprobado el 2026-11-04 en esta máquina:** `lspci` solo lista la Intel UHD 620, `nvidia-smi` no existe, `MemTotal` da 15.589.436 kB y `lscpu` da 8 CPU. Cuando se escribió, `drakter/verificacion` no tenía commits propios; después ha publicado `docs/research/verificacion.md`.
 - **Sin comprobar:** si el destino final es otra máquina con 32 GB y GPU. Esto solo puede confirmarlo el usuario; si lo es, se reabre esta entrada.
 - **Alternativas descartadas:** conservar 32 GB y 4 GB como objetivo (llevaría a elegir modelos que aquí no se pueden medir).
 - **Motivo:** la orden del usuario fija estos frenos, y dimensionar con datos que no se han medido produce decisiones falsas.
@@ -126,7 +127,7 @@ Decisiones técnicas, cambios de tecnología y motivos.
 
 ## [2026-11-04] Python 3.12 para el backend, con Hermes y OpenViking en entornos propios
 - **Contexto:** ningún plan fijaba versión. El sistema trae Python 3.14.4 y 3.12.16. `drakter/backend-base` declara `requires-python = ">=3.12,<3.13"`. Un primer razonamiento atribuía el 3.12 del backend a Hermes, y era erróneo: Hermes no lo condiciona.
-- **Decisión:** Python 3.12 es obligatorio para `backend/` y para todo el código propio que corra en su entorno, por elección propia del proyecto. Hermes es el tag v0.22.7 (`b200f5bc`), instalado desde git, en venv propio y ejecutado como subproceso, con Python 3.14. OpenViking va en otro entorno, con 3.12 o 3.13. Ningún entorno se comparte.
+- **Decisión:** Python 3.12 es obligatorio para `backend/` y para todo el código propio que corra en su entorno, por elección propia del proyecto. Hermes es el tag v0.22.7 (`b200f5bc`), instalado desde git, en venv propio y ejecutado como subproceso, con Python 3.14. Cuando se active, OpenViking irá en otro entorno, con 3.12 o 3.13. Ningún entorno se comparte.
 - **Hermes y Python, comprobado en el checkout de ese tag:** `.python-version` es 3.14, el lock es para 3.14.x y el venv instalado da Python 3.14.10. En cambio, `pyproject.toml` declara `requires-python = ">=3.11,<3.15"`: el requisito de 3.14 es efectivo por el fijado de versiones, no por esa metadata, y el orquestador lo comunicó como `>=3.14`.
 - **PyPI descartado para Hermes:** `pip install hermes-agent` no se usa. Nous retiró el soporte en `d84e11af4d` ("rip out brew + pip/PyPI wheel support", 2026-07-22, confirmado en el historial del checkout) y la 0.19.0 de PyPI está desfasada.
 - **Sin comprobar:** desde esta rama no se ha ejecutado Hermes. `backend/app/integrations/hermes/CONTRACT.md`, en `drakter/agente-hermes`, afirma que `hermes --version` confirma el commit.
@@ -135,11 +136,12 @@ Decisiones técnicas, cambios de tecnología y motivos.
 - **Impacto:** `CLAUDE.md` §1 y §9, `ROADMAP`, `backend/pyproject.toml` (ya alineado).
 
 ## [2026-11-04] Los 14 archivos de identidad viven en agent/identity/
+- **Estado:** REVOCADA por la entrada "Identidad repartida en identity/, context/ y knowledge/". Se conserva como historial.
 - **Contexto:** `MASTER_PLAN` y `ROADMAP` los repartían en `identity/`, `context/` y `knowledge/`. `PLAN_DISEÑO` los ponía en `~/.hermes/` y `config/`, y `CLAUDE.md` §8 solo cita `agent/identity/`. El commit `c487985` de `drakter/identidad-personaje` los creó los 14 en `agent/identity/` (C-14).
 - **Decisión:** los 14 archivos están en `agent/identity/`: `SOUL`, `PERSONALITY`, `BEHAVIOR`, `COMMUNICATION`, `EMOTIONAL_STYLE`, `VALUES`, `USER`, `ENVIRONMENT`, `PREFERENCES`, `CURRENT_CONTEXT`, `CAPABILITIES`, `WORKSPACE_GUIDE`, `TOOL_GUIDE` y `SYSTEM_GUIDE`, todos `.md`. `agent/context/` y `agent/knowledge/` no forman parte de la estructura vigente (ver la nota ⚠️ de esta entrada). La fuente es el repositorio: un cargador compone esos archivos y los publica en el `HERMES_HOME` de un perfil propio, y comprueba el tope de 20.000 caracteres de los archivos de contexto de Hermes, porque un recorte podría eliminar reglas del centro.
 - **Sin comprobar:** la carga real en Hermes.
 - **Alternativas descartadas:** mantener tres carpetas (rompería lo ya escrito sin beneficio); `~/.hermes/` como fuente (dejaría la personalidad fuera del repositorio).
-- **⚠️ Desajuste con el código:** `d88fb4e`, de `drakter/memoria-contexto`, movió 8 archivos a `agent/context/` y `agent/knowledge/`, y al fusionar en `drakter/build` quedaron duplicados con `agent/identity/` (22 archivos; los 8 pares son idénticos). `backend/app/integrations/memory/context/rules.py` lee esas dos carpetas. Esta decisión sigue vigente, pero sin cumplirse: hay que cambiar esas rutas y borrar los duplicados, o revocarla con entrada nueva. Lo decide el orquestador.
+- **Resolución:** el desajuste entre esta entrada y `d88fb4e`, que dejó 22 archivos en `drakter/build`, lo cierra la revocación.
 - **Motivo:** `CLAUDE.md` §8 y el código ya existente.
 - **Impacto:** `MASTER_PLAN` §8.1 y Parte XII, `ROADMAP` Fase 5 y árboles, `PLAN_DISEÑO` §5, `drakter-orquestator`.
 
@@ -152,13 +154,13 @@ Decisiones técnicas, cambios de tecnología y motivos.
 
 ## [2026-11-04] La memoria no se impone a la instrucción actual
 - **Contexto:** el orden de prioridad pone la memoria (6) antes de la instrucción actual (7). Leído literalmente, un recuerdo, incluso envenenado, vencería a lo que el usuario pide ahora, y eso contradice que la memoria sea dato no confiable (C-45).
-- **Decisión:** se mantiene el orden, y se aclara su lectura como hace `agent/identity/SYSTEM_GUIDE.md`: los niveles 1 a 5 enmarcan la instrucción actual; la memoria y los datos no confiables solo informan y nunca dan órdenes; el nivel 7 es lo que hay que hacer dentro de ese marco. Si la memoria contradice al usuario, vale lo que dice ahora y se señala la discrepancia. Para datos operativos, la fuente es el Workspace.
+- **Decisión:** se mantiene el orden, y se aclara su lectura como hace `agent/knowledge/SYSTEM_GUIDE.md`: los niveles 1 a 5 enmarcan la instrucción actual; la memoria y los datos no confiables solo informan y nunca dan órdenes; el nivel 7 es lo que hay que hacer dentro de ese marco. Si la memoria contradice al usuario, vale lo que dice ahora y se señala la discrepancia. Para datos operativos, la fuente es el Workspace.
 - **Alternativas descartadas:** intercambiar los niveles 6 y 7 (cambiaría una regla de `CLAUDE.md` §8 que no está mal, solo mal explicada).
 - **Motivo:** cerrar la lectura peligrosa sin alterar la regla.
 - **Impacto:** `CLAUDE.md` §8, `MASTER_PLAN` §8.3. La barrera real la impone el backend, no este texto.
 
 ## [2026-11-04] Huecos de MASTER_PLAN §19: borrar o mover archivos y listar hábitos
-- **Contexto:** `MASTER_PLAN` §19 no tiene herramienta para eliminar o mover recursos ni para listar hábitos, aunque §24 clasifica esas acciones. `agent/identity/TOOL_GUIDE.md` lo señala como hueco (C-09 y dossier de contratos C-05).
+- **Contexto:** `MASTER_PLAN` §19 no tiene herramienta para eliminar o mover recursos ni para listar hábitos, aunque §24 clasifica esas acciones. `agent/knowledge/TOOL_GUIDE.md` lo señala como hueco (C-09 y dossier de contratos C-05).
 - **Decisión:** §19 sigue siendo la base del catálogo. Se añade `list_habits`, de solo lectura. Eliminar o mover recursos queda sin herramienta de agente en la v1: se hace desde la GUI, con confirmación. Si el agente recibe esa petición, lo dice y no improvisa un sustituto. El catálogo definitivo lo congela `drakter/contratos`; si difiere, manda su entrada posterior aquí.
 - **Alternativas descartadas:** añadir `delete_resource` y `move_resource` al agente (amplía la superficie destructiva antes de que exista el flujo de confirmación).
 - **Motivo:** menor superficie destructiva para el agente, y coherencia con lo que dicen ya las guías de identidad.
@@ -171,8 +173,8 @@ Decisiones técnicas, cambios de tecnología y motivos.
 - **Motivo:** es lo que ya definen las guías de identidad y el personaje provisional.
 - **Impacto:** `MASTER_PLAN` §6.3, `PLAN_DISEÑO` §5, contrato de eventos.
 
-## [2026-11-04] agent/identity/USER.md es plantilla; el USER.md vivo es el de Hermes
-- **Contexto:** los datos del usuario tenían varias fuentes: `agent/identity/USER.md` y `PREFERENCES.md` en el repositorio, `USER.md` nativo de Hermes y perfil y preferencias de OpenViking (C-15).
+## [2026-11-04] agent/context/USER.md es plantilla; el USER.md vivo es el de Hermes
+- **Contexto:** los datos del usuario tenían varias fuentes: `agent/context/USER.md` y `PREFERENCES.md` en el repositorio, `USER.md` nativo de Hermes y perfil y preferencias de OpenViking (C-15).
 - **Decisión:** en el repositorio solo se versionan plantillas sin datos reales. El `USER.md` nativo, en el `HERMES_HOME` del perfil de Drakter, guarda lo esencial, y OpenViking, lo demás. La plantilla rellenada por el usuario vive fuera del repositorio, en el directorio de datos de Drakter, y solo inicializa el `USER.md` nativo; a partir de ahí manda el nativo. `PREFERENCES.md` sigue el mismo criterio.
 - **Sin comprobar:** el cargador no existe todavía, y el ciclo de inicialización no se ha ejecutado.
 - **Alternativas descartadas:** rellenar el archivo versionado (metería datos personales en Git); eliminar la plantilla (se perdería la estructura que espera la identidad).
@@ -189,15 +191,16 @@ Decisiones técnicas, cambios de tecnología y motivos.
 
 ## [2026-11-04] Puente Hermes-backend y flujo de una petición
 - **Contexto:** `PLAN_DISEÑO` fijaba MCP, `MASTER_PLAN` describía Skills que llaman a la API, y `CLAUDE.md` lo dejaba por investigar (C-08, C-13, C-42, C-48). El flujo de `MASTER_PLAN` §28 recuperaba memoria antes de Hermes, pero las herramientas `viking_*` se usan dentro de su bucle.
-- **Decisión:** Hermes corre como proceso aparte, supervisado por FastAPI: `hermes gateway run` con API server en loopback, venv y `HERMES_HOME` propios, versión fijada (tag v0.22.7, `b200f5bc`, desde git, nunca PyPI) y un `AgentProvider` por encima para que el proveedor siga siendo intercambiable. Las herramientas las sirve el backend por MCP en loopback, en un servidor delgado sin lógica de negocio que usa los mismos servicios que la API; Hermes es solo cliente. El perfil lleva lista de permitidos. El backend entrega mensaje y contexto de sesión, y la recuperación de memoria ocurre dentro de Hermes. Skills e identidad tienen su fuente en `agent/` y se publican al perfil. Sigue sin importarse `AIAgent` en FastAPI.
+- **Decisión:** Hermes corre como proceso aparte, supervisado por FastAPI: `hermes gateway run` con API server en loopback, venv y `HERMES_HOME` propios, versión fijada (tag v0.22.7, `b200f5bc`, desde git, nunca PyPI) y un `AgentProvider` por encima para que el proveedor siga siendo intercambiable. Las herramientas las sirve el backend por MCP en loopback, en un servidor delgado sin lógica de negocio que usa los mismos servicios que la API; Hermes es solo cliente. El perfil lleva lista de permitidos. El backend entrega mensaje y contexto de sesión, y la recuperación de memoria ocurre dentro de Hermes. (Revocado: ver "El backend recupera los recuerdos".) Skills e identidad tienen su fuente en `agent/` y se publican al perfil. Sigue sin importarse `AIAgent` en FastAPI.
 - **Actualización:** el mecanismo `hermes gateway run` queda sustituido por la entrada "Hermes sin gateway: runner propio sobre AIAgent". El resto de esta entrada sigue vigente.
 - **Sin comprobar:** nada de esto se ha ejecutado; proviene de leer el código de v0.22.7. Quedan por probar la lista de permitidos real, el nombre visible de las herramientas MCP, si puede bloquearse del todo la escritura de Skills y la RAM consumida.
 - **Alternativas descartadas:** importar `AIAgent` en FastAPI (rompe la separación de procesos y mezcla dependencias); Skills que llaman a la API (no valen como frontera de herramientas).
 - **Motivo:** el modelo y Hermes se tratan como no confiables; la frontera real es el backend. Esto invierte `MASTER_PLAN` §28.
-- **Impacto:** `CLAUDE.md` §2, `MASTER_PLAN` §28 y Parte XII, `ROADMAP`. `agent/identity/SYSTEM_GUIDE.md` (paso 2 del flujo) dice aún que el backend recupera los recuerdos: lo corrige su propietario.
+- **Impacto:** `CLAUDE.md` §2, `MASTER_PLAN` §28 y Parte XII, `ROADMAP`. El conflicto con `agent/knowledge/SYSTEM_GUIDE.md` (paso 2) y `builder.py` lo cierra la entrada "El backend recupera los recuerdos".
 
 ## [2026-11-04] Memoria sin pipeline propio ni recuerdos en el repositorio
 - **Contexto:** `MASTER_PLAN` §11, `ROADMAP` y la Checklist 12 seguían pidiendo archivos de recuerdos en `memory/` y una extracción propia, en contra de la decisión de memoria nativa + OpenViking (C-05, C-11, C-12, C-16, C-17).
+- **Actualización:** en v1 no hay OpenViking que configurar (entrada "Memoria v1 en SQLite + FTS5; OpenViking desactivado"): extracción, deduplicación y contradicciones van en el Memory Adapter del backend. Se mantiene que `memory/` no guarda recuerdos.
 - **Decisión:** `memory/` guarda configuración e integración, nunca recuerdos ni datos personales. Extraer, clasificar, deduplicar y resolver contradicciones se configura y se comprueba en OpenViking; lo que falte se anota con ⚠️. ByteRover sale de la memoria del producto y queda como utilidad opcional de desarrollo. La casilla "Skill de memoria" pasa al paso 15. La ingesta del almacén en OpenViking es opcional por recurso, viene apagada y pasa siempre por el backend. Esto último cambia el flujo de `MASTER_PLAN` §10.
 - **Alternativas descartadas:** pipeline propio (duplica lo que aporta OpenViking y anula la decisión anterior).
 - **Motivo:** aplicar la decisión de memoria ya tomada.
@@ -269,7 +272,7 @@ Decisiones técnicas, cambios de tecnología y motivos.
 - **Decisión:** no se usa el gateway. Un runner propio (`backend/app/integrations/hermes/runner/drakter_runner.py`) crea `AIAgent` en un proceso separado, con el venv de Hermes, y habla con el backend por JSONL en stdin y stdout. Solo usa stdlib y Hermes, sin scheduler ni cron. El runner termina con EOF en stdin. Salen `aiohttp` y `API_SERVER_KEY`. `AIAgent` sigue sin importarse en FastAPI.
 - **Alternativas descartadas:** mantener el gateway con `platform_toolsets.cron: [no_mcp]` (cierra los jobs, pero `/api/jobs` y las tareas de fondo siguen vivas, sin interruptor para quitar esas rutas); importar `AIAgent` en FastAPI (mezcla procesos y dependencias).
 - **Motivo:** el cron del gateway salta la lista blanca.
-- **⚠️ Desajuste con el código:** `backend/app/integrations/hermes/CONTRACT.md` ya describe el runner, pero en `drakter/agente-hermes` (`8f56f4b`) no hay runner commiteado, `supervisor.py` lanza aún `hermes gateway run` y `preflight.py` comprueba `aiohttp`. `contracts/README.md` §1 sigue citando `API_SERVER_KEY`. La rama no está fusionada en `drakter/build`.
+- **⚠️ Estado en código:** `866ad9d`, de `drakter/agente-hermes`, añade `runner/drakter_runner.py`, pero a fecha de `4a84a5d` no está en `drakter/build`. `contracts/README.md` §1 sigue citando `API_SERVER_KEY`.
 - **Sin comprobar:** el runner no se ha ejecutado, ni la salida por EOF.
 - **Impacto:** `CLAUDE.md` §2, `MASTER_PLAN` §28, `ROADMAP` Fase 4, `PLAN_DISEÑO` §18 y flujo de arranque, `contracts/README.md` §1.
 
@@ -326,13 +329,14 @@ Decisiones técnicas, cambios de tecnología y motivos.
 ## [2026-11-04] Host de Electron: interfaz, aprobaciones y arranque
 - **Contexto:** `drakter-24` comunica por el orquestador cómo queda el host. Completa la entrada "Interfaz del renderer y confirmación por REST".
 - **Decisión:** la firma es `call(method, path, body, options)`, con `options` limitado a `ifMatch` e `idempotencyKey` y lista cerrada de rutas. `ALLOWED_ROUTES` lo genera `desktop/electron/scripts/generate-routes.mjs`. `ApprovalOutcome` incluye `conflict` y `failed`. Cancelar en el diálogo de aprobación rechaza. El handshake con el backend espera 120 s por las migraciones. El WebSocket no usa ping de texto. D-14 prevalece sobre `contracts/README.md` §1.
-- **⚠️ Desajuste con el código:** en `drakter/electron-host` (`3ebb99a`) `call` sigue teniendo tres parámetros, sin `options`, `ifMatch` ni `idempotencyKey`. Sí están `generate-routes.mjs`, `ApprovalOutcome`, `HANDSHAKE_TIMEOUT_MS = 120_000` y el botón Cancelar con `cancelId: 0`. D-14 no consta en este archivo: solo en comentarios de código y mensajes.
+- **Resuelto en código:** `drakter/build` ya tiene `ifMatch` e `idempotencyKey` en `bridge.ts`. También están `generate-routes.mjs`, `ApprovalOutcome`, `HANDSHAKE_TIMEOUT_MS = 120_000` y el botón Cancelar con `cancelId: 0`. D-14 no consta en este archivo: solo en comentarios de código y mensajes.
 - **Alternativas descartadas:** `api.call(opId, args)`.
 - **Motivo:** el proceso principal es el único que conoce token y puerto.
 - **Impacto:** `desktop/electron/`, `contracts/README.md` §1.
 
 ## [2026-11-04] Confirmación sin token HMAC
 - **Contexto:** el token HMAC de confirmación estaba anotado como provisional.
+- **Resuelto en código:** `05861f9` retira `ApprovalSigner`, y está en `drakter/build`.
 - **Decisión:** se retira. Para aprobar bastan el rol `approver` de D-14 y `params_hash`, con `UPDATE` atómico sobre la fila pendiente.
 - **⚠️ Desajuste con el código:** `drakter/seguridad` (`87f5481`) mantiene `ApprovalSigner` en `backend/app/permissions/credentials.py`, y su `README.md` pide `{params_hash, approval_token}` en `POST /api/v1/confirmations/{id}/approve`. Hay que quitarlo.
 - **Alternativas descartadas:** mantener el HMAC (no aporta nada sobre el rol y el hash).
@@ -343,6 +347,67 @@ Decisiones técnicas, cambios de tecnología y motivos.
 - **Contexto:** faltaba fijar tres nombres que comparten backend y GUI.
 - **Decisión:** la clave de zona horaria es `default_timezone`. La tabla `settings` se ajusta en la migración `0011_settings_value.sql`. El cuerpo de `POST /api/v1/chat/sessions/{id}/messages` lleva el texto en `text`, junto a `client_message_id`.
 - **Comprobado por lectura:** `0011_settings_value.sql` está en `drakter/contratos` y `drakter/chat-personaje`, y aún no en `drakter/build`. `text` consta en `contracts/api/routes.md`.
+- **Alcance de la prueba de `0011`:** se probó con datos sintéticos, no reales: `backend/migrations/check_migrations.py` inserta `default_timezone` y `bulk_threshold` y comprueba que se conservan. Los triggers obligatorios son 25 (7 de auditoría y confirmaciones, 9 `*_delete_entity`, 3 `*_no_cycle`, 3 `trg_search_*` y 3 `trg_memory_records_*`), recuento hecho sobre `contracts/README.md`. El script no se ha ejecutado desde esta rama.
 - **Alternativas descartadas:** ninguna comunicada.
 - **Motivo:** un solo nombre en todo el sistema.
 - **Impacto:** `backend/migrations/`, `contracts/`, `desktop/src/stores/chat.ts`.
+
+## [2026-11-04] Identidad repartida en identity/, context/ y knowledge/
+- **Contexto:** la entrada "Los 14 archivos de identidad viven en agent/identity/" salió de una contradicción en las instrucciones del orquestador, no de un fallo de los planes: `MASTER_PLAN` §8.1 ya los repartía en tres carpetas y el cargador lee esas rutas.
+- **Decisión:** se revoca esa entrada. Los 14 archivos quedan así: 6 en `agent/identity/` (`SOUL`, `PERSONALITY`, `BEHAVIOR`, `COMMUNICATION`, `EMOTIONAL_STYLE`, `VALUES`), 4 en `agent/context/` (`USER`, `ENVIRONMENT`, `PREFERENCES`, `CURRENT_CONTEXT`) y 4 en `agent/knowledge/` (`CAPABILITIES`, `WORKSPACE_GUIDE`, `TOOL_GUIDE`, `SYSTEM_GUIDE`). Se mantiene el resto de lo dicho allí: la fuente es el repositorio, y el cargador compone los archivos, los publica en el `HERMES_HOME` del perfil propio y comprueba el tope de 20.000 caracteres. `USER.md` y `PREFERENCES.md` son plantillas.
+- **Comprobado por lectura:** `f13204a`, de `drakter/identidad-personaje`, quita los 8 duplicados y deja 14 archivos; `backend/app/integrations/memory/context/rules.py` lee `knowledge/`, `identity/` y `context/`.
+- **Resuelto en código:** `drakter/build` ya tiene los 14 archivos.
+- **Alternativas descartadas:** los 14 en `agent/identity/` (obliga a cambiar el cargador y se aparta de `MASTER_PLAN`, sin beneficio).
+- **Motivo:** es lo que dice `MASTER_PLAN`, lo que lee el cargador, y deja la personalidad en `identity/`, como pide `CLAUDE.md` §8.
+- **Impacto:** `MASTER_PLAN` §8.1 y Parte XII, `ROADMAP` árbol y Fase 5, `PLAN_DISEÑO` §5, `CLAUDE.md` §8, `RUN_STATE.md`.
+
+## [2026-11-04] El backend recupera los recuerdos
+- **Contexto:** la entrada "Puente Hermes-backend y flujo de una petición" situaba la recuperación dentro de Hermes, mientras `backend/app/integrations/memory/context/builder.py` y `agent/knowledge/SYSTEM_GUIDE.md` (paso 2) la hacen en el backend.
+- **Decisión:** el backend recupera los recuerdos, y `builder.py` y `SYSTEM_GUIDE.md` son correctos. Lo recuperado se entrega siempre cercado como dato no confiable, nunca en el prompt de sistema. Es una desviación de `MASTER_PLAN` §28, ya recogida allí, y revoca esa parte de la entrada del puente.
+- **Motivo:** con runner propio no hay plugin de memoria en Hermes, y el backend controla la delimitación y la procedencia.
+- **Alternativas descartadas:** recuperación dentro de Hermes con `viking_*` (exige el plugin que el runner no carga).
+- **Resuelto:** cómo entra OpenViking lo fija la entrada "Memoria v1 en SQLite + FTS5; OpenViking desactivado".
+- **Sin comprobar:** el cercado no se ha ejecutado con Hermes ni con modelo; procede de leer `builder.py`.
+- **Impacto:** `MASTER_PLAN` §10, §28, §30 y §31, `PLAN_DISEÑO`, `CLAUDE.md` §2.
+
+## [2026-11-04] Raíces del almacén y roles de ruta
+- **Contexto:** gestionar ubicaciones permitidas amplía lo que el sistema puede leer, así que no puede quedar al alcance del renderer ni del agente.
+- **Decisión:** las raíces se gestionan desde el proceso principal con `window.api.addStorageLocation`, `update` y `delete`, selector nativo y token `approver`. Nacen con `read_only` y sin `agent_read`. En `storage-locations` y `permissions`, GET y HEAD usan `ui`; las escrituras, `approver`.
+- **Comprobado por lectura:** `desktop/electron/main/storageRoots.ts` con `showOpenDialog` en `drakter/build`; `0005_storage.sql` tiene `read_only` con `DEFAULT 1`; `generate-routes.mjs` exige `approver` en esas rutas. No se ha ejecutado.
+- **Alternativas descartadas:** un campo de ruta en el renderer (daría al renderer rutas absolutas).
+- **Motivo:** las ubicaciones permitidas son una frontera de seguridad.
+- **Impacto:** `desktop/electron/`, `contracts/api/routes.md`.
+
+## [2026-11-04] Almacén en v1
+- **Contexto:** `drakter-15` comunica por el orquestador el alcance del almacén.
+- **Decisión:** en v1 las ubicaciones son `read_only=1`. Borrar un recurso no toca el archivo. El agente solo crea notas con `create_resource`. Las imágenes se leen sin Pillow (solo metadatos con parser propio). `.docx` no tiene lector. La caducidad de la confirmación se queda en 300 s.
+- **⚠️ Desajuste con el código:** `CONFIRMATION_TTL_SECONDS = 300` está en `backend/app/services/actions.py` de `drakter/seguridad`, pero `drakter/build` (`488b83d`) tiene en `backend/app/services/habits_calendar_support.py` una caducidad propia de 15 minutos. Son dos caminos de confirmación con plazos distintos, y `contracts/README.md` §5 pide uno solo.
+- **Alternativas descartadas:** añadir Pillow y un lector de `.docx` (más dependencias y más superficie para archivos no confiables).
+- **Motivo:** menor superficie en v1.
+- **Impacto:** `backend/app/services/`, `backend/app/tools/storage.py`.
+
+## [2026-11-04] Rama verificacion integrada por squash
+- **Contexto:** el historial de `drakter/verificacion` contenía una clave falsa de prueba.
+- **Decisión:** se integra por squash para no publicarla.
+- **Estado:** a fecha de `488b83d`, `drakter/verificacion` no es ancestro de `drakter/build` y `docs/research/` aún no aparece allí, así que el squash no se ha visto.
+- **Alternativas descartadas:** fusión normal (publicaría ese historial).
+- **Motivo:** no publicar nada con forma de credencial, aunque sea falsa.
+- **Impacto:** historial de `drakter/build`.
+
+## [2026-11-04] Memoria v1 en SQLite + FTS5; OpenViking desactivado
+- **Estado:** DESVIACIÓN de una decisión del usuario, pendiente de que la confirme (U-1). Mientras tanto se trabaja así, y si no la confirma se reabre.
+- **Contexto:** la entrada "Memoria: nativa de Hermes + OpenViking con capas L0/L1/L2" la pidió el usuario. Con el runner propio no hay plugin de memoria en Hermes, y `docs/research/verificacion.md` (en `drakter/verificacion`) midió OpenViking.
+- **Decisión:** la v1 usa memoria SQLite + FTS5 tras el Memory Adapter. OpenViking queda desactivado, como opción posterior llamada desde el backend por HTTP, nunca como plugin de Hermes. `memory.provider`, las herramientas `viking_*` y las capas L0/L1/L2 de `MASTER_PLAN` §10 pasan a futuros.
+- **Motivo:** unos 600 MB en reposo, servidor HTTP obligatorio, sin embeddings no indexa, y es un plugin externo. La cifra de 600 MB consta en `verificacion.md`; el resto llega del orquestador.
+- **Alternativas descartadas:** OpenViking activo en v1, como plugin o por HTTP (por lo anterior, en una máquina de 14 GB).
+- **Consecuencia:** se pierde en v1 la carga progresiva L0/L1/L2 y la búsqueda semántica: FTS5 busca por texto. Si U-1 se rechaza, hay que retomar `MASTER_PLAN` §10 tal como está.
+- **Sin comprobar:** la calidad de recuperación con FTS5 en español.
+- **Impacto:** `MASTER_PLAN` §10, `ROADMAP` §2 y Fase 16, `PLAN_DISEÑO` §8, `IMPLEMENTATION_STATUS.md` Checklist 12, `CLAUDE.md` §1 y §2, `RUN_STATE.md`. `.claude/skills/drakter-toolkit/SKILL.md` aún dice que la memoria es la nativa de Hermes + OpenViking.
+
+## [2026-11-04] Hoy es la pantalla inicial
+- **Contexto:** `MASTER_PLAN` §5.3 y `PLAN_DISEÑO` §3.2 hacían de la cara la pantalla principal.
+- **Decisión:** Hoy es la pantalla inicial, con pestaña propia, y pasan a ser 10 pestañas. La cara sigue en su pestaña. Atajos: Ctrl+0 para Hoy y Ctrl+K para la búsqueda.
+- **Alternativas descartadas:** mantener la cara como inicio.
+- **Motivo:** prioridad del usuario de uso diario.
+- **⚠️ Estado en código:** a fecha de `815976f`, `desktop/src/navigation/sections.ts` en `drakter/build` tiene 9 secciones con `home` primero, sin Hoy, y `useAppShortcuts.ts` documenta Ctrl+1 a Ctrl+9. En `drakter/desktop-shell` sí consta. Ctrl+K sí está en `SearchPalette.tsx`.
+- **Impacto:** `MASTER_PLAN` §5.3, `PLAN_DISEÑO` §3.2 y §3.3, `desktop/src/navigation/`, `desktop/src/app/useAppShortcuts.ts`.
