@@ -16,7 +16,7 @@ Gracias por el interés. Drakter es un proyecto personal en pre-release, manteni
 
 ```sh
 (cd backend && uv sync --frozen)
-(cd desktop && npm ci && node node_modules/electron/install.js)
+(cd desktop && npm ci)
 scripts/check-env.sh
 scripts/drakter-local.sh start          # con el stub, sin clave de API
 ```

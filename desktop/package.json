@@ -6,6 +6,7 @@
   "license": "Apache-2.0",
   "main": "./out/main/index.js",
   "scripts": {
+    "postinstall": "node scripts/ensure-electron.cjs",
     "dev": "electron-vite dev",
     "build": "npm run typecheck && electron-vite build",
     "start": "electron-vite preview",

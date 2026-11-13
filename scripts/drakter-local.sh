@@ -32,6 +32,9 @@ start() {
   # AppArmor restringe userns y chrome-sandbox no es root:4755 (README, "Sandbox de Electron").
   export DRAKTER_DEV_NO_SANDBOX=1 ELECTRON_DISABLE_SANDBOX=1
 
+  # dev.sh también lo hace, pero aquí falla a la vista en vez de solo en el log.
+  node "$root/desktop/scripts/ensure-electron.cjs" || { echo "No se pudo obtener el binario de Electron." >&2; exit 1; }
+
   case "$provider" in
     stub)
       export DRAKTER_MODEL_PROVIDER=dev_stub
