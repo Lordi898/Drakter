@@ -45,7 +45,7 @@ scripts/drakter-local.sh start            # app con el stub de desarrollo, sin m
 
 - `backend/.venv` (Python 3.12): `cd backend && uv sync --frozen`. `uv` está en `~/.local/bin`.
 - `desktop/node_modules`: `cd desktop && npm ci && node node_modules/electron/install.js` (npm 12 no ejecuta el script que descarga Electron).
-- Hermes v0.22.7 (`b200f5b`, Python 3.14) en `/var/tmp/drakter-agente-hermes/hv/venv`, expuesto como `~/.local/bin/hermes-python`, o con `DRAKTER_HERMES_PYTHON` en `~/.config/drakter/.env` (no en el entorno de `dev.sh`: Electron no la pasa al backend). `/var/tmp` sobrevive a reinicios, pero no es una ubicación definitiva.
+- Hermes v0.22.7 (`b200f5b`, Python 3.14.10 de uv) en `~/.local/share/drakter/venvs/hermes` (clon en `~/.local/share/drakter/src/hermes-agent`), expuesto como `~/.local/bin/hermes-python`, o con `DRAKTER_HERMES_PYTHON` en `~/.config/drakter/.env` (no en el entorno de `dev.sh`: Electron no la pasa al backend). Se instala con `scripts/install-hermes.sh`. `~/.local/bin/python3.12` y `python3.14` apuntan a los Python gestionados por uv (`~/.local/share/uv/python/`). Ningún runtime vive en `/tmp` ni `/var/tmp` (DECISIONS 2026-11-13); `scripts/check-env.sh` lo vigila.
 - Clave: `ANTHROPIC_API_KEY` en `~/.config/drakter/.env` (las líneas vacías se ignoran).
 - Sandbox de Electron desactivado solo en desarrollo (`DRAKTER_DEV_NO_SANDBOX=1`, `ELECTRON_DISABLE_SANDBOX=1`): AppArmor restringe userns y `chrome-sandbox` no es `root:4755` (requiere `sudo`, ver `docs/installation/sandbox-electron.md`).
 
