@@ -6,8 +6,10 @@ import sqlite3
 from datetime import date
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Header, Query
-from fastapi.responses import JSONResponse
+from collections.abc import Mapping
+from typing import Any
+
+from fastapi import APIRouter, Depends, Header, Query, Request
 
 from app.core.errors import AppError
 from app.schemas.calendar import (
@@ -28,7 +30,7 @@ from app.services import calendar as service
 from app.services import calendar_reminders  # noqa: F401  (registra las fuentes de recordatorios)
 from app.services.habits_calendar_support import (
     RequestContext,
-    confirmation_response,
+    run_confirmable,
     get_db,
     rest_context,
 )
@@ -57,10 +59,10 @@ def _revision(value: str | None) -> int | None:
 @router.get("/calendar/events", response_model=service.EventPage)
 def list_events(
     conn: Conn, ctx: Ctx, include_archived: bool = False, status: str | None = None,
-    limit: int | None = None, offset: int | None = None,
+    limit: Annotated[int, Query(ge=1, le=200)] = 50, cursor: str | None = None,
 ) -> service.EventPage:  # fmt: skip
     return service.list_events(
-        conn, ctx, include_archived=include_archived, status=status, limit=limit, offset=offset
+        conn, ctx, include_archived=include_archived, status=status, limit=limit, cursor=cursor
     )
 
 
@@ -81,9 +83,14 @@ def update_event(
     return service.update_event(conn, ctx, event_id, body, _revision(if_match))
 
 
-@router.delete("/calendar/events/{event_id}", response_model=None, responses={409: {"description": "Pide confirmación"}})
-def delete_event(event_id: str, conn: Conn, ctx: Ctx) -> JSONResponse:
-    return confirmation_response(ctx, service.request_delete_event(conn, ctx, event_id))
+@router.delete("/calendar/events/{event_id}", response_model=None, status_code=200)
+def delete_event(event_id: str, request: Request, conn: Conn, ctx: Ctx) -> Mapping[str, Any]:
+    from app.services.calendar_actions import DeleteEventArgs  # import tardío: ese módulo importa services.calendar
+
+    return run_confirmable(
+        request, ctx, "delete_event", DeleteEventArgs(event_id=event_id),
+        service.deletion_prompt_event(conn, event_id),
+    )
 
 
 @router.get("/calendar/events/{event_id}/exceptions", response_model=service.ExceptionList)
@@ -106,11 +113,11 @@ def create_exception(
 @router.get("/calendar/time-blocks", response_model=service.TimeBlockPage)
 def list_time_blocks(
     conn: Conn, ctx: Ctx, include_archived: bool = False, task_id: str | None = None,
-    status: str | None = None, limit: int | None = None, offset: int | None = None,
+    status: str | None = None, limit: Annotated[int, Query(ge=1, le=200)] = 50, cursor: str | None = None,
 ) -> service.TimeBlockPage:  # fmt: skip
     return service.list_time_blocks(
         conn, ctx, include_archived=include_archived, task_id=task_id, status=status,
-        limit=limit, offset=offset,
+        limit=limit, cursor=cursor,
     )  # fmt: skip
 
 
@@ -131,11 +138,14 @@ def update_time_block(
     return service.update_time_block(conn, ctx, block_id, body, _revision(if_match))
 
 
-@router.delete(
-    "/calendar/time-blocks/{block_id}", response_model=None, responses={409: {"description": "Pide confirmación"}}
-)
-def delete_time_block(block_id: str, conn: Conn, ctx: Ctx) -> JSONResponse:
-    return confirmation_response(ctx, service.request_delete_time_block(conn, ctx, block_id))
+@router.delete("/calendar/time-blocks/{block_id}", response_model=None, status_code=200)
+def delete_time_block(block_id: str, request: Request, conn: Conn, ctx: Ctx) -> Mapping[str, Any]:
+    from app.services.calendar_actions import DeleteTimeBlockArgs  # import tardío
+
+    return run_confirmable(
+        request, ctx, "delete_time_block", DeleteTimeBlockArgs(time_block_id=block_id),
+        service.deletion_prompt_time_block(conn, block_id),
+    )
 
 
 # ----------------------------------------------------------------------- agenda

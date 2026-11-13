@@ -1,4 +1,4 @@
-import { api, type Page } from '@/modules/calendar/workspaceApi'
+import { api, listAll } from '@/modules/calendar/workspaceApi'
 import type {
   Habit,
   HabitCreate,
@@ -9,17 +9,8 @@ import type {
   RecordStatus
 } from './types'
 
-export async function listHabits(includeArchived: boolean): Promise<readonly Habit[]> {
-  const items: Habit[] = []
-  const limit = 100
-  for (;;) {
-    const page = await api<Page<Habit>>('GET', '/habits', {
-      query: { include_archived: includeArchived, limit, offset: items.length }
-    })
-    items.push(...page.items)
-    if (page.items.length < limit || items.length >= page.total) return items
-  }
-}
+export const listHabits = (includeArchived: boolean): Promise<readonly Habit[]> =>
+  listAll<Habit>('/habits', { include_archived: includeArchived })
 
 export const createHabit = (body: HabitCreate) => api<Habit>('POST', '/habits', { body })
 

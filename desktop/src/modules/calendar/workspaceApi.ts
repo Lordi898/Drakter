@@ -10,7 +10,7 @@ export { ApiError, type ConfirmationTicket, type ReviewOutcome, type TrustedGest
 
 export interface Page<T> {
   readonly items: readonly T[]
-  readonly total: number
+  readonly next_cursor: string | null
 }
 
 export type Query = Readonly<Record<string, string | number | boolean | null | undefined>>
@@ -29,7 +29,7 @@ function withQuery(path: string, query?: Query): string {
 export function api<T>(
   method: Method,
   path: string,
-  // `revision` va en If-Match; main aún no la reenvía, así que el control no está activo.
+  // `revision` va en If-Match; llega al backend cuando se integre el puente de main.
   options: { readonly query?: Query; readonly body?: unknown; readonly revision?: number } = {}
 ): Promise<T> {
   return apiRequest<T>(`/api/v1${withQuery(path, options.query)}`, {
@@ -56,4 +56,16 @@ export function isBackendUnavailable(error: unknown): boolean {
 
 export function errorText(error: unknown, fallback = 'No se pudo completar la acción.'): string {
   return describeError(error, fallback)
+}
+
+/** Recorre todas las páginas de un listado por cursor. */
+export async function listAll<T>(path: string, query: Query = {}): Promise<readonly T[]> {
+  const items: T[] = []
+  let cursor: string | null = null
+  do {
+    const page: Page<T> = await api<Page<T>>('GET', path, { query: { ...query, limit: 200, cursor } })
+    items.push(...page.items)
+    cursor = page.next_cursor
+  } while (cursor !== null)
+  return items
 }

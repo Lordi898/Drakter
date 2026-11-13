@@ -5,8 +5,8 @@ mismos campos, para que `app/tools/{habits,calendar,subjects}.py` no cambien.
 
 `service_handler` convierte un servicio `(conn, ctx, args)` en el handler
 `(tool_ctx, args)` que espera el registro. El agente solo llega a la base por aquí.
-La confirmación de RiskClass.CONFIRM la impone `ToolGate` antes de llamar al handler:
-por eso el handler de `delete_*` ejecuta el borrado y no existe herramienta de aprobar.
+La confirmación de RiskClass.CONFIRM la impone `ToolGate` y la ejecución es de
+`ActionService`: el handler de `delete_*` se niega a borrar y no hay herramienta de aprobar.
 """
 
 from __future__ import annotations
@@ -14,7 +14,6 @@ from __future__ import annotations
 import sqlite3
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
-from enum import StrEnum
 from typing import Any, Literal, TypeVar
 from uuid import UUID
 
@@ -27,12 +26,9 @@ from app.services.habits_calendar_support import RequestContext
 try:
     from app.tools.spec import RiskClass, ToolContext, ToolError, ToolSpec
 except ImportError:
-    AuditPolicy = Literal["log", "hash", "omit"]
+    from drakter_contracts.tools import RiskClass
 
-    class RiskClass(StrEnum):  # type: ignore[no-redef]
-        READ = "read"
-        WRITE = "write"
-        CONFIRM = "confirm"
+    AuditPolicy = Literal["log", "hash", "omit"]
 
     @dataclass(frozen=True, slots=True)
     class ToolContext:  # type: ignore[no-redef]
@@ -70,7 +66,7 @@ except ImportError:
         summarize: Callable[[BaseModel], str] | None = None
 
 
-__all__ = ["RiskClass", "ToolContext", "ToolError", "ToolSpec", "service_handler"]
+__all__ = ["RiskClass", "ToolContext", "ToolError", "ToolSpec", "deny_direct", "service_handler"]
 
 A = TypeVar("A", bound=BaseModel)
 R = TypeVar("R", bound=BaseModel)
@@ -94,3 +90,8 @@ def service_handler(
             conn.close()
 
     return handler
+
+
+def deny_direct(tool_ctx: ToolContext, args: BaseModel) -> Any:
+    """Un borrado nunca corre por `handler`: si se llega aquí, falla cerrado."""
+    raise ToolError("confirmation_unavailable", "Esta acción solo se ejecuta al aprobarla en la GUI.")

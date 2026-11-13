@@ -1,4 +1,4 @@
-import { api, type Page } from '@/modules/calendar/workspaceApi'
+import { api, listAll, type Page } from '@/modules/calendar/workspaceApi'
 import type {
   ClassSession,
   ExceptionInput,
@@ -13,7 +13,10 @@ import type {
 export type DeleteResult = undefined
 
 export function listSubjects(includeArchived: boolean): Promise<Page<Subject>> {
-  return api('GET', '/subjects', { query: { include_archived: includeArchived, limit: 200 } })
+  return listAll<Subject>('/subjects', { include_archived: includeArchived }).then((items) => ({
+    items,
+    next_cursor: null
+  }))
 }
 
 export function createSubject(body: SubjectInput): Promise<Subject> {
@@ -37,7 +40,7 @@ export function deleteSubject(id: string): Promise<DeleteResult> {
 }
 
 export function listSessions(subjectId: string): Promise<Page<ClassSession>> {
-  return api('GET', `/subjects/${subjectId}/sessions`, { query: { limit: 200 } })
+  return listAll<ClassSession>(`/subjects/${subjectId}/sessions`).then((items) => ({ items, next_cursor: null }))
 }
 
 export function createSession(subjectId: string, body: SessionInput): Promise<SessionWriteResult> {

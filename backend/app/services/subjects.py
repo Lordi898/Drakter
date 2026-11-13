@@ -30,20 +30,18 @@ from app.schemas.subjects import (
 )
 from app.services.calendar_recurrence import to_display, to_utc, utc_iso
 from app.services.habits_calendar_support import (
-    ConfirmationRef,
     RequestContext,
     bounded_limit,
-    bounded_offset,
-    confirmed_action,
     deletion_summary,
+    decode_cursor,
     ensure_timezone,
     insert_entity,
     new_id,
     now_utc,
     record_audit,
-    request_confirmation,
     require_entity,
     set_archived,
+    split_page,
     touch_entity,
     transaction,
 )
@@ -53,7 +51,7 @@ _DT_FMT = "%Y-%m-%dT%H:%M"
 
 class SubjectList(BaseModel):
     items: list[SubjectOut]
-    total: int
+    next_cursor: str | None
 
 
 class ClassSessionWriteResult(BaseModel):
@@ -65,7 +63,7 @@ class ClassSessionWriteResult(BaseModel):
 
 class SessionList(BaseModel):
     items: list[ClassSessionOut]
-    total: int
+    next_cursor: str | None
 
 
 class SubjectResources(BaseModel):
@@ -114,13 +112,14 @@ def list_subjects(
     *,
     include_archived: bool = False,
     limit: int | None = None,
-    offset: int | None = None,
+    cursor: str | None = None,
 ) -> SubjectList:
-    rows, total = repo.list_subjects(
-        conn, include_archived=include_archived, limit=bounded_limit(limit),
-        offset=bounded_offset(offset),
-    )  # fmt: skip
-    return SubjectList(items=[SubjectOut(**row) for row in rows], total=total)
+    size = bounded_limit(limit)
+    rows = repo.list_subjects(
+        conn, include_archived=include_archived, after=decode_cursor(cursor), limit=size + 1
+    )
+    page, next_cursor = split_page(rows, size, ("created_at", "id"))
+    return SubjectList(items=[SubjectOut(**row) for row in page], next_cursor=next_cursor)
 
 
 def update_subject(
@@ -182,34 +181,19 @@ def _check_subject_deletable(conn: sqlite3.Connection, subject_id: str) -> None:
         )
 
 
-def request_delete_subject(
-    conn: sqlite3.Connection, ctx: RequestContext, subject_id: str
-) -> ConfirmationRef:
-    with _atomic(conn):
-        subject = repo.get_subject(conn, subject_id)
-        if subject is None:
-            raise AppError("not_found", "No existe esa asignatura", 404)
-        _check_subject_deletable(conn, subject_id)
-        return request_confirmation(
-            conn, ctx, "delete_subject", {"subject_id": subject_id},
-            deletion_summary("asignatura", subject["name"]),
-            entity_type="subject", entity_id=subject_id, affected_count=1,
-        )  # fmt: skip
+def deletion_prompt_subject(conn: sqlite3.Connection, subject_id: str) -> str:
+    subject = repo.get_subject(conn, subject_id)
+    if subject is None:
+        raise AppError("not_found", "No existe esa asignatura", 404)
+    _check_subject_deletable(conn, subject_id)
+    return deletion_summary("asignatura", subject["name"])
 
 
-@confirmed_action("delete_subject")
-def execute_delete_subject(
-    conn: sqlite3.Connection, ctx: RequestContext, args: dict[str, Any]
-) -> dict[str, Any]:
-    subject_id = str(args["subject_id"])
-    with _atomic(conn):
-        require_entity(conn, subject_id, "subject")
-        _check_subject_deletable(conn, subject_id)
-        repo.delete_subject(conn, subject_id)
-        record_audit(
-            conn, ctx, "delete_subject", result="success", entity_type="subject",
-            entity_id=subject_id, params={"subject_id": subject_id}, affected_count=1,
-        )  # fmt: skip
+def execute_delete_subject(conn: sqlite3.Connection, subject_id: str) -> dict[str, Any]:
+    """Corre dentro de la transacción de ActionService, que audita."""
+    require_entity(conn, subject_id, "subject")
+    _check_subject_deletable(conn, subject_id)
+    repo.delete_subject(conn, subject_id)
     return {"deleted": True, "subject_id": subject_id}
 
 
@@ -265,14 +249,16 @@ def list_class_sessions(
     subject_id: str,
     include_archived: bool = False,
     limit: int | None = None,
-    offset: int | None = None,
+    cursor: str | None = None,
 ) -> SessionList:
     require_entity(conn, subject_id, "subject")
-    rows, total = repo.list_sessions(
-        conn, subject_id, include_archived=include_archived, limit=bounded_limit(limit),
-        offset=bounded_offset(offset),
+    size = bounded_limit(limit)
+    rows = repo.list_sessions(
+        conn, subject_id, include_archived=include_archived,
+        after=decode_cursor(cursor, size=3), limit=size + 1,
     )  # fmt: skip
-    return SessionList(items=[ClassSessionOut(**row) for row in rows], total=total)
+    page, next_cursor = split_page(rows, size, ("weekday", "starts_local_time", "id"))
+    return SessionList(items=[ClassSessionOut(**row) for row in page], next_cursor=next_cursor)
 
 
 def get_class_session(
@@ -346,34 +332,18 @@ def update_class_session(
     return ClassSessionWriteResult(session=_session_out(conn, session_id), conflicts=conflicts)
 
 
-def request_delete_class_session(
-    conn: sqlite3.Connection, ctx: RequestContext, session_id: str
-) -> ConfirmationRef:
-    with _atomic(conn):
-        row = repo.get_session(conn, session_id)
-        if row is None:
-            raise AppError("not_found", "No existe esa sesión de clase", 404)
-        subject = repo.get_subject(conn, row["subject_id"])
-        subject_name = subject["name"] if subject else "clase"
-        return request_confirmation(
-            conn, ctx, "delete_class_session", {"session_id": session_id},
-            deletion_summary("sesión de clase", subject_name),
-            entity_type="class_session", entity_id=session_id, affected_count=1,
-        )  # fmt: skip
+def deletion_prompt_class_session(conn: sqlite3.Connection, session_id: str) -> str:
+    row = repo.get_session(conn, session_id)
+    if row is None:
+        raise AppError("not_found", "No existe esa sesión de clase", 404)
+    subject = repo.get_subject(conn, row["subject_id"])
+    return deletion_summary("sesión de clase", subject["name"] if subject else "clase")
 
 
-@confirmed_action("delete_class_session")
-def execute_delete_class_session(
-    conn: sqlite3.Connection, ctx: RequestContext, args: dict[str, Any]
-) -> dict[str, Any]:
-    session_id = str(args["session_id"])
-    with _atomic(conn):
-        require_entity(conn, session_id, "class_session")
-        repo.delete_session(conn, session_id)
-        record_audit(
-            conn, ctx, "delete_class_session", result="success", entity_type="class_session",
-            entity_id=session_id, params={"session_id": session_id}, affected_count=1,
-        )  # fmt: skip
+def execute_delete_class_session(conn: sqlite3.Connection, session_id: str) -> dict[str, Any]:
+    """Corre dentro de la transacción de ActionService, que audita."""
+    require_entity(conn, session_id, "class_session")
+    repo.delete_session(conn, session_id)
     return {"deleted": True, "session_id": session_id}
 
 

@@ -79,9 +79,9 @@ def list_events(
     *,
     include_archived: bool,
     status: str | None,
+    after: tuple[str, str] | None,
     limit: int,
-    offset: int,
-) -> tuple[list[dict[str, Any]], int]:
+) -> list[dict[str, Any]]:
     clauses: list[str] = []
     params: list[Any] = []
     if not include_archived:
@@ -89,16 +89,12 @@ def list_events(
     if status is not None:
         clauses.append("c.status=?")
         params.append(status)
+    if after is not None:
+        clauses.append("(e.created_at,c.id)>(?,?)")
+        params.extend(after)
     where = (" WHERE " + " AND ".join(clauses)) if clauses else ""
-    total = conn.execute(
-        "SELECT count(*) FROM calendar_events c JOIN entities e ON e.id=c.id" + where, params
-    ).fetchone()[0]
-    rows = _rows(
-        conn.execute(
-            _EVENT_SELECT + where + " ORDER BY e.created_at,c.id LIMIT ? OFFSET ?", (*params, limit, offset)
-        )
-    )
-    return rows, int(total)
+    params.append(limit)
+    return _rows(conn.execute(_EVENT_SELECT + where + " ORDER BY e.created_at,c.id LIMIT ?", params))
 
 
 def update_event(conn: sqlite3.Connection, event_id: str, columns: dict[str, Any]) -> None:
@@ -233,9 +229,9 @@ def list_time_blocks(
     include_archived: bool,
     task_id: str | None,
     status: str | None,
+    after: tuple[str, str] | None,
     limit: int,
-    offset: int,
-) -> tuple[list[dict[str, Any]], int]:
+) -> list[dict[str, Any]]:
     clauses: list[str] = []
     params: list[Any] = []
     if not include_archived:
@@ -246,17 +242,12 @@ def list_time_blocks(
     if status is not None:
         clauses.append("b.status=?")
         params.append(status)
+    if after is not None:
+        clauses.append("(b.starts_at_utc,b.id)>(?,?)")
+        params.extend(after)
     where = (" WHERE " + " AND ".join(clauses)) if clauses else ""
-    total = conn.execute(
-        "SELECT count(*) FROM time_blocks b JOIN entities e ON e.id=b.id" + where, params
-    ).fetchone()[0]
-    rows = _rows(
-        conn.execute(
-            _BLOCK_SELECT + where + " ORDER BY b.starts_at_utc,b.id LIMIT ? OFFSET ?",
-            (*params, limit, offset),
-        )
-    )
-    return rows, int(total)
+    params.append(limit)
+    return _rows(conn.execute(_BLOCK_SELECT + where + " ORDER BY b.starts_at_utc,b.id LIMIT ?", params))
 
 
 def update_time_block(conn: sqlite3.Connection, block_id: str, columns: dict[str, Any]) -> None:

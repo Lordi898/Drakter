@@ -7,8 +7,6 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from collections.abc import Iterator
-from contextlib import contextmanager
 from datetime import date, datetime, time, timedelta
 from typing import Any
 
@@ -44,18 +42,16 @@ from app.services.calendar_recurrence import (
     utc_iso,
 )
 from app.services.habits_calendar_support import (
-    ConfirmationRef,
     RequestContext,
     bounded_limit,
-    confirmed_action,
-    bounded_offset,
+    decode_cursor,
     deletion_summary,
+    split_page,
     ensure_timezone,
     insert_entity,
     new_id,
     now_utc,
     record_audit,
-    request_confirmation,
     touch_entity,
     transaction,
 )
@@ -72,17 +68,17 @@ _TEMPORAL = ("timezone", "all_day", "local_start", "local_end", "start_date", "e
 
 class EventPage(BaseModel):
     items: list[EventOut]
-    total: int
+    next_cursor: str | None = None
 
 
 class TimeBlockPage(BaseModel):
     items: list[TimeBlockOut]
-    total: int
+    next_cursor: str | None = None
 
 
 class ExceptionList(BaseModel):
     items: list[RecurrenceExceptionOut]
-    total: int
+    next_cursor: str | None = None
 
 
 class OverlapsResponse(BaseModel):
@@ -102,16 +98,6 @@ class DeleteResult(BaseModel):
 
 
 # ------------------------------------------------------------------ utilidades
-
-
-@contextmanager
-def _atomic(conn: sqlite3.Connection) -> Iterator[sqlite3.Connection]:
-    """Una transacción propia, o la ya abierta por el pipeline de confirmaciones."""
-    if conn.in_transaction:
-        yield conn
-    else:
-        with transaction(conn):
-            yield conn
 
 
 def _query(message: str) -> AppError:
@@ -572,13 +558,16 @@ def list_events(
     include_archived: bool = False,
     status: str | None = None,
     limit: int | None = None,
-    offset: int | None = None,
+    cursor: str | None = None,
 ) -> EventPage:
-    rows, total = repo.list_events(
-        conn, include_archived=include_archived, status=status, limit=bounded_limit(limit),
-        offset=bounded_offset(offset),
+    size = bounded_limit(limit)
+    after = decode_cursor(cursor)
+    rows = repo.list_events(
+        conn, include_archived=include_archived, status=status,
+        after=None if after is None else (after[0], after[1]), limit=size + 1,
     )  # fmt: skip
-    return EventPage(items=[EventOut(**r) for r in rows], total=total)
+    page, next_cursor = split_page(rows, size, ("created_at", "id"))
+    return EventPage(items=[EventOut(**r) for r in page], next_cursor=next_cursor)
 
 
 def update_event(
@@ -623,30 +612,17 @@ def update_event(
     return _event_result(conn, event_id)
 
 
-def request_delete_event(conn: sqlite3.Connection, ctx: RequestContext, event_id: str) -> ConfirmationRef:
+def deletion_prompt_event(conn: sqlite3.Connection, event_id: str) -> str:
     row = _event_row(conn, event_id)
     _no_dependents(conn, event_id)
-    with transaction(conn):
-        return request_confirmation(
-            conn, ctx, "delete_event", {"event_id": event_id},
-            deletion_summary("evento", row["title"], repo.count_exceptions(conn, event_id)),
-            entity_type="calendar_event", entity_id=event_id,
-        )  # fmt: skip
+    return deletion_summary("evento", row["title"], repo.count_exceptions(conn, event_id))
 
 
-@confirmed_action("delete_event")
-def execute_delete_event(
-    conn: sqlite3.Connection, ctx: RequestContext, args: dict[str, Any]
-) -> dict[str, Any]:
-    event_id = str(args["event_id"])
+def execute_delete_event(conn: sqlite3.Connection, event_id: str) -> dict[str, Any]:
+    """Corre dentro de la transacción de ActionService, que audita."""
     _event_row(conn, event_id)
     _no_dependents(conn, event_id)
-    with _atomic(conn):
-        repo.delete_event(conn, event_id)
-        record_audit(
-            conn, ctx, "delete_event", result="success", entity_type="calendar_event",
-            entity_id=event_id, params={"event_id": event_id},
-        )  # fmt: skip
+    repo.delete_event(conn, event_id)
     return {"status": "deleted", "id": event_id}
 
 
@@ -664,7 +640,7 @@ def _exception_out(row: dict[str, Any]) -> RecurrenceExceptionOut:
 def list_exceptions(conn: sqlite3.Connection, ctx: RequestContext, event_id: str) -> ExceptionList:
     _event_row(conn, event_id)
     items = [_exception_out(r) for r in repo.list_exceptions(conn, event_id)]
-    return ExceptionList(items=items, total=len(items))
+    return ExceptionList(items=items)
 
 
 def create_exception(
@@ -775,13 +751,16 @@ def list_time_blocks(
     task_id: str | None = None,
     status: str | None = None,
     limit: int | None = None,
-    offset: int | None = None,
+    cursor: str | None = None,
 ) -> TimeBlockPage:
-    rows, total = repo.list_time_blocks(
+    size = bounded_limit(limit)
+    after = decode_cursor(cursor)
+    rows = repo.list_time_blocks(
         conn, include_archived=include_archived, task_id=task_id, status=status,
-        limit=bounded_limit(limit), offset=bounded_offset(offset),
+        after=None if after is None else (after[0], after[1]), limit=size + 1,
     )  # fmt: skip
-    return TimeBlockPage(items=[TimeBlockOut(**r) for r in rows], total=total)
+    page, next_cursor = split_page(rows, size, ("starts_at_utc", "id"))
+    return TimeBlockPage(items=[TimeBlockOut(**r) for r in page], next_cursor=next_cursor)
 
 
 def update_time_block(
@@ -825,30 +804,15 @@ def move_time_block(
     )
 
 
-def request_delete_time_block(
-    conn: sqlite3.Connection, ctx: RequestContext, block_id: str
-) -> ConfirmationRef:
+def deletion_prompt_time_block(conn: sqlite3.Connection, block_id: str) -> str:
     row = _block_row(conn, block_id)
     _no_dependents(conn, block_id)
-    with transaction(conn):
-        return request_confirmation(
-            conn, ctx, "delete_time_block", {"time_block_id": block_id},
-            deletion_summary("bloque de tiempo", row["title"]),
-            entity_type="time_block", entity_id=block_id,
-        )  # fmt: skip
+    return deletion_summary("bloque de tiempo", row["title"])
 
 
-@confirmed_action("delete_time_block")
-def execute_delete_time_block(
-    conn: sqlite3.Connection, ctx: RequestContext, args: dict[str, Any]
-) -> dict[str, Any]:
-    block_id = str(args["time_block_id"])
-    _block_row(conn, block_id)
-    _no_dependents(conn, block_id)
-    with _atomic(conn):
-        repo.delete_time_block(conn, block_id)
-        record_audit(
-            conn, ctx, "delete_time_block", result="success", entity_type="time_block",
-            entity_id=block_id, params={"time_block_id": block_id},
-        )  # fmt: skip
-    return {"status": "deleted", "id": block_id}
+def execute_delete_time_block(conn: sqlite3.Connection, time_block_id: str) -> dict[str, Any]:
+    """Corre dentro de la transacción de ActionService, que audita."""
+    _block_row(conn, time_block_id)
+    _no_dependents(conn, time_block_id)
+    repo.delete_time_block(conn, time_block_id)
+    return {"status": "deleted", "id": time_block_id}

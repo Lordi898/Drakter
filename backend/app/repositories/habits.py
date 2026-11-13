@@ -54,9 +54,9 @@ def list_habits(
     *,
     include_archived: bool,
     status: str | None,
+    after: list[Any] | None,
     limit: int,
-    offset: int,
-) -> tuple[list[dict[str, Any]], int]:
+) -> list[dict[str, Any]]:
     clauses: list[str] = []
     params: list[Any] = []
     if not include_archived:
@@ -64,12 +64,12 @@ def list_habits(
     if status is not None:
         clauses.append("h.status=?")
         params.append(status)
+    if after is not None:
+        clauses.append("(e.created_at,h.id)>(?,?)")
+        params.extend(after)
     where = (" WHERE " + " AND ".join(clauses)) if clauses else ""
-    total = conn.execute(
-        "SELECT count(*) FROM habits h JOIN entities e ON e.id=h.id" + where, params
-    ).fetchone()[0]
-    sql = _HABIT_SELECT + where + " ORDER BY e.created_at,h.id LIMIT ? OFFSET ?"
-    return _rows(conn.execute(sql, (*params, limit, offset))), total
+    sql = _HABIT_SELECT + where + " ORDER BY e.created_at,h.id LIMIT ?"
+    return _rows(conn.execute(sql, (*params, limit + 1)))
 
 
 def update_habit(conn: sqlite3.Connection, habit_id: str, columns: dict[str, Any]) -> None:
@@ -183,3 +183,31 @@ def reminder_candidates(conn: sqlite3.Connection) -> list[dict[str, Any]]:
             "AND h.preferred_local_time IS NOT NULL AND h.status='active' AND e.archived_at IS NULL"
         )
     )
+
+
+def delete_record(conn: sqlite3.Connection, habit_id: str, day: str) -> bool:
+    cur = conn.execute(
+        "DELETE FROM habit_records WHERE habit_id=? AND occurrence_date=?", (habit_id, day)
+    )
+    return cur.rowcount > 0
+
+
+def records_page(
+    conn: sqlite3.Connection,
+    habit_id: str,
+    start: str,
+    end: str,
+    after: list[Any] | None,
+    limit: int,
+) -> list[dict[str, Any]]:
+    clauses = ["habit_id=?", "occurrence_date BETWEEN ? AND ?"]
+    params: list[Any] = [habit_id, start, end]
+    if after is not None:
+        clauses.append("(occurrence_date,id)>(?,?)")
+        params.extend(after)
+    cur = conn.execute(
+        "SELECT id,habit_id,occurrence_date,status,note,created_at,updated_at FROM habit_records "
+        f"WHERE {' AND '.join(clauses)} ORDER BY occurrence_date,id LIMIT ?",
+        (*params, limit + 1),
+    )
+    return _rows(cur)

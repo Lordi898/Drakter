@@ -44,7 +44,7 @@ class ListHabitsArgs(_Args):
     include_archived: bool = False
     status: HabitStatus | None = None
     limit: int | None = Field(default=None, ge=1, le=200)
-    offset: int | None = Field(default=None, ge=0)
+    cursor: str | None = None
 
 
 class RegisterCompletionArgs(_Args):
@@ -82,7 +82,7 @@ def _archive(conn: sqlite3.Connection, ctx: RequestContext, args: ArchiveHabitAr
 def _list(conn: sqlite3.Connection, ctx: RequestContext, args: ListHabitsArgs) -> service.HabitPage:
     return service.list_habits(
         conn, ctx, include_archived=args.include_archived, status=args.status,
-        limit=args.limit, offset=args.offset,
+        limit=args.limit, cursor=args.cursor,
     )  # fmt: skip
 
 
@@ -172,7 +172,7 @@ TOOLS: tuple[ToolSpec, ...] = (
     ),
     ToolSpec(
         name="list_habits",
-        description="Lista los hábitos del usuario (sin archivados salvo include_archived=true), paginados (limit/offset).",
+        description="Lista los hábitos del usuario (sin archivados salvo include_archived=true), paginados con cursor.",
         domain="habits",
         args_model=ListHabitsArgs,
         result_model=service.HabitPage,
@@ -181,7 +181,7 @@ TOOLS: tuple[ToolSpec, ...] = (
         handler=service_handler("list_habits", _list),
         errors=("validation_error",),
         idempotent=True,
-        audit={"include_archived": "log", "status": "log", "limit": "log", "offset": "log"},
+        audit={"include_archived": "log", "status": "log", "limit": "log", "cursor": "omit"},
     ),
     ToolSpec(
         name="register_habit_completion",

@@ -33,7 +33,7 @@ from app.services.calendar_recurrence import (
 from app.services.habits_calendar_support import (
     RequestContext,
     bounded_limit,
-    bounded_offset,
+    decode_cursor,
     ensure_timezone,
     insert_entity,
     new_id,
@@ -41,6 +41,7 @@ from app.services.habits_calendar_support import (
     record_audit,
     require_entity,
     set_archived,
+    split_page,
     touch_entity,
     transaction,
 )
@@ -53,12 +54,12 @@ _NOT_NULL_FIELDS = ("name", "timezone", "rrule", "status", "reminder_enabled")
 
 class HabitPage(BaseModel):
     items: list[HabitOut]
-    total: int
+    next_cursor: str | None = None
 
 
 class RecordPage(BaseModel):
     items: list[HabitRecordOut]
-    total: int
+    next_cursor: str | None = None
 
 
 def _invalid(message: str, field: str | None = None) -> AppError:
@@ -239,16 +240,18 @@ def list_habits(
     include_archived: bool = False,
     status: str | None = None,
     limit: int | None = None,
-    offset: int | None = None,
+    cursor: str | None = None,
 ) -> HabitPage:
-    rows, total = repo.list_habits(
+    size = bounded_limit(limit)
+    rows = repo.list_habits(
         conn,
         include_archived=include_archived,
         status=status,
-        limit=bounded_limit(limit),
-        offset=bounded_offset(offset),
+        after=decode_cursor(cursor),
+        limit=size,
     )
-    return HabitPage(items=_present(conn, rows), total=total)
+    page, next_cursor = split_page(rows, size, ("created_at", "id"))
+    return HabitPage(items=_present(conn, page), next_cursor=next_cursor)
 
 
 def update_habit(
@@ -400,11 +403,32 @@ def list_records(
     habit_id: str,
     from_date: date | None = None,
     to_date: date | None = None,
+    limit: int | None = None,
+    cursor: str | None = None,
 ) -> RecordPage:
     habit = _load(conn, habit_id)
     start, end = _range(habit["timezone"], from_date, to_date)
-    rows = repo.records_between(conn, habit_id, start.isoformat(), end.isoformat())
-    return RecordPage(items=[HabitRecordOut(**row) for row in rows], total=len(rows))
+    size = bounded_limit(limit)
+    rows = repo.records_page(
+        conn, habit_id, start.isoformat(), end.isoformat(), decode_cursor(cursor), size
+    )
+    page, next_cursor = split_page(rows, size, ("occurrence_date", "id"))
+    return RecordPage(items=[HabitRecordOut(**row) for row in page], next_cursor=next_cursor)
+
+
+def delete_record(conn: sqlite3.Connection, ctx: RequestContext, habit_id: str, day: date) -> None:
+    with transaction(conn):
+        _load(conn, habit_id)
+        if not repo.delete_record(conn, habit_id, day.isoformat()):
+            raise AppError("not_found", "No hay registro de ese día", 404)
+        record_audit(
+            conn,
+            ctx,
+            "delete_habit_record",
+            entity_type=ENTITY,
+            entity_id=habit_id,
+            params={"habit_id": habit_id, "occurrence_date": day.isoformat()},
+        )
 
 
 def history(

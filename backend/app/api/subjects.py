@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import sqlite3
+from collections.abc import Mapping
 from datetime import date
-from typing import Annotated
+from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, Header, Query
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, Depends, Header, Query, Request
 
 from app.core.errors import AppError
 from app.schemas.calendar import RecurrenceExceptionOut
@@ -24,7 +24,7 @@ from app.schemas.subjects import (
 from app.services import subjects as service
 from app.services.habits_calendar_support import (
     RequestContext,
-    confirmation_response,
+    run_confirmable,
     get_db,
     rest_context,
 )
@@ -58,11 +58,11 @@ def list_subjects(
     conn: Db,
     ctx: Ctx,
     include_archived: bool = False,
-    limit: Annotated[int | None, Query(ge=1)] = None,
-    offset: Annotated[int | None, Query(ge=0)] = None,
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+    cursor: str | None = None,
 ) -> SubjectList:
     return service.list_subjects(
-        conn, ctx, include_archived=include_archived, limit=limit, offset=offset
+        conn, ctx, include_archived=include_archived, limit=limit, cursor=cursor
     )
 
 
@@ -83,9 +83,14 @@ def update_subject(
     return service.update_subject(conn, ctx, subject_id, body, _revision(if_match))
 
 
-@router.delete("/subjects/{subject_id}", status_code=409, response_model=None)
-def delete_subject(subject_id: str, conn: Db, ctx: Ctx) -> JSONResponse:
-    return confirmation_response(ctx, service.request_delete_subject(conn, ctx, subject_id))
+@router.delete("/subjects/{subject_id}", status_code=200, response_model=None)
+def delete_subject(subject_id: str, request: Request, conn: Db, ctx: Ctx) -> Mapping[str, Any]:
+    from app.services.calendar_actions import DeleteSubjectArgs
+
+    return run_confirmable(
+        request, ctx, "delete_subject", DeleteSubjectArgs(subject_id=subject_id),
+        service.deletion_prompt_subject(conn, subject_id),
+    )
 
 
 @router.post("/subjects/{subject_id}/archive", response_model=SubjectOut)
@@ -104,10 +109,10 @@ def list_sessions(
     conn: Db,
     ctx: Ctx,
     include_archived: bool = False,
-    limit: Annotated[int | None, Query(ge=1)] = None,
-    offset: Annotated[int | None, Query(ge=0)] = None,
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+    cursor: str | None = None,
 ) -> SessionList:
-    return service.list_class_sessions(conn, ctx, subject_id, include_archived, limit, offset)
+    return service.list_class_sessions(conn, ctx, subject_id, include_archived, limit, cursor)
 
 
 @router.post(
@@ -136,9 +141,16 @@ def update_session(
     return service.update_class_session(conn, ctx, session_id, body, _revision(if_match))
 
 
-@router.delete("/class-sessions/{session_id}", status_code=409, response_model=None)
-def delete_session(session_id: str, conn: Db, ctx: Ctx) -> JSONResponse:
-    return confirmation_response(ctx, service.request_delete_class_session(conn, ctx, session_id))
+@router.delete("/class-sessions/{session_id}", status_code=200, response_model=None)
+def delete_session(
+    session_id: str, request: Request, conn: Db, ctx: Ctx
+) -> Mapping[str, Any]:
+    from app.services.calendar_actions import DeleteClassSessionArgs
+
+    return run_confirmable(
+        request, ctx, "delete_class_session", DeleteClassSessionArgs(session_id=session_id),
+        service.deletion_prompt_class_session(conn, session_id),
+    )
 
 
 @router.post(

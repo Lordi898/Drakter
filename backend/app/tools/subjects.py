@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import sqlite3
 from datetime import date
-from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -20,7 +19,7 @@ from app.schemas.subjects import (
 )
 from app.services import subjects as service
 from app.services.habits_calendar_support import RequestContext
-from app.tools.habits_calendar_toolspec import RiskClass, ToolSpec, service_handler
+from app.tools.habits_calendar_toolspec import RiskClass, ToolSpec, deny_direct, service_handler
 
 _ERRORS = ("not_found", "has_dependents", "revision_mismatch", "invalid_timezone", "validation_error")
 
@@ -40,7 +39,7 @@ class UpdateSubjectArgs(SubjectUpdate):
 class ListSubjectsArgs(_Args):
     include_archived: bool = False
     limit: int | None = Field(default=None, ge=1, le=200)
-    offset: int | None = Field(default=None, ge=0)
+    cursor: str | None = None
 
 
 class CreateClassSessionArgs(ClassSessionCreate):
@@ -88,7 +87,7 @@ def _list_subjects(
     conn: sqlite3.Connection, ctx: RequestContext, args: ListSubjectsArgs
 ) -> service.SubjectList:
     return service.list_subjects(
-        conn, ctx, include_archived=args.include_archived, limit=args.limit, offset=args.offset
+        conn, ctx, include_archived=args.include_archived, limit=args.limit, cursor=args.cursor
     )
 
 
@@ -105,16 +104,6 @@ def _update_class_session(
     fields = args.model_fields_set - {"session_id"}
     data = ClassSessionUpdate(**{name: getattr(args, name) for name in fields})
     return service.update_class_session(conn, ctx, args.session_id, data)
-
-
-def _delete_class_session(
-    conn: sqlite3.Connection, ctx: RequestContext, args: DeleteClassSessionArgs
-) -> DeleteResult:
-    # La confirmación ya la impuso ToolGate: se ejecuta el mismo ejecutor que usa la aprobación REST.
-    result: dict[str, Any] = service.execute_delete_class_session(
-        conn, ctx, {"session_id": args.session_id}
-    )
-    return DeleteResult(**result)
 
 
 def _create_schedule_exception(
@@ -194,7 +183,7 @@ TOOLS: tuple[ToolSpec, ...] = (
         handler=service_handler("list_subjects", _list_subjects),
         errors=(),
         idempotent=True,
-        audit={"include_archived": "log", "limit": "log", "offset": "log"},
+        audit={"include_archived": "log", "limit": "log", "cursor": "omit"},
     ),
     ToolSpec(
         name="create_class_session",
@@ -229,9 +218,9 @@ TOOLS: tuple[ToolSpec, ...] = (
         domain="subjects",
         args_model=DeleteClassSessionArgs,
         result_model=DeleteResult,
-        permission="subjects.write",
+        permission="subjects.delete",
         risk=RiskClass.CONFIRM,
-        handler=service_handler("delete_class_session", _delete_class_session),
+        handler=deny_direct,
         errors=("not_found",),
         audit={"session_id": "log"},
         summarize=lambda args: "Eliminar una sesión de clase semanal y sus excepciones",
