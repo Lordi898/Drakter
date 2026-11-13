@@ -358,7 +358,7 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
   ⚠️ La voz emite `voice.playback_level`, pero no llega a la boca: el backend no publica los eventos de voz y `SvgCharacter.setMouth` no hace nada.
 - [x] Crear gestión de errores.
 - [ ] Probar conversación por voz completa.
-  ⚠️ Rediseño previsto sobre Pipecat (STT Whisper, TTS Fish Audio); en v1 `voice/` solo se estabiliza y documenta.
+  ⚠️ Rediseño previsto sobre Pipecat (STT Whisper, TTS Fish Audio); en v1 `voice/` solo se estabiliza y documenta. El router de voz (`backend/app/integrations/voice/router.py`) no se monta en `main.py` en este cierre, aunque Electron permite `/api/v1/voice/*`.
   ⚠️ No es posible hoy: `backend/app/integrations/voice` no está registrado en `main.py` (a propósito, `DRAKTER_VOICE_ENABLED=false` por defecto) y el escritorio no tiene cliente de voz (botón de micrófono desactivado). El puente del backend (`VoiceService`, supervisor, cliente IPC, `VoiceBridge`) no se ha ejecutado contra el proceso real.
 
 ## Checklist 15. Automejora
@@ -387,14 +387,14 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 - [x] Validar rutas.
 - [x] Limitar acceso a archivos.
 - [x] Proteger operaciones destructivas.
-  ⚠️ Brechas de diseño del banco red-team que siguen abiertas: contaminación solo en memoria (CONF-46/INJ-26), canal de datos de `TurnRequest` y contaminación de `build_context` (INJ-11/14/25), eco de documentos con `trust=derived` (INJ-32), título y URL remotos fuera del sobre en `read_resource` (INJ-05). El informe las daba por no explotables mientras `build_context` no estuviera conectado; ya lo está (`df258b1`), así que hay que reevaluarlas.
+  ⚠️ Brechas de diseño del banco red-team que siguen abiertas: contaminación solo en memoria (CONF-46/INJ-26), canal de datos de `TurnRequest` y contaminación de `build_context` (INJ-11/14/25), eco de documentos con `trust=derived` (INJ-32), título y URL remotos fuera del sobre en `read_resource` (INJ-05). El informe las daba por no explotables mientras `build_context` no estuviera conectado; ya lo está (`df258b1`), así que hay que reevaluarlas: tainted ya se propaga (`df258b1`); repaso de drakter-34 pendiente.
 - [x] Crear auditoría.
 - [x] Crear copias de seguridad.
 - [x] Probar restauración.
 - [ ] Probar desconexiones.
   ⚠️ Backend↔Hermes comprobado (el runner muere y se reconecta solo). La reconexión del WebSocket del escritorio (`eventsBridge.ts`) no se ha observado aislada.
 - [ ] Probar recuperación del backend.
-  ⚠️ Pendiente: el informe de seguridad deja sin rellenar la prueba en Electron.
+  ⚠️ Pendiente: el informe de seguridad deja sin rellenar la prueba en Electron; sale del repaso de drakter-34 o de la pasada completa de drakter-49.
 - [x] Probar recuperación de Hermes.
 - [x] Probar errores de memoria.
 - [x] Revisar datos sensibles.
