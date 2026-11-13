@@ -11,14 +11,14 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 - [x] Crear estructura de carpetas (cada carpeta se crea cuando entra código).
 - [x] Crear README.
 - [x] Crear CHANGELOG.
-- [ ] Documentar arquitectura.
+- [x] Documentar arquitectura.
 - [x] Documentar decisiones técnicas.
-- [ ] Definir convenciones.
-- [ ] Definir modelos de datos.
+- [x] Definir convenciones.
+- [x] Definir modelos de datos.
 - [x] Definir API.
-- [ ] Definir eventos.
-- [ ] Definir permisos.
-- [ ] Definir configuración.
+- [x] Definir eventos.
+- [x] Definir permisos.
+- [x] Definir configuración.
 - [x] Preparar entorno de desarrollo.
 
 ## Checklist 1. Aplicación de escritorio
@@ -52,6 +52,7 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 - [x] Crear gestión de errores.
 - [ ] Crear sistema de permisos.
   ⚠️ Matriz de roles y confirmaciones comprobadas (`check_confirmations.py`: 0 fallos), pero tareas y proyectos no están cableados a `ActionService`: borrar desde la GUI da 503 `confirmation_unavailable` (falla cerrado).
+  ⚠️ Parcial (cierre 2026-11-13): la guardia de red y roles funciona (`SecurityGuardMiddleware`: loopback, Host, Origin, tokens ui/approver). El servicio de confirmaciones (`app/permissions/setup.py`) no está cableado en `app/main.py`: `/api/v1/confirmations/**` da 503 y los borrados de tareas y proyectos también (`FailClosedGate`). Cablearlo rompe el arranque porque `setup.py` espera `habits_calendar_support.CONFIRMED_ACTIONS`, que no existe. Pendiente del integrador.
 
 ## Checklist 3. Hermes
 
@@ -71,6 +72,7 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 - [ ] Probar conversación completa.
   ⚠️ Conversación completa GUI → backend → Hermes (b200f5b) → respuesta en el chat comprobada SOLO con `tools/dev-llm-stub` (2 s). Falta con Haiku real.
   ⚠️ Sin clave de API no se cierra: el adaptador usa un doble identificado como mock, y ninguna casilla de conversación, personalidad, selección de herramientas o memoria se marca hasta probarla con clave.
+  ⚠️ Evals (cierre 2026-11-13): la tubería está verificada con el stub (`agent/evals/run.py`: encadenadas 11/11, personalidad 16/16, selección 19/19, 101/101 controles negativos). El arnés va directo a la Messages API, no pasa por Hermes ni MCP; el paso por Hermes se verifica en `tests/e2e` con el stub. Con `--provider anthropic` y sin clave sale BLOQUEADO.
 
 ## Checklist 4. Personalidad y contexto
 
@@ -80,41 +82,62 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 - [x] Crear COMMUNICATION.md.
 - [x] Crear EMOTIONAL_STYLE.md.
 - [x] Crear VALUES.md.
-- [ ] Crear USER.md.
-- [ ] Crear ENVIRONMENT.md.
-- [ ] Crear PREFERENCES.md.
-- [ ] Crear CURRENT_CONTEXT.md.
-- [ ] Crear CAPABILITIES.md.
-- [ ] Crear WORKSPACE_GUIDE.md.
-- [ ] Crear TOOL_GUIDE.md.
-- [ ] Crear SYSTEM_GUIDE.md.
-- [ ] Configurar carga de contexto.
-- [ ] Configurar prioridades.
+- [x] Crear USER.md.
+- [x] Crear ENVIRONMENT.md.
+- [x] Crear PREFERENCES.md.
+- [x] Crear CURRENT_CONTEXT.md.
+- [x] Crear CAPABILITIES.md.
+- [x] Crear WORKSPACE_GUIDE.md.
+- [x] Crear TOOL_GUIDE.md.
+- [x] Crear SYSTEM_GUIDE.md.
+- [x] Configurar carga de contexto.
+  ⚠️ Comprobado con el arreglo `edbcf5e` (`render_soul` compone los 14 archivos desde identity/knowledge/context), pendiente de fusión en `drakter/integracion`. Sin él, los 8 archivos de context/ y knowledge/ no llegan al prompt de Hermes.
+- [x] Configurar prioridades.
 - [ ] Probar consistencia de personalidad.
+  ⚠️ Sin clave: la tubería está verificada con el stub (`agent/evals/run.py --suite personalidad`: 16/16 casos y 33/33 controles negativos), pero el stub no evalúa el modelo. Repetir con Claude Haiku 5.5: `--provider anthropic --suite personalidad --repeat 3`.
+  ⚠️ Además de la clave, falta la lectura humana de las rúbricas de la suite `personalidad` (16 casos).
 
 ## Checklist 5. Personaje
 
-- [ ] Diseñar identidad visual.
-- [ ] Diseñar ojos.
-- [ ] Diseñar boca.
-- [ ] Diseñar expresiones.
+- [x] Diseñar identidad visual.
+  ⚠️ Hecho en el personaje provisional SVG; la versión `.riv` sigue pendiente (ver «Crear proyecto Rive»).
+- [x] Diseñar ojos.
+  ⚠️ Hecho en el personaje provisional SVG; la versión `.riv` sigue pendiente (ver «Crear proyecto Rive»).
+- [x] Diseñar boca.
+  ⚠️ Hecho en el personaje provisional SVG; la versión `.riv` sigue pendiente (ver «Crear proyecto Rive»).
+- [x] Diseñar expresiones.
+  ⚠️ Hecho en el personaje provisional SVG; la versión `.riv` sigue pendiente (ver «Crear proyecto Rive»).
 - [ ] Crear proyecto Rive.
   ⚠️ Se ve el personaje sustituto (SVG) en la pantalla Drakter; el `.riv` real sigue pendiente.
   ⚠️ El `.riv` se diseña a mano en el editor de Rive. Por código solo se cubre el personaje provisional; las casillas de estados, transiciones e integración dependen de ese archivo hasta que el usuario lo entregue.
-- [ ] Crear estado idle.
-- [ ] Crear estado listening.
-- [ ] Crear estado thinking.
-- [ ] Crear estado speaking.
-- [ ] Crear estado executing.
-- [ ] Crear estado success.
-- [ ] Crear estado error.
-- [ ] Crear estado interrupted.
-- [ ] Crear estado offline.
-- [ ] Crear transiciones.
+- [x] Crear estado idle.
+  ⚠️ Hecho en el personaje provisional SVG; la versión `.riv` sigue pendiente (ver «Crear proyecto Rive»).
+- [x] Crear estado listening.
+  ⚠️ Hecho en el personaje provisional SVG; la versión `.riv` sigue pendiente (ver «Crear proyecto Rive»).
+- [x] Crear estado thinking.
+  ⚠️ Hecho en el personaje provisional SVG; la versión `.riv` sigue pendiente (ver «Crear proyecto Rive»).
+- [x] Crear estado speaking.
+  ⚠️ Hecho en el personaje provisional SVG; la versión `.riv` sigue pendiente (ver «Crear proyecto Rive»).
+- [x] Crear estado executing.
+  ⚠️ Hecho en el personaje provisional SVG; la versión `.riv` sigue pendiente (ver «Crear proyecto Rive»).
+- [x] Crear estado success.
+  ⚠️ Hecho en el personaje provisional SVG; la versión `.riv` sigue pendiente (ver «Crear proyecto Rive»).
+- [x] Crear estado error.
+  ⚠️ Hecho en el personaje provisional SVG; la versión `.riv` sigue pendiente (ver «Crear proyecto Rive»).
+- [x] Crear estado interrupted.
+  ⚠️ Hecho en el personaje provisional SVG; la versión `.riv` sigue pendiente (ver «Crear proyecto Rive»).
+- [x] Crear estado offline.
+  ⚠️ Hecho en el personaje provisional SVG; la versión `.riv` sigue pendiente (ver «Crear proyecto Rive»).
+- [x] Crear transiciones.
+  ⚠️ Hecho en el personaje provisional SVG; la versión `.riv` sigue pendiente (ver «Crear proyecto Rive»).
 - [ ] Integrar Rive con React.
-- [ ] Crear sistema de eventos visuales.
+  ⚠️ El enchufe está listo (`plug.ts` de una línea, `CharacterRendererProps`, `EmptyFrame` de respaldo, `rive.md`), pero faltan el runtime de Rive (no está en `package.json`) y el `.riv`.
+- [x] Crear sistema de eventos visuales.
+  ⚠️ Provisional SVG. Cadena `agent.status_changed` → `protocol.ts` → `stores/agent.ts` → `CharacterSlot` comprobada por typecheck, lectura y render por estado. Falta el e2e `desktop.personaje` en Electron (hoy NO COMPROBADO: Electron no arranca por CDP en la pasada y la conversación da 503). `agent.expression_changed` se valida pero el SVG la ignora y el backend no la emite.
 - [ ] Implementar sincronización labial.
-- [ ] Probar animaciones.
+  ⚠️ En `speaking` solo hay articulación procedural (`talk`/`stepTalk`); `CharacterSink.setMouth(level)` no hace nada en `SvgCharacter`. Depende del audio real del módulo de voz y del `.riv`.
+- [x] Probar animaciones.
+  ⚠️ Hecho en el personaje provisional SVG; la versión `.riv` sigue pendiente (ver «Crear proyecto Rive»).
 
 ## Checklist 6. Base de datos y relaciones
 
@@ -133,51 +156,55 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 - [x] Crear tabla de relaciones.
 - [x] Crear tabla de auditoría.
 - [x] Crear identificadores UUID.
-- [ ] Crear integridad referencial.
+- [x] Crear integridad referencial.
 - [x] Crear migraciones.
-- [ ] Probar persistencia.
+- [x] Probar persistencia.
 
 ## Checklist 7. Tareas y proyectos
 
 - [x] Crear interfaz de tareas.
 - [x] Crear tareas.
-- [ ] Editar tareas.
+- [x] Editar tareas.
 - [ ] Eliminar tareas.
   ⚠️ 503 `confirmation_unavailable`: `tasks_ports.Ports` usa `FailClosedGate` porque nadie fija `app.state.workspace_ports` ni hay ejecutores de tareas/proyectos en `load_confirmed_executors`.
-- [ ] Completar tareas.
-- [ ] Reabrir tareas.
-- [ ] Crear subtareas.
-- [ ] Crear subtareas anidadas.
-- [ ] Crear estados.
-- [ ] Crear prioridades.
-- [ ] Crear fechas límite.
-- [ ] Crear etiquetas.
-- [ ] Crear dependencias.
+  ⚠️ Hoy DELETE responde 503 `confirmation_unavailable`. Funciona (409 → aprobación con token `approver` → borrada; revisión cambiada → no borra) solo con `db85f3e` (`services/tasks_confirmations.py`, por `ActionService`) más el cableado de `drakter-34` en `main.py`, ambos pendientes.
+- [x] Completar tareas.
+- [x] Reabrir tareas.
+- [x] Crear subtareas.
+- [x] Crear subtareas anidadas.
+- [x] Crear estados.
+- [x] Crear prioridades.
+- [x] Crear fechas límite.
+- [x] Crear etiquetas.
+- [x] Crear dependencias.
 - [x] Crear interfaz de proyectos.
-- [ ] Crear proyectos.
-- [ ] Editar proyectos.
-- [ ] Archivar proyectos.
-- [ ] Asociar tareas a proyectos.
-- [ ] Mostrar progreso.
-- [ ] Crear historial.
-- [ ] Crear herramientas Hermes.
+- [x] Crear proyectos.
+- [x] Editar proyectos.
+- [x] Archivar proyectos.
+  ⚠️ Archivar y desarchivar funcionan. Borrar un proyecto (conserva sus tareas sin proyecto) depende del mismo arreglo que «Eliminar tareas.».
+- [x] Asociar tareas a proyectos.
+- [x] Mostrar progreso.
+- [x] Crear historial.
+- [x] Crear herramientas Hermes.
 - [ ] Probar operaciones desde GUI.
 - [ ] Probar operaciones desde Drakter.
+  ⚠️ Sin clave: las 21 herramientas se han invocado directamente con un `ToolContext` de agente (14/14 OK), pero no en una conversación con Haiku 5.5.
 
 ## Checklist 8. Hábitos
 
 - [x] Crear interfaz.
-- [ ] Crear hábitos.
-- [ ] Editar hábitos.
-- [ ] Definir frecuencia.
-- [ ] Definir días.
-- [ ] Definir recordatorios.
-- [ ] Registrar cumplimiento.
-- [ ] Consultar historial.
-- [ ] Calcular estadísticas.
-- [ ] Asociar hábitos con objetivos.
-- [ ] Crear herramientas Hermes.
-- [ ] Probar persistencia.
+- [x] Crear hábitos.
+- [x] Editar hábitos.
+- [x] Definir frecuencia.
+- [x] Definir días.
+- [x] Definir recordatorios.
+- [x] Registrar cumplimiento.
+- [x] Consultar historial.
+- [x] Calcular estadísticas.
+- [x] Asociar hábitos con objetivos.
+- [x] Crear herramientas Hermes.
+  ⚠️ Las 8 herramientas se registran sin deriva del catálogo y sus handlers responden con el actor `agent`; sin clave, no se han probado desde una conversación real.
+- [x] Probar persistencia.
 
 ## Checklist 9. Calendario y asignaturas
 
@@ -232,44 +259,53 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 
 - [x] Crear servicio de relaciones.
 - [x] Crear tipos de relación.
-- [ ] Crear validaciones.
-- [ ] Crear relaciones entre tareas y proyectos.
-- [ ] Crear relaciones entre tareas y asignaturas.
-- [ ] Crear relaciones entre tareas y recursos.
-- [ ] Crear relaciones entre tareas y calendario.
-- [ ] Crear relaciones entre proyectos y recursos.
-- [ ] Crear relaciones entre asignaturas y recursos.
-- [ ] Crear consulta inversa.
-- [ ] Crear consulta de elementos relacionados.
+- [x] Crear validaciones.
+- [x] Crear relaciones entre tareas y proyectos.
+- [x] Crear relaciones entre tareas y asignaturas.
+- [x] Crear relaciones entre tareas y recursos.
+- [x] Crear relaciones entre tareas y calendario.
+- [x] Crear relaciones entre proyectos y recursos.
+- [x] Crear relaciones entre asignaturas y recursos.
+- [x] Crear consulta inversa.
+- [x] Crear consulta de elementos relacionados.
 - [ ] Crear visualización de relaciones.
+  ⚠️ El código existe (`RelationshipsPage`, `RelationGraph`, `RelatedPanel`, diálogos), está enrutado, tipa sin errores y su contrato coincide con el backend; arreglado el filtro por tipo (`78acfca`, pendiente de fusión). Falta abrirla una vez en Electron (`scripts/dev.sh`) para confirmar que se ve bien.
 - [ ] Crear herramientas Hermes.
-- [ ] Probar integridad y eliminación.
+  ⚠️ Las 4 de relaciones y las 3 de etiquetas se registran en el `ToolRegistry` real y sus handlers funcionan. Sin clave: no se han probado con el modelo real. Aviso `tool_catalog_drift` en `get_related_items` hasta alinear `contracts/tools/catalog.json` a `returns_untrusted: true` (pedido a drakter-32).
+- [x] Probar integridad y eliminación.
 
 ## Checklist 12. Memoria
 
-- [ ] Definir cuatro capas de memoria.
-- [ ] Crear configuración e integración de `memory/` (sin recuerdos ni datos personales).
-- [ ] Crear Memory Adapter.
-- [ ] Implementar la memoria SQLite + FTS5 tras el Memory Adapter.
+- [x] Definir cuatro capas de memoria.
+- [x] Crear configuración e integración de `memory/` (sin recuerdos ni datos personales).
+- [x] Crear Memory Adapter.
+- [x] Implementar la memoria SQLite + FTS5 tras el Memory Adapter.
   ⚠️ OpenViking queda desactivado en v1 (entrada "Memoria v1 en SQLite + FTS5; OpenViking desactivado" de `DECISIONS.md`); desviación pendiente de confirmar por el usuario (U-1).
 - [ ] Configurar capas L0/L1/L2 (futuro, con OpenViking).
 - [ ] Elegir embedding multilingüe (futuro, con OpenViking).
-- [ ] Implementar y comprobar la extracción de recuerdos en el Memory Adapter.
-- [ ] Implementar y comprobar la clasificación en el Memory Adapter.
-- [ ] Implementar y comprobar la deduplicación en el Memory Adapter.
-- [ ] Implementar y comprobar la detección de contradicciones en el Memory Adapter.
+- [x] Implementar y comprobar la extracción de recuerdos en el Memory Adapter.
+  ⚠️ Funciona (`RuleExtractor` vía `MemoryService.extract_from_turn`), pero aún nadie la invoca tras un turno de chat (ver recuperación selectiva).
+- [x] Implementar y comprobar la clasificación en el Memory Adapter.
+  ⚠️ Comprobado con el arreglo `a27c22a` (hábitos antes que perfil), pendiente de fusión en `drakter/integracion`.
+- [x] Implementar y comprobar la deduplicación en el Memory Adapter.
+- [x] Implementar y comprobar la detección de contradicciones en el Memory Adapter.
 - [ ] Configurar y comprobar la memoria de trabajo en Hermes y OpenViking.
-- [ ] Implementar y comprobar la memoria episódica en el Memory Adapter.
-- [ ] Implementar y comprobar la memoria semántica en el Memory Adapter.
-- [ ] Implementar y comprobar la memoria procedimental en el Memory Adapter.
+  ⚠️ OpenViking desactivado (U-1). Solo hay plantillas en `memory/working/`; ningún código escribe `DRAKTER_DATA_DIR/memory/working/`. La memoria de trabajo real es la sesión del runner de Hermes.
+- [x] Implementar y comprobar la memoria episódica en el Memory Adapter.
+- [x] Implementar y comprobar la memoria semántica en el Memory Adapter.
+- [x] Implementar y comprobar la memoria procedimental en el Memory Adapter.
+  ⚠️ Desde la extracción depende del arreglo `a27c22a`, pendiente de fusión.
 - [ ] Configurar y comprobar la recuperación selectiva.
+  ⚠️ La búsqueda selectiva por herramienta funciona (filtros, límite, solo aprobados y vigentes), pero la recuperación del backend al turno (`MemoryService.memories_for_context` → `context.builder.build_context`) no está conectada al runner de Hermes.
 - [ ] Configurar y comprobar los límites de contexto.
-- [ ] Configurar y comprobar los registros de memoria.
-- [ ] Crear Skill de memoria.
-- [ ] Probar persistencia.
-- [ ] Probar recuperación.
-- [ ] Probar recuerdos contradictorios.
-- [ ] Probar información obsoleta.
+  ⚠️ `ContextBudget` y su orden de recorte están comprobados en `check_memory_rules.py` (40/40), pero no se aplican aún a un turno real (misma causa que la recuperación selectiva).
+- [x] Configurar y comprobar los registros de memoria.
+- [x] Crear Skill de memoria.
+- [x] Probar persistencia.
+- [x] Probar recuperación.
+  ⚠️ Sin modelo real (sin clave): comprobado por REST y por la herramienta `search_memory`.
+- [x] Probar recuerdos contradictorios.
+- [x] Probar información obsoleta.
 
 ## Checklist 13. Skills y herramientas
 
@@ -288,42 +324,65 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 - [ ] Definir confirmaciones.
 - [ ] Definir errores.
 - [ ] Probar selección de herramientas.
+  ⚠️ Sin clave. Suite `seleccion` (19 casos) lista y verificada con el stub: `agent/evals/run.py --provider anthropic --suite seleccion`.
 - [ ] Probar operaciones encadenadas.
+  ⚠️ Sin clave. Suite `encadenadas` (11 casos) lista y verificada con el stub: `agent/evals/run.py --provider anthropic --suite encadenadas`.
 
 ## Checklist 14. Voz
 
 - [ ] Instalar openWakeWord.
+  ⚠️ Rediseño previsto sobre Pipecat (STT Whisper, TTS Fish Audio); en v1 `voice/` solo se estabiliza y documenta.
 - [ ] Configurar palabra de activación.
+  ⚠️ Rediseño previsto sobre Pipecat (STT Whisper, TTS Fish Audio); en v1 `voice/` solo se estabiliza y documenta.
 - [ ] Instalar Silero VAD.
+  ⚠️ Rediseño previsto sobre Pipecat (STT Whisper, TTS Fish Audio); en v1 `voice/` solo se estabiliza y documenta.
 - [ ] Configurar detección de voz.
+  ⚠️ Rediseño previsto sobre Pipecat (STT Whisper, TTS Fish Audio); en v1 `voice/` solo se estabiliza y documenta.
 - [ ] Instalar Faster-Whisper.
+  ⚠️ Rediseño previsto sobre Pipecat (STT Whisper, TTS Fish Audio); en v1 `voice/` solo se estabiliza y documenta.
 - [ ] Probar modelo small.
+  ⚠️ Rediseño previsto sobre Pipecat (STT Whisper, TTS Fish Audio); en v1 `voice/` solo se estabiliza y documenta.
 - [ ] Medir latencia.
+  ⚠️ Rediseño previsto sobre Pipecat (STT Whisper, TTS Fish Audio); en v1 `voice/` solo se estabiliza y documenta.
 - [ ] Evaluar modelo medium.
+  ⚠️ Rediseño previsto sobre Pipecat (STT Whisper, TTS Fish Audio); en v1 `voice/` solo se estabiliza y documenta.
 - [ ] Instalar Kokoro.
+  ⚠️ Rediseño previsto sobre Pipecat (STT Whisper, TTS Fish Audio); en v1 `voice/` solo se estabiliza y documenta.
 - [ ] Instalar Piper.
+  ⚠️ Rediseño previsto sobre Pipecat (STT Whisper, TTS Fish Audio); en v1 `voice/` solo se estabiliza y documenta.
 - [ ] Crear Voice Manager.
+  ⚠️ Rediseño previsto sobre Pipecat (STT Whisper, TTS Fish Audio); en v1 `voice/` solo se estabiliza y documenta.
 - [ ] Crear Voice Personality Engine.
+  ⚠️ Rediseño previsto sobre Pipecat (STT Whisper, TTS Fish Audio); en v1 `voice/` solo se estabiliza y documenta.
 - [ ] Crear reproducción de audio.
+  ⚠️ Rediseño previsto sobre Pipecat (STT Whisper, TTS Fish Audio); en v1 `voice/` solo se estabiliza y documenta.
 - [ ] Crear interrupciones.
+  ⚠️ Rediseño previsto sobre Pipecat (STT Whisper, TTS Fish Audio); en v1 `voice/` solo se estabiliza y documenta.
 - [ ] Crear cancelación de audio.
+  ⚠️ Rediseño previsto sobre Pipecat (STT Whisper, TTS Fish Audio); en v1 `voice/` solo se estabiliza y documenta.
 - [ ] Sincronizar boca.
+  ⚠️ Rediseño previsto sobre Pipecat (STT Whisper, TTS Fish Audio); en v1 `voice/` solo se estabiliza y documenta.
 - [ ] Crear gestión de errores.
+  ⚠️ Rediseño previsto sobre Pipecat (STT Whisper, TTS Fish Audio); en v1 `voice/` solo se estabiliza y documenta.
 - [ ] Probar conversación por voz completa.
+  ⚠️ Rediseño previsto sobre Pipecat (STT Whisper, TTS Fish Audio); en v1 `voice/` solo se estabiliza y documenta.
 
 ## Checklist 15. Automejora
 
-- [ ] Crear registro de feedback.
-- [ ] Crear clasificación de incidencias.
-- [ ] Crear propuestas.
-- [ ] Crear evaluaciones.
-- [ ] Crear entorno de pruebas.
+- [x] Crear registro de feedback.
+  ⚠️ Afecta a toda la Checklist 15: comprobado con `b5a0d25` (rutas REST) y `9a9a34e` (migración `0012_improvement_cycle.sql`), pendientes de fusión en `drakter/integracion`: sin ellos el ciclo de automejora falla sobre una BD real.
+- [x] Crear clasificación de incidencias.
+- [x] Crear propuestas.
+- [x] Crear evaluaciones.
+- [x] Crear entorno de pruebas.
 - [ ] Crear flujo de aprobación.
-- [ ] Integrar Git.
-- [ ] Crear historial de cambios.
-- [ ] Crear informes.
-- [ ] Impedir cambios no autorizados.
-- [ ] Probar recuperación de cambios.
+  ⚠️ La lógica funciona con una puerta de prueba (`request_approval` → `approve` ligado al digest → `apply`), pero falta integrarla en la app: no hay adaptador `ConfirmationGate` sobre `ActionService` (sin cablear en `main.py`), nadie fija `app.state.gui_principal` (por HTTP la GUI cuenta como agente y aprobar/evaluar/aplicar dan 403 `user_required`) y no hay pantalla de automejora en `desktop/src/modules/`. Falla cerrado.
+- [x] Integrar Git.
+- [x] Crear historial de cambios.
+- [x] Crear informes.
+- [x] Impedir cambios no autorizados.
+- [x] Probar recuperación de cambios.
+  ⚠️ `revert` funciona. Falta llamar a `recover_interrupted(settings)` al arrancar (una línea en `main.py`, pedida a drakter-32) y registrar `invalidate_after_restore` como hook de restauración de copias (módulo de copias).
 
 ## Checklist 16. Seguridad y fiabilidad
 

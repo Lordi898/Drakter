@@ -446,3 +446,87 @@ Decisiones técnicas, cambios de tecnología y motivos.
 - **Contexto:** la `ANTHROPIC_API_KEY` de `~/.config/drakter/.env` recibe 401 `invalid x-api-key`, también en una llamada directa a `GET /v1/models`.
 - **Decisión:** la app se deja arrancada con `tools/dev-llm-stub`. Nada de lo marcado demuestra el comportamiento de Claude Haiku 5.5.
 - **Impacto:** Checklist 3 y 13 de `IMPLEMENTATION_STATUS.md`.
+
+## [2026-11-13] Cierre de backend base: seguridad sin cablear en el arranque
+- **Contexto:** al cerrar las Checklists 0/2/6, `app/permissions/setup.py` (confirmaciones y permisos del agente) no se invoca desde `app/main.py`. Cablearlo tal y como indica `permissions/README.md` rompe el arranque porque `load_confirmed_executors` espera `habits_calendar_support.CONFIRMED_ACTIONS`, que no existe.
+- **Decisión:** no se cablea desde el módulo backend-base. Se marca «Crear sistema de permisos» con ⚠️ (guardia de red y roles operativos, confirmaciones no) y se traslada al integrador la reconciliación seguridad↔hábitos/calendario y el adaptador `ConfirmationGate` de tareas.
+- **Alternativas descartadas:** cablear con `try/except` para tolerar el fallo (dejaría las confirmaciones a medias sin avisar); implementar el adaptador de tareas desde este módulo (fuera de zona y de alcance).
+- **Motivo:** el arreglo cruza tres módulos y un archivo compartido. Hacerlo a medias ocultaría un fallo en una zona de seguridad.
+- **Impacto:** `backend/app/main.py`, `backend/app/permissions/setup.py`, `backend/app/services/habits_calendar_support.py`/`calendar_actions.py`, `backend/app/services/tasks_ports.py`; Checklists 2 (permisos), 7 (borrado con confirmación) y 16; e2e `confirmacion.destructiva`.
+
+## [2026-11-13] Clasificación de memoria: los hábitos van antes que el perfil
+- **Contexto:** el clasificador por reglas evaluaba primero el perfil, y "Siempre estudio por la noche" (contiene "estudio") acababa como memoria semántica de perfil en vez de procedimental.
+- **Decisión:** los marcadores de hábito (siempre, suelo, cada día…, always, usually…) se evalúan antes que perfil y preferencias.
+- **Alternativas descartadas:** quitar "estudio"/"trabajo en" del perfil (perdería "Estudio Física", que sí es perfil).
+- **Motivo:** que la memoria procedimental se alimente desde la conversación.
+- **Impacto:** `backend/app/integrations/memory/pipeline/classify.py`, Checklist 12.
+
+## [2026-11-13] Memoria v1: recuperación al turno y olvido sin conectar al cierre
+- **Contexto:** en el cierre se comprobó que `memories_for_context` + `build_context` no los llama el runner de Hermes, y que olvidar usa `DenyAllGate` (GUI) y `DefaultToolGate` (agente).
+- **Decisión:** se cierra la v1 con la memoria accesible al agente solo por herramientas (`search_memory`, `get_memory_item`) y con el olvido fallando cerrado. Quedan con ⚠️ "recuperación selectiva", "límites de contexto" y "memoria de trabajo".
+- **Alternativas descartadas:** conectarlo en el cierre (integración nueva en `app/integrations/hermes/` y en el flujo de confirmaciones, fuera del alcance de cierre).
+- **Motivo:** el protocolo de cierre solo termina lo empezado.
+- **Impacto:** Checklist 12; siguiente paso: llamar a `build_context` en el runner y enchufar `memory.forget` a `app/services/actions.py`.
+
+## [2026-11-13] Caducidad única de confirmaciones: 300 s
+- **Contexto:** convivían tres plazos de confirmación: `ActionService` 300 s (`backend/app/services/actions.py`), `habits_calendar_support` 15 min y `storage_ports` 600 s («propuesto»). `contracts/README.md` §5 pide un único camino de confirmación.
+- **Decisión:** un único camino de confirmación, `ActionService` de `services/actions.py` con `CONFIRMATION_TTL_SECONDS = 300`, según `contracts/README.md` §5 y `backend/app/permissions/README.md`. Lo autorizó `drakter-1`.
+- **Alternativas descartadas:** mantener un plazo propio por módulo (contradice el contrato y deja tres flujos de confirmación que auditar).
+- **Motivo:** una sola frontera de confirmación, con un plazo corto y coherente para las acciones destructivas.
+- **Impacto:** `backend/app/services/habits_calendar_support.py`, `backend/app/services/storage_ports.py`, cableado de seguridad en `backend/app/main.py` (drakter-34); Checklists 8, 9, 10 y 16. Resuelve el desajuste anotado en la entrada «Almacén en v1» (2026-11-04).
+
+## [2026-11-13] get_related_items devuelve contenido no confiable
+- **Contexto:** `get_related_items` devuelve títulos de entidades, entre ellos títulos de recursos del almacén (documentos importados). El código declaraba `returns_untrusted=True` y el catálogo `contracts/tools/catalog.json` decía `false`, lo que provocaba el aviso `tool_catalog_drift` al arrancar.
+- **Decisión:** mantener `returns_untrusted=True` y alinear el catálogo a `true`.
+- **Alternativas descartadas:** bajar el código a `false`. Se descarta porque los títulos de documentos del almacén son datos no confiables (CLAUDE.md §8) y deben marcar la sesión.
+- **Motivo:** seguridad. Lo que viene del almacén no puede tratarse como instrucción.
+- **Impacto:** `contracts/tools/catalog.json` (entrada get_related_items), Checklist 11 «Crear herramientas Hermes».
+
+## [2026-11-13] SOUL.md compone los 14 archivos desde sus tres carpetas
+- **Contexto:** la entrada "Identidad repartida en identity/, context/ y knowledge/" revocó la de los 14 archivos en agent/identity/, pero `render_soul` (backend/app/integrations/hermes/home.py) y `agent/evals/harness.py` seguían buscándolos todos en identity/. Los 8 de knowledge/ y context/ no llegaban al prompt de Hermes, y los evals abortaban.
+- **Decisión:** `_IDENTITY_ORDER` pasa a ser una lista de pares (carpeta, archivo) con el mismo orden de antes: seguridad → identity → knowledge → context. Un archivo de identity/ con alguno de los 14 nombres se ignora; otros .md de identity/ se siguen añadiendo al final. El arnés de evals usa las mismas rutas.
+- **Alternativas descartadas:** volver a juntar los 14 en identity/ (contradice la entrada vigente y `rules.py`); componer el SOUL con `build_context` (mezcla la carga estática del home con el armado de cada turno).
+- **Motivo:** que el prompt real lleve lo que dice la decisión vigente, sin tocar el texto de la identidad.
+- **Impacto:** Checklist 4 (carga de contexto). SOUL.md pasa de 21.922 a 46.227 caracteres, por debajo de `context_file_max_chars` = 120.000. La cifra de 20.000 caracteres que citan las entradas del 2026-11-04 ya no aplica: el tope configurado es `SOUL_MAX_CHARS`.
+
+## [2026-11-13] Esquema de automejora: manda el del servicio (migración 0012)
+- **Contexto:** la migración 0010 y `contracts/.../improvement.py` definían unas tablas `improvement_*` que ningún código usa. Los servicios de automejora se escribieron contra `backend/app/schemas/ddl_improvement.sql`, que nunca pasó a una migración, de modo que sobre una BD real todo el ciclo fallaba.
+- **Decisión:** `0012_improvement_cycle.sql` borra las tablas de 0010 (vacías) y crea el esquema del servicio, con CHECK/FK/UNIQUE con nombre y triggers de inmutabilidad (propuestas inmutables, evaluaciones e historial de solo añadir). Las rutas se montan con `backend/app/api/improvement.py`.
+- **Alternativas descartadas:** adaptar los servicios al esquema de 0010 (pierde el historial `improvement_events`, el parche, el digest de aprobación y los triggers de seguridad); tablas con otro nombre (dos esquemas vivos).
+- **Motivo:** el esquema del servicio es el único con código, y garantiza en la BD que nada cambia sin aprobación.
+- **Impacto:** `backend/migrations/0012_improvement_cycle.sql`, `check_migrations.py`, `backend/app/api/improvement.py`. `contracts/python/drakter_contracts/models/improvement.py` y `contracts/ts` quedan desalineados (categorías y estados distintos): hay que actualizarlos o marcarlos como obsoletos. Checklist 15.
+
+## [2026-11-13] Checklist 5 cerrada con el personaje provisional SVG
+- **Contexto:** el cierre verifica el personaje provisional (`desktop/src/character/`). El `.riv` sigue sin entregarse.
+- **Decisión:** se marcan las casillas de diseño, los 9 estados, las transiciones, el sistema de eventos visuales y la prueba de animaciones como hechas en el provisional SVG, con nota de que la versión `.riv` sigue pendiente. Quedan ⚠️ «Crear proyecto Rive», «Integrar Rive con React» (plug listo, sin runtime ni `.riv`) e «Implementar sincronización labial» (solo generador procedural; `setMouth` sin audio).
+- **Alternativas descartadas:** dejar todo sin marcar hasta tener el `.riv`, que ocultaría el trabajo ya hecho y verificado. Marcar también Rive y la sincronización labial, que no funcionan.
+- **Motivo:** CLAUDE.md §2 (riesgo Rive) y DECISIONS [2026-11-04]: el provisional tiene la misma API de estados y el `.riv` se enchufa cambiando una línea de `plug.ts`.
+- **Impacto:** `IMPLEMENTATION_STATUS.md` Checklist 5. Sin cambios de código.
+
+## [2026-11-13] Evals: identidad y esquemas leídos del árbol integrado
+- **Contexto:** tras la integración, los archivos de identidad están repartidos en `agent/identity/`, `agent/knowledge/` y `agent/context/`, y varias herramientas cambiaron de argumentos (`delete_*` exige `expected_revision`); el arnés de evals salía BLOQUEADO.
+- **Decisión:** el arnés busca cada archivo de `IDENTITY_ORDER` en esas tres carpetas, en el mismo orden; `tool_inputs.json` se regenera desde `drakter/integracion` con el mismo `args_model.model_json_schema()` que usa `mcp_bridge.py`, y se ajustan los escenarios.
+- **Alternativas descartadas:** reescribir `extract_schemas.py` para el árbol único (no era necesario para cerrar; se reutilizaron sus funciones); mover archivos de identidad (zona de otro módulo y prohibido tocar identidad).
+- **Motivo:** que el arnés corra contra el código real integrado sin cambiar su contrato.
+- **Impacto:** `agent/evals/`; casillas de prueba de modelo de CL3, CL4 y CL13 siguen ⚠️ sin clave.
+
+## [2026-11-13] Cierre del desajuste de caducidad de confirmaciones (hábitos/calendario)
+- **Contexto:** DECISIONS registraba un ⚠️: `habits_calendar_support.py` tenía su propia caducidad de 15 min frente a los 300 s de `ActionService`.
+- **Decisión:** se da por cerrado. Desde a123a90 todos los borrados de hábitos, calendario y asignaturas pasan por `run_confirmable` → `ActionService` (300 s), con sus `ActionSpec` en `services/calendar_actions.py`. Se retira el bucle heredado `CONFIRMED_ACTIONS` de `permissions/setup.py`.
+- **Alternativas descartadas:** restaurar `CONFIRMED_ACTIONS` vacío en `habits_calendar_support.py` como compatibilidad (mantendría un segundo camino muerto).
+- **Motivo:** contracts/README.md §5 pide un único camino de confirmación.
+- **Impacto:** backend/app/permissions/setup.py, backend/app/main.py (instalar la seguridad al arrancar), Checklist 8/9.
+
+## [2026-11-13] Confirmaciones de tareas y proyectos sobre pending_confirmations
+- **Contexto:** los servicios de tareas y proyectos piden confirmación a través de `tasks_ports.ConfirmationGate`, pero nadie instalaba una puerta real: `FailClosedGate` daba 503 en todo DELETE. Además `main.py` no montaba `install_security`.
+- **Decisión:** `services/tasks_confirmations.py` registra cada operación de `TASK_CONFIRMABLE`/`PROJECT_CONFIRMABLE` como `ActionSpec` (riesgo confirm, `external=True`, prefijo `workspace_`) y `ActionServiceGate` pide la confirmación con `ActionService.execute_or_request`, único camino (TTL 300 s). Los `targets` y `affected_count` que resuelve el servicio viajan en los argumentos firmados; al aprobar, el servicio abre su transacción y vuelve a comprobar alcance y revisiones. `main.py` deja `app.state.workspace_ports = build_ports(actions)`.
+- **Alternativas descartadas:** insertar la fila en `pending_confirmations` desde el módulo, como hace almacén (segundo camino paralelo a `ActionService`); usar los nombres sin prefijo (chocarían con las herramientas del agente `delete_task`, `update_task` y `complete_task`, que ejecuta el registro).
+- **Motivo:** reutiliza las reglas de dominio y la comprobación de revisiones del servicio sin tocar el contrato de confirmaciones.
+- **Impacto:** `backend/app/services/tasks_confirmations.py` (`db85f3e`, pendiente de fusión), `backend/app/main.py` (cableado de `drakter-34`); Checklist 7 (eliminar tareas, borrar proyectos).
+
+## [2026-11-13] Voz: cierre mínimo, rediseño posterior sobre Pipecat
+- **Contexto:** la capa de voz de v1 (`voice/`: openWakeWord, Silero VAD, Faster-Whisper, Kokoro/Piper, Voice Manager) llega al cierre sin probar de punta a punta. `drakter-1` indica que la capa de voz y conversación se rediseñará sobre Pipecat, con STT Whisper y TTS Fish Audio.
+- **Decisión:** en v1 `voice/` solo se estabiliza y se documenta. Las casillas de la Checklist 14 no verificadas quedan con ⚠️ «rediseño previsto sobre Pipecat». El rediseño se planifica aparte, fuera de este cierre.
+- **Alternativas descartadas:** terminar y verificar ahora toda la tubería actual (trabajo que el rediseño sustituiría); retirar `voice/` de v1 (se perdería lo que ya funciona hasta tener el nuevo diseño).
+- **Motivo:** indicación de `drakter-1`; no invertir en una tubería que se va a sustituir.
+- **Impacto:** `voice/`, Checklist 14, `MASTER_PLAN` (parte de voz) y `ROADMAP` (fase de voz), que se actualizarán cuando se planifique el rediseño; el módulo de voz del escritorio y la sincronización labial (CL5).
