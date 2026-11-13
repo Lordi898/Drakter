@@ -14,6 +14,9 @@ BUSY_TIMEOUT_MS: Final = 5000
 _PRIVATE_MODE: Final = 0o600
 _SIDECAR_SUFFIXES: Final = ("-wal", "-shm")
 _RETRY_DELAY_SECONDS: Final = 0.05
+_PROTECTED_PRAGMAS: Final = frozenset(
+    {"foreign_keys", "defer_foreign_keys", "ignore_check_constraints", "writable_schema"}
+)
 
 
 def sqlite_uri(path: Path, *, read_only: bool = False) -> str:
@@ -99,16 +102,33 @@ def _enable_wal(conn: sqlite3.Connection) -> None:
         time.sleep(_RETRY_DELAY_SECONDS)
 
 
-def _configure(conn: sqlite3.Connection) -> None:
+def _deny_protection_changes(
+    action: int, name: str | None, value: str | None, _database: str | None, _source: str | None
+) -> int:
+    if action == sqlite3.SQLITE_PRAGMA and value is not None and name is not None:
+        if name.lower() in _PROTECTED_PRAGMAS:
+            return sqlite3.SQLITE_DENY
+    return sqlite3.SQLITE_OK
+
+
+def _configure(conn: sqlite3.Connection, *, migrating: bool) -> None:
     conn.execute(f"PRAGMA busy_timeout={BUSY_TIMEOUT_MS}")
     _enable_wal(conn)
     conn.execute("PRAGMA synchronous=NORMAL")
-    conn.execute("PRAGMA foreign_keys=ON")
+    conn.setconfig(sqlite3.SQLITE_DBCONFIG_DEFENSIVE, True)
+    conn.setconfig(sqlite3.SQLITE_DBCONFIG_ENABLE_FKEY, True)
+    if not conn.getconfig(sqlite3.SQLITE_DBCONFIG_DEFENSIVE):
+        raise sqlite3.OperationalError("No se pudo activar el modo defensivo en la base")
     if conn.execute("PRAGMA foreign_keys").fetchone() != (1,):
         raise sqlite3.OperationalError("No se pudo activar foreign_keys en la base")
+    if not migrating:
+        conn.set_authorizer(_deny_protection_changes)
 
 
-def connect(db_path: Path, *, create: bool = False) -> sqlite3.Connection:
+def connect(
+    db_path: Path, *, create: bool = False, migrating: bool = False
+) -> sqlite3.Connection:
+    """Open a hardened connection. Only the migrator may pass `migrating=True`."""
     path = Path(db_path)
     identity = _prepare_database_file(path, create=create)
     secure_sidecars(path)
@@ -123,7 +143,7 @@ def connect(db_path: Path, *, create: bool = False) -> sqlite3.Connection:
         if (current.st_dev, current.st_ino) != (identity.st_dev, identity.st_ino):
             raise ValueError(f"La base cambió mientras se abría: {path}")
         _check_owned_regular_file(path, current)
-        _configure(conn)
+        _configure(conn, migrating=migrating)
         secure_sidecars(path)
     except BaseException:
         conn.close()
