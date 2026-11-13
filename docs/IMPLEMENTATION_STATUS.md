@@ -338,40 +338,33 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 
 - [ ] Instalar openWakeWord.
   ⚠️ Rediseño previsto sobre Pipecat (STT Whisper, TTS Fish Audio); en v1 `voice/` solo se estabiliza y documenta.
+  ⚠️ `OpenWakeWordProvider` existe, pero no hay modelo para «Drakter» (los preentrenados son CC BY-NC-SA 4.0 y de otras palabras); por defecto `NullWakeWord` (pulsar para hablar). No se instala en el cierre.
 - [ ] Configurar palabra de activación.
   ⚠️ Rediseño previsto sobre Pipecat (STT Whisper, TTS Fish Audio); en v1 `voice/` solo se estabiliza y documenta.
-- [ ] Instalar Silero VAD.
-  ⚠️ Rediseño previsto sobre Pipecat (STT Whisper, TTS Fish Audio); en v1 `voice/` solo se estabiliza y documenta.
-- [ ] Configurar detección de voz.
-  ⚠️ Rediseño previsto sobre Pipecat (STT Whisper, TTS Fish Audio); en v1 `voice/` solo se estabiliza y documenta.
-- [ ] Instalar Faster-Whisper.
-  ⚠️ Rediseño previsto sobre Pipecat (STT Whisper, TTS Fish Audio); en v1 `voice/` solo se estabiliza y documenta.
-- [ ] Probar modelo small.
-  ⚠️ Rediseño previsto sobre Pipecat (STT Whisper, TTS Fish Audio); en v1 `voice/` solo se estabiliza y documenta.
-- [ ] Medir latencia.
-  ⚠️ Rediseño previsto sobre Pipecat (STT Whisper, TTS Fish Audio); en v1 `voice/` solo se estabiliza y documenta.
-- [ ] Evaluar modelo medium.
-  ⚠️ Rediseño previsto sobre Pipecat (STT Whisper, TTS Fish Audio); en v1 `voice/` solo se estabiliza y documenta.
-- [ ] Instalar Kokoro.
-  ⚠️ Rediseño previsto sobre Pipecat (STT Whisper, TTS Fish Audio); en v1 `voice/` solo se estabiliza y documenta.
+  ⚠️ Depende de un modelo propio (`DRAKTER_WAKEWORD_MODEL`); `wakeword.set true` sin proveedor responde `invalid_request`.
+- [x] Instalar Silero VAD.
+- [x] Configurar detección de voz.
+- [x] Instalar Faster-Whisper.
+- [x] Probar modelo small.
+- [x] Medir latencia.
+  ⚠️ Medición lista y ejecutada (`voice/tests/bench_engines.py`, evento `voice.metrics`), pero con la máquina muy cargada (loadavg 9–14): STT small RTF 0,82–1,02; Kokoro primer audio 398–1 282 ms. Hay que repetirla con la máquina en reposo antes de dar cifras de producto.
+- [x] Evaluar modelo medium.
+- [x] Instalar Kokoro.
 - [ ] Instalar Piper.
   ⚠️ Rediseño previsto sobre Pipecat (STT Whisper, TTS Fish Audio); en v1 `voice/` solo se estabiliza y documenta.
-- [ ] Crear Voice Manager.
-  ⚠️ Rediseño previsto sobre Pipecat (STT Whisper, TTS Fish Audio); en v1 `voice/` solo se estabiliza y documenta.
-- [ ] Crear Voice Personality Engine.
-  ⚠️ Rediseño previsto sobre Pipecat (STT Whisper, TTS Fish Audio); en v1 `voice/` solo se estabiliza y documenta.
-- [ ] Crear reproducción de audio.
-  ⚠️ Rediseño previsto sobre Pipecat (STT Whisper, TTS Fish Audio); en v1 `voice/` solo se estabiliza y documenta.
-- [ ] Crear interrupciones.
-  ⚠️ Rediseño previsto sobre Pipecat (STT Whisper, TTS Fish Audio); en v1 `voice/` solo se estabiliza y documenta.
-- [ ] Crear cancelación de audio.
-  ⚠️ Rediseño previsto sobre Pipecat (STT Whisper, TTS Fish Audio); en v1 `voice/` solo se estabiliza y documenta.
+  ⚠️ `PiperTTS` y `FallbackTTS` existen (proceso externo, venv propio), pero no se instaló `piper-tts` ni se probó.
+- [x] Crear Voice Manager.
+- [x] Crear Voice Personality Engine.
+- [x] Crear reproducción de audio.
+- [x] Crear interrupciones.
+- [x] Crear cancelación de audio.
 - [ ] Sincronizar boca.
   ⚠️ Rediseño previsto sobre Pipecat (STT Whisper, TTS Fish Audio); en v1 `voice/` solo se estabiliza y documenta.
-- [ ] Crear gestión de errores.
-  ⚠️ Rediseño previsto sobre Pipecat (STT Whisper, TTS Fish Audio); en v1 `voice/` solo se estabiliza y documenta.
+  ⚠️ La voz emite `voice.playback_level`, pero no llega a la boca: el backend no publica los eventos de voz y `SvgCharacter.setMouth` no hace nada.
+- [x] Crear gestión de errores.
 - [ ] Probar conversación por voz completa.
   ⚠️ Rediseño previsto sobre Pipecat (STT Whisper, TTS Fish Audio); en v1 `voice/` solo se estabiliza y documenta.
+  ⚠️ No es posible hoy: `backend/app/integrations/voice` no está registrado en `main.py` (a propósito, `DRAKTER_VOICE_ENABLED=false` por defecto) y el escritorio no tiene cliente de voz (botón de micrófono desactivado).
 
 ## Checklist 15. Automejora
 
@@ -380,8 +373,8 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 - [x] Crear propuestas.
 - [x] Crear evaluaciones.
 - [x] Crear entorno de pruebas.
-- [ ] Crear flujo de aprobación.
-  ⚠️ La lógica funciona con una puerta de prueba (`request_approval` → `approve` ligado al digest → `apply`), pero falta integrarla en la app. El cableado de seguridad (`4d2bcd1`) no cubre automejora (recomprobado sobre `6d2f78a`): sigue `DenyAllGate` (no hay adaptador `ConfirmationGate` sobre `ActionService`), el guardia no reserva al rol `approver` las rutas de automejora, nadie fija `app.state.gui_principal` (por HTTP la GUI cuenta como agente y aprobar/evaluar/aplicar dan 403 `user_required`) y no hay pantalla de automejora en `desktop/src/modules/`. Falla cerrado.
+- [x] Crear flujo de aprobación.
+  ⚠️ En el backend funciona por `ActionService` (`approval-request`/`revert-request` → 409 → `/api/v1/confirmations/{id}/approve`, 300 s, ligado al digest, de un solo uso y auditado; el agente recibe DENY) con `2425da5` y `b1a49a3`, pendientes de fusión. No hay pantalla de automejora en `desktop/src/modules/`, y `routes.generated.ts` aún lista la ruta `/approve` retirada.
 - [x] Integrar Git.
 - [x] Crear historial de cambios.
 - [x] Crear informes.
@@ -417,7 +410,8 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 - [ ] Medir latencia de TTS.
 - [ ] Medir latencia de Hermes.
 - [ ] Optimizar consultas SQLite.
-- [ ] Optimizar FTS5.
+- [x] Optimizar FTS5.
+  ⚠️ Comprobado en la búsqueda global: índice de prefijos `prefix='2 3'`, pesos bm25 por columna y `reconcile_structured` con atajo sin cambios. Con 5.000 tareas sintéticas: reconcile inicial 0,95 s, sin cambios 18 ms, consultas de caso peor 190–460 ms. El FTS del almacén se cubre en la Checklist 10.
 - [ ] Optimizar recuperación de memoria.
 - [ ] Optimizar carga de interfaz.
 - [ ] Crear instalador.
