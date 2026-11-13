@@ -168,6 +168,17 @@ def allowed_tool(ctx):
     return f"{ALLOWED_TOOL} iniciada y completada sin error; el stub recibió el resultado; eventos {types}"
 
 
+@check("conversacion.cambiar_voz", "«Cambia tu voz a la neutral» acaba en voice_set_profile y falla sin ID",
+       needs=("backend", "stub", "hermes"), uses_stub=True)
+def change_voice(ctx):
+    turn = run_turn(ctx, "cambiar-voz", "Cambia tu voz a la neutral")
+    assert any(tool.endswith("voice_set_profile") for tool in turn.tools_called()), \
+        f"el stub no llegó a pedir voice_set_profile: {turn.stub_steps}"
+    assert "FALLO" not in turn.text, f"el cambio de voz sin ID no fue rechazado: {turn.text}"
+    assert "Perfil sin configurar" in turn.text, f"respuesta inesperada: {turn.text!r}"
+    return "voice_set_profile rechazada con profile_unconfigured (plantilla sin IDs)"
+
+
 @check("conversacion.herramienta_bloqueada", "Una herramienta no ofrecida se rechaza",
        needs=("backend", "stub", "hermes"), uses_stub=True)
 def blocked_tool(ctx):

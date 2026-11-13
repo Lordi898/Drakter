@@ -15,7 +15,7 @@ from typing import Final, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-SETTING_KEYS: Final = frozenset({"default_timezone"})
+SETTING_KEYS: Final = frozenset({"default_timezone", "voice_profile"})
 
 KeyState = Literal["configured", "missing", "unknown"]
 DevModeState = Literal["active", "inactive", "unknown"]

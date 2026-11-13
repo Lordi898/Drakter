@@ -46,6 +46,8 @@ jobs:
         run: .venv/bin/python tests/check_security.py
       - name: La memoria no sobrescribe las reglas
         run: .venv/bin/python tests/check_memory_rules.py
+      - name: Perfiles de voz (plantilla, alias, modelo de pago, herramientas)
+        run: .venv/bin/python tests/check_voice_profiles.py
 
   desktop:
     name: Escritorio (typecheck + build)

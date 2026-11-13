@@ -2,7 +2,7 @@
 
 `catalog.json` es una lista de `ToolManifest` (`contracts/python/drakter_contracts/tools.py`). Es la única lista de lo que Hermes puede llamar; se sirve por MCP en puerto propio. Hermes no toca la BD. Formato de `ToolSpec`: `backend/app/integrations/hermes/CONTRACT.md` §1 (drakter-16).
 
-82 herramientas en el catálogo: 37 `read`, 36 `write`, 9 `confirm`. 78 construidas, 4 sin construir. Comprobado el 2026-11-13 contra el registro real (`TOOLS` de `backend/app/tools/*.py` en `drakter/integracion`): en las 78 coinciden `domain`, `permission`, `risk` y `returns_untrusted` (corregido `get_related_items`, que el código marca `returns_untrusted`). Las 4 de automejora están en el catálogo desde la decisión de cierre (ver «Automejora»), así que `registry._warn_catalog_drift` no emite ningún aviso `tool_catalog_drift`.
+84 herramientas en el catálogo: 38 `read`, 37 `write`, 9 `confirm`. 80 construidas, 4 sin construir. Comprobado el 2026-11-13 contra el registro real (`TOOLS` de `backend/app/tools/*.py` en `drakter/integracion`): en las 80 coinciden `domain`, `permission`, `risk` y `returns_untrusted` (corregido `get_related_items`, que el código marca `returns_untrusted`). Las 4 de automejora están en el catálogo desde la decisión de cierre (ver «Automejora»), así que `registry._warn_catalog_drift` no emite ningún aviso `tool_catalog_drift`.
 
 ## Reglas aplicadas
 
@@ -20,6 +20,10 @@
 - `set_task_tags` (drakter-13) convive con `add_tag`/`remove_tag` (genéricas, ya construidas en `app/tools/tags.py`). El integrador decide si se retira `set_task_tags`.
 - No hay `delete_project` ni `delete_habit` ni `delete_resource`: el borrado queda en la GUI (así lo dejó drakter-13, `projects.py:1`).
 - Memoria: `propose_memory` deja el registro pendiente hasta que el usuario lo aprueba en la GUI. Automejora (decisión de cierre, 2026-11-13): el agente tiene cuatro herramientas en el catálogo y en `TOOL_DOMAINS` (`improvement`, fase 18): `record_improvement_feedback` y `create_improvement_proposal` (`improvement.write`, `confirm`), y `list_improvement_proposals` y `get_improvement_proposal` (`improvement.read`, `read`, `returns_untrusted`). No hay herramienta para evaluar, aprobar, aplicar ni revertir: eso solo ocurre en la GUI.
+
+## Voz (fase 17)
+
+`voice_list_profiles` (`voice.read`, `read`) y `voice_set_profile` (`voice.write`, `write`, sin confirmación: guarda un nombre de perfil). Los IDs de Fish no pasan por aquí: viven solo en `~/.config/drakter/voces.toml` y ningún resultado los lleva enteros. Ver `docs/usage/voces.md`.
 
 ## Sin construir (4)
 

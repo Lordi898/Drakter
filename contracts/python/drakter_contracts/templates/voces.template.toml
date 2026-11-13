@@ -1,0 +1,44 @@
+# ============================================================================
+#  Perfiles de voz de Drakter  ·  voces.toml
+# ============================================================================
+#  Este es el ÚNICO sitio donde van los IDs de voz de Fish Audio.
+#  Se creó solo, a partir de una plantilla, con los IDs vacíos. Es un archivo
+#  tuyo: está fuera del repositorio y no se sube a ningún sitio.
+#
+#  CÓMO PONER UNA VOZ
+#    1. Entra en https://fish.audio y abre la voz que quieres usar.
+#    2. El ID es el trozo largo de la URL:  fish.audio/.../m/<ID>/
+#       (32 caracteres, solo 0-9 y a-f).
+#    3. Pégalo en `reference_id` del perfil que quieras.
+#
+#  CÓMO CAMBIAR UNA VOZ
+#    Basta con cambiar el ID. Se recarga sola al guardar el archivo,
+#    sin reiniciar Drakter.
+#
+#  CÓMO AÑADIR UN PERFIL NUEVO
+#    Copia un bloque [perfiles.<nombre>] entero, cámbiale el nombre
+#    (minúsculas, números y _) y rellena su ID, su descripción y sus alias.
+#    Los alias sirven para pedirlo hablando ("pon la voz seria").
+#    No se distinguen mayúsculas ni tildes, y no pueden repetirse entre
+#    perfiles. Un perfil con el ID vacío sale como "sin configurar".
+#
+#  Comprobar y probar:  scripts/voces.sh listar | comprobar | probar <perfil>
+# ============================================================================
+
+[tts]
+proveedor = "fish"
+# Modelo fijado: s2.1-pro-free. Con otro modelo Fish cobra, así que Drakter
+# solo acepta este. (Solo si pones allow_paid = true a mano se admite otro.)
+modelo = "s2.1-pro-free"
+perfil_por_defecto = "natural"
+# allow_paid = true   # NO lo actives salvo que quieras pagar por otro modelo
+
+[perfiles.natural]
+reference_id = ""   # <- pega aquí el ID (la parte <ID> de fish.audio/.../m/<ID>/)
+descripcion = "Voz natural y cálida (por defecto)"
+alias = ["natural", "normal", "cálida", "la de siempre", "por defecto"]
+
+[perfiles.neutral]
+reference_id = ""   # <- pega aquí el ID
+descripcion = "Voz neutral, más seria y robótica"
+alias = ["neutral", "seria", "robótica", "la otra"]

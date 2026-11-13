@@ -162,7 +162,7 @@ Más en [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
 ## Documentación
 
-- [Instalación](docs/installation/README.md) · [Uso por módulo](docs/usage/README.md)
+- [Instalación](docs/installation/README.md) · [Uso por módulo](docs/usage/README.md) · [Perfiles de voz](docs/usage/voces.md)
 - [Arquitectura](docs/ARCHITECTURE.md) · [Convenciones](docs/CONVENTIONS.md)
 - [Estado de implementación](docs/IMPLEMENTATION_STATUS.md) · [Decisiones](docs/DECISIONS.md) · [Plan maestro](docs/MASTER_PLAN.md)
 - [Registro de cambios](CHANGELOG.md)
