@@ -715,7 +715,7 @@ Decisiones técnicas, cambios de tecnología y motivos.
 - **Contexto:** `RUN_STATE.md` tenía pendiente la revisión adversarial de `drakter/seguridad`.
 - **Decisión:** se da por hecha. Banco de 200 ataques: de 125/27/47/1 (BLOCKED/BREACH/N/A/ERROR) a 169/12/19/0. Quedan abiertas, de diseño: contaminación solo en memoria (CONF-46/INJ-26), canal de datos de `TurnRequest` y contaminación de `build_context` (INJ-11/14/25, no explotables mientras `build_context` no esté conectado), INJ-32, INJ-05 y FILE-DB-02 (TOCTOU, riesgo bajo). Las herramientas CONFIRM del agente siguen denegadas (`DefaultToolGate` en el runtime): falla cerrado. (Resuelto después: `b722aca` y `42a0a17` ponen `BackendToolGate` en el registro del agente.)
 - **Motivo:** `CLAUDE.md` §8.
-- **Estado posterior:** `build_context` ya está conectado (`df258b1`), así que INJ-11/14/25 hay que reevaluarlas: tainted ya se propaga (`df258b1`); repaso de drakter-34 pendiente.
+- **Estado posterior:** `build_context` ya está conectado (`df258b1`), así que INJ-11/14/25 INJ-14 se cierra en `1588c04`; INJ-11/25 quedan como diseño pendiente (campo de contexto aparte en `TurnRequest`), mitigadas porque tainted se propaga y fuerza confirmación (`df258b1`, `1588c04`).
 - **Impacto:** `RUN_STATE.md` (quitar "Seguridad sin revisar"), Checklist 16.
 
 ## [2026-11-13] Empaquetado: backend PyInstaller con app.* explícito y electron-builder por npx
@@ -738,3 +738,11 @@ Decisiones técnicas, cambios de tecnología y motivos.
 - **Alternativas descartadas:** `chown root` + `chmod 4755` de `chrome-sandbox` (requiere sudo y se pierde con cada reinstalación de node_modules).
 - **Motivo:** sin estas dos cosas, Electron aborta (FATAL setuid sandbox) o sale sin ventana al haber otra instancia.
 - **Impacto:** `tests/e2e/stack.py`, `scripts/dev.sh`, documentación de desarrollo. Checklist 1.
+
+## [2026-11-13] Lo que propone el agente en sesión contaminada es de terceros
+- **Contexto:** el red-team (INJ-32) mostró que el modelo podía repetir un documento con `propose_memory` y el recuerdo quedaba con trust `derived`.
+- **Decisión:** `propose_memory` pasa la contaminación de la sesión al servicio; si está contaminada, o no se puede saber, el recuerdo entra `third_party`. Fuera de eso sigue `derived`. Solo el usuario puede subirlo con una corrección. La conversación también marca el turno como contaminado (INJ-14).
+- **Alternativas descartadas:** todo lo del agente `third_party` (contradice INJ-31 y quita valor a lo derivado limpio); heurística por contenido (no distingue un documento de una frase legítima).
+- **Motivo:** CONTRACT de memoria, regla 2: los terceros siempre `THIRD_PARTY`.
+- **Comprobado:** `check_memory_rules.py` 40/40, smoke de memoria 21/21, INJ-31 sigue BLOCKED; banco 170 BLOCKED / 11 BREACH.
+- **Impacto:** `backend/app/tools/memory.py`, `backend/app/integrations/memory/service.py`, `context/builder.py` (`1588c04`); sonda INJ-32 del banco a actualizar.
