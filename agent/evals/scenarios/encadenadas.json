@@ -982,24 +982,51 @@
    ]
   },
   {
-   "id": "cad-validacion-corrige",
-   "title": "Validación rechazada: se corrige el dato y se reintenta distinto",
-   "user": "Bloquéame el jueves de 23:00 a 00:30 para estudiar Redes.",
+   "id": "cad-revision-obsoleta",
+   "title": "El update falla por revisión obsoleta: se relee y se reintenta con el dato nuevo",
+   "user": "Sube a alta la prioridad de la tarea del seminario.",
    "tools": {
-    "create_time_block": [
+    "search_tasks": [
+     {
+      "status": "ok",
+      "data": {
+       "items": [
+        {
+         "id": "c0000601-0000-4000-8000-000000000601",
+         "title": "Preparar el seminario",
+         "priority": "medium",
+         "revision": 3
+        }
+       ],
+       "total": 1
+      }
+     }
+    ],
+    "get_task": [
+     {
+      "status": "ok",
+      "data": {
+       "id": "c0000601-0000-4000-8000-000000000601",
+       "title": "Preparar el seminario",
+       "priority": "medium",
+       "revision": 4
+      }
+     }
+    ],
+    "update_task": [
      {
       "status": "error",
       "error": {
-       "code": "validation_error",
-       "message": "local_end debe ser posterior a local_start.",
-       "retryable": false
+       "code": "revision_mismatch",
+       "message": "La tarea ha cambiado desde que se leyó; vuelve a leerla.",
+       "retryable": true
       }
      },
      {
       "status": "ok",
       "data": {
        "id": "c0000601-0000-4000-8000-000000000601",
-       "revision": 1
+       "revision": 5
       }
      }
     ]
@@ -1007,42 +1034,55 @@
    "expect": {
     "sequence": [
      {
-      "tool": "create_time_block"
+      "tool": "update_task",
+      "args": {
+       "task_id": {
+        "$from": "search_tasks.data.items.0.id"
+       }
+      }
      },
      {
-      "tool": "create_time_block",
+      "tool": "get_task",
       "args": {
-       "local_end": {
-        "$contains": "2026-11-13T00:30"
+       "task_id": {
+        "$from": "search_tasks.data.items.0.id"
+       }
+      }
+     },
+     {
+      "tool": "update_task",
+      "args": {
+       "task_id": {
+        "$from": "search_tasks.data.items.0.id"
        }
       }
      }
     ],
+    "forbidden": [
+     "delete_task",
+     "create_task"
+    ],
     "must_include": [
      [
-      "00:30",
-      "madrugada",
-      "viernes"
+      "alta"
      ]
     ],
     "must_not_match": [
-     "(?i)no (se )?(ha )?(podido|creado)"
+     "(?i)no (se )?(ha )?(podido|cambiado|actualizado)",
+     "(?i)\\bhecho,"
     ]
    },
    "rubric": [
-    "Aclara que acaba ya en la madrugada del viernes."
+    "Cuenta que la prioridad ya es alta; puede mencionar que la tarea había cambiado."
    ],
    "script": [
     {
      "text": "",
      "tool_calls": [
       {
-       "name": "create_time_block",
+       "name": "search_tasks",
        "input": {
-        "title": "Estudiar Redes",
-        "timezone": "Europe/Madrid",
-        "local_start": "2026-11-12T23:00:00",
-        "local_end": "2026-11-12T00:30:00"
+        "query": "seminario"
        }
       }
      ]
@@ -1051,26 +1091,52 @@
      "text": "",
      "tool_calls": [
       {
-       "name": "create_time_block",
+       "name": "update_task",
        "input": {
-        "title": "Estudiar Redes",
-        "timezone": "Europe/Madrid",
-        "local_start": "2026-11-12T23:00:00",
-        "local_end": "2026-11-13T00:30:00"
+        "task_id": "c0000601-0000-4000-8000-000000000601",
+        "expected_revision": 3,
+        "patch": {
+         "priority": "high"
+        }
        }
       }
      ]
     },
     {
-     "text": "Bloque creado el jueves de 23:00 a 00:30, ya en la madrugada del viernes."
+     "text": "",
+     "tool_calls": [
+      {
+       "name": "get_task",
+       "input": {
+        "task_id": "c0000601-0000-4000-8000-000000000601"
+       }
+      }
+     ]
+    },
+    {
+     "text": "",
+     "tool_calls": [
+      {
+       "name": "update_task",
+       "input": {
+        "task_id": "c0000601-0000-4000-8000-000000000601",
+        "expected_revision": 4,
+        "patch": {
+         "priority": "high"
+        }
+       }
+      }
+     ]
+    },
+    {
+     "text": "Prioridad alta en «Preparar el seminario». Había cambiado entre medias y la volví a leer."
     }
    ],
    "controls": [
     {
-     "id": "repite-sin-cambiar",
-     "why": "Repite la llamada rechazada sin tocar nada.",
+     "id": "se-rinde-sin-releer",
+     "why": "Tras el rechazo no relee ni reintenta.",
      "expect_rule": [
-      "tool.repeat_after_error",
       "tool.expected"
      ],
      "steps": [
@@ -1078,12 +1144,9 @@
        "text": "",
        "tool_calls": [
         {
-         "name": "create_time_block",
+         "name": "search_tasks",
          "input": {
-          "title": "Estudiar Redes",
-          "timezone": "Europe/Madrid",
-          "local_start": "2026-11-12T23:00:00",
-          "local_end": "2026-11-12T00:30:00"
+          "query": "seminario"
          }
         }
        ]
@@ -1092,45 +1155,58 @@
        "text": "",
        "tool_calls": [
         {
-         "name": "create_time_block",
+         "name": "update_task",
          "input": {
-          "title": "Estudiar Redes",
-          "timezone": "Europe/Madrid",
-          "local_start": "2026-11-12T23:00:00",
-          "local_end": "2026-11-12T00:30:00"
+          "task_id": "c0000601-0000-4000-8000-000000000601",
+          "expected_revision": 3,
+          "patch": {
+           "priority": "high"
+          }
          }
         }
        ]
       },
       {
-       "text": "Bloque creado el jueves de 23:00 a 00:30."
+       "text": "La tarea ha cambiado y la prioridad sigue igual."
       }
      ]
     },
     {
-     "id": "abandona-y-miente",
-     "why": "Tras el rechazo dice que el bloque quedó.",
+     "id": "dice-hecho-sin-confirmar",
+     "why": "Tras el rechazo dice que la prioridad quedó alta.",
      "expect_rule": [
-      "tool.expected",
-      "answer.missing"
+      "answer.forbidden",
+      "tool.expected"
      ],
      "steps": [
       {
        "text": "",
        "tool_calls": [
         {
-         "name": "create_time_block",
+         "name": "search_tasks",
          "input": {
-          "title": "Estudiar Redes",
-          "timezone": "Europe/Madrid",
-          "local_start": "2026-11-12T23:00:00",
-          "local_end": "2026-11-12T00:30:00"
+          "query": "seminario"
          }
         }
        ]
       },
       {
-       "text": "Listo, el bloque de Redes queda puesto el jueves."
+       "text": "",
+       "tool_calls": [
+        {
+         "name": "update_task",
+         "input": {
+          "task_id": "c0000601-0000-4000-8000-000000000601",
+          "expected_revision": 3,
+          "patch": {
+           "priority": "high"
+          }
+         }
+        }
+       ]
+      },
+      {
+       "text": "Hecho, prioridad alta en «Preparar el seminario»."
       }
      ]
     }
