@@ -1,0 +1,3634 @@
+{
+  "generated_from": {
+    "drakter/contratos": "8f39bf0",
+    "drakter/tareas-proyectos": "8e2523a",
+    "drakter/habitos-calendario": "cb5dbb3+dirty",
+    "drakter/almacen-relaciones": "1cb1348+dirty",
+    "drakter/agente-hermes": "8f56f4b",
+    "drakter/memoria-contexto": "75392f6",
+    "drakter/busqueda": "d57d187"
+  },
+  "tools": {
+    "add_task_dependency": {
+      "additionalProperties": false,
+      "properties": {
+        "task_id": {
+          "format": "uuid",
+          "type": "string"
+        },
+        "depends_on_task_id": {
+          "format": "uuid",
+          "type": "string"
+        }
+      },
+      "required": [
+        "task_id",
+        "depends_on_task_id"
+      ],
+      "type": "object"
+    },
+    "archive_habit": {
+      "additionalProperties": false,
+      "properties": {
+        "habit_id": {
+          "description": "UUID del hábito",
+          "type": "string"
+        },
+        "archived": {
+          "default": true,
+          "description": "true archiva; false lo restaura",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "habit_id"
+      ],
+      "type": "object"
+    },
+    "archive_project": {
+      "additionalProperties": false,
+      "properties": {
+        "project_id": {
+          "format": "uuid",
+          "type": "string"
+        },
+        "expected_revision": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "project_id"
+      ],
+      "type": "object"
+    },
+    "archive_task": {
+      "additionalProperties": false,
+      "properties": {
+        "task_id": {
+          "format": "uuid",
+          "type": "string"
+        },
+        "expected_revision": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "task_id"
+      ],
+      "type": "object"
+    },
+    "check_availability": {
+      "additionalProperties": false,
+      "properties": {
+        "local_start": {
+          "description": "Inicio, hora local sin desfase",
+          "type": "string"
+        },
+        "local_end": {
+          "description": "Fin, hora local sin desfase",
+          "type": "string"
+        },
+        "timezone": {
+          "maxLength": 64,
+          "type": "string"
+        }
+      },
+      "required": [
+        "local_start",
+        "local_end",
+        "timezone"
+      ],
+      "type": "object"
+    },
+    "complete_task": {
+      "additionalProperties": false,
+      "properties": {
+        "task_id": {
+          "format": "uuid",
+          "type": "string"
+        },
+        "expected_revision": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "task_id"
+      ],
+      "type": "object"
+    },
+    "create_class_session": {
+      "additionalProperties": false,
+      "properties": {
+        "weekday": {
+          "description": "1=lunes .. 7=domingo",
+          "maximum": 7,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "starts_local_time": {
+          "type": "string"
+        },
+        "ends_local_time": {
+          "type": "string"
+        },
+        "timezone": {
+          "maxLength": 64,
+          "type": "string"
+        },
+        "valid_from": {
+          "format": "date",
+          "type": "string"
+        },
+        "valid_until": {
+          "anyOf": [
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "interval_weeks": {
+          "default": 1,
+          "maximum": 52,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "room": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "subject_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "weekday",
+        "starts_local_time",
+        "ends_local_time",
+        "timezone",
+        "valid_from",
+        "subject_id"
+      ],
+      "type": "object"
+    },
+    "create_event": {
+      "additionalProperties": false,
+      "properties": {
+        "title": {
+          "maxLength": 300,
+          "minLength": 1,
+          "type": "string"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "maxLength": 8000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "location": {
+          "anyOf": [
+            {
+              "maxLength": 300,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "reminder_minutes_before": {
+          "anyOf": [
+            {
+              "maximum": 40320,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "kind": {
+          "default": "event",
+          "enum": [
+            "event",
+            "reminder",
+            "work_session"
+          ],
+          "type": "string"
+        },
+        "status": {
+          "default": "confirmed",
+          "enum": [
+            "tentative",
+            "confirmed",
+            "cancelled"
+          ],
+          "type": "string"
+        },
+        "timezone": {
+          "maxLength": 64,
+          "type": "string"
+        },
+        "all_day": {
+          "default": false,
+          "type": "boolean"
+        },
+        "local_start": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "local_end": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "start_date": {
+          "anyOf": [
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "end_date_exclusive": {
+          "anyOf": [
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "rrule": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "title",
+        "timezone"
+      ],
+      "type": "object"
+    },
+    "create_event_exception": {
+      "additionalProperties": false,
+      "properties": {
+        "occurrence_local_start": {
+          "description": "Hora local original de la ocurrencia, o fecha si es de día completo",
+          "maxLength": 16,
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "cancelled",
+            "modified"
+          ],
+          "type": "string"
+        },
+        "override": {
+          "anyOf": [
+            {
+              "additionalProperties": false,
+              "properties": {
+                "title": {
+                  "anyOf": [
+                    {
+                      "maxLength": 300,
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null
+                },
+                "description": {
+                  "anyOf": [
+                    {
+                      "maxLength": 8000,
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null
+                },
+                "local_start": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null
+                },
+                "local_end": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null
+                },
+                "room": {
+                  "anyOf": [
+                    {
+                      "maxLength": 200,
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null
+                }
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "event_id": {
+          "description": "UUID del evento recurrente",
+          "type": "string"
+        }
+      },
+      "required": [
+        "occurrence_local_start",
+        "kind",
+        "event_id"
+      ],
+      "type": "object"
+    },
+    "create_habit": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "maxLength": 200,
+          "minLength": 1,
+          "type": "string"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "maxLength": 4000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "timezone": {
+          "maxLength": 64,
+          "type": "string"
+        },
+        "rrule": {
+          "description": "Subconjunto RRULE, p. ej. FREQ=WEEKLY;BYDAY=MO,WE",
+          "maxLength": 200,
+          "type": "string"
+        },
+        "start_date": {
+          "format": "date",
+          "type": "string"
+        },
+        "end_date": {
+          "anyOf": [
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "goal_note": {
+          "anyOf": [
+            {
+              "maxLength": 1000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "goal_project_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "preferred_local_time": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "reminder_enabled": {
+          "default": false,
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "name",
+        "timezone",
+        "rrule",
+        "start_date"
+      ],
+      "type": "object"
+    },
+    "create_project": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "maxLength": 200,
+          "minLength": 1,
+          "type": "string"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "maxLength": 20000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "objective": {
+          "anyOf": [
+            {
+              "maxLength": 2000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "status": {
+          "default": "planned",
+          "enum": [
+            "planned",
+            "active",
+            "paused",
+            "completed",
+            "cancelled"
+          ],
+          "type": "string"
+        },
+        "priority": {
+          "default": "medium",
+          "enum": [
+            "low",
+            "medium",
+            "high",
+            "urgent"
+          ],
+          "type": "string"
+        },
+        "start_date": {
+          "anyOf": [
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "target_date": {
+          "anyOf": [
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "manual_progress": {
+          "anyOf": [
+            {
+              "maximum": 100,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "metadata": {
+          "additionalProperties": true,
+          "default": {},
+          "type": "object"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "type": "object"
+    },
+    "create_relationship": {
+      "additionalProperties": false,
+      "properties": {
+        "source_id": {
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+          "type": "string"
+        },
+        "target_id": {
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+          "type": "string"
+        },
+        "relationship_type": {
+          "enum": [
+            "belongs_to",
+            "related_to",
+            "scheduled_for",
+            "uses_resource",
+            "depends_on",
+            "supports",
+            "studies",
+            "parent_of",
+            "references",
+            "derived_from"
+          ],
+          "type": "string"
+        },
+        "metadata": {
+          "additionalProperties": true,
+          "default": {},
+          "type": "object"
+        }
+      },
+      "required": [
+        "source_id",
+        "target_id",
+        "relationship_type"
+      ],
+      "type": "object"
+    },
+    "create_resource": {
+      "additionalProperties": false,
+      "properties": {
+        "title": {
+          "maxLength": 300,
+          "minLength": 1,
+          "type": "string"
+        },
+        "note_body": {
+          "maxLength": 200000,
+          "type": "string"
+        },
+        "folder_id": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "description": {
+          "anyOf": [
+            {
+              "maxLength": 4000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "tags": {
+          "default": [],
+          "items": {
+            "maxLength": 60,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 32,
+          "type": "array"
+        },
+        "index_content": {
+          "default": false,
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "title",
+        "note_body"
+      ],
+      "type": "object"
+    },
+    "create_schedule_exception": {
+      "additionalProperties": false,
+      "properties": {
+        "occurrence_date": {
+          "format": "date",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "cancelled",
+            "modified"
+          ],
+          "type": "string"
+        },
+        "override": {
+          "anyOf": [
+            {
+              "additionalProperties": false,
+              "properties": {
+                "title": {
+                  "anyOf": [
+                    {
+                      "maxLength": 300,
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null
+                },
+                "description": {
+                  "anyOf": [
+                    {
+                      "maxLength": 8000,
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null
+                },
+                "local_start": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null
+                },
+                "local_end": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null
+                },
+                "room": {
+                  "anyOf": [
+                    {
+                      "maxLength": 200,
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null
+                }
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "session_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "occurrence_date",
+        "kind",
+        "session_id"
+      ],
+      "type": "object"
+    },
+    "create_subject": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "maxLength": 200,
+          "minLength": 1,
+          "type": "string"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "maxLength": 4000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "teacher": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "color": {
+          "anyOf": [
+            {
+              "pattern": "^#[0-9a-fA-F]{6}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "type": "object"
+    },
+    "create_subtask": {
+      "additionalProperties": false,
+      "properties": {
+        "parent_task_id": {
+          "format": "uuid",
+          "type": "string"
+        },
+        "subtask": {
+          "additionalProperties": false,
+          "description": "El padre viene de la ruta o del argumento de la herramienta.",
+          "properties": {
+            "title": {
+              "maxLength": 300,
+              "minLength": 1,
+              "type": "string"
+            },
+            "description": {
+              "anyOf": [
+                {
+                  "maxLength": 20000,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "status": {
+              "default": "pending",
+              "enum": [
+                "pending",
+                "in_progress",
+                "on_hold",
+                "cancelled"
+              ],
+              "type": "string"
+            },
+            "priority": {
+              "default": "medium",
+              "enum": [
+                "low",
+                "medium",
+                "high",
+                "urgent"
+              ],
+              "type": "string"
+            },
+            "start_at": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "due_at": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "due_date": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "estimated_minutes": {
+              "anyOf": [
+                {
+                  "maximum": 1000000,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "parent_task_id": {
+              "default": null,
+              "type": "null"
+            },
+            "project_id": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "subject_id": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "position": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "tags": {
+              "default": [],
+              "items": {
+                "maxLength": 64,
+                "minLength": 1,
+                "type": "string"
+              },
+              "maxItems": 20,
+              "type": "array"
+            },
+            "metadata": {
+              "additionalProperties": true,
+              "default": {},
+              "type": "object"
+            }
+          },
+          "required": [
+            "title"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "parent_task_id",
+        "subtask"
+      ],
+      "type": "object"
+    },
+    "create_task": {
+      "additionalProperties": false,
+      "properties": {
+        "title": {
+          "maxLength": 300,
+          "minLength": 1,
+          "type": "string"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "maxLength": 20000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "status": {
+          "default": "pending",
+          "enum": [
+            "pending",
+            "in_progress",
+            "on_hold",
+            "cancelled"
+          ],
+          "type": "string"
+        },
+        "priority": {
+          "default": "medium",
+          "enum": [
+            "low",
+            "medium",
+            "high",
+            "urgent"
+          ],
+          "type": "string"
+        },
+        "start_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "due_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "due_date": {
+          "anyOf": [
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "estimated_minutes": {
+          "anyOf": [
+            {
+              "maximum": 1000000,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "parent_task_id": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "project_id": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "subject_id": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "position": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "tags": {
+          "default": [],
+          "items": {
+            "maxLength": 64,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 20,
+          "type": "array"
+        },
+        "metadata": {
+          "additionalProperties": true,
+          "default": {},
+          "type": "object"
+        }
+      },
+      "required": [
+        "title"
+      ],
+      "type": "object"
+    },
+    "create_time_block": {
+      "additionalProperties": false,
+      "properties": {
+        "title": {
+          "maxLength": 300,
+          "minLength": 1,
+          "type": "string"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "maxLength": 8000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "timezone": {
+          "maxLength": 64,
+          "type": "string"
+        },
+        "local_start": {
+          "type": "string"
+        },
+        "local_end": {
+          "type": "string"
+        },
+        "status": {
+          "default": "planned",
+          "enum": [
+            "planned",
+            "in_progress",
+            "done",
+            "skipped",
+            "cancelled"
+          ],
+          "type": "string"
+        },
+        "task_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "title",
+        "timezone",
+        "local_start",
+        "local_end"
+      ],
+      "type": "object"
+    },
+    "delete_class_session": {
+      "additionalProperties": false,
+      "properties": {
+        "session_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "session_id"
+      ],
+      "type": "object"
+    },
+    "delete_event": {
+      "additionalProperties": false,
+      "properties": {
+        "event_id": {
+          "description": "UUID del evento",
+          "type": "string"
+        }
+      },
+      "required": [
+        "event_id"
+      ],
+      "type": "object"
+    },
+    "delete_relationship": {
+      "additionalProperties": false,
+      "properties": {
+        "relationship_id": {
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "relationship_id"
+      ],
+      "type": "object"
+    },
+    "delete_task": {
+      "additionalProperties": false,
+      "properties": {
+        "task_id": {
+          "format": "uuid",
+          "type": "string"
+        },
+        "expected_revision": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "task_id"
+      ],
+      "type": "object"
+    },
+    "delete_time_block": {
+      "additionalProperties": false,
+      "properties": {
+        "block_id": {
+          "description": "UUID del bloque de tiempo",
+          "type": "string"
+        }
+      },
+      "required": [
+        "block_id"
+      ],
+      "type": "object"
+    },
+    "forget_memory": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "format": "uuid",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "type": "object"
+    },
+    "get_agent_status": {
+      "additionalProperties": false,
+      "properties": {},
+      "type": "object",
+      "required": []
+    },
+    "get_event": {
+      "additionalProperties": false,
+      "properties": {
+        "event_id": {
+          "description": "UUID del evento",
+          "type": "string"
+        }
+      },
+      "required": [
+        "event_id"
+      ],
+      "type": "object"
+    },
+    "get_habit": {
+      "additionalProperties": false,
+      "properties": {
+        "habit_id": {
+          "description": "UUID del hábito",
+          "type": "string"
+        }
+      },
+      "required": [
+        "habit_id"
+      ],
+      "type": "object"
+    },
+    "get_habit_history": {
+      "additionalProperties": false,
+      "properties": {
+        "habit_id": {
+          "description": "UUID del hábito",
+          "type": "string"
+        },
+        "from_date": {
+          "anyOf": [
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Inicio (AAAA-MM-DD); por defecto, 30 días atrás"
+        },
+        "to_date": {
+          "anyOf": [
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Fin (AAAA-MM-DD); por defecto, hoy"
+        }
+      },
+      "required": [
+        "habit_id"
+      ],
+      "type": "object"
+    },
+    "get_habit_statistics": {
+      "additionalProperties": false,
+      "properties": {
+        "habit_id": {
+          "description": "UUID del hábito",
+          "type": "string"
+        },
+        "from_date": {
+          "anyOf": [
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Inicio (AAAA-MM-DD); por defecto, 30 días atrás"
+        },
+        "to_date": {
+          "anyOf": [
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Fin (AAAA-MM-DD); por defecto, hoy"
+        }
+      },
+      "required": [
+        "habit_id"
+      ],
+      "type": "object"
+    },
+    "get_memory_item": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "format": "uuid",
+          "type": "string"
+        },
+        "level": {
+          "enum": [
+            "l0",
+            "l1",
+            "l2"
+          ],
+          "type": "string",
+          "default": "l1"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "type": "object"
+    },
+    "get_memory_status": {
+      "additionalProperties": false,
+      "properties": {},
+      "type": "object",
+      "required": []
+    },
+    "get_project": {
+      "additionalProperties": false,
+      "properties": {
+        "project_id": {
+          "format": "uuid",
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id"
+      ],
+      "type": "object"
+    },
+    "get_project_progress": {
+      "additionalProperties": false,
+      "properties": {
+        "project_id": {
+          "format": "uuid",
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id"
+      ],
+      "type": "object"
+    },
+    "get_related_items": {
+      "additionalProperties": false,
+      "properties": {
+        "entity_id": {
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+          "type": "string"
+        },
+        "direction": {
+          "default": "both",
+          "enum": [
+            "in",
+            "out",
+            "both"
+          ],
+          "type": "string"
+        },
+        "relationship_type": {
+          "anyOf": [
+            {
+              "enum": [
+                "belongs_to",
+                "related_to",
+                "scheduled_for",
+                "uses_resource",
+                "depends_on",
+                "supports",
+                "studies",
+                "parent_of",
+                "references",
+                "derived_from"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "entity_id"
+      ],
+      "type": "object"
+    },
+    "get_resource": {
+      "additionalProperties": false,
+      "properties": {
+        "resource_id": {
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "resource_id"
+      ],
+      "type": "object"
+    },
+    "get_schedule": {
+      "additionalProperties": false,
+      "properties": {
+        "from_date": {
+          "description": "Primer día (AAAA-MM-DD)",
+          "format": "date",
+          "type": "string"
+        },
+        "to_date": {
+          "description": "Día final, exclusivo. Ventana máxima de 370 días",
+          "format": "date",
+          "type": "string"
+        },
+        "timezone": {
+          "description": "Zona IANA en la que se muestra la agenda",
+          "maxLength": 64,
+          "type": "string"
+        },
+        "types": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Filtro opcional: event, reminder, work_session, time_block, class"
+        }
+      },
+      "required": [
+        "from_date",
+        "to_date",
+        "timezone"
+      ],
+      "type": "object"
+    },
+    "get_subject": {
+      "additionalProperties": false,
+      "properties": {
+        "subject_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "subject_id"
+      ],
+      "type": "object"
+    },
+    "get_subject_resources": {
+      "additionalProperties": false,
+      "properties": {
+        "subject_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "subject_id"
+      ],
+      "type": "object"
+    },
+    "get_system_status": {
+      "additionalProperties": false,
+      "properties": {},
+      "type": "object",
+      "required": []
+    },
+    "get_task": {
+      "additionalProperties": false,
+      "properties": {
+        "task_id": {
+          "format": "uuid",
+          "type": "string"
+        }
+      },
+      "required": [
+        "task_id"
+      ],
+      "type": "object"
+    },
+    "get_timetable": {
+      "additionalProperties": false,
+      "properties": {
+        "on": {
+          "description": "Fecha (AAAA-MM-DD) en la que se consulta el horario vigente",
+          "format": "date",
+          "type": "string"
+        }
+      },
+      "required": [
+        "on"
+      ],
+      "type": "object"
+    },
+    "index_resource": {
+      "additionalProperties": false,
+      "properties": {
+        "resource_id": {
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+          "type": "string"
+        },
+        "include_content": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "resource_id"
+      ],
+      "type": "object"
+    },
+    "list_folders": {
+      "additionalProperties": false,
+      "properties": {
+        "parent_folder_id": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "type": "object",
+      "required": []
+    },
+    "list_habits": {
+      "additionalProperties": false,
+      "properties": {
+        "include_archived": {
+          "default": false,
+          "type": "boolean"
+        },
+        "status": {
+          "anyOf": [
+            {
+              "enum": [
+                "active",
+                "paused",
+                "ended"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "limit": {
+          "anyOf": [
+            {
+              "maximum": 200,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "offset": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "type": "object",
+      "required": []
+    },
+    "list_projects": {
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "default": [],
+          "items": {
+            "enum": [
+              "planned",
+              "active",
+              "paused",
+              "completed",
+              "cancelled"
+            ],
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "priority": {
+          "default": [],
+          "items": {
+            "enum": [
+              "low",
+              "medium",
+              "high",
+              "urgent"
+            ],
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "q": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "include_archived": {
+          "default": false,
+          "type": "boolean"
+        },
+        "sort": {
+          "default": "-updated_at",
+          "maxLength": 100,
+          "type": "string"
+        },
+        "limit": {
+          "default": 50,
+          "maximum": 200,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "offset": {
+          "default": 0,
+          "maximum": 1000000,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "type": "object",
+      "required": []
+    },
+    "list_subjects": {
+      "additionalProperties": false,
+      "properties": {
+        "include_archived": {
+          "default": false,
+          "type": "boolean"
+        },
+        "limit": {
+          "anyOf": [
+            {
+              "maximum": 200,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "offset": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "type": "object",
+      "required": []
+    },
+    "list_tasks": {
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "default": [],
+          "items": {
+            "enum": [
+              "pending",
+              "in_progress",
+              "on_hold",
+              "completed",
+              "cancelled"
+            ],
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "priority": {
+          "default": [],
+          "items": {
+            "enum": [
+              "low",
+              "medium",
+              "high",
+              "urgent"
+            ],
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "project_id": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "no_project": {
+          "default": false,
+          "type": "boolean"
+        },
+        "subject_id": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "parent_task_id": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "root_only": {
+          "default": false,
+          "type": "boolean"
+        },
+        "tag": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "due_before": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "due_after": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "q": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "include_archived": {
+          "default": false,
+          "type": "boolean"
+        },
+        "sort": {
+          "default": "position,-created_at",
+          "maxLength": 100,
+          "type": "string"
+        },
+        "limit": {
+          "default": 50,
+          "maximum": 200,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "offset": {
+          "default": 0,
+          "maximum": 1000000,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "type": "object",
+      "required": []
+    },
+    "move_time_block": {
+      "additionalProperties": false,
+      "properties": {
+        "block_id": {
+          "description": "UUID del bloque de tiempo",
+          "type": "string"
+        },
+        "local_start": {
+          "description": "Nuevo inicio, hora local sin desfase",
+          "type": "string"
+        },
+        "local_end": {
+          "description": "Nuevo fin, hora local sin desfase",
+          "type": "string"
+        }
+      },
+      "required": [
+        "block_id",
+        "local_start",
+        "local_end"
+      ],
+      "type": "object"
+    },
+    "propose_memory": {
+      "additionalProperties": false,
+      "properties": {
+        "content": {
+          "maxLength": 4000,
+          "minLength": 1,
+          "type": "string"
+        },
+        "kind": {
+          "description": "What type of memory (MASTER_PLAN §9).",
+          "enum": [
+            "working",
+            "episodic",
+            "semantic",
+            "procedural"
+          ],
+          "type": "string",
+          "default": "semantic"
+        },
+        "category": {
+          "description": "OpenViking categories (MASTER_PLAN §10.4), so records map 1:1 when it is plugged in.",
+          "enum": [
+            "profile",
+            "preferences",
+            "entities",
+            "events",
+            "cases",
+            "patterns"
+          ],
+          "type": "string",
+          "default": "entities"
+        },
+        "subject": {
+          "default": "",
+          "maxLength": 200,
+          "type": "string"
+        },
+        "confidence": {
+          "default": 0.5,
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "type": "number"
+        }
+      },
+      "required": [
+        "content"
+      ],
+      "type": "object"
+    },
+    "read_resource": {
+      "additionalProperties": false,
+      "properties": {
+        "resource_id": {
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+          "type": "string"
+        },
+        "selector": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "offset": {
+          "default": 0,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "max_chars": {
+          "default": 8000,
+          "maximum": 20000,
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "resource_id"
+      ],
+      "type": "object"
+    },
+    "refresh_resource_index": {
+      "additionalProperties": false,
+      "properties": {},
+      "type": "object",
+      "required": []
+    },
+    "register_habit_completion": {
+      "additionalProperties": false,
+      "properties": {
+        "habit_id": {
+          "description": "UUID del hábito",
+          "type": "string"
+        },
+        "occurrence_date": {
+          "anyOf": [
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Día a registrar (AAAA-MM-DD); por defecto, hoy en la zona del hábito"
+        },
+        "status": {
+          "default": "done",
+          "enum": [
+            "done",
+            "skipped",
+            "missed"
+          ],
+          "type": "string"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "maxLength": 2000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "habit_id"
+      ],
+      "type": "object"
+    },
+    "remove_task_dependency": {
+      "additionalProperties": false,
+      "properties": {
+        "task_id": {
+          "format": "uuid",
+          "type": "string"
+        },
+        "depends_on_task_id": {
+          "format": "uuid",
+          "type": "string"
+        }
+      },
+      "required": [
+        "task_id",
+        "depends_on_task_id"
+      ],
+      "type": "object"
+    },
+    "reopen_task": {
+      "additionalProperties": false,
+      "properties": {
+        "task_id": {
+          "format": "uuid",
+          "type": "string"
+        },
+        "expected_revision": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "task_id"
+      ],
+      "type": "object"
+    },
+    "search_all": {
+      "additionalProperties": false,
+      "properties": {
+        "query": {
+          "maxLength": 200,
+          "minLength": 1,
+          "type": "string"
+        },
+        "types": {
+          "anyOf": [
+            {
+              "items": {
+                "enum": [
+                  "task",
+                  "project",
+                  "habit",
+                  "calendar_event",
+                  "subject",
+                  "resource"
+                ],
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "limit": {
+          "default": 10,
+          "maximum": 25,
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "query"
+      ],
+      "type": "object"
+    },
+    "search_memory": {
+      "additionalProperties": false,
+      "properties": {
+        "query": {
+          "maxLength": 2000,
+          "minLength": 1,
+          "type": "string"
+        },
+        "kinds": {
+          "default": [],
+          "items": {
+            "description": "What type of memory (MASTER_PLAN §9).",
+            "enum": [
+              "working",
+              "episodic",
+              "semantic",
+              "procedural"
+            ],
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "categories": {
+          "default": [],
+          "items": {
+            "description": "OpenViking categories (MASTER_PLAN §10.4), so records map 1:1 when it is plugged in.",
+            "enum": [
+              "profile",
+              "preferences",
+              "entities",
+              "events",
+              "cases",
+              "patterns"
+            ],
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "limit": {
+          "default": 8,
+          "maximum": 20,
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "query"
+      ],
+      "type": "object"
+    },
+    "search_relationships": {
+      "additionalProperties": false,
+      "properties": {
+        "source_id": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "target_id": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "entity_type": {
+          "anyOf": [
+            {
+              "enum": [
+                "task",
+                "project",
+                "habit",
+                "calendar_event",
+                "time_block",
+                "subject",
+                "class_session",
+                "resource",
+                "folder"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "relationship_type": {
+          "anyOf": [
+            {
+              "enum": [
+                "belongs_to",
+                "related_to",
+                "scheduled_for",
+                "uses_resource",
+                "depends_on",
+                "supports",
+                "studies",
+                "parent_of",
+                "references",
+                "derived_from"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "limit": {
+          "default": 20,
+          "maximum": 50,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "cursor": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "type": "object",
+      "required": []
+    },
+    "search_resources": {
+      "additionalProperties": false,
+      "properties": {
+        "q": {
+          "maxLength": 200,
+          "minLength": 1,
+          "type": "string"
+        },
+        "types": {
+          "anyOf": [
+            {
+              "items": {
+                "enum": [
+                  "image",
+                  "document",
+                  "pdf",
+                  "text",
+                  "code",
+                  "link",
+                  "note",
+                  "study_note",
+                  "archive",
+                  "other"
+                ],
+                "type": "string"
+              },
+              "maxItems": 10,
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "limit": {
+          "default": 10,
+          "maximum": 25,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "cursor": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "q"
+      ],
+      "type": "object"
+    },
+    "search_tasks": {
+      "additionalProperties": false,
+      "properties": {
+        "query": {
+          "maxLength": 200,
+          "minLength": 1,
+          "type": "string"
+        },
+        "limit": {
+          "default": 20,
+          "maximum": 50,
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "query"
+      ],
+      "type": "object"
+    },
+    "search_workspace": {
+      "additionalProperties": false,
+      "properties": {
+        "query": {
+          "maxLength": 200,
+          "minLength": 1,
+          "type": "string"
+        },
+        "types": {
+          "anyOf": [
+            {
+              "items": {
+                "enum": [
+                  "task",
+                  "project",
+                  "habit",
+                  "calendar_event",
+                  "subject"
+                ],
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "limit": {
+          "default": 10,
+          "maximum": 25,
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "query"
+      ],
+      "type": "object"
+    },
+    "set_task_tags": {
+      "additionalProperties": false,
+      "properties": {
+        "task_id": {
+          "format": "uuid",
+          "type": "string"
+        },
+        "names": {
+          "items": {
+            "maxLength": 64,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 20,
+          "type": "array"
+        }
+      },
+      "required": [
+        "task_id",
+        "names"
+      ],
+      "type": "object"
+    },
+    "unarchive_project": {
+      "additionalProperties": false,
+      "properties": {
+        "project_id": {
+          "format": "uuid",
+          "type": "string"
+        },
+        "expected_revision": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "project_id"
+      ],
+      "type": "object"
+    },
+    "unarchive_task": {
+      "additionalProperties": false,
+      "properties": {
+        "task_id": {
+          "format": "uuid",
+          "type": "string"
+        },
+        "expected_revision": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "task_id"
+      ],
+      "type": "object"
+    },
+    "update_class_session": {
+      "additionalProperties": false,
+      "properties": {
+        "weekday": {
+          "anyOf": [
+            {
+              "maximum": 7,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "starts_local_time": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "ends_local_time": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "timezone": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "valid_from": {
+          "anyOf": [
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "valid_until": {
+          "anyOf": [
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "interval_weeks": {
+          "anyOf": [
+            {
+              "maximum": 52,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "room": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "session_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "session_id"
+      ],
+      "type": "object"
+    },
+    "update_event": {
+      "additionalProperties": false,
+      "properties": {
+        "title": {
+          "anyOf": [
+            {
+              "maxLength": 300,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "description": {
+          "anyOf": [
+            {
+              "maxLength": 8000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "location": {
+          "anyOf": [
+            {
+              "maxLength": 300,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "reminder_minutes_before": {
+          "anyOf": [
+            {
+              "maximum": 40320,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "kind": {
+          "anyOf": [
+            {
+              "enum": [
+                "event",
+                "reminder",
+                "work_session"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "status": {
+          "anyOf": [
+            {
+              "enum": [
+                "tentative",
+                "confirmed",
+                "cancelled"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "timezone": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "all_day": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "local_start": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "local_end": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "start_date": {
+          "anyOf": [
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "end_date_exclusive": {
+          "anyOf": [
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "rrule": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "event_id": {
+          "description": "UUID del evento",
+          "type": "string"
+        }
+      },
+      "required": [
+        "event_id"
+      ],
+      "type": "object"
+    },
+    "update_habit": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "description": {
+          "anyOf": [
+            {
+              "maxLength": 4000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "timezone": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "rrule": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "schedule_effective_from": {
+          "anyOf": [
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Inicio de la nueva frecuencia; por defecto, hoy en la zona del hábito."
+        },
+        "end_date": {
+          "anyOf": [
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "status": {
+          "anyOf": [
+            {
+              "enum": [
+                "active",
+                "paused",
+                "ended"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "goal_note": {
+          "anyOf": [
+            {
+              "maxLength": 1000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "goal_project_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "preferred_local_time": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "reminder_enabled": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "habit_id": {
+          "description": "UUID del hábito",
+          "type": "string"
+        }
+      },
+      "required": [
+        "habit_id"
+      ],
+      "type": "object"
+    },
+    "update_project": {
+      "additionalProperties": false,
+      "properties": {
+        "project_id": {
+          "format": "uuid",
+          "type": "string"
+        },
+        "expected_revision": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "patch": {
+          "additionalProperties": false,
+          "description": "PATCH con la misma semántica que TaskUpdate. `status=completed` fija `completed_at`.",
+          "properties": {
+            "name": {
+              "anyOf": [
+                {
+                  "maxLength": 200,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "description": {
+              "anyOf": [
+                {
+                  "maxLength": 20000,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "objective": {
+              "anyOf": [
+                {
+                  "maxLength": 2000,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "status": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "planned",
+                    "active",
+                    "paused",
+                    "completed",
+                    "cancelled"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "priority": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "low",
+                    "medium",
+                    "high",
+                    "urgent"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "start_date": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "target_date": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "manual_progress": {
+              "anyOf": [
+                {
+                  "maximum": 100,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "metadata": {
+              "anyOf": [
+                {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            }
+          },
+          "type": "object"
+        }
+      },
+      "required": [
+        "project_id",
+        "patch"
+      ],
+      "type": "object"
+    },
+    "update_resource_metadata": {
+      "additionalProperties": false,
+      "properties": {
+        "resource_id": {
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+          "type": "string"
+        },
+        "expected_revision": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "title": {
+          "anyOf": [
+            {
+              "maxLength": 300,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "folder_id": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "description": {
+          "anyOf": [
+            {
+              "maxLength": 4000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "tags": {
+          "anyOf": [
+            {
+              "items": {
+                "maxLength": 60,
+                "minLength": 1,
+                "type": "string"
+              },
+              "maxItems": 32,
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "resource_id",
+        "expected_revision"
+      ],
+      "type": "object"
+    },
+    "update_subject": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "description": {
+          "anyOf": [
+            {
+              "maxLength": 4000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "teacher": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "color": {
+          "anyOf": [
+            {
+              "pattern": "^#[0-9a-fA-F]{6}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "subject_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "subject_id"
+      ],
+      "type": "object"
+    },
+    "update_task": {
+      "additionalProperties": false,
+      "properties": {
+        "task_id": {
+          "format": "uuid",
+          "type": "string"
+        },
+        "expected_revision": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "patch": {
+          "additionalProperties": false,
+          "description": "PATCH: lo ausente no cambia; `null` borra si el campo lo admite (`model_fields_set`).",
+          "properties": {
+            "title": {
+              "anyOf": [
+                {
+                  "maxLength": 300,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "description": {
+              "anyOf": [
+                {
+                  "maxLength": 20000,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "status": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "pending",
+                    "in_progress",
+                    "on_hold",
+                    "cancelled"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "priority": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "low",
+                    "medium",
+                    "high",
+                    "urgent"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "start_at": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "due_at": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "due_date": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "estimated_minutes": {
+              "anyOf": [
+                {
+                  "maximum": 1000000,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "parent_task_id": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "project_id": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "subject_id": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "position": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "tags": {
+              "anyOf": [
+                {
+                  "items": {
+                    "maxLength": 64,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "maxItems": 20,
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "metadata": {
+              "anyOf": [
+                {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            }
+          },
+          "type": "object"
+        }
+      },
+      "required": [
+        "task_id",
+        "patch"
+      ],
+      "type": "object"
+    },
+    "update_time_block": {
+      "additionalProperties": false,
+      "properties": {
+        "title": {
+          "anyOf": [
+            {
+              "maxLength": 300,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "description": {
+          "anyOf": [
+            {
+              "maxLength": 8000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "timezone": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "local_start": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "local_end": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "status": {
+          "anyOf": [
+            {
+              "enum": [
+                "planned",
+                "in_progress",
+                "done",
+                "skipped",
+                "cancelled"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "task_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "block_id": {
+          "description": "UUID del bloque de tiempo",
+          "type": "string"
+        }
+      },
+      "required": [
+        "block_id"
+      ],
+      "type": "object"
+    }
+  }
+}
