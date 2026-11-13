@@ -24,6 +24,7 @@ class VoiceSettings(BaseSettings):
         env_prefix="DRAKTER_",
         env_file=env_file(),
         env_file_encoding="utf-8",
+        env_ignore_empty=True,  # an empty `KEY=` in .env means "default", not ""
         extra="ignore",
         frozen=True,
     )
