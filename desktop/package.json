@@ -7,9 +7,9 @@
   "main": "./out/main/index.js",
   "scripts": {
     "postinstall": "node scripts/ensure-electron.cjs",
-    "dev": "electron-vite dev",
+    "dev": "electron-vite dev -- --allow-loopback-in-peer-connection",
     "build": "npm run typecheck && electron-vite build",
-    "start": "electron-vite preview",
+    "start": "electron-vite preview -- --allow-loopback-in-peer-connection",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json"
   },
   "dependencies": {

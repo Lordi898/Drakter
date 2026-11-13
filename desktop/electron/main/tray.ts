@@ -36,28 +36,41 @@ export function activateVoice(backend: BackendHost, trigger: 'hotkey' | 'ui'): P
   })
 }
 
+/** Lo informa el renderer (`voice:mic-state`); hasta entonces se supone abierto. */
+let micOpen = true
+let trayBackend: BackendHost | null = null
+
+function buildMenu(backend: BackendHost): Menu {
+  return Menu.buildFromTemplate([
+    { label: 'Abrir', click: () => focusMainWindow() },
+    { label: 'Activar voz', click: () => void activateVoice(backend, 'ui') },
+    {
+      label: micOpen ? 'Silenciar micrófono' : 'Activar micrófono',
+      click: () => getMainWindow()?.webContents.send(IPC_CHANNELS.voiceMicToggle)
+    },
+    { type: 'separator' },
+    {
+      label: 'Salir',
+      click: () => {
+        markQuitting()
+        app.quit()
+      }
+    }
+  ])
+}
+
+export function setTrayMicOpen(open: boolean): void {
+  if (open === micOpen) return
+  micOpen = open
+  if (tray && trayBackend) tray.setContextMenu(buildMenu(trayBackend))
+}
+
 export function createTray(backend: BackendHost): Tray {
   if (tray) return tray
+  trayBackend = backend
   tray = new Tray(drawIcon())
   tray.setToolTip('Drakter')
-  tray.setContextMenu(
-    Menu.buildFromTemplate([
-      { label: 'Abrir', click: () => focusMainWindow() },
-      { label: 'Activar voz', click: () => void activateVoice(backend, 'ui') },
-      {
-        label: 'Silenciar micrófono',
-        click: () => getMainWindow()?.webContents.send(IPC_CHANNELS.voiceMicToggle)
-      },
-      { type: 'separator' },
-      {
-        label: 'Salir',
-        click: () => {
-          markQuitting()
-          app.quit()
-        }
-      }
-    ])
-  )
+  tray.setContextMenu(buildMenu(backend))
   tray.on('click', () => focusMainWindow())
   return tray
 }

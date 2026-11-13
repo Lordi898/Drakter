@@ -191,7 +191,9 @@ function onUserMessage(p: {
   const pending = byId
     ? undefined
     : messages.find((m) => m.role === 'user' && m.status === 'sending' && m.turnId === null && m.content === p.text)
-  const byTurn = messages.find((m) => m.role === 'user' && m.turnId === p.turn_id)
+  // Optimista de texto que ya tiene turno (id = client_message_id). No aplica a la voz: no hay
+  // optimista, y una corrección por voz (steer) llega con el turn_id del turno que corrige.
+  const byTurn = viaVoice ? undefined : messages.find((m) => m.role === 'user' && m.turnId === p.turn_id)
   const known = byId ?? pending ?? byTurn
   if (known) {
     if (known.turnId === null || (viaVoice && !known.viaVoice)) {

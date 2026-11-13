@@ -64,6 +64,8 @@ class WebRtcVoiceClient implements VoiceClient {
   private pingTimer: ReturnType<typeof setInterval> | null = null
   private readonly listeners = new Set<Listener>()
   private unsubscribers: Array<() => void> = []
+  /** Último estado del micrófono enviado a main (etiqueta de la bandeja). */
+  private reportedMic: boolean | null = null
 
   async start(): Promise<void> {
     if (this.running) return
@@ -127,6 +129,11 @@ class WebRtcVoiceClient implements VoiceClient {
   }
 
   private notify(): void {
+    const open = this.micOpen()
+    if (open !== this.reportedMic) {
+      this.reportedMic = open
+      void window.api.voice.reportMicState(open).catch(() => undefined)
+    }
     for (const listener of [...this.listeners]) {
       try {
         listener()
@@ -256,8 +263,9 @@ class WebRtcVoiceClient implements VoiceClient {
       })
       if (generation !== this.generation) return
       if (!reply.ok) {
-        // Un `pc_id` que la voz ya no reconoce (reinicio) se descarta para la próxima oferta.
-        if (reply.status === 400) this.pcId = null
+        // Sin `pc_id` la voz siempre acepta la oferta (sustituye la conexión): tras un rechazo
+        // (p. ej. 409 invalid_request o 503 porque la voz se reinició) se reoferta sin él.
+        this.pcId = null
         throw new Error(`Oferta rechazada (${reply.status} ${reply.code})`)
       }
       this.pcId = reply.data.pc_id

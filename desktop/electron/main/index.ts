@@ -19,6 +19,11 @@ process.on('unhandledRejection', (reason) => {
 
 const ACTIVATE_ARG = 'activate'
 
+// Voz v2: WebRTC con voice/ en 127.0.0.1. La vía probada (WP8a) es el argv (scripts/drakter,
+// `npm run dev`/`start`); esto es el respaldo para arranques sin lanzador, antes de `ready`.
+if (!app.commandLine.hasSwitch('allow-loopback-in-peer-connection')) {
+  app.commandLine.appendSwitch('allow-loopback-in-peer-connection')
+}
 applySandboxPolicy()
 registerRendererScheme()
 
