@@ -20,6 +20,9 @@ class ToolContext:
     call_id: str
     principal: Literal["agent"]
     state: Any  # app.state
+    # Set by the job lane (`integrations/hermes/lanes.py`), never by the model: a call made
+    # from a background job. It travels to `confirmation.requested.job_id`.
+    job_id: UUID | None = None
 
 
 ToolHandler = Callable[[ToolContext, Any], "BaseModel | Awaitable[BaseModel]"]
