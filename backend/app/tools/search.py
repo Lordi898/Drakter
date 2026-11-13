@@ -11,9 +11,11 @@ from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from drakter_contracts.models.system import SearchHitOut
+
 from app.database.connection import connect
-from app.services.search import search_global
-from app.services.search_schemas import MAX_QUERY_CHARS, SearchEntityType, SearchItem, SearchPage
+from app.services.search import SearchPage, search_global
+from app.services.search_schemas import MAX_QUERY_CHARS, SearchEntityType
 from app.tools.spec import RiskClass, ToolContext, ToolSpec, untrusted_envelope
 
 MAX_TOOL_RESULTS = 25
@@ -58,16 +60,12 @@ class SearchAllResult(BaseModel):
     has_more: bool
 
 
-def _excerpt(item: SearchItem) -> str:
-    return "".join(part.text for part in item.snippet)
-
-
-def _hit(item: SearchItem) -> WorkspaceHit:
+def _hit(item: SearchHitOut) -> WorkspaceHit:
     return WorkspaceHit(
         entity_type=item.entity_type,  # type: ignore[arg-type]
-        entity_id=item.entity_id,
+        entity_id=str(item.entity_id),
         title=item.title,
-        excerpt=_excerpt(item),
+        excerpt=item.snippet,
     )
 
 
@@ -90,21 +88,21 @@ def search_workspace(ctx: ToolContext, args: SearchWorkspaceArgs) -> SearchWorks
     page = _run(ctx, query=args.query, types=list(types), limit=args.limit)
     return SearchWorkspaceResult(
         items=[_hit(item) for item in page.items],
-        has_more=page.total > len(page.items),
+        has_more=page.next_cursor is not None,
     )
 
 
 def search_all(ctx: ToolContext, args: SearchAllArgs) -> SearchAllResult:
     page = _run(ctx, query=args.query, types=args.types, limit=args.limit)
     documents = [
-        untrusted_envelope("resource", item.entity_id, f"{item.title}\n{_excerpt(item)}".strip())
+        untrusted_envelope("resource", str(item.entity_id), f"{item.title}\n{item.snippet}".strip())
         for item in page.items
-        if item.trust == "untrusted"
+        if item.entity_type == "resource"
     ]
     return SearchAllResult(
-        items=[_hit(item) for item in page.items if item.trust != "untrusted"],
+        items=[_hit(item) for item in page.items if item.entity_type != "resource"],
         documents=documents,
-        has_more=page.total > len(page.items),
+        has_more=page.next_cursor is not None,
     )
 
 
@@ -121,6 +119,7 @@ TOOLS: tuple[ToolSpec, ...] = (
         permission="search.read",
         risk=RiskClass.READ,
         handler=search_workspace,
+        errors=("service_unavailable",),
         idempotent=True,
         audit=_AUDIT,
     ),
@@ -136,6 +135,7 @@ TOOLS: tuple[ToolSpec, ...] = (
         permission="search.read",
         risk=RiskClass.READ,
         handler=search_all,
+        errors=("service_unavailable",),
         idempotent=True,
         returns_untrusted=True,
         audit=_AUDIT,

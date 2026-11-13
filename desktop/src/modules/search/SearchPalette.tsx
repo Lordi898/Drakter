@@ -14,6 +14,7 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/compone
 import { navigateTo } from '@/navigation/route'
 import type { SectionId } from '@/navigation/sections'
 import type { SearchEntityType, SearchItem } from './searchApi'
+import { highlightTerms } from './highlight'
 import { useGlobalSearch } from './useGlobalSearch'
 
 const TYPE_META: Record<
@@ -44,12 +45,11 @@ function groupItems(items: readonly SearchItem[]): Group[] {
   return Array.from(map, ([type, list]) => ({ type, items: list }))
 }
 
-function Snippet({ item }: { item: SearchItem }) {
-  const text = item.snippet.map((p) => p.text).join('')
-  if (!text || text.trim() === item.title.trim()) return null
+function Snippet({ item, query }: { item: SearchItem; query: string }) {
+  if (!item.snippet) return null
   return (
     <span className="block truncate text-xs text-muted-foreground">
-      {item.snippet.map((part, i) =>
+      {highlightTerms(item.snippet, query).map((part, i) =>
         part.match ? (
           <mark key={i} className="rounded-xs bg-accent px-0.5 text-accent-foreground">
             {part.text}
@@ -216,9 +216,9 @@ export function SearchPalette() {
                       <Icon className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
                       <span className="min-w-0 flex-1">
                         <span className="block truncate">{item.title}</span>
-                        <Snippet item={item} />
+                        <Snippet item={item} query={query} />
                       </span>
-                      {item.trust === 'untrusted' && (
+                      {item.entity_type === 'resource' && (
                         <Badge variant="outline" title="Contenido externo">
                           documento
                         </Badge>
