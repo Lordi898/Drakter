@@ -388,7 +388,7 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 - [x] Validar rutas.
 - [x] Limitar acceso a archivos.
 - [x] Proteger operaciones destructivas.
-  ⚠️ Brechas de diseño del banco red-team que siguen abiertas: contaminación solo en memoria (CONF-46/INJ-26), canal de datos de `TurnRequest` y contaminación de `build_context` (INJ-11/14/25), eco de documentos con `trust=derived` (INJ-32), título y URL remotos fuera del sobre en `read_resource` (INJ-05). El informe las daba por no explotables mientras `build_context` no estuviera conectado; ya lo está (`df258b1`), así que hay que reevaluarlas: tainted ya se propaga (`df258b1`); repaso de drakter-34 pendiente.
+  ⚠️ Brechas abiertas del banco red-team (cribado de drakter-42): INJ-11 e INJ-25, diseño pendiente: los recuerdos viajan dentro del texto del turno; hace falta un campo de contexto aparte en `TurnRequest`; mitigado porque tainted se propaga y fuerza confirmación (`df258b1`, `1588c04`). CONF-46/INJ-26: la contaminación vive solo en memoria y se pierde al reiniciar. INJ-24: una herramienta WRITE sin `summarize` llega a la puerta (se adapta con resumen por defecto). INJ-05: título y URL remotos fuera del sobre en `read_resource`. INJ-14 cerrado (`1588c04`); INJ-32 arreglado en código (`1588c04`), la sonda del banco está desfasada. Recuento final: drakter-34.
 - [x] Crear auditoría.
 - [x] Crear copias de seguridad.
 - [x] Probar restauración.
