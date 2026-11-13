@@ -23,7 +23,7 @@ reason = "Estructura, documentación o convenciones: la revisión es documental.
 
 [[item]]
 checklist = 0
-text = "Crear estructura de carpetas."
+text = "Crear estructura de carpetas (cada carpeta se crea cuando entra código)."
 blocked = "documental"
 reason = "Estructura, documentación o convenciones: la revisión es documental."
 
@@ -533,7 +533,7 @@ blocked = "hardware"
 
 [[item]]
 checklist = 17
-text = "Medir VRAM."
+text = "Medir uso de CPU y RAM (no hay VRAM dedicada)."
 blocked = "hardware"
 
 [[item]]
