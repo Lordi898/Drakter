@@ -22,7 +22,7 @@ Los routers entran por autodescubrimiento. Falta enlazar el servicio en `_instal
 
 ```python
 # _install_services
-actions = install_security(app, settings, agent_grants_path=REPO / "agent/configuration/permissions.json", events=<EventSink>)
+actions = install_security(app, settings, agent_grants_path=REPO / "agent/configuration/permissions.json")
 # registrar aquí: actions.registry.register(...), o tool_action_spec(...) por cada ToolSpec
 # lifespan, después de migrate y antes de on_ready()
 await start_security(app)
@@ -47,6 +47,14 @@ La matriz la aplica `SecurityGuardMiddleware`. El token `approver` solo vive en 
 Flujo de main: `GET` del detalle con `ui` → `dialog.showMessageBox` con el foco en Cancelar → `approve` con `approver`.
 
 Un solo uso: la transición atómica a `approved` y `executing` con estado, `args_hash` y caducidad en el `WHERE`. `pending_confirmations.args_hash` es el nombre de la columna; en la API solo existe `params_hash`.
+
+## Quién ejecuta lo aprobado
+
+`approve` busca por `tool_name`, en este orden: los ejecutores de `load_confirmed_executors` (`storage_confirmed.CONFIRMED_ACTIONS` y `habits_calendar_support.CONFIRMED_ACTIONS`) y después `ActionRegistry`. Los ejecutores abren su transacción y auditan su efecto, así que corren con `executing` ya confirmado y sus `targets` con `revision` se comparan contra `entities`.
+
+Toda fila debe guardar `args_hash = compute_params_hash(tool_name, canonical_json(args))`, y TTL de 300 s. Una fila con otro hash falla en `approve` con `conflict`.
+
+`confirmation.requested` sale por `app.state.event_hub` una vez por fila, sea cual sea el módulo que la creó: al pedirla desde `ActionService`, o en el siguiente tick (1 s) si la creó otro módulo.
 
 ## Reglas
 

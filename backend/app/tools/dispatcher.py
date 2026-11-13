@@ -42,7 +42,8 @@ def dispatch(
         spec = actions.registry.get(tool)
         if spec is None:
             return _refuse(actions, ctx, tool[:64], ErrorCode.PERMISSION_DENIED, "Unknown tool")
-        if ctx.origin is Origin.MCP and (ctx.principal is not Principal.AGENT or not ctx.turn_id):
+        is_agent = ctx.principal is Principal.AGENT
+        if (is_agent and not ctx.turn_id) or (ctx.origin is Origin.MCP and not is_agent):
             return _refuse(actions, ctx, tool, ErrorCode.NO_ACTIVE_TURN, "No active turn")
         try:
             params = spec.args_model.model_validate(dict(raw_args))

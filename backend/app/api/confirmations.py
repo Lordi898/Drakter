@@ -36,6 +36,16 @@ def _request_id(request: Request) -> str:
     return request.scope["state"]["request_id"]
 
 
+def _require_exact_path(request: Request, verb: str) -> None:
+    """Second barrier: the guard's role check holds only for the exact path it recognizes.
+
+    The router also matches a final newline (`approve%0A`), which the guard does not
+    treat as this route. Without this, the `ui` token would decide.
+    """
+    if request.scope["path"].rsplit("/", 1)[-1] != verb:
+        raise AppError("permission_denied", "Approver required", 403)
+
+
 @router.get("")
 def list_confirmations(
     request: Request,
@@ -72,6 +82,7 @@ def get_confirmation(request: Request, action_id: UUID) -> dict[str, Any]:
 def approve_confirmation(
     request: Request, action_id: UUID, body: ApproveBody
 ) -> dict[str, Any]:
+    _require_exact_path(request, "approve")
     actions = _actions(request)
     conn = actions.open()
     try:
@@ -89,6 +100,7 @@ def approve_confirmation(
 
 @router.post("/{action_id}/reject")
 def reject_confirmation(request: Request, action_id: UUID) -> dict[str, str]:
+    _require_exact_path(request, "reject")
     actions = _actions(request)
     conn = actions.open()
     try:

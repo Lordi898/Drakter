@@ -53,8 +53,8 @@ def _actor(ctx: Any, tainted: bool) -> ActorContext:
         principal=Principal.AGENT,
         origin=Origin.MCP,
         correlation_id=str(ctx.turn_id),
-        turn_id=str(ctx.turn_id),
-        session_id=str(ctx.session_id),
+        turn_id=str(ctx.turn_id) if ctx.turn_id else None,
+        session_id=str(ctx.session_id) if ctx.session_id else None,
         tainted=tainted,
     )
 
