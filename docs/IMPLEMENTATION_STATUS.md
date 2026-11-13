@@ -2,7 +2,30 @@
 
 Las siguientes listas son el control de trabajo del proyecto y la única lista viva de casillas. Se marcarán cuando la tarea esté implementada y funcione como se espera (`CLAUDE.md` §4). Lo bloqueado se anota con ⚠️. La equivalencia entre checklists, pasos del orden real y fases de cada plan está en `DECISIONS.md`.
 
-> **Pasada integrada 2026-11-13** (`drakter/integracion`): solo se marca lo visto funcionar en la app arrancada (Electron + backend + Hermes con el stub). Detalle en `RUN_STATE.md`.
+> **Cierre 2026-11-13** (`drakter/integracion`): cada casilla se marcó a partir del informe de su finalizador o de la pasada integrada final (`scripts/verify-all.sh`, 44/44 sobre `183cc25`), con Claude Haiku 5.5 real donde dependía del modelo. `[x]` con ⚠️ = funciona, con una reserva anotada; `[ ]` con ⚠️ = bloqueado o a medias, con el motivo; `[ ]` sin nota = sin código (no se tocó). La Checklist 18 no entra en el cierre. Detalle operativo en `RUN_STATE.md`.
+
+| Checklist | Casillas | `[x]` | de ellas con ⚠️ | `[ ]` con ⚠️ | `[ ]` sin código |
+|---|---|---|---|---|---|
+| 0. Arquitectura y preparación | 14 | 14 | 0 | 0 | 0 |
+| 1. Aplicación de escritorio | 13 | 13 | 0 | 0 | 0 |
+| 2. Backend | 12 | 12 | 0 | 0 | 0 |
+| 3. Hermes | 12 | 11 | 0 | 1 | 0 |
+| 4. Personalidad y contexto | 17 | 17 | 0 | 0 | 0 |
+| 5. Personaje | 19 | 16 | 16 | 3 | 0 |
+| 6. Base de datos y relaciones | 18 | 18 | 0 | 0 | 0 |
+| 7. Tareas y proyectos | 23 | 23 | 0 | 0 | 0 |
+| 8. Hábitos | 12 | 12 | 1 | 0 | 0 |
+| 9. Calendario y asignaturas | 18 | 18 | 0 | 0 | 0 |
+| 10. Almacén e indexación | 25 | 25 | 1 | 0 | 0 |
+| 11. Relaciones avanzadas | 14 | 13 | 0 | 1 | 0 |
+| 12. Memoria | 22 | 20 | 4 | 0 | 2 |
+| 13. Skills y herramientas | 15 | 7 | 1 | 8 | 0 |
+| 14. Voz | 18 | 13 | 1 | 5 | 0 |
+| 15. Automejora | 11 | 11 | 2 | 0 | 0 |
+| 16. Seguridad y fiabilidad | 15 | 14 | 2 | 1 | 0 |
+| 17. Optimización y lanzamiento | 17 | 3 | 1 | 6 | 8 |
+| 18. Ampliaciones futuras | 10 | 0 | 0 | 0 | 10 |
+| **Total 0–17** | **295** | **260** | **29** | **25** | **10** |
 
 ## Checklist 0. Arquitectura y preparación
 
@@ -263,7 +286,7 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 - [x] Crear visualización de relaciones.
   Nota: vista en Electron real con backend (drakter-48): lista con filtros, panel con grafo SVG y relaciones salientes, sin errores de consola. Detalles menores: la lista muestra tipo + ID corto en vez del título, y el panel contextual del shell sigue en «Nada seleccionado».
 - [ ] Crear herramientas Hermes.
-  ⚠️ Con Claude Haiku 5.5 real por Hermes, leer, buscar y crear relaciones funcionan (`create_relationship`, `get_related_items`). `delete_relationship` queda denegado (`confirmation_unavailable`) hasta que el runtime use la puerta real de confirmación (drakter-34). El desvío de catálogo de `get_related_items` ya está corregido.
+  ⚠️ Con Claude Haiku 5.5 real por Hermes, leer, buscar y crear relaciones funcionan (`create_relationship`, `get_related_items`). `delete_relationship` se denegaba porque el runtime no usaba la puerta real; desde `b722aca` debería crear la confirmación pendiente, pero no se ha recomprobado con el modelo.
 - [x] Probar integridad y eliminación.
 
 ## Checklist 12. Memoria
@@ -292,14 +315,12 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
   ⚠️ El archivo existe y cita las herramientas reales, pero Hermes no carga las Skills (toolset `skills` apagado por `skill_manage`), como las de la Checklist 13.
 - [x] Probar persistencia.
 - [x] Probar recuperación.
-  ⚠️ Sin modelo real (sin clave): comprobado por REST y por la herramienta `search_memory`.
 - [x] Probar recuerdos contradictorios.
 - [x] Probar información obsoleta.
 
 ## Checklist 13. Skills y herramientas
 
 - [x] Crear estructura de Skills.
-  ⚠️ Las 78 herramientas cargan en el registro y Hermes arranca con ellas (tras arreglar imports y auditorías en la integración), pero el stub no las usa: selección y encadenado sin probar con modelo real.
 - [ ] Crear Skill de tareas.
   ⚠️ Creada y coherente con las herramientas reales, pero **inerte**: `home.py` desactiva el toolset `skills` de Hermes porque arrastra `skill_manage` (H-06/F14). Hermes no la carga; el modelo se guía por la descripción y el esquema de cada herramienta MCP. Corregidas las herramientas citadas en `workspace-subjects` y `workspace-storage` (`b8086ce`).
 - [ ] Crear Skill de proyectos.
@@ -318,7 +339,6 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
   ⚠️ El archivo existe, pero sus herramientas (`get_configuration`, `propose_configuration_change`) son PROPUESTA y no existen ni en el catálogo ni en el backend. Además está inerte.
 - [x] Definir parámetros.
 - [x] Definir permisos.
-  ⚠️ Arreglado: faltaba `storage.write` y se denegaban 4 herramientas del almacén (ya concedido en `drakter/integracion`). `improvement.read`/`improvement.write` se conceden con las dos escrituras en `RiskClass.CONFIRM` (`5dd55b1`); hoy esas escrituras quedan denegadas porque el runtime usa `DefaultToolGate` (ver «Definir confirmaciones»).
   Nota: con el modelo real (prueba de relaciones de drakter-41), el agente llamó por iniciativa propia a create/list/get_improvement_proposal y record_improvement_feedback sin que se le pidiera. Es seguro (las escrituras exigen confirmación), pero hay que revisar las descripciones de esas herramientas o las instrucciones de cuándo proponer mejoras; se deja para el rediseño de la personalidad y la conversación.
 - [x] Definir confirmaciones.
 - [x] Definir errores.
@@ -366,7 +386,7 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 - [x] Crear evaluaciones.
 - [x] Crear entorno de pruebas.
 - [x] Crear flujo de aprobación.
-  ⚠️ En el backend funciona por `ActionService` (`approval-request`/`revert-request` → 409 → `/api/v1/confirmations/{id}/approve`, 300 s, ligado al digest, de un solo uso y auditado; el agente recibe DENY) con `2425da5` y `b1a49a3`. No hay pantalla de automejora en `desktop/src/modules/`, y `routes.generated.ts` aún lista la ruta `/approve` retirada.
+  ⚠️ En el backend funciona por `ActionService` (`approval-request`/`revert-request` → 409 → `/api/v1/confirmations/{id}/approve`, 300 s, ligado al digest, de un solo uso y auditado; el agente recibe DENY). No hay pantalla de automejora en `desktop/src/modules/`.
 - [x] Integrar Git.
 - [x] Crear historial de cambios.
 - [x] Crear informes.
@@ -393,7 +413,7 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 - [x] Probar recuperación de Hermes.
 - [x] Probar errores de memoria.
 - [x] Revisar datos sensibles.
-  ⚠️ Sigue abierta FILE-DB-02 (TOCTOU en `connect`, riesgo bajo). INJ-05 (título y URL remotos fuera del sobre en `read_resource`) en curso (drakter-42).
+  ⚠️ Brechas de diseño abiertas: FILE-DB-02 (TOCTOU en `connect`, riesgo bajo) e INJ-05 (título y URL de `read_resource` fuera del sobre).
 
 ## Checklist 17. Optimización y lanzamiento
 
