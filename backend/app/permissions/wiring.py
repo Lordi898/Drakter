@@ -40,6 +40,10 @@ REPO_ROOT: Final = Path(__file__).resolve().parents[3]
 AGENT_GRANTS: Final = REPO_ROOT / "agent/configuration/permissions.json"
 PORTS_STATE_KEY: Final = "workspace_ports"  # app/api/tasks_http.py and app/tools/tasks.py
 _MAX_SUMMARY: Final = 500
+# Rows and executors of the task/project services. The prefix keeps them apart from the
+# agent tools `delete_task`, `update_task` and `complete_task`: executors win over the
+# registry in `approve`, so a shared name would run the service executor on a tool's row.
+WORKSPACE_PREFIX: Final = "workspace_"
 
 
 def _clean_summary(text: str) -> str:
@@ -66,6 +70,7 @@ class PendingConfirmationGate:
     ) -> Any:
         from app.schemas.tasks import ConfirmationTicket
 
+        tool_name = WORKSPACE_PREFIX + tool_name
         canonical = canonical_json(dict(args))
         digest = compute_params_hash(tool_name, canonical)
         stored_targets = canonical_json(
@@ -144,7 +149,7 @@ def _workspace_executor(
             correlation_id=ctx.correlation_id,
             tool_name=tool,
         )
-        targets = _stored_targets(conn, tool, args)
+        targets = _stored_targets(conn, WORKSPACE_PREFIX + tool, args)
         result = run(ServiceContext(conn=conn, actor=actor, ports=ports), args, targets)
         return result if isinstance(result, Mapping) else {}
 
@@ -161,7 +166,7 @@ def workspace_executors(ports: Any) -> dict[str, ConfirmedExecutor]:
         return executors
     for table in (TASK_CONFIRMABLE, PROJECT_CONFIRMABLE):
         for tool, run in table.items():
-            executors[tool] = _workspace_executor(run, tool, ports)
+            executors[WORKSPACE_PREFIX + tool] = _workspace_executor(run, tool, ports)
     return executors
 
 
