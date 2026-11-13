@@ -202,10 +202,10 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 
 - [x] Crear interfaz de calendario.
 - [ ] Crear vista diaria.
-  ⚠️ Código presente (`DayView.tsx`, botón Día visible) y typecheck limpio; falta la captura en la app (en cola del lock).
+  ⚠️ Código presente (`DayView.tsx`, botón Día visible) y typecheck limpio; falta verla en la app: queda para la pasada completa de drakter-49.
 - [x] Crear vista semanal.
 - [ ] Crear vista mensual.
-  ⚠️ Código presente (`MonthView.tsx`, botón Mes visible) y typecheck limpio; falta la captura en la app (en cola del lock).
+  ⚠️ Código presente (`MonthView.tsx`, botón Mes visible) y typecheck limpio; falta verla en la app: queda para la pasada completa de drakter-49.
 - [x] Crear eventos.
 - [x] Editar eventos.
 - [x] Eliminar eventos.
