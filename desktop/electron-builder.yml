@@ -1,0 +1,83 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/electron-userland/electron-builder/v26.18.0/packages/app-builder-lib/scheme.json
+# Empaquetado de Drakter Desktop (electron-builder 26.18.0). Ver electron-builder.README.md.
+appId: app.drakter.desktop
+productName: Drakter
+copyright: Drakter
+executableName: drakter
+
+directories:
+  output: release
+
+asar: true
+publish: null # sin auto-actualizacion por red por ahora (ver README)
+
+# Solo el resultado de `electron-vite build` y package.json. Los dependencies del renderer
+# ya van empaquetados por Vite; si main llega a importar un paquete externo, quitar la
+# exclusion de node_modules.
+files:
+  - out/**
+  - package.json
+  - "!**/*.map"
+  - "!**/*.ts"
+  - "!**/*.tsx"
+  - "!**/.env*"
+  - "!node_modules/**"
+
+# extraResources va por plataforma (linux:/win: abajo): el backend FastAPI congelado con
+# PyInstaller (electron-builder.build-backend.mjs) no se cross-compila. Queda en
+# resources/backend/. Sin Hermes, sin OpenViking (AGPL, servicio aparte) y sin modelos.
+
+# Fuses endurecidos (se aplican antes de firmar). Ver README: GrantFileProtocolExtraPrivileges.
+electronFuses:
+  runAsNode: false
+  enableNodeOptionsEnvironmentVariable: false
+  enableNodeCliInspectArguments: false
+  enableCookieEncryption: true
+  onlyLoadAppFromAsar: true
+  enableEmbeddedAsarIntegrityValidation: true
+  grantFileProtocolExtraPrivileges: false
+
+linux:
+  target:
+    - target: deb
+      arch: [x64]
+    - target: AppImage
+      arch: [x64]
+  category: Office
+  maintainer: Drakter <drakter@localhost>
+  synopsis: Agente personal de IA
+  description: Drakter Desktop, agente personal de IA local.
+  extraResources:
+    - from: ../backend/dist/linux/drakter-backend
+      to: backend
+      filter: &backend-filter
+        - "**/*"
+        - "!**/.env*"
+        - "!**/*.pem"
+        - "!**/*.key"
+        - "!**/*.map"
+        - "!**/__pycache__/**"
+
+deb:
+  packageCategory: utils
+  priority: optional
+
+# AppImage no puede llevar chrome-sandbox con SUID: depende de user namespaces sin restringir.
+# Camino soportado: .deb (ver README).
+
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+  # Sin firma por ahora: no se define certificado ni publisherName.
+  extraResources:
+    - from: ../backend/dist/win/drakter-backend
+      to: backend
+      filter: *backend-filter
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowElevation: false
+  allowToChangeInstallationDirectory: true
+  deleteAppDataOnUninstall: false # los datos del usuario nunca se borran al desinstalar

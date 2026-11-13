@@ -1,0 +1,29 @@
+{
+  "checks": [
+    {
+      "name": "whitespace",
+      "argv": [
+        "{python}",
+        "-I",
+        "-c",
+        "import sys\nbad = 0\nhunk = False\nfor line in open(sys.argv[1], 'rb'):\n    if line.startswith(b'diff --git '):\n        hunk = False\n    elif line.startswith(b'@@'):\n        hunk = True\n    elif hunk and line.startswith(b'+'):\n        text = line[1:].rstrip(b'\\r\\n')\n        if text != text.rstrip() or text.startswith((b'<<<<<<< ', b'>>>>>>> ')):\n            bad += 1\nif bad:\n    print(f'{bad} added line(s) with trailing whitespace or conflict markers')\nsys.exit(1 if bad else 0)\n",
+        "{diff}"
+      ],
+      "timeout_s": 30
+    },
+    {
+      "name": "compileall",
+      "argv": [
+        "{python}",
+        "-I",
+        "-X",
+        "pycache_prefix=/tmp/pycache",
+        "-m",
+        "compileall",
+        "-q",
+        "backend/app"
+      ],
+      "timeout_s": 120
+    }
+  ]
+}
