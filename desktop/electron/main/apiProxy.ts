@@ -35,11 +35,13 @@ const HEADER_VALUE_PATTERN = /^[\x20-\x7e]{1,128}$/
 const METHODS: ReadonlySet<string> = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE'])
 
 // Defensa en profundidad: decidir confirmaciones y escribir raíces de almacén exigen
-// el token approver y solo los usa main. Otras rutas `/approve` (memoria, mejora) son legítimas.
+// el token approver y solo los usa main; aplicar o revertir mejoras no se expone al renderer.
+// Otras rutas `/approve` (memoria, mejora) son legítimas.
 for (const route of ALLOWED_ROUTES) {
   const decides = route.path.startsWith(CONFIRMATIONS_PREFIX) && /\/(approve|reject|approval-token)\/?$/.test(route.path)
   const writesStorage = isStorageLocations(route.path) && route.method !== 'GET'
-  if (decides || writesStorage) throw new Error(`Ruta prohibida en ALLOWED_ROUTES: ${route.method} ${route.path}`)
+  const changesProduction = /^\/api\/v1\/improvement\/proposals\/[^/]+\/(apply|revert)\/?$/.test(route.path)
+  if (decides || writesStorage || changesProduction) throw new Error(`Ruta prohibida en ALLOWED_ROUTES: ${route.method} ${route.path}`)
 }
 
 function isStorageLocations(path: string): boolean {

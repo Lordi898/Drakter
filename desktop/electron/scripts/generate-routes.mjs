@@ -27,6 +27,8 @@ function readContract() {
 function isApproverOnly(method, path) {
   if (/^\/api\/v1\/confirmations\/[^/]+\/(approve|reject|approval-token)$/.test(path)) return true
   if (path.startsWith('/api/v1/permissions')) return true
+  // Aplicar o revertir una mejora cambia producción: la GUI con token `ui` no las llama (drakter-33).
+  if (/^\/api\/v1\/improvement\/proposals\/[^/]+\/(apply|revert)$/.test(path)) return true
   return path.startsWith('/api/v1/storage-locations') && method !== 'GET'
 }
 
