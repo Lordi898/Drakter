@@ -55,7 +55,8 @@ Detalle por casilla en [`docs/IMPLEMENTATION_STATUS.md`](docs/IMPLEMENTATION_STA
 - **Python >= 3.14** para Hermes, en un venv propio separado del backend. Hermes se instala desde git con el tag v0.22.7 (`b200f5bc`), nunca desde PyPI (ver [`docs/installation/hermes-y-openviking.md`](docs/installation/hermes-y-openviking.md)).
 - **[`uv`](https://docs.astral.sh/uv/)** para el venv del backend.
 - **Node 24 y npm.**
-- Una **clave de API de Anthropic** para usar el modelo real. Sin ella, la app funciona con el stub de desarrollo (`tools/dev-llm-stub`).
+- **Hermes Agent** instalado en ese venv (`hermes-python` en el `PATH` o `DRAKTER_HERMES_PYTHON`). Sin Hermes la app abre, pero el chat y el agente no funcionan.
+- Una **clave de API de Anthropic** para usar el modelo real. Sin ella, el agente puede usar el stub de desarrollo (`tools/dev-llm-stub`) en lugar del modelo; Hermes sigue siendo necesario.
 
 Se ha desarrollado en un portátil con 14 GB de RAM y gráfica integrada; la voz local es la parte más exigente.
 
@@ -71,12 +72,14 @@ cd Drakter
 scripts/check-env.sh
 ```
 
+Hermes va aparte, en su propio venv con Python >= 3.14: sigue [`docs/installation/hermes-y-openviking.md`](docs/installation/hermes-y-openviking.md).
+
 - `npm` 12 no ejecuta el script que descarga Electron; de ahí `node node_modules/electron/install.js`.
-- `scripts/check-env.sh` imprime líneas `OK`, `AVISO` o `FALTA` y sale con 1 si falta algo. Comprueba Python, Node, npm, `uv`, el venv de Hermes, `~/.config/drakter/.env` (sin leerlo), el sandbox de Electron y la sesión gráfica.
+- `scripts/check-env.sh` imprime líneas `OK`, `AVISO` o `FALTA` y sale con 1 si falta algo. Comprueba Python 3.12, que haya un Python >= 3.14 para Hermes (no comprueba que Hermes esté instalado), Node, npm, `uv`, `~/.config/drakter/.env` (sin leerlo), el sandbox de Electron y la sesión gráfica.
 
 ## Configuración
 
-El backend lee las variables del entorno y de `~/.config/drakter/.env` (respeta `XDG_CONFIG_HOME`). **No lee ningún `.env` en la raíz del repositorio.** [`.env.example`](.env.example) es la plantilla completa, solo con nombres:
+La configuración va en `~/.config/drakter/.env` (respeta `XDG_CONFIG_HOME`). **No se lee ningún `.env` en la raíz del repositorio.** El backend lo lanza Electron con un entorno filtrado por lista blanca: de las variables exportadas en la shell solo le llegan `DRAKTER_DATA_DIR`, las `XDG_*` y, en desarrollo, `DRAKTER_MODEL_PROVIDER` y `DRAKTER_DEV_STUB_URL`. Todo lo demás (incluida `ANTHROPIC_API_KEY`) tiene que estar en ese `.env`. [`.env.example`](.env.example) es la plantilla completa, solo con nombres:
 
 ```sh
 mkdir -p ~/.config/drakter
@@ -85,6 +88,8 @@ chmod 600 ~/.config/drakter/.env
 ```
 
 Las líneas sin valor (`NOMBRE=`) se ignoran y se usa el valor por defecto; basta con rellenar las que necesites (al menos `ANTHROPIC_API_KEY` para el modelo real). No hay puerto que configurar: Electron lanza el backend en `127.0.0.1` con un puerto efímero.
+
+Variables que se leen de `~/.config/drakter/.env`:
 
 | Variable | Por defecto | Para qué |
 |---|---|---|

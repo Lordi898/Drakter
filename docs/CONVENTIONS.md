@@ -4,8 +4,8 @@ Recoge lo que `CLAUDE.md` §9 exige y lo que ya se practica en las ramas. Cuando
 
 ## Ramas y commits
 
-- Rama de integración: `drakter/build`. `main` no se toca.
-- Una rama por zona o agente, con la forma `drakter/<zona>`: `drakter/backend-base`, `drakter/desktop-shell`, `drakter/identidad-personaje`.
+- Desde la publicación en GitHub (2026-11-13), `main` es la rama de trabajo: cada cambio sale de `main` en una rama temática (`feat/...`, `fix/...`, `docs/...`, `chore/...`) y vuelve por pull request con el CI en verde.
+- Histórico: durante la construcción de la v1 se integraba en `drakter/build` con una rama `drakter/<zona>` por zona o agente. Esas ramas ya no existen en el remoto.
 - Trabajo paralelo en un `git worktree` por rama. Dos agentes no editan el mismo archivo.
 - Commits pequeños y convencionales, en inglés y en imperativo: `tipo(zona): descripción`. La zona es opcional.
 - Tipos usados: `feat`, `chore`, `docs`. Zonas usadas: `backend`, `desktop`, `identity`.

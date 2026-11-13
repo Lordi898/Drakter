@@ -120,7 +120,7 @@ Instalar de la comunidad está permitido y fomentado. Aun así: antes de ejecuta
 
 ## 6. Skills del proyecto
 
-Las skills de este proyecto son estas y ya están instaladas en `.claude/skills/` (orígenes y adaptaciones en `docs/DECISIONS.md`). Cuándo usar cada una está en **`.claude/skills/drakter-toolkit/SKILL.md`**.
+Las skills de este proyecto son estas (orígenes, licencias y adaptaciones en `THIRD_PARTY_NOTICES.md` y `docs/DECISIONS.md`). Las 19 de LLMTooling (punto 1) **no se versionan** porque su origen no tiene licencia: instálalas con `scripts/install-agent-skills.sh` en el checkout principal y en cada worktree nuevo. El resto ya está en `.claude/skills/`. Cuándo usar cada una está en **`.claude/skills/drakter-toolkit/SKILL.md`**.
 
 1. **Las skills útiles para Drakter de** `https://github.com/LLMTooling/agent-skills` (no las 105): `electron`, `electron-builder`, `electron-vite`, `vite`, `vitest`, `playwright-cli`, `typescript-best-practices`, `react-19`, `shadcn`, `radix-ui`, `tailwind-css`, `lucide-react`, `motion`, `react-arborist`, `fastapi`, `pydantic-dev`, `python-best-practices`, `fastmcp-sdk`, `pdf-to-markdown`.
 2. **`skill-creator`** (Anthropic).

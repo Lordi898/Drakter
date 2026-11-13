@@ -17,7 +17,7 @@ die() {
 }
 
 require_backend() {
-  [ -d "$backend_dir" ] || die "backend/ no está en este checkout" "git merge drakter/backend-base"
+  [ -d "$backend_dir" ] || die "backend/ no está en este checkout" "git checkout main && git pull --ff-only"
   [ -x "$venv_python" ] || die "falta backend/.venv" "cd backend && uv sync --frozen"
   case "$("$venv_python" --version 2>&1)" in
     "Python 3.12."*) ;;
@@ -26,7 +26,7 @@ require_backend() {
 }
 
 require_desktop() {
-  [ -d "$desktop_dir" ] || die "desktop/ no está en este checkout" "git merge drakter/build"
+  [ -d "$desktop_dir" ] || die "desktop/ no está en este checkout" "git checkout main && git pull --ff-only"
   command -v node >/dev/null || die "node no está en el PATH" "instala Node y vuelve a abrir la terminal"
   command -v npm >/dev/null || die "npm no está en el PATH" "instala Node y vuelve a abrir la terminal"
   [ -d "$desktop_dir/node_modules" ] || die "falta desktop/node_modules" "cd desktop && npm ci"

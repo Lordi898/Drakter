@@ -111,6 +111,7 @@ Reutiliza un rol del catálogo si existe. Un rol puntual va con `general-purpose
 - **Agentes de `Workflow`:** los que no llevan `agentType` no pueden lanzar subagentes. Para anidar, lanza `drakter-lider` desde el hilo principal con `Agent`.
 - **Agentes nuevos:** la lista se carga al arrancar la sesión. Un agente añadido después da `Agent type not found` hasta abrir una sesión nueva.
 - **Dentro de un worktree** solo carga su propia `.claude/skills`. Lo sin commitear no existe allí.
+- **Skills de LLMTooling no versionadas:** `electron`, `electron-vite`, `electron-builder`, `vite`, `vitest`, `playwright-cli`, `typescript-best-practices`, `react-19`, `shadcn`, `radix-ui`, `tailwind-css`, `lucide-react`, `motion`, `react-arborist`, `fastapi`, `pydantic-dev`, `python-best-practices`, `fastmcp-sdk` y `pdf-to-markdown` no tienen licencia redistribuible y están en `.gitignore`. En el checkout principal y en cada worktree nuevo, ejecuta `scripts/install-agent-skills.sh` antes de usarlas.
 - **Máquina:** 8 CPU y 14 GB de RAM; limita instalaciones y compilaciones simultáneas.
 - **Coste de contexto:** el catálogo completo se anuncia en cada sesión. Recortarlo reduce ese coste.
 

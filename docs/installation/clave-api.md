@@ -43,7 +43,7 @@ ANTHROPIC_API_KEY=<tu-clave>
 
 Evita `echo "ANTHROPIC_API_KEY=..." >> .env`, `export` con la clave y cualquier forma de escribirla en la línea de comandos: quedaría en el historial de la shell.
 
-No necesitas copiar `.env.example`. Si lo haces, usa `cp -n` para no pisar tu `.env` y borra después toda línea sin valor: en las variables del agente una línea vacía no equivale a no definirla. Ojo: `.env.example` aún lista variables que ya no se leen (ver abajo).
+No necesitas copiar `.env.example`. Si lo haces, usa `cp -n` para no pisar tu `.env`; las líneas sin valor (`NOMBRE=`) se ignoran y se usa el valor por defecto.
 
 ## Qué dice la app
 
@@ -71,7 +71,7 @@ Aun así, la regla es no poner espacios ni comillas. Motivos: no depender de una
 Mismo archivo, prefijo `DRAKTER_`. No pongas valores reales en el repositorio:
 
 - Backend (`backend/app/core/config.py`): `DRAKTER_DATA_DIR` (ruta absoluta) y `DRAKTER_LOG_LEVEL` (`DEBUG`, `INFO`, `WARNING`, `ERROR`). Ignora las líneas vacías.
-- Agente (`backend/app/integrations/hermes/settings.py`): `DRAKTER_ENV` (`development` o `production`), `DRAKTER_AGENT_PROVIDER` (`hermes` o `fake`), `DRAKTER_MODEL_PROVIDER` (`anthropic` o `dev_stub`), `DRAKTER_MODEL_NAME` (por defecto `claude-haiku-5-5`), `DRAKTER_DEV_STUB_URL`, `DRAKTER_HERMES_PYTHON` (Python del venv de Hermes; por defecto `hermes-python` en el PATH), `DRAKTER_AGENT_MAX_TURNS`, `DRAKTER_TURN_TIMEOUT_S`, `DRAKTER_IDLE_TIMEOUT_S`. Aquí una línea vacía sí cuenta como valor: pon solo las que quieras cambiar.
+- Agente (`backend/app/integrations/hermes/settings.py`): `DRAKTER_ENV` (`development` o `production`), `DRAKTER_AGENT_PROVIDER` (`hermes` o `fake`), `DRAKTER_MODEL_PROVIDER` (`anthropic` o `dev_stub`), `DRAKTER_MODEL_NAME` (por defecto `claude-haiku-5-5`), `DRAKTER_DEV_STUB_URL`, `DRAKTER_HERMES_PYTHON` (Python del venv de Hermes; por defecto `hermes-python` en el PATH), `DRAKTER_AGENT_MAX_TURNS`, `DRAKTER_TURN_TIMEOUT_S`, `DRAKTER_IDLE_TIMEOUT_S`. También ignora las líneas vacías.
 - Voz: las variables `DRAKTER_STT_*`, `DRAKTER_TTS_*`, etc. de [voz.md](voz.md).
 
 `DRAKTER_PORT`, `DRAKTER_RUNTIME_DIR` y `DRAKTER_ALLOWED_ORIGINS` ya no existen: el puerto es efímero y lo gestiona Electron. Los valores por defecto sirven para el uso normal. `dev_stub` es solo para desarrollo y el código lo rechaza con `DRAKTER_ENV=production`.
