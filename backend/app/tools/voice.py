@@ -6,6 +6,7 @@ is low risk (a name saved in the settings), so it needs no confirmation. The reg
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any, Final
 
@@ -40,6 +41,11 @@ class SetProfileArgs(BaseModel):
     )
 
 
+# Ningún TTS usa todavía el perfil (Pipecat + Fish no están): el cambio solo queda guardado.
+# Pasará a True cuando el proceso de voz lo aplique de verdad.
+VOICE_APPLIES_PROFILE: Final = False
+
+
 class SetProfileResult(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -47,54 +53,47 @@ class SetProfileResult(BaseModel):
     previous: str
     description: str
     changed: bool
-
-
-def _raise(exc: VoiceProfileError) -> ToolError:
-    return ToolError(exc.code, exc.message)
+    applied_to_voice: bool  # False: preferencia guardada, la voz que suena no cambia aún
+    note: str
 
 
 def _list_profiles(ctx: ToolContext, args: NoArgs) -> ProfileList:
     try:
         return service.list_profiles(ctx.state.settings.db_path)
     except VoiceProfileError as exc:
-        raise _raise(exc) from None
+        raise ToolError(exc.code, exc.message) from None
 
 
 async def _set_profile(ctx: ToolContext, args: SetProfileArgs) -> SetProfileResult:
-    db_path = ctx.state.settings.db_path
     try:
-        name = service.resolve_configured(args.profile)
-        config = service.load_config()
-        previous = service.active_profile(db_path, config)
-        changed = previous != name
-        service.save_active(db_path, name)
+        # SQLite y el archivo son E/S bloqueante: fuera del event loop.
+        done = await asyncio.to_thread(service.switch_profile, ctx.state.settings.db_path, args.profile)
     except VoiceProfileError as exc:
-        raise _raise(exc) from None
-    if changed:
-        await _announce(ctx, name, previous)
-    return SetProfileResult(
-        active=name, previous=previous, description=config.perfiles[name].descripcion, changed=changed
+        raise ToolError(exc.code, exc.message) from None
+    if done.changed:
+        _announce(ctx, done.active, done.previous)
+    note = (
+        "El perfil está activo en la voz."
+        if VOICE_APPLIES_PROFILE
+        else "Preferencia guardada: la voz con Fish aún no está conectada, así que no suena "
+        "distinto todavía; se usará cuando lo esté."
     )
+    return SetProfileResult(**done.model_dump(), applied_to_voice=VOICE_APPLIES_PROFILE, note=note)
 
 
-async def _announce(ctx: ToolContext, name: str, previous: str) -> None:
-    """Event for the interface and message for the voice process. Neither can fail the tool."""
+def _announce(ctx: ToolContext, name: str, previous: str) -> None:
+    """Evento para la interfaz. No puede hacer fallar la herramienta."""
     hub: Any = getattr(getattr(ctx.state, "agent_runtime", None), "hub", None)
-    if hub is not None:
-        try:
-            hub.publish(
-                "voice.profile_changed",
-                VoiceProfileChanged(profile=name, previous=previous),
-                correlation_id=str(ctx.turn_id),
-            )
-        except Exception:  # noqa: BLE001
-            logger.exception("event failed", extra={"event": "voice_profile_event_failed"})
-    voice: Any = getattr(ctx.state, "voice_service", None)
-    if voice is not None:
-        try:
-            await voice.set_voice_profile(name)
-        except Exception:  # noqa: BLE001 - an old voice process ignores it
-            logger.warning("voice process ignored the profile", extra={"event": "voice_ipc_skip"})
+    if hub is None:
+        return
+    try:
+        hub.publish(
+            "voice.profile_changed",
+            VoiceProfileChanged(profile=name, previous=previous),
+            correlation_id=str(ctx.turn_id),
+        )
+    except Exception:  # noqa: BLE001
+        logger.exception("event failed", extra={"event": "voice_profile_event_failed"})
 
 
 TOOLS: tuple[ToolSpec, ...] = (
@@ -117,8 +116,9 @@ TOOLS: tuple[ToolSpec, ...] = (
     ToolSpec(
         name="voice_set_profile",
         description=(
-            "Cambia el perfil de voz activo por nombre o alias (\"la neutral\", \"la otra\"). "
-            "Falla si no existe o aún no tiene ID de voz."
+            "Cambia el perfil de voz activo por nombre o alias (\"neutral\", \"la otra\"; vale "
+            "tal como lo diga el usuario). Falla si no existe o aún no tiene ID de voz. "
+            "Guarda la preferencia: mira `applied_to_voice` antes de decir que ya suena."
         ),
         domain="voice",
         args_model=SetProfileArgs,

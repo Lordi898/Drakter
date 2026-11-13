@@ -1483,7 +1483,7 @@
  {
   "name": "voice_set_profile",
   "domain": "voice",
-  "description": "Cambia el perfil de voz activo por nombre o alias (\"la neutral\", \"la otra\"). Falla si no existe o aún no tiene ID de voz.",
+  "description": "Cambia el perfil de voz activo por nombre o alias (\"neutral\", \"la otra\"; vale tal como lo diga el usuario). Falla si no existe o aún no tiene ID de voz. Guarda la preferencia: mira `applied_to_voice` antes de decir que ya suena.",
   "permission": "voice.write",
   "risk": "write",
   "idempotent": true,

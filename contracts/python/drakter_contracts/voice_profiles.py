@@ -37,6 +37,17 @@ def fold(text: str) -> str:
     return " ".join(plain.casefold().split())
 
 
+_FILLER: Final = frozenset({"la", "el", "las", "los", "voz", "de", "tu", "mi", "una", "un"})
+
+
+def _bare(folded: str) -> str:
+    """Sin artículos ni «voz» al principio: «la voz neutral» -> «neutral»."""
+    words = folded.split()
+    while len(words) > 1 and words[0] in _FILLER:
+        words.pop(0)
+    return " ".join(words)
+
+
 def mask_id(reference_id: str) -> str | None:
     """``ab12…ef90``. Nunca el ID entero en pantalla, logs ni resultados."""
     if not reference_id:
@@ -131,10 +142,14 @@ class VoiceConfig(BaseModel):
     def resolve(self, query: str) -> str | None:
         """Nombre canónico del perfil por nombre o alias, o ``None``."""
         wanted = fold(query)
-        for name, profile in self.perfiles.items():
-            if wanted in {fold(name), *(fold(a) for a in profile.alias)}:
+        labels = {n: {fold(n), *(fold(a) for a in pr.alias)} for n, pr in self.perfiles.items()}
+        for name, options in labels.items():
+            if wanted in options:
                 return name
-        return None
+        # Sin coincidencia exacta: tolera artículo y «voz» («la neutral», «la voz seria»).
+        bare = _bare(wanted)
+        found = [n for n, options in labels.items() if bare in {_bare(o) for o in options}]
+        return found[0] if len(found) == 1 else None
 
 
 def voices_path() -> Path:
@@ -181,7 +196,13 @@ def parse_voice_config(text: str) -> VoiceConfig:
 def load_voice_config(path: Path | None = None) -> VoiceConfig:
     target = path or voices_path()
     try:
-        if target.is_symlink() or not target.is_file():
+        if target.is_symlink():
+            raise VoiceConfigError(
+                f"{target} es un enlace simbólico; por seguridad debe ser un archivo normal"
+            )
+        if target.is_dir():
+            raise VoiceConfigError(f"{target} es un directorio, no un archivo normal")
+        if not target.is_file():
             raise VoiceConfigError(f"no existe {target}")
         with target.open("rb") as handle:
             data = handle.read(MAX_FILE_BYTES + 1)
@@ -225,7 +246,8 @@ class VoiceProfileStore:
 
 # Mensaje IPC backend -> proceso de voz (socket Unix, mismo formato que el resto de comandos).
 # Solo lleva el nombre del perfil: el proceso de voz lee el ID de su propio voces.toml.
-# El backend lo manda sin esperar garantías: si el proceso de voz no lo entiende, se ignora.
+# SOLO CONTRATO: el backend aún no lo envía (VoiceService no está montado en main.py). Lo cablea
+# el trabajo de Pipecat; hasta entonces no hay ningún código que lo mande.
 VOICE_IPC_SET_PROFILE: Final = "voice.set_profile"
 
 

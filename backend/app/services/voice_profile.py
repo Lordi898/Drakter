@@ -119,9 +119,14 @@ def list_profiles(db_path: Path, store: VoiceProfileStore | None = None) -> Prof
     )
 
 
-def resolve_configured(query: str, store: VoiceProfileStore | None = None) -> str:
-    """Nombre canónico de un perfil existente y con ID. Si no, ``VoiceProfileError``."""
-    config = load_config(store)
+def resolve_configured(
+    query: str, store: VoiceProfileStore | None = None, config: VoiceConfig | None = None
+) -> str:
+    """Nombre canónico de un perfil existente y con ID. Si no, ``VoiceProfileError``.
+
+    Con ``config`` se usa esa misma lectura del archivo (una sola por operación).
+    """
+    config = config or load_config(store)
     name = config.resolve(query)
     if name is None:
         known = ", ".join(config.perfiles)
@@ -133,6 +138,29 @@ def resolve_configured(query: str, store: VoiceProfileStore | None = None) -> st
             f"El usuario debe poner el ID en {(store or _STORE).path}.",
         )
     return name
+
+
+class SwitchResult(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    active: str
+    previous: str
+    description: str
+    changed: bool
+
+
+def switch_profile(db_path: Path, query: str) -> SwitchResult:
+    """Resuelve, guarda y devuelve el cambio. Bloqueante: llamar con ``asyncio.to_thread``."""
+    config = load_config()
+    name = resolve_configured(query, config=config)
+    previous = active_profile(db_path, config)
+    save_active(db_path, name)
+    return SwitchResult(
+        active=name,
+        previous=previous,
+        description=config.perfiles[name].descripcion,
+        changed=previous != name,
+    )
 
 
 def save_active(db_path: Path, name: str) -> str | None:

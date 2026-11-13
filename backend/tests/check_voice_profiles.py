@@ -67,6 +67,12 @@ def loader(tmp: Path) -> None:
     cfg = store.get()
     check(all(not p.configured for p in cfg.perfiles.values()), "plantilla: todo 'sin configurar'")
     check(cfg.resolve("LA OTRA") == "neutral" and cfg.resolve("Cálida") == "natural", "alias sin mayúsculas ni tildes")
+    check(
+        all(cfg.resolve(q) == "neutral" for q in ("la neutral", "la voz neutral", "La Seria", "la voz de la otra"))
+        and cfg.resolve("la natural") == "natural"
+        and cfg.resolve("la voz") is None,
+        "resolve tolera artículo y «voz» («la neutral», «la natural»)",
+    )
     check(ensure_voices_file(path) == (path, False), "no sobrescribe si ya existe")
 
     check(
@@ -117,6 +123,8 @@ async def tools(tmp: Path) -> None:
         out.status == "error" and out.error.code == "profile_unconfigured" and "sin configurar" in out.error.message.lower(),
         "voice_set_profile sin ID: 'perfil sin configurar'",
     )
+    out = await call("voice_set_profile", {"profile": "la neutral"})
+    check(out.status == "error" and out.error.code == "profile_unconfigured", "«la neutral» sin ID: profile_unconfigured")
     out = await call("voice_set_profile", {"profile": "no existe"})
     check(out.status == "error" and out.error.code == "profile_not_found", "perfil inexistente")
 
@@ -125,8 +133,9 @@ async def tools(tmp: Path) -> None:
         cfg_path.read_text(encoding="utf-8").replace('reference_id = ""', f'reference_id = "{FAKE_ID}"', 2),
         encoding="utf-8",
     )
-    out = await call("voice_set_profile", {"profile": "La Otra"})
-    check(out.status == "ok" and out.data["active"] == "neutral" and out.data["changed"], "voice_set_profile resuelve el alias")
+    out = await call("voice_set_profile", {"profile": "la neutral"})
+    check(out.status == "ok" and out.data["active"] == "neutral" and out.data["changed"], "voice_set_profile resuelve «la neutral»")
+    check(out.data["applied_to_voice"] is False and "no suena" in out.data["note"], "el resultado dice que solo queda guardado")
     check(voice_profile.stored_profile(settings.db_path) == "neutral", "perfil activo persistido")
     check(FAKE_ID not in str(out.data), "el resultado no lleva el ID entero")
     events = [e for e in hub._buffer if e.type == "voice.profile_changed"]  # noqa: SLF001

@@ -38,16 +38,35 @@ def env_path() -> Path:
 
 
 def read_api_key() -> str | None:
-    """Solo busca FISH_API_KEY; el resto del .env no se interpreta."""
+    """Solo busca FISH_API_KEY. Acepta `export `, comillas y comentario final sin comillas."""
     try:
-        for line in env_path().read_text(encoding="utf-8").splitlines():
-            name, sep, value = line.partition("=")
-            if sep and name.strip() == "FISH_API_KEY":
-                value = value.strip().strip("'\"")
-                return value or None
+        lines = env_path().read_text(encoding="utf-8").splitlines()
     except OSError:
         return None
+    for line in lines:
+        line = line.strip().removeprefix("export ").strip()
+        name, sep, value = line.partition("=")
+        if not sep or name.strip() != "FISH_API_KEY":
+            continue
+        value = value.strip()
+        if value[:1] in ("'", '"'):
+            value = value[1:].split(value[0], 1)[0]
+        else:
+            value = value.split(" #", 1)[0].strip()
+        return value or None
     return None
+
+
+def checked_key() -> str | None:
+    """La clave si tiene forma de clave; si no, un mensaje sin el valor y ``None``."""
+    key = read_api_key()
+    if key is None:
+        print(f"Falta FISH_API_KEY en {env_path()} (clave: https://fish.audio/app/api-keys/).")
+        return None
+    if not (key.isascii() and key.isprintable() and " " not in key):
+        print(f"FISH_API_KEY de {env_path()} tiene caracteres no válidos (¿espacios o tildes?).")
+        return None
+    return key
 
 
 def load() -> tuple[Path, VoiceConfig]:
@@ -94,9 +113,8 @@ def cmd_comprobar(_: argparse.Namespace) -> int:
     if not configured:
         print(need_ids_message(path))
         return 1
-    key = read_api_key()
+    key = checked_key()
     if key is None:
-        print(f"Falta FISH_API_KEY en {env_path()} (clave: https://fish.audio/app/api-keys/).")
         return 1
     bad = 0
     with client(key) as http:
@@ -129,12 +147,15 @@ def cmd_comprobar(_: argparse.Namespace) -> int:
     return 1 if bad else 0
 
 
-def play(path: Path) -> bool:
-    for player in (["pw-play"], ["aplay", "-q"]):
-        if shutil.which(player[0]):
-            return subprocess.run([*player, str(path)], check=False).returncode == 0
-    print("No hay reproductor (pw-play ni aplay).")
-    return False
+PLAYERS = (["pw-play"], ["aplay", "-q"])
+
+
+def available_players() -> list[list[str]]:
+    return [p for p in PLAYERS if shutil.which(p[0])]
+
+
+def play(path: Path, players: list[list[str]]) -> bool:
+    return any(subprocess.run([*p, str(path)], check=False).returncode == 0 for p in players)
 
 
 def cmd_probar(args: argparse.Namespace) -> int:
@@ -151,13 +172,16 @@ def cmd_probar(args: argparse.Namespace) -> int:
     if not profile.configured:
         print(f"El perfil {name!r} está sin configurar. Pon su ID en {path}")
         return 1
-    text = (args.texto or DEFAULT_TEXT).strip()
+    text = (" ".join(args.texto) or DEFAULT_TEXT).strip()
     if not text or len(text) > MAX_TEXT:
         print(f"El texto debe tener entre 1 y {MAX_TEXT} caracteres.")
         return 1
-    key = read_api_key()
+    players = available_players()
+    if not players:
+        print("No hay reproductor (pw-play ni aplay): no gasto cuota de Fish sin poder oírlo.")
+        return 1
+    key = checked_key()
     if key is None:
-        print(f"Falta FISH_API_KEY en {env_path()}.")
         return 1
     body = {"text": text, "reference_id": profile.reference_id, "format": "wav", "latency": "normal"}
     try:
@@ -174,7 +198,7 @@ def cmd_probar(args: argparse.Namespace) -> int:
         wav = Path(tmp) / "prueba.wav"
         wav.write_bytes(res.content)
         print(f"Reproduciendo con {name} ({model})…")
-        return 0 if play(wav) else 1
+        return 0 if play(wav, players) else 1
 
 
 def main() -> int:
@@ -184,7 +208,7 @@ def main() -> int:
     sub.add_parser("comprobar", help="comprueba cada voz contra Fish").set_defaults(run=cmd_comprobar)
     probar = sub.add_parser("probar", help="genera y reproduce una frase corta")
     probar.add_argument("perfil")
-    probar.add_argument("texto", nargs="?")
+    probar.add_argument("texto", nargs="*", help='frase (si empieza por "-", ponla tras --)')
     probar.set_defaults(run=cmd_probar)
     args = parser.parse_args()
     try:

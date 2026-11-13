@@ -2,7 +2,7 @@
 
 `catalog.json` es una lista de `ToolManifest` (`contracts/python/drakter_contracts/tools.py`). Es la única lista de lo que Hermes puede llamar; se sirve por MCP en puerto propio. Hermes no toca la BD. Formato de `ToolSpec`: `backend/app/integrations/hermes/CONTRACT.md` §1 (drakter-16).
 
-84 herramientas en el catálogo: 38 `read`, 37 `write`, 9 `confirm`. 80 construidas, 4 sin construir. Comprobado el 2026-11-13 contra el registro real (`TOOLS` de `backend/app/tools/*.py` en `drakter/integracion`): en las 78 coinciden `domain`, `permission`, `risk` y `returns_untrusted` (corregido `get_related_items`, que el código marca `returns_untrusted`). Las 4 de automejora están en el catálogo desde la decisión de cierre (ver «Automejora»), así que `registry._warn_catalog_drift` no emite ningún aviso `tool_catalog_drift`.
+84 herramientas en el catálogo: 38 `read`, 37 `write`, 9 `confirm`. 80 construidas, 4 sin construir. Comprobado el 2026-11-13 contra el registro real (`TOOLS` de `backend/app/tools/*.py` en `drakter/integracion`): en las 80 coinciden `domain`, `permission`, `risk` y `returns_untrusted` (corregido `get_related_items`, que el código marca `returns_untrusted`). Las 4 de automejora están en el catálogo desde la decisión de cierre (ver «Automejora»), así que `registry._warn_catalog_drift` no emite ningún aviso `tool_catalog_drift`.
 
 ## Reglas aplicadas
 
