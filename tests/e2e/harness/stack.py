@@ -190,6 +190,7 @@ class Stack:
         if self.api.request("GET", "/health").status != 200:
             return self._failed("backend", "/health no responde 200")
         self.state["backend"] = "ok"
+        self.wait_agent()  # también tras cada rearranque (copia y restauración)
         return True
 
     def wait_agent(self) -> None:
@@ -203,6 +204,7 @@ class Stack:
             reply = self.api.request("GET", "/api/v1/agent/status")
             body = reply.body if isinstance(reply.body, dict) else {}
             if reply.status == 200 and body.get("state") not in (None, "offline"):
+                self.state.pop("agent", None)
                 return
             if "failed" in str(body.get("detail") or ""):
                 break

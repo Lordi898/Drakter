@@ -159,7 +159,6 @@ def main() -> int:
     stack.start_stub()  # antes que el backend: este debe conocer su URL
     stack.write_env_file()
     stack.start_backend()
-    stack.wait_agent()
     run_phase(PHASES[0])
     # D-14: Electron lanza su propio backend y la instancia es exclusiva. El arnés hace ese
     # papel en la fase sin ventana y le cede los mismos datos antes de abrirlo.
