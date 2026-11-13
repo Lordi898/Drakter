@@ -22,6 +22,7 @@ INHERITED = ("PATH", "LANG", "LC_ALL", "TZ", "DISPLAY", "WAYLAND_DISPLAY", "XAUT
 BACKEND_TIMEOUT = 40
 STUB_TIMEOUT = 15
 STOP_TIMEOUT = 8
+AGENT_READY_TIMEOUT = 150  # el supervisor da 120 s a Hermes para arrancar (READY_TIMEOUT_S)
 
 
 def free_port() -> int:
@@ -191,6 +192,23 @@ class Stack:
         self.state["backend"] = "ok"
         return True
 
+    def wait_agent(self) -> None:
+        """Hermes arranca en segundo plano: sin esperar, los turnos salen `agent_unavailable`.
+        Espera a que el agente deje `offline`; si no llega, lo deja anotado y sigue."""
+        if self.api is None or not self.available("hermes"):
+            return
+        deadline = time.monotonic() + AGENT_READY_TIMEOUT
+        body: Any = None
+        while time.monotonic() < deadline:
+            reply = self.api.request("GET", "/api/v1/agent/status")
+            body = reply.body if isinstance(reply.body, dict) else {}
+            if reply.status == 200 and body.get("state") not in (None, "offline"):
+                return
+            if "failed" in str(body.get("detail") or ""):
+                break
+            time.sleep(1)
+        self.state["agent"] = f"sin agente listo tras esperar: {body}"
+
     @staticmethod
     def _announced_port(proc: subprocess.Popen) -> int:
         deadline = time.monotonic() + BACKEND_TIMEOUT
@@ -229,8 +247,9 @@ class Stack:
         if self.headless:
             argv += ["--ozone-platform=headless", "--ozone-override-screen-size=1280,820"]
         argv.append(str(desktop))
+        # Electron rechaza --no-sandbox salvo en desarrollo con DRAKTER_DEV_NO_SANDBOX=1.
         proc = self._spawn("desktop", argv, desktop, self.base_env() | {
-            "DRAKTER_DATA_DIR": str(self.data_dir)})
+            "DRAKTER_DATA_DIR": str(self.data_dir), "DRAKTER_DEV_NO_SANDBOX": "1"})
         time.sleep(1)
         if proc.poll() is not None:
             return self._failed("desktop", f"salió con código {proc.returncode}; ver desktop.log")
