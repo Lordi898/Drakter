@@ -322,8 +322,8 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 - [x] Definir permisos.
   ⚠️ Arreglado: faltaba `storage.write` y se denegaban 4 herramientas del almacén (ya concedido en `drakter/integracion`). `improvement.read`/`improvement.write` se conceden con las dos escrituras en `RiskClass.CONFIRM` (`5dd55b1`); hoy esas escrituras quedan denegadas porque el runtime usa `DefaultToolGate` (ver «Definir confirmaciones»).
   Nota: con el modelo real (prueba de relaciones de drakter-41), el agente llamó por iniciativa propia a create/list/get_improvement_proposal y record_improvement_feedback sin que se le pidiera. Es seguro (las escrituras exigen confirmación), pero hay que revisar las descripciones de esas herramientas o las instrucciones de cuándo proponer mejoras; se deja para el rediseño de la personalidad y la conversación.
-- [ ] Definir confirmaciones.
-  ⚠️ 7 herramientas con `risk=confirm` y `summarize`; la puerta falla cerrada (`delete_task` del agente no se ejecuta y se audita `rejected`), pero nunca se crea la confirmación pendiente: `main.py` no llama a `install_security` y `AgentRuntime` crea `ToolRegistry` sin `gate=BackendToolGate`. `GET /api/v1/confirmations` da 503.
+- [x] Definir confirmaciones.
+  ⚠️ Las herramientas CONFIRM del agente pasan ya por `BackendToolGate` y crean la confirmación pendiente, con auditoría en `audit_events` (`b722aca`, `42a0a17`, drakter-34). El borrado pedido por el agente no se ha recomprobado módulo a módulo; olvidar un recuerdo sigue con `DenyAllGate`.
 - [x] Definir errores.
   ⚠️ 6 herramientas de lectura no declaran `errors` (`get_memory_status`, `search_relationships`, `list_subjects`, `get_timetable`, `get_agent_status`, `get_system_status`).
 - [x] Probar selección de herramientas.
@@ -382,7 +382,7 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 - [x] Crear permisos por módulo.
 - [x] Crear permisos por operación.
 - [x] Crear confirmaciones.
-  ⚠️ Por la GUI funciona (409 → aprobar con `approver` → ejecutado, no reutilizable; CONF-55..71 BLOCKED). Camino del agente: el runtime de Hermes crea `ToolRegistry` con `DefaultToolGate`, así que las 7 herramientas CONFIRM y las escrituras en sesión contaminada se deniegan (`confirmation_unavailable`) en vez de crear una confirmación pendiente. Olvidar un recuerdo usa `DenyAllGate` y falla cerrado. Seguro, pero no completo.
+  ⚠️ Por la GUI funciona (409 → aprobar con `approver` → ejecutado, no reutilizable; CONF-55..71 BLOCKED). Camino del agente: desde `b722aca` y `42a0a17` sus herramientas CONFIRM crean confirmación pendiente por `BackendToolGate`. Olvidar un recuerdo usa `DenyAllGate` y falla cerrado.
 - [x] Proteger credenciales.
 - [x] Validar rutas.
 - [x] Limitar acceso a archivos.
