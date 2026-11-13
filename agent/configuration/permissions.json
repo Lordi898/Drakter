@@ -26,6 +26,8 @@
     "tags.write",
     "tasks.delete",
     "tasks.read",
-    "tasks.write"
+    "tasks.write",
+    "voice.read",
+    "voice.write"
   ]
 }

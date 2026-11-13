@@ -1446,6 +1446,12 @@ export interface VoicePlaybackLevel {
   level: number;
 }
 
+/** Perfil de voz activo. Lleva el nombre del perfil, nunca su ID de Fish. */
+export interface VoiceProfileChanged {
+  profile: string;
+  previous: string | null;
+}
+
 export interface VoiceTranscription {
   utterance_id: string;
   text: string;
@@ -1519,6 +1525,7 @@ export interface EventPayloads {
   "voice.playback_level": VoicePlaybackLevel;
   "voice.playback_stopped": VoiceUtterance;
   "voice.playback_interrupted": VoiceUtterance;
+  "voice.profile_changed": VoiceProfileChanged;
 }
 
 export type EventType = keyof EventPayloads;

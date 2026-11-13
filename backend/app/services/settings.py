@@ -17,6 +17,7 @@ from app.core.errors import AppError
 from app.database.backup import BackupError, create_backup
 from app.database.connection import connect
 from app.repositories import settings as repo
+from app.services import voice_profile
 from app.services.settings_models import (
     SETTING_KEYS,
     BackupItem,
@@ -72,6 +73,8 @@ def update_setting(db_path: Path, key: str, value: str, correlation_id: str) -> 
         raise AppError("unknown_setting", "Unknown setting", 404)
     if key == "default_timezone" and value not in _timezones():
         raise AppError("invalid_timezone", "Invalid timezone", 422)
+    if key == "voice_profile":
+        value = voice_profile.validate_setting_value(value)
     conn = _open(db_path)
     with closing(conn):
         try:

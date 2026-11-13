@@ -1460,5 +1460,43 @@
   "args_model": "GetProposalParams",
   "result_model": "ProposalDetail",
   "phase": "18"
+ },
+ {
+  "name": "voice_list_profiles",
+  "domain": "voice",
+  "description": "Lista los perfiles de voz: nombre, alias, descripción, cuál está activo y si están configurados. Úsala si el usuario pregunta qué voces tienes.",
+  "permission": "voice.read",
+  "risk": "read",
+  "idempotent": true,
+  "returns_untrusted": false,
+  "timeout_s": 5.0,
+  "errors": [
+   "voice_config_invalid",
+   "profile_not_found",
+   "profile_unconfigured",
+   "settings_unavailable"
+  ],
+  "args_model": "NoArgs",
+  "result_model": "ProfileList",
+  "phase": "17"
+ },
+ {
+  "name": "voice_set_profile",
+  "domain": "voice",
+  "description": "Cambia el perfil de voz activo por nombre o alias (\"la neutral\", \"la otra\"). Falla si no existe o aún no tiene ID de voz.",
+  "permission": "voice.write",
+  "risk": "write",
+  "idempotent": true,
+  "returns_untrusted": false,
+  "timeout_s": 10.0,
+  "errors": [
+   "voice_config_invalid",
+   "profile_not_found",
+   "profile_unconfigured",
+   "settings_unavailable"
+  ],
+  "args_model": "SetProfileArgs",
+  "result_model": "SetProfileResult",
+  "phase": "17"
  }
 ]

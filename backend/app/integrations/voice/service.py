@@ -7,6 +7,7 @@ from collections.abc import AsyncIterator, Mapping
 from pathlib import Path
 from typing import Final, Literal, Protocol
 
+from drakter_contracts.voice_profiles import VOICE_IPC_SET_PROFILE
 from pydantic import ValidationError
 
 from app.integrations.voice.bridge import VoiceBridge
@@ -164,6 +165,13 @@ class VoiceService:
             return
         await self._client.request("wakeword.set", {"enabled": False})
         await self._record("voice.wakeword_requested", {"enabled": False})
+
+    async def set_voice_profile(self, profile: str) -> None:
+        """Avisa del perfil activo. Si el proceso de voz no lo entiende o no está, se ignora."""
+        try:
+            await self._client.request(VOICE_IPC_SET_PROFILE, {"profile": profile})
+        except (VoiceUnavailableError, VoiceIPCError):
+            return
 
     async def listen_start(self) -> str:
         result = await self._client.request("listen.start")

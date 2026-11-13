@@ -17,6 +17,7 @@ Cada herramienta llama al backend, que valida parámetros, permisos y relaciones
 | Relaciones | `create_relationship`, `delete_relationship`, `get_related_items`, `search_relationships` | Conectar elementos y consultar qué se conecta con qué. |
 | Etiquetas | `list_tags`, `add_tag`, `remove_tag` | Clasificar elementos. |
 | Búsqueda | `search_workspace`, `search_all` | Localizar algo sin saber en qué módulo está. |
+| Voz | `voice_list_profiles`, `voice_set_profile` | Ver qué voces hay y cambiar la activa por nombre o alias. Sin ID configurado devuelve «perfil sin configurar». |
 | Sistema | `get_system_status`, `get_agent_status`, `get_voice_status`, `get_workspace_summary`, `get_activity_log`, `get_pending_confirmations` | Comprobar qué funciona, ver lo hecho y lo que espera aprobación. |
 | Memoria | `get_memory_status`, `search_memory`, `get_memory_item`, `propose_memory`, `forget_memory` | Recordar lo aprobado sobre el usuario. Los datos operativos se consultan en el Workspace, no aquí. |
 

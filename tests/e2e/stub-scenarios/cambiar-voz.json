@@ -1,0 +1,15 @@
+{
+  "description": "Pasada integrada: «cambia tu voz a la neutral» acaba en voice_set_profile. Con la plantilla (IDs vacios) la herramienta debe fallar con «perfil sin configurar».",
+  "steps": [
+    {
+      "text": "Voy a cambiar la voz.",
+      "tool_calls": [{"name": "drakter__voice_set_profile", "input": {"profile": "la neutral"}}]
+    },
+    {
+      "text": "FALLO: el cambio no fue rechazado. Resultado: {{tool_result}}",
+      "branches": [
+        {"contains": "profile_unconfigured", "text": "Perfil sin configurar: falta el ID. Detalle: {{tool_result}}"}
+      ]
+    }
+  ]
+}
