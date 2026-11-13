@@ -179,6 +179,13 @@ class VoicePlaybackLevel(VoiceUtterance):
     level: float
 
 
+class VoiceProfileChanged(BaseModel):
+    """Perfil de voz activo. Lleva el nombre del perfil, nunca su ID de Fish."""
+
+    profile: str
+    previous: str | None = None
+
+
 EVENTS: Final[dict[str, type[BaseModel]]] = {
     "agent.status_changed": AgentStatusChanged,
     "agent.expression_changed": AgentExpressionChanged,
@@ -212,5 +219,6 @@ EVENTS: Final[dict[str, type[BaseModel]]] = {
     "voice.playback_level": VoicePlaybackLevel,
     "voice.playback_stopped": VoiceUtterance,
     "voice.playback_interrupted": VoiceUtterance,
+    "voice.profile_changed": VoiceProfileChanged,
 }
 EXPERIMENTAL_PREFIXES: Final = ("voice.",)

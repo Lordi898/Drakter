@@ -279,7 +279,7 @@ Ya resuelto (fusión de drakter-34, `app/permissions/wiring.py`): pipeline de co
 | Qué | Dónde | Efecto hoy | Qué debe hacer |
 |---|---|---|---|
 | Restaurar copias por la API | `app/services/backup_service.py:restore_bundle` llama a `database/backup.restore_backup`, que toma el bloqueo de instancia con un `flock` propio; con el backend en marcha ese bloqueo ya lo tiene el proceso, y nadie instala `post_restore_hooks` ni `restore_quiesce` | ⚠️ Sin ruta: restaurar solo con el backend parado (`python -m app.database.cli restore`, copias SQLite) | Diseño propio: dejar de servir, soltar el bloqueo, restaurar, invalidar confirmaciones (README §5) y rearrancar. Fuera del cierre v1 |
-| Voz sin montar ni arrancar | `app/integrations/voice/router.py` y su supervisor no se usan fuera de su paquete | `/api/v1/voice/**` da 404 y no se emite ningún `voice.*` | Nada en v1: DECISIONS «Voz: cierre mínimo, rediseño posterior sobre Pipecat». Se rehace con el rediseño |
+| Voz sin montar ni arrancar | `app/integrations/voice/router.py` y su supervisor no se usan fuera de su paquete | `/api/v1/voice/**` da 404 y no se emite ningún `voice.*` de la integración (única excepción: `voice.profile_changed`, que publica la herramienta `voice_set_profile` aunque la voz no esté montada) | Nada en v1: DECISIONS «Voz: cierre mínimo, rediseño posterior sobre Pipecat». Se rehace con el rediseño |
 
 ### Paginación por `offset`: desviación aceptada en v1
 
@@ -308,7 +308,7 @@ Solo documentados: en v1 no se implementan emisores ni oyentes nuevos (decisión
 | `workspace.entity_*` | Tareas y proyectos ya los emiten con `actor_type` (`services/tasks.py:186`, `services/projects.py:113`); el resto de módulos no los emite, y el desktop no escucha `workspace.*` |
 | `workspace.relationship_*` | Ningún emisor en el backend |
 | `agent.expression_changed`, `storage.index_progress` | Ningún emisor en el backend |
-| `voice.*` | Los emite la integración de voz, que no se arranca |
+| `voice.*` | Los emite la integración de voz, que no se arranca. Excepción: `voice.profile_changed` lo publica `voice_set_profile`; el desktop no lo consume |
 | `system.health_changed` | Lo emite `integrations/hermes/runtime.py`; el desktop no lo escucha y deriva `offline` solo de la caída del socket (admitido en README §7) |
 
 ### Sobre de error

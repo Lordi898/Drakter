@@ -15,6 +15,7 @@ Para instalar, ve a [installation](../installation/README.md).
 - [Búsqueda](busqueda.md)
 - [Chat y personaje](chat-y-personaje.md)
 - [Voz](voz.md)
+- [Perfiles de voz](voces.md): los IDs de Fish Audio, cómo cambiarlos y cambiar de voz
 
 ## Organización
 
