@@ -1,9 +1,8 @@
 import { spawn, type ChildProcess } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
-import { existsSync } from 'node:fs'
+import { accessSync, constants } from 'node:fs'
 import { request } from 'node:http'
-import { homedir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { app } from 'electron'
 import type { BackendConnection, BackendState } from '../shared/bridge'
 import { describeError, logError } from './log'
@@ -41,19 +40,39 @@ interface Command {
   readonly file: string
   readonly args: string[]
   readonly cwd: string
+  /** Texto para el usuario si `file` no existe. */
+  readonly missing: string
 }
 
+/** Sin `uv` en ejecución: el intérprete del venv en desarrollo y el binario empaquetado en producción. */
 function resolveCommand(): Command {
+  const windows = process.platform === 'win32'
   if (app.isPackaged) {
-    // Ruta provisional: la fija P10 (empaquetado).
-    const dataDir = process.env.DRAKTER_DATA_DIR ?? join(homedir(), '.local', 'share', 'drakter')
-    const cwd = join(dataDir, 'runtime', 'backend')
-    return { file: join(cwd, '.venv', 'bin', 'python'), args: ['-m', 'app'], cwd }
+    const file = join(process.resourcesPath, 'backend', windows ? 'drakter-backend.exe' : 'drakter-backend')
+    return {
+      file,
+      args: [],
+      cwd: dirname(file),
+      missing: `Falta el servicio local de Drakter (${file}). Reinstala la aplicación.`
+    }
   }
   const cwd = resolve(app.getAppPath(), '../backend')
-  const venvPython = join(cwd, '.venv', 'bin', 'python')
-  if (existsSync(venvPython)) return { file: venvPython, args: ['-m', 'app'], cwd }
-  return { file: process.env.DRAKTER_UV ?? 'uv', args: ['run', '--frozen', 'python', '-m', 'app'], cwd }
+  const file = windows ? join(cwd, '.venv', 'Scripts', 'python.exe') : join(cwd, '.venv', 'bin', 'python')
+  return {
+    file,
+    args: ['-m', 'app'],
+    cwd,
+    missing: `Falta el entorno del backend (${file}). Créalo con: cd ${cwd} && uv sync --frozen`
+  }
+}
+
+function isExecutable(file: string): boolean {
+  try {
+    accessSync(file, constants.X_OK)
+    return true
+  } catch {
+    return false
+  }
 }
 
 function buildEnv(): NodeJS.ProcessEnv {
@@ -98,6 +117,7 @@ const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms
 
 export function createBackendHost(): BackendHost {
   let state: BackendState = 'stopped'
+  let detail: string | undefined
   let current: Attempt | null = null
   let endpoint: BackendEndpoint | null = null
   let stopping = false
@@ -107,10 +127,15 @@ export function createBackendHost(): BackendHost {
   let failures: number[] = []
   const listeners = new Set<(connection: BackendConnection) => void>()
 
-  function setState(next: BackendState): void {
-    if (next === state) return
+  function snapshot(): BackendConnection {
+    return detail === undefined ? { state } : { state, detail }
+  }
+
+  function setState(next: BackendState, reason?: string): void {
+    if (next === state && reason === detail) return
     state = next
-    const connection: BackendConnection = { state }
+    detail = reason
+    const connection = snapshot()
     for (const listener of [...listeners]) {
       try {
         listener(connection)
@@ -145,7 +170,7 @@ export function createBackendHost(): BackendHost {
     failures = failures.filter((t) => now - t < FAIL_WINDOW_MS)
     failures.push(now)
     if (failures.length > MAX_FAILURES) {
-      setState('failed')
+      setState('failed', 'El servicio local de Drakter ha fallado varias veces. Revisa el registro y reinicia Drakter.')
       return
     }
     setState('restarting')
@@ -195,6 +220,13 @@ export function createBackendHost(): BackendHost {
 
   function launch(): void {
     const cmd = resolveCommand()
+    // Reintentar no lo arreglaría: se queda en `failed` con la instrucción para resolverlo.
+    if (!isExecutable(cmd.file)) {
+      logError('backend', cmd.missing)
+      setState('failed', cmd.missing)
+      return
+    }
+
     const ui = randomBytes(32).toString('base64url')
     const approver = randomBytes(32).toString('base64url')
 
@@ -328,7 +360,7 @@ export function createBackendHost(): BackendHost {
     },
 
     getConnection(): BackendConnection {
-      return { state }
+      return snapshot()
     },
 
     onConnection(listener): () => void {
