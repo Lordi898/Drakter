@@ -717,3 +717,10 @@ Decisiones técnicas, cambios de tecnología y motivos.
 - **Motivo:** `CLAUDE.md` §8.
 - **Estado posterior:** `build_context` ya está conectado (`df258b1`), así que INJ-11/14/25 hay que reevaluarlas.
 - **Impacto:** `RUN_STATE.md` (quitar "Seguridad sin revisar"), Checklist 16.
+
+## [2026-11-13] Empaquetado: backend PyInstaller con app.* explícito y electron-builder por npx
+- **Contexto:** primera ejecución real del empaquetado (Checklist 17). El backend congelado no incluía `app.*` porque `collect_submodules` corre en un subproceso aislado sin `pathex`, y respondía 404 en todas las rutas. El `.deb` exigía `homepage`, y `electron-builder` no está en `desktop/package.json`.
+- **Decisión:** el `.spec` añade `backend/` a `sys.path` antes de `collect_submodules("app")` y aborta si falta `app.api.health`. El `.yml` define `homepage` con `extraMetadata`. Se empaqueta con `npx --yes electron-builder@26.18.0 … -c.npmRebuild=false` y, si `/tmp` es un tmpfs justo, con `TMPDIR` en disco.
+- **Alternativas descartadas:** listar a mano los `hiddenimports` de `app` (se desincroniza con cada módulo nuevo); añadir `homepage` a `package.json` (archivo compartido); dejar que electron-builder recompile `node_modules` (compartido entre worktrees).
+- **Motivo:** que el instalador arranque un backend completo y que el build falle en voz alta si vuelve a perder módulos.
+- **Impacto:** `desktop/electron-builder.backend.spec`, `desktop/electron-builder.yml`, `desktop/electron-builder.README.md`, `docs/installation/paquete-deb.md`, Checklist 17 «Crear instalador».

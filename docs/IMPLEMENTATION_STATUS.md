@@ -406,20 +406,27 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 - [ ] Medir CPU.
 - [ ] Medir uso de CPU y RAM (no hay VRAM dedicada).
 - [ ] Medir latencia de STT.
+  ⚠️ Método listo (`voice/metrics.py`, `voice/tests/bench_engines.py --wav`). La única medición (informe de voz: Whisper small, RTF 0,82–1,02) se tomó con la máquina muy cargada; hay que repetirla en reposo. Voz congelada a la espera de Pipecat.
 - [ ] Medir latencia de TTS.
+  ⚠️ Método listo (`voice/tests/bench_engines.py --tts kokoro`). La única medición (informe de voz: Kokoro, primer audio 398–1 282 ms) se tomó con la máquina muy cargada; hay que repetirla en reposo. Voz congelada a la espera de Pipecat.
 - [ ] Medir latencia de Hermes.
+  ⚠️ No hay instrumentación de latencia de Hermes (las marcas de `voice/metrics.py` solo cubren la voz); no se crea en este cierre.
 - [ ] Optimizar consultas SQLite.
 - [x] Optimizar FTS5.
   ⚠️ Comprobado en la búsqueda global: índice de prefijos `prefix='2 3'`, pesos bm25 por columna y `reconcile_structured` con atajo sin cambios. Con 5.000 tareas sintéticas: reconcile inicial 0,95 s, sin cambios 18 ms, consultas de caso peor 190–460 ms. El FTS del almacén se cubre en la Checklist 10.
 - [ ] Optimizar recuperación de memoria.
 - [ ] Optimizar carga de interfaz.
 - [ ] Crear instalador.
+  ⚠️ Configuración y build funcionan: PyInstaller (backend congelado de 45 MB, arreglado en `39503a7` porque respondía 404 en todas las rutas), AppImage (~150 MB, con el backend corregido) y `.deb` revisado (sandbox SUID, perfil AppArmor, fuses, sin secretos). Pero el `.deb` no se ha regenerado tras el arreglo (`fpm` falló con `/tmp` lleno), no se ha instalado (requiere sudo) ni se ha abierto la ventana empaquetada sin `--no-sandbox`. Faltan icono propio, `desktopName` y `electron-builder` en `desktop/package.json` (hoy por `npx`). Windows sin probar.
 - [ ] Crear actualización de aplicación.
-- [ ] Crear documentación de instalación.
+- [x] Crear documentación de instalación.
 - [ ] Crear documentación de uso.
+  ⚠️ Las 14 guías de `docs/usage/` tienen la cabecera de estado comprobada contra el código (`276cc11`), pero las notas «Pendiente» del cuerpo no se han revisado una a una y nadie las ha seguido paso a paso en la app.
 - [ ] Crear versión estable.
 - [ ] Crear copia de seguridad inicial.
+  ⚠️ El mecanismo funciona (`python -m app.database.cli migrate|backup|status|restore`, copias 600 con `.sha256`), pero una instalación nueva no hace copia inicial automática y no se ha copiado la base real del usuario (el protocolo prohíbe tocar `~/.local/share/drakter`). En la app instalada se hace desde Configuración → Copias de seguridad.
 - [ ] Realizar pruebas de aceptación.
+  ⚠️ Depende de la pasada completa final de drakter-49 sobre la punta de integración.
 
 ## Checklist 18. Ampliaciones futuras
 
