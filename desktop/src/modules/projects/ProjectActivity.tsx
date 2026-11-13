@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { formatDueDate, formatInstant } from '../tasks/format'
-import { actorLabel } from '../tasks/format'
+import { actorLabel, forActor } from '../tasks/format'
 import type { HistoryEntry } from '../tasks/types'
 import { projectActivity } from './api'
 import { LoadFailure, LoadingNote } from './ProjectStates'
@@ -125,7 +125,7 @@ export function ProjectActivity({ projectId, version }: { readonly projectId: st
             return (
               <li key={entry.id} className="flex flex-col gap-0.5">
                 <p className="text-sm text-foreground">
-                  <span className="font-medium">{actorLabel(entry.actor_type)}</span> {describe(entry)}
+                  <span className="font-medium">{actorLabel(entry.actor_type)}</span> {forActor(entry.actor_type, describe(entry))}
                 </p>
                 {lines.map((line) => (
                   <p key={line} className="text-xs text-muted-foreground">
