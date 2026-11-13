@@ -70,6 +70,8 @@ export type BackendState = 'starting' | 'ready' | 'restarting' | 'failed' | 'sto
 /** Sin puerto ni credenciales: el renderer no los conoce nunca (D-14). */
 export interface BackendConnection {
   readonly state: BackendState
+  /** Solo en `failed`: texto propio para mostrar al usuario, con lo que debe hacer. */
+  readonly detail?: string
 }
 
 /** `events`: cada evento de `/ws`, parseado y SIN validar. `connection`: `BackendConnection`. */
