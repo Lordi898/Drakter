@@ -56,6 +56,7 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 
 - [x] Instalar Hermes.
 - [x] Configurar Claude Haiku 5.5.
+  Nota: comprobado con Claude Haiku 5.5 real a través de Hermes (`informes/hermes.md`, «Recomprobación con modelo real»; de apoyo, `informes/relaciones.md`, 3 turnos reales por Hermes).
 - [x] Configurar credenciales.
 - [x] Conectar Hermes con backend.
 - [x] Crear adaptador.
@@ -67,6 +68,7 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 - [ ] Crear primera Skill.
   ⚠️ (d) Las Skills existen y son coherentes con las herramientas reales, pero Hermes no las carga: `home.py` desactiva el toolset `skills` porque arrastra `skill_manage` (H-06/F14). Ver `DECISIONS.md` «Skills de agent/ inertes en Hermes».
 - [x] Probar conversación completa.
+  Nota: comprobado con Claude Haiku 5.5 real a través de Hermes (`informes/hermes.md`, «Recomprobación con modelo real»; de apoyo, `informes/relaciones.md`, 3 turnos reales por Hermes).
 
 ## Checklist 4. Personalidad y contexto
 
@@ -288,7 +290,6 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 - [x] Implementar y comprobar la memoria procedimental en el Memory Adapter.
 - [x] Configurar y comprobar la recuperación selectiva.
 - [x] Configurar y comprobar los límites de contexto.
-  ⚠️ `build_context` con `ContextBudget` se aplica a cada turno real de Hermes (`f364b48`); comprobado con el stub. Con el modelo real se ha comprobado la recuperación, no un recorte por presupuesto.
 - [x] Configurar y comprobar los registros de memoria.
 - [x] Crear Skill de memoria.
 - [x] Probar persistencia.

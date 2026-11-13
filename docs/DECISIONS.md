@@ -609,7 +609,7 @@ Decisiones técnicas, cambios de tecnología y motivos.
 - **Alternativas descartadas:** meter la memoria en el prompt de sistema (Hermes la trataría como autoritativa durante toda la sesión); repetir el historial en `build_context` (duplicaría lo que ya guarda Hermes).
 - **Motivo:** aplicar "El backend recupera los recuerdos" y la prioridad de CLAUDE.md §8.
 - **Efecto conocido:** tras un turno con memoria la sesión queda `tainted` y las escrituras del agente escalan a `confirm`; mientras el runtime use `DefaultToolGate`, fallan cerradas (`confirmation_unavailable`).
-- **Impacto:** `backend/app/integrations/hermes/hermes_provider.py`, `runtime.py` (`f364b48`), Checklist 12 (recuperación selectiva, límites de contexto, memoria de trabajo).
+- **Impacto:** `backend/app/integrations/hermes/hermes_provider.py`, `runtime.py` (`df258b1`), Checklist 12 (recuperación selectiva, límites de contexto, memoria de trabajo).
 
 ## [2026-11-13] Cierre de CL4: consistencia OK, estilo al rediseño
 - **Contexto:** con Claude Haiku 5.5 real, drakter-45 dio por buena «Probar consistencia de personalidad» (2 casos, 0 hallazgos, lectura humana conforme) y drakter-51 la dejó con ⚠️: el modelo a veces supera `max_sentences` (4 frases para máx. 3), abre dos veces con la muletilla «Mal asunto a medias:» y las rúbricas de `agent/evals` (`report.md`) no tienen lectura humana.
@@ -656,3 +656,29 @@ Decisiones técnicas, cambios de tecnología y motivos.
 - **Alternativas descartadas:** devolver títulos y marcar la herramienta como no confiable (cambia el catálogo compartido); dejar el stub.
 - **Motivo:** cerrar la casilla «Asociar recursos» sin cambiar el contrato ni meter texto no confiable en un resultado marcado como confiable.
 - **Impacto:** `backend/app/services/subjects.py`, `backend/app/tools/subjects.py` (`bbee4c4`); Checklist 9.
+
+## [2026-11-13] Paginación por offset en memoria, chat y automejora: desviación aceptada en v1
+- **Contexto:** `contracts/README.md` §2 y `contracts/api/routes.md` piden `{items, next_cursor, total?}` con `limit`/`cursor`. Tres frentes paginan con `limit`/`offset`: memoria (`backend/app/integrations/memory/router.py`), chat (`backend/app/api/chat.py`, sesiones y mensajes) y automejora (`backend/app/services/improvement_api.py`: `feedback`, `proposals`, `changelog`).
+- **Decisión:** no se refactorizan en v1. Se documentan como desviación aceptada en `routes.md` (convención de listados y sección «Paginación por `offset`»). El cliente usa `offset` en esos listados; el resto sigue con cursor.
+- **Alternativas descartadas:** migrar ahora los tres a cursor. Toca servicios, GUI y herramientas al cierre, sin un fallo que lo justifique.
+- **Motivo:** decisión de cierre del coordinador (drakter-33). Con los volúmenes de v1 funciona.
+- **Impacto:** `contracts/api/routes.md`. Queda pendiente para después de v1.
+
+## [2026-11-13] Modelos del contrato alineados con la API real
+- **Contexto:** `contracts/python/drakter_contracts/models` (y `contracts/ts`, generado) describían campos que la API no devuelve ni acepta. Por ejemplo: `target_note` frente a `goal_note` en hábitos, `metadata` en entidades que no lo exponen, `location_id`/`relative_path` en carpetas, y la memoria con el origen plano frente a `provenance`.
+- **Decisión:** el contrato se alinea con la API construida. Se añade la base `EntityCoreOut` sin `metadata`, y `EntityOut` la extiende para tareas y proyectos. Cambian hábitos (`goal_note`), proyectos (`objective`), asignaturas, sesiones, carpetas, recursos, eventos, bloques, etiquetas (`usage_count`), relaciones (`limit`/`cursor`), chat (`ChatSession.status`; `MessageOut` sin `client_message_id`) y memoria (`provenance`, alta/parche/búsqueda con los campos reales). `contracts/ts` se regenera; el `typecheck` del desktop pasa.
+- **Alternativas descartadas:** cambiar la API para ajustarla al contrato antiguo. Rompería la GUI y las herramientas, que ya consumen la API.
+- **Motivo:** decisión de cierre del coordinador (drakter-33). Lo construido y consumido manda.
+- **Impacto:** `contracts/python/drakter_contracts/models/*`, `contracts/ts/index.ts`.
+
+## [2026-11-13] API de copias montada; borrar por ActionService, restaurar sin ruta
+- **Contexto:** `backend/app/services/backup_api.py` no estaba montado, usaba una puerta de confirmación propia (`restore-request`, `delete-request`, `confirmation_id` en el cuerpo) y no podía crear copias: `verify_backup` exigía un sidecar `.sha256` que un bundle no lleva.
+- **Decisión:**
+  - Se monta con `backend/app/api/backups.py`.
+  - `DELETE /api/v1/backups/{name}` va sin cuerpo y responde 409. Se borra en `/confirmations/{id}/approve` mediante la acción `delete_backup` (`services/backup_actions.py`: permiso `backups.delete`, riesgo `confirm`, `external`, objetivo con el SHA-256 del archivo → `conflict` si cambia).
+  - Se retiran la puerta propia y la ruta `restore`.
+  - Una BD extraída de un bundle se verifica sin sidecar (`verify_backup(check_digest=False)`), porque `read_bundle` ya comprobó su SHA-256 contra el manifiesto. Una copia suelta sigue exigiéndolo.
+- **⚠️ Restaurar:** sin ruta. `restore_bundle` llama a `database/backup.restore_backup`, que toma el bloqueo de instancia con un `flock` propio. Con el backend en marcha, ese bloqueo ya lo tiene el proceso, y nadie instala `post_restore_hooks` ni `restore_quiesce`. Necesita un diseño propio: dejar de servir, soltar el bloqueo, restaurar, invalidar confirmaciones y rearrancar. Hoy se restaura con el backend parado (`python -m app.database.cli restore`, copias SQLite).
+- **Alternativas descartadas:** mantener la puerta propia, que contradice el camino único de README §5. Montar `restore` igualmente: fallaría siempre con `DatabaseInUse`.
+- **Motivo:** decisión de cierre del coordinador (drakter-33): copias es de backend-base, por el pipeline único o sin montar.
+- **Impacto:** `backend/app/api/backups.py`, `services/backup_api.py`, `services/backup_actions.py`, `services/backup_service.py`, `database/backup.py`, `permissions/wiring.py` (registro de la acción, drakter-34), `contracts/api/routes.md`. Checklist 2 y la parte de copias de la 16. `/settings/backups` (copias SQLite sueltas) sigue siendo lo que usa la GUI.
