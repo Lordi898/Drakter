@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useLinkStatus } from '@/stores/connection'
 import type { TodayResponse } from './contract'
 import { dayInZone } from './format'
 import { fetchSettings, fetchToday } from './requests'
@@ -59,6 +60,15 @@ export function useToday(): UseToday {
       window.removeEventListener('focus', onFocus)
     }
   }, [load])
+
+  // Hoy es la pantalla inicial: se monta antes de que el servicio local conecte.
+  // Al pasar a 'open' (arranque o reconexión) se recarga sin esperar al foco.
+  const link = useLinkStatus()
+  const previousLink = useRef(link)
+  useEffect(() => {
+    if (link === 'open' && previousLink.current !== 'open') void load()
+    previousLink.current = link
+  }, [link, load])
 
   const reload = useCallback(() => void load(), [load])
   return { data, error, loading, reload }
