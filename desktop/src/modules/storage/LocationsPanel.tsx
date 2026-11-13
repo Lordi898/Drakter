@@ -7,9 +7,9 @@ import {
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { notify } from '@/services/notify'
-import { createLocation, deleteLocation, refreshIndex, scanLocation, updateLocation } from './api'
-import { canPickDirectory, pickDirectory } from './bridge'
-import { describeConfirmation, errorCode, notifyError } from './errors'
+import { refreshIndex, scanLocation } from './api'
+import { addLocation, changeLocation, removeLocation } from './bridge'
+import { notifyError } from './errors'
 import type { StorageLocation } from './types'
 
 interface Props {
@@ -17,16 +17,17 @@ interface Props {
   readonly onChanged: () => void
 }
 
-function lastSegment(path: string): string {
-  const parts = path.split(/[\\/]/).filter(Boolean)
-  return parts[parts.length - 1] ?? path
+const OUTCOME_TEXT: Readonly<Record<string, string>> = {
+  rejected: 'Has rechazado la acción. No se ha quitado nada.',
+  expired: 'La confirmación ha caducado. No se ha quitado nada.',
+  conflict: 'La ubicación ha cambiado. Vuelve a intentarlo.',
+  failed: 'No se ha podido quitar la ubicación.'
 }
 
 export function LocationsPanel({ locations, onChanged }: Props) {
   const [busyId, setBusyId] = useState<string | null>(null)
   const [removing, setRemoving] = useState<StorageLocation | null>(null)
   const [waiting, setWaiting] = useState<string | null>(null)
-  const pickable = canPickDirectory()
 
   async function guard(id: string, task: () => Promise<void>, failTitle: string) {
     setBusyId(id)
@@ -40,10 +41,8 @@ export function LocationsPanel({ locations, onChanged }: Props) {
   }
 
   async function add() {
-    const path = await pickDirectory()
-    if (!path) return
     await guard('new', async () => {
-      await createLocation(path, lastSegment(path))
+      if (!(await addLocation())) return
       notify({ tone: 'success', title: 'Ubicación añadida', body: 'Es de solo lectura y Drakter no puede leerla hasta que lo permitas.' })
       onChanged()
     }, 'No se ha podido añadir la ubicación')
@@ -51,8 +50,7 @@ export function LocationsPanel({ locations, onChanged }: Props) {
 
   async function toggle(location: StorageLocation, patch: { agent_read?: boolean; enabled?: boolean }) {
     await guard(location.id, async () => {
-      await updateLocation(location.id, patch)
-      onChanged()
+      if (await changeLocation(location.id, patch)) onChanged()
     }, 'No se ha podido cambiar la ubicación')
   }
 
@@ -85,13 +83,16 @@ export function LocationsPanel({ locations, onChanged }: Props) {
     setWaiting(null)
     setBusyId(removing.id)
     try {
-      await deleteLocation(removing.id)
-      notify({ tone: 'success', title: 'Ubicación quitada', body: 'Tus archivos no se han tocado.' })
-      setRemoving(null)
-      onChanged()
+      const outcome = await removeLocation(removing.id)
+      if (outcome === 'approved') {
+        notify({ tone: 'success', title: 'Ubicación quitada', body: 'Tus archivos no se han tocado.' })
+        setRemoving(null)
+        onChanged()
+      } else {
+        setWaiting(OUTCOME_TEXT[outcome] ?? 'No se ha podido quitar la ubicación.')
+      }
     } catch (error) {
-      if (errorCode(error) === 'confirmation_required') setWaiting(describeConfirmation(error))
-      else notifyError('No se ha podido quitar la ubicación', error)
+      notifyError('No se ha podido quitar la ubicación', error)
     } finally {
       setBusyId(null)
     }
@@ -105,16 +106,11 @@ export function LocationsPanel({ locations, onChanged }: Props) {
           <Button variant="ghost" size="icon-sm" aria-label="Refrescar el índice" title="Refrescar el índice" disabled={busyId !== null} onClick={() => void refresh()}>
             <RefreshCw />
           </Button>
-          <Button variant="outline" size="sm" disabled={!pickable || busyId !== null} onClick={() => void add()}>
+          <Button variant="outline" size="sm" disabled={busyId !== null} onClick={() => void add()}>
             <FolderPlus /> Añadir
           </Button>
         </div>
       </div>
-      {!pickable ? (
-        <p className="text-xs text-muted-foreground">
-          Elegir una carpeta necesita el selector nativo, que esta versión del puente todavía no ofrece.
-        </p>
-      ) : null}
       {locations === null ? <p role="status" className="text-sm text-muted-foreground">Cargando ubicaciones…</p> : null}
       {locations?.length === 0 ? <p className="text-sm text-muted-foreground">Aún no has añadido ninguna carpeta.</p> : null}
       <ul className="flex flex-col gap-2">
