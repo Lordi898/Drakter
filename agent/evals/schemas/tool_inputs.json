@@ -1,14 +1,27 @@
 {
   "generated_from": {
-    "drakter/contratos": "8f39bf0",
-    "drakter/tareas-proyectos": "8e2523a",
-    "drakter/habitos-calendario": "cb5dbb3+dirty",
-    "drakter/almacen-relaciones": "1cb1348+dirty",
-    "drakter/agente-hermes": "8f56f4b",
-    "drakter/memoria-contexto": "75392f6",
-    "drakter/busqueda": "d57d187"
+    "drakter/integracion": "7fd30e1"
   },
   "tools": {
+    "add_tag": {
+      "additionalProperties": false,
+      "properties": {
+        "entity_id": {
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+          "type": "string"
+        },
+        "tag": {
+          "maxLength": 60,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "entity_id",
+        "tag"
+      ],
+      "type": "object"
+    },
     "add_task_dependency": {
       "additionalProperties": false,
       "properties": {
@@ -1276,6 +1289,7 @@
     },
     "delete_event": {
       "additionalProperties": false,
+      "description": "Igual que `calendar_actions.DeleteEventArgs` (ese módulo importa asignaturas).",
       "properties": {
         "event_id": {
           "description": "UUID del evento",
@@ -1308,32 +1322,25 @@
           "type": "string"
         },
         "expected_revision": {
-          "anyOf": [
-            {
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
+          "type": "integer"
         }
       },
       "required": [
-        "task_id"
+        "task_id",
+        "expected_revision"
       ],
       "type": "object"
     },
     "delete_time_block": {
       "additionalProperties": false,
       "properties": {
-        "block_id": {
+        "time_block_id": {
           "description": "UUID del bloque de tiempo",
           "type": "string"
         }
       },
       "required": [
-        "block_id"
+        "time_block_id"
       ],
       "type": "object"
     },
@@ -1749,11 +1756,10 @@
           ],
           "default": null
         },
-        "offset": {
+        "cursor": {
           "anyOf": [
             {
-              "minimum": 0,
-              "type": "integer"
+              "type": "string"
             },
             {
               "type": "null"
@@ -1852,11 +1858,47 @@
           ],
           "default": null
         },
-        "offset": {
+        "cursor": {
           "anyOf": [
             {
-              "minimum": 0,
-              "type": "integer"
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "type": "object",
+      "required": []
+    },
+    "list_tags": {
+      "additionalProperties": false,
+      "properties": {
+        "q": {
+          "anyOf": [
+            {
+              "maxLength": 60,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "limit": {
+          "default": 50,
+          "maximum": 100,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "cursor": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "type": "string"
             },
             {
               "type": "null"
@@ -2173,6 +2215,25 @@
       },
       "required": [
         "habit_id"
+      ],
+      "type": "object"
+    },
+    "remove_tag": {
+      "additionalProperties": false,
+      "properties": {
+        "entity_id": {
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+          "type": "string"
+        },
+        "tag": {
+          "maxLength": 60,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "entity_id",
+        "tag"
       ],
       "type": "object"
     },
