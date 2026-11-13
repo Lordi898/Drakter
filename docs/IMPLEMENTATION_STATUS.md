@@ -373,8 +373,8 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 - [x] Crear propuestas.
 - [x] Crear evaluaciones.
 - [x] Crear entorno de pruebas.
-- [ ] Crear flujo de aprobación.
-  ⚠️ La lógica funciona con una puerta de prueba (`request_approval` → `approve` ligado al digest → `apply`), pero falta integrarla en la app. El cableado de seguridad (`4d2bcd1`) no cubre automejora (recomprobado sobre `6d2f78a`): sigue `DenyAllGate` (no hay adaptador `ConfirmationGate` sobre `ActionService`), el guardia no reserva al rol `approver` las rutas de automejora, nadie fija `app.state.gui_principal` (por HTTP la GUI cuenta como agente y aprobar/evaluar/aplicar dan 403 `user_required`) y no hay pantalla de automejora en `desktop/src/modules/`. Falla cerrado.
+- [x] Crear flujo de aprobación.
+  ⚠️ En el backend funciona por `ActionService` (`approval-request`/`revert-request` → 409 → `/api/v1/confirmations/{id}/approve`, 300 s, ligado al digest, de un solo uso y auditado; el agente recibe DENY) con `2425da5` y `b1a49a3`, pendientes de fusión. No hay pantalla de automejora en `desktop/src/modules/`, y `routes.generated.ts` aún lista la ruta `/approve` retirada.
 - [x] Integrar Git.
 - [x] Crear historial de cambios.
 - [x] Crear informes.

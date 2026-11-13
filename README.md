@@ -29,7 +29,7 @@ Arranque: `scripts/drakter-local.sh start anthropic` (con el modelo real) o `sta
 | Relaciones (CL11) | `backend/app/services/relations.py`, `desktop/src/modules/relationships/` | Verificado el servicio, los tipos, las validaciones, las consultas y la integridad. ⚠️ La pantalla falta verla en Electron; herramientas sin probar con modelo |
 | Memoria (CL12) | `memory/`, `backend/app/integrations/memory/` | Verificado el adaptador SQLite + FTS5 y su ciclo (extraer, clasificar, deduplicar, contradicciones, caducidad). ⚠️ La recuperación al turno está pendiente de fusión y aún no se puede olvidar; OpenViking desactivado (U-1, sin confirmar) |
 | Voz (CL14) | `voice/` | Verificado como proceso aislado: VAD, Whisper small, Kokoro, Voice Manager, reproducción e interrupciones. ⚠️ Sin conectar a la app (no hay conversación por voz), sin wake word ni Piper; rediseño previsto sobre Pipecat |
-| Automejora (CL15) | `improvement/`, `backend/app/services/improvement_*.py` | Verificado el ciclo (feedback, propuestas, evaluación aislada, rama Git, revertir) y que no puede cambiar nada sin aprobación. ⚠️ Sin flujo de aprobación en la app ni pantalla |
+| Automejora (CL15) | `improvement/`, `backend/app/services/improvement_*.py` | Verificado el ciclo (feedback, propuestas, evaluación aislada, rama Git, revertir) y que no puede cambiar nada sin aprobación. Aprobación por `ActionService` pendiente de fusión. ⚠️ Sin pantalla de automejora |
 
 ## Estructura de carpetas
 
