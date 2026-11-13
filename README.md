@@ -15,7 +15,7 @@ Arranque rápido: `scripts/drakter-local.sh start` (con el stub) o `start anthro
 | Bloque | Dónde | Estado verificado |
 |---|---|---|
 | Arquitectura y preparación (CL0) | raíz, `contracts/`, `docs/`, `scripts/` | Verificado |
-| Backend FastAPI + SQLite (CL2) | `backend/app/` | Verificado salvo el sistema de permisos: las confirmaciones no están cableadas en el arranque (⚠️) |
+| Backend FastAPI + SQLite (CL2) | `backend/app/` | Verificado, incluido el sistema de permisos: guardia de red y roles, y confirmaciones cableadas en el arranque con un único camino (`ActionService`, 300 s) |
 | Base de datos y migraciones (CL6) | `backend/migrations/` (0001–0011) | Verificado: 36 tablas, integridad referencial, copia y restauración |
 | Escritorio (CL1) | `desktop/` | Visto en la app: ventana, navegación, área central, panel contextual, configuración y gestión de errores; las 10 pantallas cargan contra el backend. ⚠️ Notificaciones y empaquetado en verificación; búsqueda global (Ctrl+K) sin montar |
 | Hermes y chat (CL3) | `backend/app/integrations/`, `agent/` | GUI → backend → Hermes v0.22.7 → respuesta en el chat, **solo con el stub** `tools/dev-llm-stub/`; ⚠️ la clave configurada da 401. Verificados sesiones, envío, recepción, eventos y recuperación tras caída del runner. Las suites de evals (`agent/evals/`, 46 casos) están listas para correr con clave |
@@ -23,7 +23,7 @@ Arranque rápido: `scripts/drakter-local.sh start` (con el stub) o `start anthro
 | Personalidad y contexto (CL4) | `agent/identity/`, `agent/context/`, `agent/knowledge/` | Verificado: 14 archivos compuestos en el `SOUL.md` de Hermes, con la seguridad primero. ⚠️ La consistencia de personalidad está sin probar con modelo (sin clave) |
 | Personaje (CL5) | `desktop/src/character/` | Verificado en el personaje provisional SVG: diseño, 9 estados, transiciones y eventos visuales. ⚠️ Faltan el `.riv`, el runtime de Rive y la sincronización labial con audio |
 | Hábitos (CL8) | `backend/app/services/habits*.py`, `desktop/src/modules/habits/` | Verificado: CRUD, frecuencia y días, recordatorios, registros, historial, estadísticas, objetivos y persistencia. ⚠️ Herramientas sin probar con modelo |
-| Tareas y proyectos (CL7) | `backend/app/services/tasks*.py`, `desktop/src/modules/tasks/`, `projects/` | Verificado el backend y las 21 herramientas: CRUD, subtareas, estados, prioridades, etiquetas, dependencias, archivo, progreso e historial. Pantallas vistas en la app. ⚠️ Borrar da 503 hasta cablear las confirmaciones |
+| Tareas y proyectos (CL7) | `backend/app/services/tasks*.py`, `desktop/src/modules/tasks/`, `projects/` | Verificado el backend y las 21 herramientas: CRUD con borrado confirmado, subtareas, estados, prioridades, etiquetas, dependencias, archivo, progreso e historial. Pantallas vistas en la app. Borrar pide confirmación y se aprueba desde la app |
 | Calendario, asignaturas, almacén | `backend/app/`, `desktop/src/modules/` | En verificación |
 | Relaciones (CL11) | `backend/app/services/relations.py`, `desktop/src/modules/relationships/` | Verificado el servicio, los tipos, las validaciones, las consultas y la integridad. ⚠️ La pantalla falta verla en Electron; herramientas sin probar con modelo |
 | Memoria (CL12) | `memory/`, `backend/app/integrations/memory/` | Verificado el adaptador SQLite + FTS5 y su ciclo (extraer, clasificar, deduplicar, contradicciones, caducidad). ⚠️ No se recupera al turno ni se puede olvidar aún; OpenViking desactivado (U-1, sin confirmar) |

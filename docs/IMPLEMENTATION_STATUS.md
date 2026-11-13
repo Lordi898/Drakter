@@ -50,9 +50,7 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 - [x] Crear validaciones.
 - [x] Crear logs.
 - [x] Crear gestión de errores.
-- [ ] Crear sistema de permisos.
-  ⚠️ Matriz de roles y confirmaciones comprobadas (`check_confirmations.py`: 0 fallos), pero tareas y proyectos no están cableados a `ActionService`: borrar desde la GUI da 503 `confirmation_unavailable` (falla cerrado).
-  ⚠️ Parcial (cierre 2026-11-13): la guardia de red y roles funciona (`SecurityGuardMiddleware`: loopback, Host, Origin, tokens ui/approver). El servicio de confirmaciones (`app/permissions/setup.py`) no está cableado en `app/main.py`: `/api/v1/confirmations/**` da 503 y los borrados de tareas y proyectos también (`FailClosedGate`). Cablearlo rompe el arranque porque `setup.py` espera `habits_calendar_support.CONFIRMED_ACTIONS`, que no existe. Pendiente del integrador.
+- [x] Crear sistema de permisos.
 
 ## Checklist 3. Hermes
 
@@ -166,9 +164,7 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 - [x] Crear interfaz de tareas.
 - [x] Crear tareas.
 - [x] Editar tareas.
-- [ ] Eliminar tareas.
-  ⚠️ 503 `confirmation_unavailable`: `tasks_ports.Ports` usa `FailClosedGate` porque nadie fija `app.state.workspace_ports` ni hay ejecutores de tareas/proyectos en `load_confirmed_executors`.
-  ⚠️ Hoy DELETE responde 503 `confirmation_unavailable`. Funciona (409 → aprobación con token `approver` → borrada; revisión cambiada → no borra) solo con `db85f3e` (`services/tasks_confirmations.py`, por `ActionService`) más el cableado de `drakter-34` en `main.py`, ambos pendientes.
+- [x] Eliminar tareas.
 - [x] Completar tareas.
 - [x] Reabrir tareas.
 - [x] Crear subtareas.
@@ -182,7 +178,6 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 - [x] Crear proyectos.
 - [x] Editar proyectos.
 - [x] Archivar proyectos.
-  ⚠️ Archivar y desarchivar funcionan. Borrar un proyecto (conserva sus tareas sin proyecto) depende del mismo arreglo que «Eliminar tareas.».
 - [x] Asociar tareas a proyectos.
 - [x] Mostrar progreso.
 - [x] Crear historial.
@@ -270,7 +265,7 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 - [x] Crear consulta inversa.
 - [x] Crear consulta de elementos relacionados.
 - [ ] Crear visualización de relaciones.
-  ⚠️ El código existe (`RelationshipsPage`, `RelationGraph`, `RelatedPanel`, diálogos), está enrutado, tipa sin errores y su contrato coincide con el backend; arreglado el filtro por tipo (`78acfca`, pendiente de fusión). Falta abrirla una vez en Electron (`scripts/dev.sh`) para confirmar que se ve bien.
+  ⚠️ El código existe (`RelationshipsPage`, `RelationGraph`, `RelatedPanel`, diálogos), está enrutado, tipa sin errores y su contrato coincide con el backend; arreglado el filtro por tipo (`78acfca`). Falta abrirla una vez en Electron (`scripts/dev.sh`) para confirmar que se ve bien.
 - [ ] Crear herramientas Hermes.
   ⚠️ Las 4 de relaciones y las 3 de etiquetas se registran en el `ToolRegistry` real y sus handlers funcionan. Sin clave: no se han probado con el modelo real. Aviso `tool_catalog_drift` en `get_related_items` hasta alinear `contracts/tools/catalog.json` a `returns_untrusted: true` (pedido a drakter-32).
 - [x] Probar integridad y eliminación.

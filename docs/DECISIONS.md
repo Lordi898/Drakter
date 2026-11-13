@@ -522,7 +522,8 @@ Decisiones técnicas, cambios de tecnología y motivos.
 - **Decisión:** `services/tasks_confirmations.py` registra cada operación de `TASK_CONFIRMABLE`/`PROJECT_CONFIRMABLE` como `ActionSpec` (riesgo confirm, `external=True`, prefijo `workspace_`) y `ActionServiceGate` pide la confirmación con `ActionService.execute_or_request`, único camino (TTL 300 s). Los `targets` y `affected_count` que resuelve el servicio viajan en los argumentos firmados; al aprobar, el servicio abre su transacción y vuelve a comprobar alcance y revisiones. `main.py` deja `app.state.workspace_ports = build_ports(actions)`.
 - **Alternativas descartadas:** insertar la fila en `pending_confirmations` desde el módulo, como hace almacén (segundo camino paralelo a `ActionService`); usar los nombres sin prefijo (chocarían con las herramientas del agente `delete_task`, `update_task` y `complete_task`, que ejecuta el registro).
 - **Motivo:** reutiliza las reglas de dominio y la comprobación de revisiones del servicio sin tocar el contrato de confirmaciones.
-- **Impacto:** `backend/app/services/tasks_confirmations.py` (`db85f3e`, pendiente de fusión), `backend/app/main.py` (cableado de `drakter-34`); Checklist 7 (eliminar tareas, borrar proyectos).
+- **Impacto:** `backend/app/services/tasks_confirmations.py`, `backend/app/main.py` (cableado de `drakter-34`); Checklist 7 (eliminar tareas, borrar proyectos).
+- **Estado:** descartada el mismo día; ver «Seguridad cableada en el arranque». `tasks_confirmations.py` (`8ff52da`/`db85f3e`) no se fusiona.
 
 ## [2026-11-13] Voz: cierre mínimo, rediseño posterior sobre Pipecat
 - **Contexto:** la capa de voz de v1 (`voice/`: openWakeWord, Silero VAD, Faster-Whisper, Kokoro/Piper, Voice Manager) llega al cierre sin probar de punta a punta. `drakter-1` indica que la capa de voz y conversación se rediseñará sobre Pipecat, con STT Whisper y TTS Fish Audio.
@@ -551,3 +552,11 @@ Decisiones técnicas, cambios de tecnología y motivos.
 - **Alternativas descartadas:** reactivar toolsets nativos para la prueba (rompería la lista blanca que se quiere comprobar).
 - **Motivo:** probar el cableado real del producto.
 - **Impacto:** `tests/e2e/`, `tools/dev-llm-stub/scenarios/` (pendiente: lo hace drakter-32).
+
+## [2026-11-13] Seguridad cableada en el arranque
+- **Contexto:** al cerrar las Checklists 0/2/6, `app/permissions/setup.py` (confirmaciones y permisos del agente) no se invocaba desde `app/main.py`, y cablearlo tal cual rompía el arranque porque `load_confirmed_executors` esperaba `habits_calendar_support.CONFIRMED_ACTIONS`, que ya no existe. Resultado: `/api/v1/confirmations/**` y los borrados de tareas, proyectos, calendario y asignaturas daban 503 `confirmation_unavailable`. Tareas proponía además su propia puerta (`services/tasks_confirmations.py`, `8ff52da`/`db85f3e`).
+- **Decisión:** `drakter-34` cablea la seguridad (`4d2bcd1`). `permissions/wiring.py` aporta `PendingConfirmationGate` para tareas y proyectos, los ejecutores de `TASK_CONFIRMABLE`/`PROJECT_CONFIRMABLE`, las `ActionSpec` de calendario y `wire_security()`; `main.py` llama a `wire_security` en `_install_services` y a `start_security`/`stop_security` en `lifespan`. `load_confirmed_executors` ya no falla sin `CONFIRMED_ACTIONS`. La migración `0012_confirmation_hardening.sql` congela la identidad de las confirmaciones (las filas nacen `pending` y las cerradas no cambian). Se descarta la puerta propia de tareas para no tener un segundo camino de confirmación.
+- **Alternativas descartadas:** fusionar `tasks_confirmations.py` (segundo camino paralelo al de seguridad); cablear con `try/except` para tolerar el fallo (dejaría las confirmaciones a medias sin avisar).
+- **Motivo:** un único camino de confirmación (`contracts/README.md` §5), con caducidad de 300 s.
+- **Comprobado:** `check_security.py` 145/145, `check_confirmations.py` 0 fallos, borrado de tareas y proyectos 409 → aprobar → 404.
+- **Impacto:** `backend/app/main.py`, `backend/app/permissions/wiring.py`, `setup.py`, `tool_gate.py`, `backend/app/services/actions.py`, `backend/migrations/0012_confirmation_hardening.sql`; Checklists 2 (sistema de permisos), 7 (eliminar tareas, borrar proyectos), 9 y 16. ⚠️ El número `0012` coincide con `0012_improvement_cycle.sql` de automejora (`9a9a34e`, sin fusionar), que tendrá que renumerarse.
