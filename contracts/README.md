@@ -36,7 +36,7 @@ Hermes no toca la BD ni el sistema de archivos: solo `app/tools/`, que llama a l
 
 - **UUID:** TEXT(36), minúsculas con guiones, lo genera solo el backend (v4). Opaco para el cliente.
 - **Instante:** `YYYY-MM-DDTHH:MM:SS.sssZ`, ancho fijo, en BD y JSON. Usa `format_instant`. Nunca `isoformat()`. Se rechaza lo que no tenga zona.
-- **Fecha:** `YYYY-MM-DD`. **Hora local:** `HH:MM`. **Fecha-hora local:** `YYYY-MM-DDTHH:MM:SS`. **Zona:** nombre IANA.
+- **Fecha:** `YYYY-MM-DD`. **Hora local:** `HH:MM`. **Fecha-hora local:** `YYYY-MM-DDTHH:MM`, sin segundos (lo que usan calendario, herramientas y GUI). **Zona:** nombre IANA.
 - **Enumerados:** inglés `snake_case`; el texto en español es cosa de la GUI.
 - **Listados:** `{items, next_cursor, total?}` con `limit` y `cursor`. El cursor es opaco y se calcula sobre (campo de orden, id), nunca sobre la versión del UUID; `limit` lo acota el servidor; `total` es opcional. `sort=campo,-campo` con lista blanca por ruta.
 - **Nombres de chat:** en la API, `session_id` y `text`; `conversations.id` y `messages.content` son solo nombres de la BD.

@@ -264,11 +264,10 @@ Revisadas contra `drakter/integracion` el 2026-11-13. Rutas relativas a la raíz
 
 ### Arranque: piezas escritas que no se conectan (integración, `backend/app/main.py`)
 
+Ya resuelto (fusión de drakter-34, `app/permissions/wiring.py`): pipeline de confirmaciones instalado (`wire_security`, `start_security`, `stop_security`), acciones de hábitos y calendario registradas con `calendar_actions.register_actions`, y `workspace_ports` con `ConfirmationGate` sobre `ActionService` y `HubEventSink`. Comprobado: `DELETE /api/v1/tasks/{id}` → 409 con `confirmation`; `GET /api/v1/confirmations` → 200.
+
 | Qué | Dónde | Efecto hoy | Qué debe hacer |
 |---|---|---|---|
-| Pipeline de confirmaciones sin instalar | `main.py` no llama a `install_security`, `start_security` ni `stop_security` (`app/permissions/setup.py`, `app/permissions/README.md`) | `/api/v1/confirmations/**` y todo `DELETE` con riesgo `confirm` responden 503 `confirmation_unavailable` | Instalarlo como indica `permissions/README.md`. **Antes** hay que resolver la fila siguiente, porque si no, el arranque falla |
-| Ejecutores de hábitos y calendario | `app/permissions/setup.py:90-94` lee `habits_calendar_support.CONFIRMED_ACTIONS`, que no existe; las acciones se registran con `app/services/calendar_actions.py:register_actions`, que nadie llama | Instalar el pipeline tal cual tumba el arranque con `AttributeError` | Un único registro: o `CONFIRMED_ACTIONS` en `habits_calendar_support`, o `setup.py` usa `calendar_actions.ACTION_SPECS` |
-| Puertos de tareas y proyectos | `app/api/tasks_http.py:35` y `app/tools/tasks.py:53` leen `app.state.workspace_ports`, que nadie asigna; `Ports()` cae en `FailClosedGate` y `NullEventSink` (`services/tasks_ports.py`) | `DELETE /tasks/{id}` y `DELETE /projects/{id}` dan 503; no se emite ningún `workspace.*` | Un adaptador `ConfirmationGate` sobre `ActionService` y `EventSink` sobre `event_hub`, asignado en `_install_services` |
 | Routers fuera de `app/api/` | `app/services/backup_api.py`, `app/services/improvement_api.py`, `app/integrations/voice/router.py` | Sus rutas dan 404 `http_404` (estado `escrita, sin montar` en las tablas) | Montarlos desde `_install_services`, como memoria, o moverlos a `app/api/` |
 | Voz sin arrancar | `app/integrations/voice/` (supervisor, puente) no se importa fuera de su paquete | No se emite ningún `voice.*` | Arrancarla en `lifespan` cuando se monte su router |
 
@@ -293,7 +292,8 @@ Revisadas contra `drakter/integracion` el 2026-11-13. Rutas relativas a la raíz
 
 | Evento | Estado |
 |---|---|
-| `workspace.*` | Se publica solo vía `ports.events`, que hoy es `NullEventSink` (ver arranque) |
+| `workspace.entity_*` | Se descartan todos: `services/tasks.py:181` y `services/projects.py:108` publican `{entity_type, entity_id, revision}` sin `actor_type`, que `WorkspaceEntityChange` exige; `HubEventSink` (`permissions/wiring.py:114`) registra `event_publish_failed` en cada mutación. Debe añadirse `actor_type` (`ctx.actor.actor_type`) y, si se conoce, `changed_fields`. Además el desktop no escucha `workspace.*` |
+| `workspace.relationship_*` | Ningún emisor en el backend |
 | `agent.expression_changed`, `storage.index_progress` | Ningún emisor en el backend |
 | `voice.*` | Los emite la integración de voz, que no se arranca |
 | `system.health_changed` | Lo emite `integrations/hermes/runtime.py`; el desktop no lo escucha y deriva `offline` solo de la caída del socket (admitido en README §7) |

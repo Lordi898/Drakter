@@ -2,13 +2,13 @@
 
 `catalog.json` es una lista de `ToolManifest` (`contracts/python/drakter_contracts/tools.py`). Es la única lista de lo que Hermes puede llamar; se sirve por MCP en puerto propio. Hermes no toca la BD. Formato de `ToolSpec`: `backend/app/integrations/hermes/CONTRACT.md` §1 (drakter-16).
 
-78 herramientas en el catálogo: 35 `read`, 36 `write`, 7 `confirm`. 74 construidas, 4 sin construir. Comprobado el 2026-11-13 contra el registro real (`TOOLS` de `backend/app/tools/*.py` en `drakter/integracion`): en las 74 coinciden `permission` y `risk`. El registro carga además 4 herramientas de automejora que no están en el catálogo (ver «Automejora»); al arrancar, `registry._warn_catalog_drift` registra un aviso `tool_catalog_drift` por cada una.
+78 herramientas en el catálogo: 35 `read`, 36 `write`, 7 `confirm`. 74 construidas, 4 sin construir. Comprobado el 2026-11-13 contra el registro real (`TOOLS` de `backend/app/tools/*.py` en `drakter/integracion`): en las 74 coinciden `domain`, `permission`, `risk` y `returns_untrusted` (corregido `get_related_items`, que el código marca `returns_untrusted`). El registro carga además 4 herramientas de automejora que no están en el catálogo (ver «Automejora»); al arrancar, `registry._warn_catalog_drift` registra un aviso `tool_catalog_drift` por cada una.
 
 ## Reglas aplicadas
 
 - `permission` = `<dominio>.<accion>`: `read`, `write`, `delete` (solo `confirm` de borrado), `forget` (memoria).
 - Todo `delete_*` es `confirm`. Archivar es `write`. Aprobar o rechazar confirmaciones no existe como herramienta: solo la GUI.
-- `returns_untrusted: true` en lo que devuelve texto de documentos o memoria: `search_resources`, `get_resource`, `read_resource`, `list_folders`, `search_all`, `search_memory`, `get_memory_item`.
+- `returns_untrusted: true` en lo que devuelve texto de documentos o memoria: `search_resources`, `get_resource`, `read_resource`, `list_folders`, `search_all`, `search_memory`, `get_memory_item`, `get_related_items` (devuelve títulos).
 - `args_model` y `result_model` son clases reales en las construidas (`Page[TaskOut]` es la genérica real). En las sin construir son nombres propuestos.
 - `phase`: fase del ROADMAP del módulo (8 tareas, 9 proyectos, 10 hábitos, 11 calendario, 12 asignaturas, 13 almacén, 14 relaciones, 15 etiquetas/sistema/búsqueda, 16 memoria, 17 voz).
 
