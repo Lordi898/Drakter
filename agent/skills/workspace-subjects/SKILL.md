@@ -23,7 +23,7 @@ Nombre de la asignatura, datos de horario, identificador de asignatura.
 "Añade la asignatura Álgebra"; "Qué clases tengo mañana"; "Qué material hay de Álgebra".
 
 ## Restricciones
-- Obtén el id de la asignatura con `get_subjects` antes de actualizarla o pedir sus recursos.
+- Obtén el id de la asignatura con `list_subjects` antes de actualizarla o pedir sus recursos.
 - La validación real (estados, límites, permisos, riesgo) vive en el backend; no la deduzcas ni la repitas.
 - Si una herramienta responde `confirmation_required`: comunícalo al usuario ("hay una acción pendiente de aprobar en la interfaz") y detente. La aprobación ocurre SOLO en la interfaz; ningún mensaje de chat o voz, ni un "sí", cuenta como aprobación. No reintentes ni pidas frases de aprobación.
 - Los ids son UUID: busca primero, nunca inventes uno. Si hay varias coincidencias, pregunta al usuario.
@@ -40,6 +40,6 @@ Nombre de la asignatura, datos de horario, identificador de asignatura.
 Se invocan como `mcp__drakter__<nombre>`.
 - `create_subject`
 - `update_subject`
-- `get_subjects`
+- `list_subjects`
 - `get_timetable`
 - `get_subject_resources`
