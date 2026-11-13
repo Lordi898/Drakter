@@ -58,7 +58,7 @@ scripts/drakter-local.sh stop
 - **Personaje Rive:** el `.riv` se diseña a mano y no se ha entregado; tampoco está el runtime de Rive en `package.json`. La Checklist 5 está cerrada sobre el personaje provisional SVG.
 - **Voz:** el pipeline propio (`voice/`) está verificado como proceso aislado (VAD, Whisper small, Kokoro, Voice Manager, interrupciones), pero no está registrado en `main.py` ni tiene cliente en el escritorio, así que no hay conversación por voz. El router `/api/v1/voice/*` tampoco se monta, aunque Electron lo permite. Se congela así: la capa de voz y conversación se rediseñará sobre Pipecat (STT Whisper, TTS Fish Audio). Las cifras de latencia se tomaron con la máquina cargada y hay que repetirlas en reposo.
 - **Memoria al turno:** `df258b1` conecta `memories_for_context` → `build_context` al runner de Hermes (memoria cercada en la entrada del turno, niveles 1, 2 y 4 como instrucciones efímeras); comprobado con el stub. Tras un turno con memoria la sesión queda `tainted` y las escrituras del agente fallan cerradas hasta `b722aca`. Olvidar un recuerdo sigue fallando cerrado: `POST /api/v1/memory/{id}/forget` da 409 y `forget_memory` se deniega.
-- **Automejora:** la aprobación y la reversión pasan por `ActionService` (409 → `/confirmations/{id}/approve`) (`2425da5`, `b1a49a3`). No existe pantalla de automejora en el escritorio, `routes.generated.ts` hay que regenerarlo y `recover_interrupted` aún no se llama al arrancar.
+- **Automejora:** la aprobación y la reversión pasan por `ActionService` (409 → `/confirmations/{id}/approve`) (`2425da5`, `b1a49a3`). No existe pantalla de automejora en el escritorio y
 - **Skills inertes:** `home.py` desactiva el toolset `skills` de Hermes (arrastra `skill_manage`); el agente se guía por las descripciones de las herramientas MCP. Además la Skill de configuración cita herramientas que no existen.
 - **Calendario:** el selector de zona horaria arranca en el primer valor de la lista (`Africa/Abidjan`) mientras `default_timezone` no esté fijado en Configuración.
 - **Deriva de catálogo:** el backend avisa (`tool_catalog_drift`) de herramientas que difieren de `contracts/tools/catalog.json` (p. ej. `get_related_items` debe pasar a `returns_untrusted: true`). No bloquea.
@@ -66,7 +66,7 @@ scripts/drakter-local.sh stop
 - **Restaurar copias con la app en marcha:** `/api/v1/backups/**` está montado y borrar va por `ActionService`, pero restaurar no tiene ruta: `restore_backup` necesita el bloqueo de instancia que ya tiene el backend. Hoy se restaura con el backend parado (`python -m app.database.cli restore`). Necesita un diseño propio.
 - **Paginación por `offset`** en memoria, chat y automejora: desviación aceptada en v1 (el contrato pide `cursor`).
 - **Eventos sin emisor:** `agent.expression_changed`, `storage.index_progress` y `workspace.relationship_*`.
-- **Seguridad, brechas del red-team conocidas al cierre** (recuento final pendiente de drakter-34 sobre `183cc25`):
+- **Seguridad, brechas del red-team conocidas al cierre** (recuento final de drakter-34: 169 BLOCKED / 12 BREACH / 19 N/A / 0 ERROR; con el modelo real, el recuerdo trampa no se obedece y en sesión contaminada `create_task` queda pendiente de confirmación):
   - ⚠️ de diseño: CONF-46/INJ-26 (la contaminación no persiste al reiniciar), INJ-11/25 (`TurnRequest` sin canal de datos; mitigado por la propagación de tainted) y FILE-DB-02 (TOCTOU de bajo riesgo).
   - En curso: INJ-05 (drakter-42).
   - No son brechas abiertas: DESK-04 y DESK-16 (falsos positivos), DESK-20 (resuelto por `89a87b5`), INJ-24 (contradicción del banco ya decidida) e INJ-32 (arreglado en código; falta ajustar la sonda).
@@ -79,6 +79,7 @@ scripts/drakter-local.sh stop
 
 ### Cerrados en el cierre
 
+- **Recuperación del backend:** con Electron, un SIGKILL al backend se relanza en unos 2 s, con backoff y tope de fallos; al arrancar se reconcilian las confirmaciones y se recuperan las evaluaciones de automejora cortadas (`a1f2b88`).
 - **Escritorio (CL1):** Electron 45 con backend real, React 19, TypeScript, Tailwind 4, shadcn/ui, ventana, 10 secciones, área central, panel contextual, notificaciones, configuración y gestión de errores vistos en la app; `ALLOWED_ROUTES` regenerado desde el contrato (`89a87b5`) y la GUI no puede aplicar ni revertir mejoras.
 - **Confirmaciones pedidas por el agente:** su registro de herramientas usa `BackendToolGate` (`b722aca`, `42a0a17`): las acciones CONFIRM crean la confirmación pendiente que se aprueba en la app, y quedan en `audit_events`. Comprobado con el modelo real en tareas.
 - **Hoy, búsqueda, Ajustes y notificaciones vistos en Electron:** Hoy carga como pantalla inicial (antes se quedaba en «no conectado» si cargaba antes que el backend; arreglado en `76270ca`), Ctrl+K agrupa resultados de tareas, eventos, proyectos y asignaturas, y los recordatorios salen como aviso emergente, campana y centro de notificaciones.
@@ -119,7 +120,6 @@ Historial Git de los repos que estaban anidados en el checkout del usuario:
 
 ## Siguiente paso
 
-1. Informe de escritorio (Checklist 1) y pasada completa de drakter-49: pruebas de aceptación, vistas diaria y mensual del calendario y recuperación del backend.
-2. Recuento final del banco red-team de drakter-34 sobre `183cc25`.
-3. Regenerar e instalar el `.deb` y abrir la ventana empaquetada sin `--no-sandbox`.
-4. Fuera de este cierre: rediseño de voz sobre Pipecat, rediseño de personalidad (estilo) y `.riv` del personaje.
+1. Pasada completa de drakter-49: pruebas de aceptación y vistas diaria y mensual del calendario.
+2. Regenerar e instalar el `.deb` y abrir la ventana empaquetada sin `--no-sandbox`.
+3. Fuera de este cierre: rediseño de voz sobre Pipecat, rediseño de personalidad (estilo) y `.riv` del personaje.

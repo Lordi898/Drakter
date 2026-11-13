@@ -322,7 +322,6 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
   ⚠️ Arreglado: faltaba `storage.write` y se denegaban 4 herramientas del almacén (ya concedido en `drakter/integracion`). `improvement.read`/`improvement.write` se conceden con las dos escrituras en `RiskClass.CONFIRM` (`5dd55b1`); hoy esas escrituras quedan denegadas porque el runtime usa `DefaultToolGate` (ver «Definir confirmaciones»).
   Nota: con el modelo real (prueba de relaciones de drakter-41), el agente llamó por iniciativa propia a create/list/get_improvement_proposal y record_improvement_feedback sin que se le pidiera. Es seguro (las escrituras exigen confirmación), pero hay que revisar las descripciones de esas herramientas o las instrucciones de cuándo proponer mejoras; se deja para el rediseño de la personalidad y la conversación.
 - [x] Definir confirmaciones.
-  ⚠️ Las herramientas CONFIRM del agente pasan por `BackendToolGate` y crean la confirmación pendiente, con auditoría en `audit_events` (`b722aca`, `42a0a17`); comprobado con el modelo real en tareas (borrar → confirmación → aprobar → borrada). Olvidar un recuerdo sigue con `DenyAllGate`.
 - [x] Definir errores.
   ⚠️ 6 herramientas de lectura no declaran `errors` (`get_memory_status`, `search_relationships`, `list_subjects`, `get_timetable`, `get_agent_status`, `get_system_status`).
 - [x] Probar selección de herramientas.
@@ -374,14 +373,14 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 - [x] Crear informes.
 - [x] Impedir cambios no autorizados.
 - [x] Probar recuperación de cambios.
-  ⚠️ `revert` funciona. Falta llamar a `recover_interrupted(settings)` al arrancar (una línea en `main.py`, pedida a drakter-32) y registrar `invalidate_after_restore` como hook de restauración de copias (módulo de copias).
+  ⚠️ `revert` funciona y `recover_interrupted` se llama al arrancar (`a1f2b88`). Falta registrar `invalidate_after_restore` como hook de restauración de copias (módulo de copias).
 
 ## Checklist 16. Seguridad y fiabilidad
 
 - [x] Crear permisos por módulo.
 - [x] Crear permisos por operación.
 - [x] Crear confirmaciones.
-  ⚠️ Por la GUI funciona (409 → aprobar con `approver` → ejecutado, no reutilizable; CONF-55..71 BLOCKED). Camino del agente: desde `b722aca` y `42a0a17` sus herramientas CONFIRM crean confirmación pendiente por `BackendToolGate`. Olvidar un recuerdo usa `DenyAllGate` y falla cerrado.
+  ⚠️ Por la GUI y por el agente funcionan (409 / confirmación pendiente → aprobar con `approver` → ejecutado; el agente por `BackendToolGate`, `3bafbe1`). Olvidar un recuerdo desde la GUI sigue con `DenyAllGate` y falla cerrado (pendiente de drakter-42).
 - [x] Proteger credenciales.
 - [x] Validar rutas.
 - [x] Limitar acceso a archivos.
@@ -392,8 +391,7 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 - [x] Probar restauración.
 - [ ] Probar desconexiones.
   ⚠️ Backend↔Hermes comprobado (el runner muere y se reconecta solo). La reconexión del WebSocket del escritorio (`eventsBridge.ts`) no se ha observado aislada.
-- [ ] Probar recuperación del backend.
-  ⚠️ Pendiente: el informe de seguridad deja sin rellenar la prueba en Electron; sale del repaso de drakter-34 o de la pasada completa de drakter-49.
+- [x] Probar recuperación del backend.
 - [x] Probar recuperación de Hermes.
 - [x] Probar errores de memoria.
 - [x] Revisar datos sensibles.
