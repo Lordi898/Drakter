@@ -6,6 +6,7 @@ import logging
 import os
 import re
 import sqlite3
+from collections.abc import Callable
 from contextlib import closing
 from datetime import datetime
 from functools import lru_cache
@@ -32,6 +33,32 @@ from app.services.settings_status import agent_config_status
 logger = logging.getLogger(__name__)
 
 _BACKUP_NAME: Final = re.compile(r"^drakter-(\d{8}T\d{12}Z)-([a-z0-9-]+)\.db$")
+_BOOL_KEYS: Final = frozenset({"voice_tts_enabled", "voice_wake_enabled"})
+_ENUM_KEYS: Final[dict[str, frozenset[str]]] = {"voice_expression": frozenset({"off", "llm"})}
+
+SettingListener = Callable[[str, str], None]
+# Called after COMMIT, from whatever thread wrote the setting (REST runs sync routes in a
+# thread pool). Listeners must be thread-safe and must not block (V-31).
+_listeners: list[SettingListener] = []
+
+
+def add_setting_listener(fn: SettingListener) -> None:
+    if fn not in _listeners:
+        _listeners.append(fn)
+
+
+def remove_setting_listener(fn: SettingListener) -> None:
+    if fn in _listeners:
+        _listeners.remove(fn)
+
+
+def notify_setting_changed(key: str, value: str) -> None:
+    """For writers that do not go through `update_setting` (``voice_profile.save_active``)."""
+    for fn in tuple(_listeners):
+        try:
+            fn(key, value)
+        except Exception:  # noqa: BLE001 - a listener must never undo a committed write
+            logger.error("setting listener failed", extra={"event": "setting_listener_failed"})
 
 
 @lru_cache(maxsize=1)
@@ -75,6 +102,12 @@ def update_setting(db_path: Path, key: str, value: str, correlation_id: str) -> 
         raise AppError("invalid_timezone", "Invalid timezone", 422)
     if key == "voice_profile":
         value = voice_profile.validate_setting_value(value)
+    if key in _BOOL_KEYS:
+        value = value.strip().lower()
+        if value not in ("true", "false"):
+            raise AppError("invalid_setting_value", "Expected true or false", 422)
+    if key in _ENUM_KEYS and value not in _ENUM_KEYS[key]:
+        raise AppError("invalid_setting_value", "Invalid value", 422)
     conn = _open(db_path)
     with closing(conn):
         try:
@@ -102,6 +135,7 @@ def update_setting(db_path: Path, key: str, value: str, correlation_id: str) -> 
             _rollback(conn)
             logger.error("settings update failed", extra={"event": "settings_update_failed"})
             raise _unavailable() from None
+    notify_setting_changed(key, value)
     return item
 
 

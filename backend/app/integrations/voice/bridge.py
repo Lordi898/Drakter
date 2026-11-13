@@ -1,264 +1,273 @@
-"""Voice <-> agent bridge.
+"""Agent → voice: the `TurnTap` (plan §4.6) and the single outbound command queue.
 
-A transcript is one conversation turn from the user, and that is all it can be:
-this module never reads what the text says. Spoken approval does not exist.
-Logs and audit carry lengths and times, never text.
+Every tap method is synchronous, never blocks and never raises: it only does `put_nowait`.
+One task drains the queue in order and talks IPC, so `speech_id`/`seq` bookkeeping lives in a
+single place and voice can never break a turn (V-19). With `voice_tts_enabled=false` no
+`speak.*` leaves this module except `speak.stop{mute}`: it is the only silence point (V-29).
+
+Logs carry ids and counts, never text.
 """
 
 from __future__ import annotations
 
 import asyncio
-import inspect
+import itertools
 import logging
-import time
-from collections import deque
-from collections.abc import AsyncIterator, Coroutine, Mapping
+import re
+from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Final
-
-from app.integrations.voice.client import VoiceClient, VoiceIPCError, VoiceUnavailableError
-
-if TYPE_CHECKING:
-    from app.integrations.voice.service import AgentTurnPort, AuditPort, EventSink
+from typing import Any, Final, Literal, Protocol
+from uuid import UUID
 
 logger = logging.getLogger("drakter.voice.bridge")
 
-VOICE_EVENTS: Final = frozenset(
-    {
-        "voice.state_changed",
-        "voice.mic_changed",
-        "voice.wakeword_detected",
-        "voice.listening_started",
-        "voice.speech_started",
-        "voice.speech_ended",
-        "voice.listening_stopped",
-        "voice.transcription_partial",
-        "voice.transcription_completed",
-        "voice.playback_started",
-        "voice.playback_level",
-        "voice.playback_stopped",
-        "voice.playback_interrupted",
-        "voice.metrics",
-        "voice.error",
-    }
-)
-_INTERRUPT_REASONS: Final = frozenset({"user", "barge_in", "new_turn"})
-_MAX_ID_CHARS: Final = 128
-_MAX_LANGUAGE_CHARS: Final = 16
-# 4 bytes per character at most, so a chunk always fits the 256 KiB IPC line.
-_MAX_SPEAK_CHARS: Final = 32_000
-_CLOSED_TURNS: Final = 256
+Source = Literal["text", "voice"]
+Outcome = Literal["completed", "cancelled", "failed"]
+Request = Callable[[str, Mapping[str, Any]], Awaitable[dict[str, Any]]]
+
+_QUEUE_SIZE: Final = 4096
+_SENTENCE_END: Final = re.compile(r"[.!?…](?=\s|$)|\n")
+# monotonic per backend process (plan §4.2)
+_speech_ids: Final = itertools.count(1)
 
 
-def _turn_id(payload: Mapping[str, object]) -> str | None:
-    value = payload.get("turn_id")
-    return value if isinstance(value, str) and 0 < len(value) <= _MAX_ID_CHARS else None
+class TapObserver(Protocol):
+    """Hooks for the orchestrator; run inside the drain task, in order."""
+
+    def turn_started(self, turn_id: UUID, session_id: UUID, source: Source) -> None: ...
+    def first_delta(self, turn_id: UUID) -> None: ...
+    def turn_ended(self, turn_id: UUID, outcome: Outcome) -> None: ...
 
 
 @dataclass
-class _ActiveTurn:
-    turn_id: str
-    task: asyncio.Task[None]
-    started: float
-    spoken_chars: int = 0
+class _Speech:
+    speech_id: int
+    seq: int = 0
+    chars: int = 0
+    open: bool = True
+
+
+@dataclass
+class _Turn:
+    session_id: UUID
+    source: Source
+    speech: _Speech | None = None
+    got_delta: bool = False
 
 
 class VoiceBridge:
     def __init__(
         self,
-        client: VoiceClient,
+        request: Request,
         *,
-        events: EventSink,
-        agent: AgentTurnPort,
-        audit: AuditPort,
+        tts_enabled: Callable[[], bool],
+        max_chars_text: int,
+        observer: TapObserver,
     ) -> None:
-        self._client = client
-        self._events = events
-        self._agent = agent
-        self._audit = audit
-        self._active: _ActiveTurn | None = None
-        self._tasks: set[asyncio.Task[None]] = set()
-        # Turns that already started or were interrupted: a late or repeated
-        # transcript must not open them again.
-        self._closed: deque[str] = deque(maxlen=_CLOSED_TURNS)
+        self._request = request
+        self._tts_enabled = tts_enabled
+        self._max_chars_text = max_chars_text
+        self._observer = observer
+        self._queue: asyncio.Queue[tuple[str, tuple[Any, ...]]] = asyncio.Queue(_QUEUE_SIZE)
+        self._turns: dict[UUID, _Turn] = {}
+        self._task: asyncio.Task[None] | None = None
 
-    async def handle_event(self, name: str, payload: Mapping[str, object]) -> None:
-        """Called in order by the client. Must not wait on IPC: that is what the tasks are for."""
-        if name not in VOICE_EVENTS:
-            return
-        # Cutting the agent goes before anything that can be slow.
-        if name == "voice.playback_interrupted":
-            elapsed_ms, spoken = self._on_interrupted(payload)
-            await self.publish(name, payload)
-            await self._record(
-                "voice.interrupted",
-                {
-                    "turn_id": _turn_id(payload),
-                    "reason": reason
-                    if (reason := payload.get("reason")) in _INTERRUPT_REASONS
-                    else "unknown",
-                    "turn_elapsed_ms": elapsed_ms,
-                    "spoken_chars": spoken,
-                },
-            )
-            return
-        await self.publish(name, payload)
-        if name == "voice.playback_level":
-            return
-        if name == "voice.listening_started":
-            turn_id = _turn_id(payload)
-            if self._active is not None and self._active.turn_id != turn_id:
-                self.cancel_active()
-        elif name == "voice.transcription_completed":
-            self._on_transcription(payload)
-        elif name == "voice.wakeword_detected":
-            await self._record(
-                "voice.wakeword_detected",
-                {"turn_id": _turn_id(payload), "score": payload.get("score")},
-            )
-        elif name == "voice.mic_changed":
-            await self._record(
-                "voice.mic_changed",
-                {
-                    "enabled": payload.get("enabled") is True,
-                    "capture_open": payload.get("capture_open") is True,
-                },
-            )
-
-    def cancel_active(self) -> None:
-        """Stop the agent task of the current turn, if there is one."""
-        active, self._active = self._active, None
-        if active is not None:
-            active.task.cancel()
+    # ── lifecycle ──────────────────────────────────────────────────────────
+    def start(self) -> None:
+        if self._task is None:
+            self._task = asyncio.create_task(self._drain(), name="voice-bridge")
 
     async def aclose(self) -> None:
-        self.cancel_active()
-        tasks = tuple(self._tasks)
-        for task in tasks:
+        task, self._task = self._task, None
+        if task is not None:
             task.cancel()
-        await asyncio.gather(*tasks, return_exceptions=True)
+            await asyncio.gather(task, return_exceptions=True)
 
-    async def publish(self, name: str, payload: Mapping[str, object]) -> None:
-        """A subscriber failing must not affect the turn."""
+    # ── TurnTap (sync, non-blocking, never raises) ───────────────────────────
+    def on_turn_started(self, turn_id: UUID, session_id: UUID, source: Source) -> None:
+        self._put("started", turn_id, session_id, source)
+
+    def on_raw_delta(self, turn_id: UUID, text: str) -> None:
+        self._put("delta", turn_id, text)
+
+    def on_tool_started(self, turn_id: UUID, tool: str) -> None:
+        self._put("tool", turn_id, tool)
+
+    def on_steered(self, turn_id: UUID, accepted: bool) -> None:
+        self._put("steered", turn_id, accepted)
+
+    def on_terminal(self, turn_id: UUID, outcome: Outcome) -> None:
+        self._put("terminal", turn_id, outcome)
+
+    # ── orchestrator side (same queue, so order holds) ──────────────────────
+    def phrase(self, key: str, when: str = "now") -> None:
+        self._put("phrase", key, when)
+
+    def stop(self, reason: str) -> None:
+        """`speak.stop` of whatever is sounding (`new_turn`, `user`, `barge_in`)."""
+        self._put("stop", reason)
+
+    def mute(self) -> None:
+        """`voice_tts_enabled` went false: close every speech and stop the sound."""
+        self._put("mute")
+
+    def cut(self, speech_id: int) -> None:
+        """Voice reported `playback{interrupted}`: stop feeding that speech."""
+        self._put("cut", speech_id)
+
+    def send(self, type: str, payload: Mapping[str, Any]) -> None:
+        """Any other fire-and-forget command (`voice.config`)."""
+        self._put("raw", type, dict(payload))
+
+    def session_of(self, turn_id: UUID) -> UUID | None:
+        turn = self._turns.get(turn_id)
+        return turn.session_id if turn else None
+
+    def speech_turn(self, speech_id: int) -> UUID | None:
+        for turn_id, turn in self._turns.items():
+            if turn.speech is not None and turn.speech.speech_id == speech_id:
+                return turn_id
+        return None
+
+    # ── internals ───────────────────────────────────────────────────────────
+    def _put(self, op: str, *args: Any) -> None:
         try:
-            await self._events.publish(name, payload, version=1, experimental=True)
-        except Exception as exc:  # noqa: BLE001
-            logger.error(
-                "Voice event not published",
-                extra={"event": "voice_publish_failed", "error": type(exc).__name__},
-            )
+            self._queue.put_nowait((op, args))
+        except Exception:  # noqa: BLE001 - QueueFull or anything else: drop, never raise
+            logger.warning("Voice command dropped", extra={"event": "voice_cmd_dropped", "op": op})
 
-    async def _record(self, action: str, meta: Mapping[str, object]) -> None:
+    async def _drain(self) -> None:
+        while True:
+            op, args = await self._queue.get()
+            try:
+                await getattr(self, f"_do_{op}")(*args)
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:  # noqa: BLE001 - voice never breaks a turn
+                logger.warning(
+                    "Voice command failed",
+                    extra={"event": "voice_cmd_failed", "op": op, "error": type(exc).__name__},
+                )
+
+    async def _send(self, type: str, payload: Mapping[str, Any]) -> dict[str, Any]:
         try:
-            await self._audit.record(action, meta)
-        except Exception as exc:  # noqa: BLE001
-            logger.error(
-                "Voice audit failed",
-                extra={"event": "voice_audit_failed", "error": type(exc).__name__},
+            return await self._request(type, payload)
+        except Exception as exc:  # noqa: BLE001 - voice down or err{}: the turn goes on
+            logger.info(
+                "Voice command not delivered",
+                extra={"event": "voice_cmd_undelivered", "type": type, "error": type_name(exc)},
             )
+            return {}
 
-    def _on_interrupted(self, payload: Mapping[str, object]) -> tuple[int | None, int | None]:
-        turn_id = _turn_id(payload)
-        if turn_id is not None:
-            self._closed.append(turn_id)
-        active = self._active
-        if active is None or (turn_id is not None and active.turn_id != turn_id):
-            return None, None
-        self.cancel_active()
-        return int((time.monotonic() - active.started) * 1000), active.spoken_chars
-
-    def _on_transcription(self, payload: Mapping[str, object]) -> None:
-        turn_id = _turn_id(payload)
-        text = payload.get("text")
-        if turn_id is None or not isinstance(text, str):
-            logger.warning("Voice transcript invalid", extra={"event": "voice_transcript_invalid"})
+    async def _open(self, turn_id: UUID, turn: _Turn) -> None:
+        turn.speech = None
+        if not self._tts_enabled():
             return
-        if turn_id in self._closed:
+        speech = _Speech(next(_speech_ids))
+        turn.speech = speech
+        await self._send("speak.open", {"turn_id": str(turn_id), "speech_id": speech.speech_id})
+
+    async def _close(self, turn: _Turn, outcome: Outcome) -> None:
+        speech = turn.speech
+        if speech is not None and speech.open:
+            speech.open = False
+            await self._send("speak.close", {"speech_id": speech.speech_id, "outcome": outcome})
+
+    async def _do_started(self, turn_id: UUID, session_id: UUID, source: Source) -> None:
+        turn = _Turn(session_id, source)
+        self._turns[turn_id] = turn
+        self._observer.turn_started(turn_id, session_id, source)
+        await self._open(turn_id, turn)
+        await self._send("turn.phase", {"turn_id": str(turn_id), "phase": "thinking"})
+
+    async def _do_delta(self, turn_id: UUID, text: str) -> None:
+        turn = self._turns.get(turn_id)
+        if turn is None or not text:
             return
-        self._closed.append(turn_id)
-        self.cancel_active()
-        if not text.strip():
-            self._spawn(self._close_turn(turn_id))  # the manager is waiting for this turn
+        if not turn.got_delta:
+            turn.got_delta = True
+            self._observer.first_delta(turn_id)
+        speech = turn.speech
+        if speech is None or not speech.open:
             return
-        task = self._spawn(self._run_turn(turn_id, text, payload))
-        self._active = _ActiveTurn(turn_id, task, time.monotonic())
-
-    def _spawn(self, coroutine: Coroutine[Any, Any, None]) -> asyncio.Task[None]:
-        task = asyncio.create_task(coroutine, name="voice-turn")
-        self._tasks.add(task)
-        task.add_done_callback(self._forget)
-        return task
-
-    def _forget(self, task: asyncio.Task[None]) -> None:
-        self._tasks.discard(task)
-        if self._active is not None and self._active.task is task:
-            self._active = None
-
-    async def _run_turn(self, turn_id: str, text: str, payload: Mapping[str, object]) -> None:
-        language = payload.get("language")
-        try:
-            # Fails closed: a turn the audit log cannot record does not reach the agent.
-            await self._audit.record(
-                "voice.turn_started",
-                {
-                    "turn_id": turn_id,
-                    "text_chars": len(text),
-                    "audio_ms": payload.get("audio_ms"),
-                    "language": language[:_MAX_LANGUAGE_CHARS]
-                    if isinstance(language, str)
-                    else None,
-                },
+        capped = False
+        if turn.source == "text":
+            text, capped = self._cap(speech.chars, text)
+        if text:
+            speech.chars += len(text)
+            result = await self._send(
+                "speak.delta", {"speech_id": speech.speech_id, "seq": speech.seq, "text": text}
             )
-            stream = self._agent.submit_user_turn(text, turn_id=turn_id, source="voice")
-            if inspect.isawaitable(stream):  # coroutine or async generator: both are valid ports
-                stream = await stream
-            await self._forward(turn_id, stream)
-        except Exception as exc:  # noqa: BLE001 - nothing an agent raises may reach the voice loop
-            logger.error(
-                "Voice turn failed",
-                extra={"event": "voice_turn_failed", "error": type(exc).__name__},
-            )
-            await self.publish(
-                "voice.error",
-                {
-                    "code": "agent_failed",
-                    "stage": "agent",
-                    "message": "The agent could not complete this turn",
-                    "recoverable": True,
-                    "turn_id": turn_id,
-                },
-            )
-            await self._close_turn(turn_id)
+            speech.seq += 1
+            if result.get("ignored") is True:  # already cut on the voice side
+                speech.open = False
+                return
+        if capped:  # V-30: the rest stays on screen
+            await self._close(turn, "completed")
+            await self._do_phrase("rest_on_screen", "now")
 
-    async def _forward(self, turn_id: str, stream: AsyncIterator[str]) -> None:
-        try:
-            async for delta in stream:
-                if not isinstance(delta, str) or not delta:
-                    continue
-                for start in range(0, len(delta), _MAX_SPEAK_CHARS):
-                    chunk = delta[start : start + _MAX_SPEAK_CHARS]
-                    result = await self._speak(turn_id, chunk, final=False)
-                    if result.get("ignored") is True:  # interrupted on the voice side
-                        return
-                    if self._active is not None and self._active.turn_id == turn_id:
-                        self._active.spoken_chars += len(chunk)
-            await self._speak(turn_id, "", final=True)
-        finally:
-            aclose = getattr(stream, "aclose", None)
-            if aclose is not None:
-                await aclose()
+    def _cap(self, said: int, text: str) -> tuple[str, bool]:
+        """Cut a written turn at the first sentence end past `max_chars_text` (hard stop at 2×)."""
+        limit = self._max_chars_text
+        if said + len(text) <= limit:
+            return text, False
+        match = _SENTENCE_END.search(text, max(0, limit - said))
+        if match is not None:
+            return text[: match.end()], True
+        if said + len(text) > 2 * limit:
+            return text[: max(0, 2 * limit - said)], True
+        return text, False
 
-    async def _speak(self, turn_id: str, text: str, *, final: bool) -> dict[str, Any]:
-        return await self._client.request(
-            "speak", {"turn_id": turn_id, "text": text, "final": final}
+    async def _do_tool(self, turn_id: UUID, tool: str) -> None:
+        turn = self._turns.get(turn_id)
+        if turn is None:
+            return
+        if turn.speech is not None and turn.speech.open:
+            await self._send("speak.flush", {"speech_id": turn.speech.speech_id})
+        await self._send(
+            "turn.phase", {"turn_id": str(turn_id), "phase": "executing", "tool": tool[:64]}
         )
 
-    async def _close_turn(self, turn_id: str) -> None:
-        """An empty final `speak` takes the manager from `waiting` back to `idle`."""
-        try:
-            await self._speak(turn_id, "", final=True)
-        except (VoiceIPCError, VoiceUnavailableError) as exc:
-            logger.warning(
-                "Voice turn not closed",
-                extra={"event": "voice_turn_not_closed", "error": type(exc).__name__},
-            )
+    async def _do_steered(self, turn_id: UUID, accepted: bool) -> None:
+        turn = self._turns.get(turn_id)
+        if turn is None or not accepted:
+            return
+        speech = turn.speech
+        if speech is not None:
+            speech.open = False
+            await self._send("speak.stop", {"speech_id": speech.speech_id, "reason": "steered"})
+        await self._open(turn_id, turn)  # same turn_id, new speech_id
+
+    async def _do_terminal(self, turn_id: UUID, outcome: Outcome) -> None:
+        turn = self._turns.pop(turn_id, None)
+        if turn is None:
+            return
+        await self._close(turn, outcome)
+        await self._send("turn.phase", {"turn_id": str(turn_id), "phase": "done"})
+        self._observer.turn_ended(turn_id, outcome)
+
+    async def _do_phrase(self, key: str, when: str) -> None:
+        if self._tts_enabled():
+            await self._send("speak.phrase", {"key": key, "when": when})
+
+    async def _do_stop(self, reason: str) -> None:
+        if self._tts_enabled():
+            await self._send("speak.stop", {"reason": reason})
+
+    async def _do_mute(self) -> None:
+        for turn in self._turns.values():
+            if turn.speech is not None:
+                turn.speech.open = False
+        await self._send("speak.stop", {"reason": "mute"})
+
+    async def _do_cut(self, speech_id: int) -> None:
+        for turn in self._turns.values():
+            if turn.speech is not None and turn.speech.speech_id == speech_id:
+                turn.speech.open = False
+
+    async def _do_raw(self, type: str, payload: dict[str, Any]) -> None:
+        await self._send(type, payload)
+
+
+def type_name(exc: BaseException) -> str:
+    return type(exc).__name__
