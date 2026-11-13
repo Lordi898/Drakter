@@ -74,7 +74,6 @@ scripts/drakter-local.sh stop
 - **Sin medir:** RAM/CPU general, latencia de Hermes, y STT/TTS en reposo. Sin pasada de optimización de SQLite, FTS5, memoria ni carga de interfaz (el renderer es un único JS de 1,63 MB).
 - **Hora de los avisos de eventos:** el aviso dice «Empieza a las HH:MM» en la zona del evento, mientras Hoy muestra la hora en la zona del usuario. Solo difiere si el evento tiene otra zona.
 - **Pruebas paralelas de Electron:** con otra instancia abierta, `requestSingleInstanceLock` cierra la nueva sin ventana; las pruebas usan `--user-data-dir` propio. Con Hermes sin preparar, `GET /api/v1/confirmations?status=pending` da 503 y la GUI muestra «No se pudieron leer las confirmaciones pendientes» (no rompe).
-- **Sin comprobar en pantalla:** las vistas diaria y mensual del calendario no se han visto funcionar en Electron.
 - **Pasada e2e:** el arnés no espera a `agent/status = idle` antes de conversar (Hermes tarda 3-6 s), así que `conversacion.*` da 503 `agent_unavailable`; los guiones `herramienta-permitida`, `accion-destructiva` e `inyeccion-documento` piden `read_file`/`terminal`, que Drakter nunca ofrece. `desktop.arranca` falla en todas las pasadas porque `tests/e2e/harness/stack.py` no pasa `DRAKTER_DEV_NO_SANDBOX=1` (con la variable arranca; cambio pedido a `drakter-32`). Además, el catálogo (`tests/e2e/catalog.toml`) usa `GET /api/v1/audit` y la ruta real es `/api/v1/activity`.
 
 ### Cerrados en el cierre
@@ -120,6 +119,6 @@ Historial Git de los repos que estaban anidados en el checkout del usuario:
 
 ## Siguiente paso
 
-1. Pasada completa de drakter-49: pruebas de aceptación y vistas diaria y mensual del calendario.
+1. Informe completo de la pasada de drakter-49: pruebas de aceptación.
 2. Regenerar e instalar el `.deb` y abrir la ventana empaquetada sin `--no-sandbox`.
 3. Fuera de este cierre: rediseño de voz sobre Pipecat, rediseño de personalidad (estilo) y `.riv` del personaje.
