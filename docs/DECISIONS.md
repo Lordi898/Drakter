@@ -610,3 +610,10 @@ Decisiones técnicas, cambios de tecnología y motivos.
 - **Motivo:** aplicar "El backend recupera los recuerdos" y la prioridad de CLAUDE.md §8.
 - **Efecto conocido:** tras un turno con memoria la sesión queda `tainted` y las escrituras del agente escalan a `confirm`; mientras el runtime use `DefaultToolGate`, fallan cerradas (`confirmation_unavailable`).
 - **Impacto:** `backend/app/integrations/hermes/hermes_provider.py`, `runtime.py` (`f364b48`, pendiente de fusión), Checklist 12 (recuperación selectiva, límites de contexto, memoria de trabajo).
+
+## [2026-11-13] Cierre de CL4: consistencia OK, estilo al rediseño
+- **Contexto:** con Claude Haiku 5.5 real, drakter-45 dio por buena «Probar consistencia de personalidad» (2 casos, 0 hallazgos, lectura humana conforme) y drakter-51 la dejó con ⚠️: el modelo a veces supera `max_sentences` (4 frases para máx. 3), abre dos veces con la muletilla «Mal asunto a medias:» y las rúbricas de `agent/evals` (`report.md`) no tienen lectura humana.
+- **Decisión (drakter-33):** la casilla queda `[x]` sin ⚠️, con una nota informativa. Los dos finalizadores verificaron que la personalidad es mecánicamente consistente (2 casos × 2 sesiones, respuestas estables), que es el criterio de CLAUDE.md §4. Los matices de estilo y la lectura humana de las rúbricas se tratan en el rediseño de personalidad, que se planifica aparte con el usuario.
+- **Alternativas descartadas:** dejar la casilla en `[ ]` hasta ajustar el estilo (exigiría tocar los textos de identidad, fuera del alcance del cierre).
+- **Motivo:** la consistencia está comprobada; ajustar el estilo es trabajo de personalidad, no de cierre.
+- **Impacto:** `IMPLEMENTATION_STATUS.md` Checklist 4. Sin cambios en `agent/identity/`.

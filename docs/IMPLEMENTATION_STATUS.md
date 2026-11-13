@@ -93,7 +93,7 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 - [x] Configurar carga de contexto.
 - [x] Configurar prioridades.
 - [x] Probar consistencia de personalidad.
-  ⚠️ Discrepancia entre finalizadores: drakter-45 la da por OK con lectura humana (2 casos, 0 hallazgos); drakter-51 observa con el modelo real que supera `max_sentences` en 2 de 3 respuestas de selección, abre dos veces con la muletilla «Mal asunto a medias:» y que el resto de rúbricas (`report.md`) no tiene lectura humana. Pendiente de decisión de drakter-33.
+  Nota: matices de estilo con Haiku 5.5 (a veces supera max_sentences; muletilla de apertura) y rúbricas de evals pendientes de lectura humana: se tratarán en el rediseño de personalidad, fuera de este cierre.
 
 ## Checklist 5. Personaje
 
