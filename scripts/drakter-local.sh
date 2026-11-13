@@ -37,17 +37,19 @@ start() {
       export DRAKTER_MODEL_PROVIDER=dev_stub
       if ! alive "$stub_pid_file"; then
         mkdir -p /var/tmp/drakter-stub/sandbox
-        setsid nohup python3.12 -I "$root/tools/dev-llm-stub/server.py" --port "$stub_port" \
+        # setsid puede hacer fork: el pid lo escribe el propio líder de sesión (= pgid).
+        setsid bash -c 'echo $$ >"$1"; shift; exec "$@"' _ "$stub_pid_file" \
+          nohup python3.12 -I "$root/tools/dev-llm-stub/server.py" --port "$stub_port" \
           --var sandbox=/var/tmp/drakter-stub/sandbox >/tmp/drakter-stub.log 2>&1 </dev/null &
-        echo $! >"$stub_pid_file"
       fi
       ;;
     anthropic) export DRAKTER_MODEL_PROVIDER=anthropic ;;
     *) echo "Proveedor desconocido: $provider (stub|anthropic)" >&2; exit 2 ;;
   esac
 
-  setsid nohup "$root/scripts/dev.sh" all >/tmp/drakter-dev.log 2>&1 </dev/null &
-  echo $! >"$dev_pid_file"
+  setsid bash -c 'echo $$ >"$1"; shift; exec "$@"' _ "$dev_pid_file" \
+    nohup "$root/scripts/dev.sh" all >/tmp/drakter-dev.log 2>&1 </dev/null &
+  sleep 0.5
   echo "Drakter arrancando (modelo: $provider). Log: /tmp/drakter-dev.log"
 }
 
