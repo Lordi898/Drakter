@@ -363,7 +363,7 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 - [x] Crear gestión de errores.
 - [ ] Probar conversación por voz completa.
   ⚠️ Rediseño previsto sobre Pipecat (STT Whisper, TTS Fish Audio); en v1 `voice/` solo se estabiliza y documenta.
-  ⚠️ No es posible hoy: `backend/app/integrations/voice` no está registrado en `main.py` (a propósito, `DRAKTER_VOICE_ENABLED=false` por defecto) y el escritorio no tiene cliente de voz (botón de micrófono desactivado).
+  ⚠️ No es posible hoy: `backend/app/integrations/voice` no está registrado en `main.py` (a propósito, `DRAKTER_VOICE_ENABLED=false` por defecto) y el escritorio no tiene cliente de voz (botón de micrófono desactivado). El puente del backend (`VoiceService`, supervisor, cliente IPC, `VoiceBridge`) no se ha ejecutado contra el proceso real.
 
 ## Checklist 15. Automejora
 
