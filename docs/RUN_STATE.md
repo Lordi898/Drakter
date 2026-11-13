@@ -21,7 +21,7 @@ Cadena de integración: **`drakter/integracion` → `drakter/build` → `main` (
 | `drakter/build` | Ancestro de `drakter/integracion` (en `815976f`). Se adelantará al terminar el cierre. |
 | `main` | Ancestro de `drakter/build`; solo el commit inicial (`098e2df`). Se adelantará en local al final. |
 
-Las ramas `ao/<sesión>/root` de los finalizadores son de trabajo; sus commits entran en `drakter/integracion` cuando `drakter-32` los fusiona. Pendientes de fusión al escribir esto: `5dd55b1` (permisos de automejora para el agente), `b8086ce` (Skills), `f364b48` (memoria en cada turno de Hermes), `0ab1639` (escenarios de evals), `2425da5` y `b1a49a3` (aprobación de automejora por `ActionService`), `dda565b`, `b31d1e8` y `6ba869a` (contratos alineados con lo montado). Las casillas que dependen de ellos llevan ⚠️ «pendiente de fusión».
+Las ramas `ao/<sesión>/root` de los finalizadores son de trabajo; sus commits entran en `drakter/integracion` cuando `drakter-32` los fusiona. Pendientes de fusión al escribir esto: `5dd55b1` (permisos de automejora para el agente), `b8086ce` (Skills), `0eaab3b` y `2fe7cc6` (almacén: aprobar el borrado de una ubicación y rejilla de la pantalla), `f364b48` (memoria en cada turno de Hermes), `0ab1639` (escenarios de evals), `2425da5` y `b1a49a3` (aprobación de automejora por `ActionService`), `dda565b`, `b31d1e8` y `6ba869a` (contratos alineados con lo montado). Las casillas que dependen de ellos llevan ⚠️ «pendiente de fusión».
 
 ## Cómo arrancar y parar
 

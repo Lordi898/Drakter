@@ -575,11 +575,11 @@ Decisiones técnicas, cambios de tecnología y motivos.
 
 ## [2026-11-13] Cierre del almacén: arreglos de integración
 - **Contexto:** al integrar `drakter/integracion`, el almacén no funcionaba: `Settings` ya no tiene `runtime_dir`, `untrusted_envelope` se movió a `app.tools.envelope`, el registro de herramientas rechaza claves de `audit` que no son argumentos y `uv.lock` no incluía pypdf.
-- **Decisión:** `denied_roots` usa `runtime_dir` solo si existe; `tools/storage.py` importa de `envelope` y filtra `audit` por los campos de cada `args_model`; se regenera `uv.lock` con pypdf; el agente necesita `storage.write` para crear notas (DECISIONS «Almacén en v1»).
+- **Decisión:** `denied_roots` usa `runtime_dir` solo si existe; los ejecutores confirmados del almacén fijan `sqlite3.Row` en la conexión del pipeline; el plazo de confirmación del almacén es el único de `services/actions.py` (300 s), lo que resuelve el desajuste de «Almacén en v1»; `tools/storage.py` importa de `envelope` y filtra `audit` por los campos de cada `args_model`; se regenera `uv.lock` con pypdf; el agente necesita `storage.write` para crear notas (DECISIONS «Almacén en v1»).
 - **Alternativas descartadas:** añadir `runtime_dir` a `Settings` (es un archivo compartido y nadie más lo usa); quitar la validación de `audit` del registro (es un control de seguridad).
 - **Motivo:** dejar el almacén operativo sin tocar contratos compartidos.
-- **Comprobado:** `check_storage_paths.py` 127/127, `check_storage_archives.py` 35/35, `check_storage_catalog.py` y `check_storage_api.py` OK, flujo REST de extremo a extremo 19/19 (rutas denegadas, symlinks fuera de la raíz, SSRF, límites de comprimidos).
-- **Impacto:** `backend/app/services/storage_ports.py`, `backend/app/tools/storage.py`, `backend/uv.lock`, `agent/configuration/permissions.json`, Checklist 10.
+- **Comprobado:** `check_storage_paths.py` 127/127, `check_storage_archives.py` 35/35, `check_storage_catalog.py` y `check_storage_api.py` OK, flujo REST de extremo a extremo sobre la app real sin parches 27/27, con confirmaciones aprobadas (rutas denegadas, symlinks fuera de la raíz, SSRF, límites de comprimidos).
+- **Impacto:** `backend/app/services/storage_ports.py`, `backend/app/tools/storage.py`, `backend/app/services/storage_confirmed.py` (`0eaab3b`, pendiente de fusión), `backend/uv.lock`, `agent/configuration/permissions.json`, `desktop/src/modules/storage/StoragePage.tsx` (`2fe7cc6`, pendiente de fusión), Checklist 10.
 
 ## [2026-11-13] Prefijo workspace_ en las confirmaciones de los servicios de tareas y proyectos
 - **Contexto:** `wiring.py` registraba los ejecutores de `TASK_CONFIRMABLE`/`PROJECT_CONFIRMABLE` con los nombres `delete_task`, `update_task` y `complete_task`, que también son herramientas del agente. `ActionService.approve` prefiere los ejecutores al registro, así que un `delete_task` del agente aprobado nunca llegaba a borrar.
