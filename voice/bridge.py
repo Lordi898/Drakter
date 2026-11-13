@@ -40,8 +40,17 @@ if TYPE_CHECKING:
 
 log = logging.getLogger("voice.bridge")
 
-_WAKE_WORD = "jarvis"
-_WAKE_LEAD = frozenset({"hey", "ey", "hei", "oye"})  # cómo transcribe el STT el «hey»
+_WAKE_WORD = frozenset({"jarvis"})
+_WAKE_LEAD = frozenset({"hey", "ey", "hei", "oye"})
+
+
+def _wake_lists() -> tuple[frozenset[str], frozenset[str]]:
+    """Variantes de «jarvis» y del «hey» en datos (`layer0.es.toml`, sección `[wake]`)."""
+    try:
+        from voice.conversation.layer0 import wake_words
+    except ImportError:
+        return _WAKE_WORD, _WAKE_LEAD
+    return wake_words()
 
 
 def _fold(token: str) -> str:
@@ -52,11 +61,12 @@ def _fold(token: str) -> str:
 
 def strip_wake_word(text: str) -> str | None:
     """Quita «jarvis» o «hey jarvis» del inicio. `None` si el texto no empieza así."""
+    wake, lead = _wake_lists()
     tokens = text.split()
     words = [(i, w) for i, w in enumerate(map(_fold, tokens)) if w]
-    if words and words[0][1] in _WAKE_LEAD:
+    if len(words) > 1 and words[0][1] in lead and words[0][1] not in wake:
         words = words[1:]
-    if not words or words[0][1] != _WAKE_WORD:
+    if not words or words[0][1] not in wake:
         return None
     return " ".join(tokens[words[0][0] + 1 :]).lstrip(" ,.;:!?")
 
@@ -219,6 +229,7 @@ class BackendBridgeProcessor(FrameProcessor):
                 "eot_ms": utt.eot_ms,
             },
         )
+        session.arm_filler()
 
     # ── habla: comandos speak.* del backend ─────────────────────────────────
     async def speak_open(self, turn_id: str, speech_id: int) -> None:

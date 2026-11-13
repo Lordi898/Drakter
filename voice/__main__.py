@@ -229,7 +229,7 @@ def _phrases(cfg: VoiceConfig, argv: list[str]) -> int:
     except ImportError as exc:
         print(f"ERROR: la caché de frases no está disponible ({exc.name or exc}).", file=sys.stderr)
         return 1
-    return int(phrases_main(cfg, argv) or 0)
+    return int(phrases_main(argv, cfg) or 0)
 
 
 def main(argv: list[str] | None = None) -> int:

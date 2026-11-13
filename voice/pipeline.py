@@ -52,7 +52,7 @@ def build(transport: BaseTransport, ctl: Session, shared: Shared, cfg: VoiceConf
     guard = create("guard", cfg.guard, cfg, ctl)
     providers = [create("tts", name, cfg, shared, profile) for name in cfg.tts]
     tts = create("tts_chain", cfg.tts_chain, cfg, ctl, providers)
-    phrases = create("phrases", cfg.phrases, cfg, ctl)
+    phrases = create("phrases", cfg.phrases, cfg, ctl, profile=profile)
     playback = create("playback", cfg.playback, cfg, ctl)  # DESPUÉS de la salida: cuenta lo oído
 
     pipeline = Pipeline(

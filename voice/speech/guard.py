@@ -185,3 +185,8 @@ class SpeechGuard(FrameProcessor):
         elif isinstance(frame, InterruptionFrame):
             self._filter.reset()
         await self.push_frame(frame, direction)
+
+
+def create(cfg: object, ctl: object) -> SpeechGuard:
+    """Fábrica para el núcleo (`VoiceConfig.guard`)."""
+    return SpeechGuard()

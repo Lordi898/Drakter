@@ -130,6 +130,21 @@ class Session:
         except Exception as exc:  # noqa: BLE001 - una frase fija nunca tumba el turno
             log.warning("phrase_failed", extra={"data": {"key": key, "error": type_name(exc)}})
 
+    def arm_filler(self) -> None:
+        """Fin de turno de usuario: acuse si el primer audio tarda (PhrasePlayer de WP3)."""
+        arm = getattr(getattr(self._parts, "phrases", None), "arm_filler", None)
+        if arm is not None and self.state.tts_enabled:
+            arm()
+
+    async def on_tool(self, turn_id: str | None) -> None:
+        hook = getattr(getattr(self._parts, "phrases", None), "on_tool", None)
+        if hook is None:
+            return
+        try:
+            await hook(turn_id)
+        except Exception as exc:  # noqa: BLE001
+            log.warning("phrase_failed", extra={"data": {"key": "tool_generic", "error": type_name(exc)}})
+
     def set_duck(self, on: bool) -> None:
         self.duck = bool(on)
         setter = getattr(self._mixer, "set_duck", None)
@@ -239,6 +254,8 @@ class Session:
                 self.state.turn_id, self.state.turn_phase = payload.turn_id, payload.phase
                 if bridge:
                     await bridge.turn_phase(payload.phase)
+                if payload.phase == "executing":
+                    await self.on_tool(payload.turn_id)
             case ipc.CmdVoiceConfig():
                 await self.apply_config(payload)
             case ipc.CmdModeSet():

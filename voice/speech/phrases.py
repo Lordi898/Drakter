@@ -398,3 +398,12 @@ def main(argv: list[str] | None = None, cfg: Any = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
+
+def create(cfg: Any, ctl: Any, profile: Any = None) -> PhrasePlayer:
+    """Fábrica para el núcleo (`VoiceConfig.phrases`). `profile`: ResolvedProfile de la conexión."""
+    if profile is None:
+        from voice.ports import ResolvedProfile
+
+        profile = ResolvedProfile(getattr(ctl.state, "profile", "natural"))
+    return PhrasePlayer(cfg, ctl, profile)

@@ -36,14 +36,23 @@ def _lists() -> dict[str, object]:
     def words(xs: list[str]) -> frozenset[str]:
         return frozenset(w for x in xs for w in normalize(x))
 
+    wake = raw.get("wake", {})
     return {
-        "fillers": words(raw["fillers"]),
+        "fillers": words(raw["fillers"]) | words(wake.get("words", [])),
+        "wake_words": words(wake.get("words", ["jarvis"])),
+        "wake_lead": words(wake.get("lead", ["hey"])),
         "stop_first": words(raw["stop"]["first_word"]),
         "stop": phrases(raw["stop"]["phrases"]) + tuple((w,) for w in words(raw["stop"]["first_word"])),
         "rest": phrases(raw["rest"]["phrases"]),
         "close": phrases(raw["close"]["phrases"]),
         "backchannel": words(raw["backchannel"]["words"]),
     }
+
+
+def wake_words() -> tuple[frozenset[str], frozenset[str]]:
+    """(variantes de «jarvis», palabras que pueden precederla) desde `[wake]` del TOML."""
+    lists = _lists()
+    return lists["wake_words"], lists["wake_lead"]  # type: ignore[return-value]
 
 
 def _only_phrase(tokens: list[str], phrases: tuple[tuple[str, ...], ...], fillers: frozenset[str]) -> bool:

@@ -29,3 +29,11 @@ phrases = ["adios", "hasta luego", "hasta manana", "buenas noches", "nos vemos",
 words = ["aja", "aha", "ajam", "mm", "mmm", "mhm", "hm", "hmm", "ya", "vale", "si", "ok", "okey",
          "claro", "entiendo", "ah", "oh", "eh", "em", "ehm", "bien", "genial", "perfecto", "guay",
          "exacto", "cierto", "acuerdo", "de", "venga", "bueno", "uh", "gracias"]
+
+[wake]
+# Confirmación textual de la palabra de activación (la usa voice/bridge.py). El STT transcribe
+# «Jarvis» de muchas formas ("jarbes" con voz sintética): añadir una variante es editar esta lista.
+# Cuentan también como muletillas en la capa 0.
+words = ["jarvis", "jarbes", "jarbis", "jarves", "jarvi", "jarbi", "yarvis", "yarbis", "harvis",
+         "charvis", "chervis", "harvish", "jarvish", "yarvish", "jervis", "yervis", "jarviz", "jarbiz", "travis", "darvis"]
+lead = ["hey", "ey", "hei", "ei", "jey", "oye", "eh", "a"]

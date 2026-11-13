@@ -39,7 +39,7 @@ DEFAULT_MODELS = ("hey_jarvis_v0.1",)
 def model_paths(models_dir: Path, names: list[str] | tuple[str, ...]) -> dict[str, Any]:
     base = Path(models_dir) / "openwakeword"
     paths = {
-        "wakeword_model_paths": [str(base / f"{n}.onnx") for n in names],
+        "wakeword_model_paths": [str(base / (n if n.endswith(".onnx") else f"{n}.onnx")) for n in names],
         "melspec_onnx_model_path": str(base / "melspectrogram.onnx"),
         "embedding_onnx_model_path": str(base / "embedding_model.onnx"),
     }

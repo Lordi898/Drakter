@@ -50,8 +50,9 @@ def enable_loopback_candidates() -> None:
 
     original = aioice.ice.get_host_addresses
 
-    def with_loopback(use_ipv4: bool, use_ipv6: bool) -> list[str]:
-        addresses = original(use_ipv4, use_ipv6)
+    def with_loopback(use_ipv4: bool = True, use_ipv6: bool = True) -> list[str]:
+        # aioice la llama por nombre (`use_ipv4=..., use_ipv6=...`): se reenvían igual.
+        addresses = original(use_ipv4=use_ipv4, use_ipv6=use_ipv6)
         if use_ipv4 and LOOPBACK not in addresses:
             addresses.insert(0, LOOPBACK)
         return addresses

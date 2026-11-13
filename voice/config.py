@@ -58,7 +58,12 @@ class VoiceConfig:
     # ── STT, activación y turnos (provisionales, sin calibrar)
     stt_model: str = "small"  # small | tiny (respaldo)
     threads: int = 2  # hilos por modelo local (CPU sin GPU dedicada)
-    wake_models: tuple[str, ...] = ("hey_jarvis_v0.1.onnx",)  # en models/openwakeword/
+    stt_update_interval: float = 0.25  # s entre parciales del STT streaming
+    stt_preroll_ms: int = 500
+    vad_confidence: float = 0.7
+    vad_start_secs: float = 0.2
+    vad_min_volume: float = 0.6
+    wake_models: tuple[str, ...] = ("hey_jarvis_v0.1.onnx",)  # en models/openwakeword/ (con o sin .onnx)
     wake_threshold: float = 0.3
     turn_stop_secs: float = 3.0  # tope de silencio de Smart Turn
     turn_final_timeout_s: float = 1.0  # espera a la transcripción final tras el fin de turno
@@ -100,6 +105,14 @@ class VoiceConfig:
     @property
     def phrase_cache_dir(self) -> Path:
         return self.voice_dir / "cache"
+
+    @property
+    def phrases_cache_dir(self) -> Path:  # nombre que usa voice/speech/phrases.py (WP3)
+        return self.phrase_cache_dir
+
+    @property
+    def tts_threads(self) -> int:  # nombre que usa el TTS local (WP3)
+        return self.threads
 
     @property
     def phrases_path(self) -> Path:

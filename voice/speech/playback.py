@@ -127,3 +127,9 @@ class PlaybackTracker(FrameProcessor):
             "voice.playback",
             {"turn_id": turn_id, "speech_id": speech_id, "state": kind, "sentence_index": self._index, **extra},
         )
+
+
+def create(cfg: object, ctl: Ctl) -> PlaybackTracker:
+    """Fábrica para el núcleo (`VoiceConfig.playback`). El texto del speech lo acumula el puente
+    en `ctl.speech_text` (sin etiquetas, todo lo recibido): de ahí sale `pending_head`."""
+    return PlaybackTracker(ctl, text_source=lambda: getattr(ctl, "speech_text", ""))
