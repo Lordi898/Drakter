@@ -295,14 +295,19 @@ def character(ctx):
        phase="desktop", needs=("desktop",))
 def confirmation(ctx):
     cdp = _cdp(ctx)
-    destructive = _find_button(r"(elimin|borr)")
+    # Palabra entera: el título «e2e borrable» de la fase API no debe contar como botón.
+    destructive = _find_button(r"(^|\s)(eliminar|borrar)\b")
     for section in ctx.state.get("desktop_sections") or [s["href"] for s in _sections(cdp)]:
         _go(cdp, section)
         if not cdp.evaluate(f"!!({destructive})"):
             continue
         _mark(cdp, destructive, "destroy", timeout=2)
         row = cdp.evaluate("(() => { const b = document.querySelector('[data-e2e=destroy]');"
-                           " const r = b.closest('li, tr, article, [role=row]'); return r ? r.innerText.trim() : ''; })()")
+                           " const r = b.closest('li, tr, article, [role=row], section[aria-label]');"
+                           " if (!r) return '';"
+                           # Panel de detalle (p. ej. Asignaturas): el dato testigo es su encabezado.
+                           " const h = r.matches('section') ? r.querySelector('h1, h2, h3') : null;"
+                           " return (h || r).innerText.trim(); })()")
         assert row, f"{section}: el botón destructivo no está dentro de un elemento identificable"
         label = cdp.evaluate("(() => { const b = document.querySelector('[data-e2e=destroy]');"
                              " return (b.innerText || b.getAttribute('aria-label') || '').trim(); })()")

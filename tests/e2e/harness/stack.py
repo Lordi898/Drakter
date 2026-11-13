@@ -154,7 +154,11 @@ class Stack:
             return self._absent("stub", f"no existe {server}")
         self.stub_port = free_port()
         env = self.base_env() | {"DRAKTER_ENV": "development"}
+        # Guiones propios del arnés: los del stub piden herramientas nativas de Hermes
+        # (read_file, terminal) que el runner de Drakter no ofrece (solo mcp__drakter__*).
+        scenarios = self.layout.root / "tests" / "e2e" / "stub-scenarios"
         proc = self._spawn("stub", ["python3", "-I", str(server), "--port", str(self.stub_port),
+                                    "--scenarios", str(scenarios),
                                     "--var", f"sandbox={self.sandbox}"], self.layout.stub_dir, env)
         url = f"http://127.0.0.1:{self.stub_port}/health"
         deadline = time.monotonic() + STUB_TIMEOUT

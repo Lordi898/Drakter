@@ -1,0 +1,14 @@
+{
+  "description": "Pide terminal cuando Hermes no la ofrece. Ejecutar con -t file. El comando es inocuo por si se ejecuta sin esa restriccion.",
+  "steps": [
+    {
+      "tool_calls": [{"name": "terminal", "allow_missing": true, "input": {"command": "echo DEV-STUB-NO-DEBERIA-EJECUTARSE"}}]
+    },
+    {
+      "text": "FALLO: la herramienta no ofrecida no fue rechazada. Resultado: {{tool_result}}",
+      "branches": [
+        {"contains": "does not exist", "text": "Herramienta rechazada por Hermes: {{tool_result}}"}
+      ]
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "description": "Pasada integrada: llama a una herramienta de lectura del catalogo Drakter (list_tags) y responde con su resultado.",
+  "steps": [
+    {
+      "text": "Voy a listar las etiquetas.",
+      "tool_calls": [{"name": "drakter__list_tags", "input": {"limit": 5}}]
+    },
+    {"text": "Resultado recibido: {{tool_result}}"}
+  ]
+}
