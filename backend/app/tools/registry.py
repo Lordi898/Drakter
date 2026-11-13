@@ -117,7 +117,11 @@ def _validation_details(exc: ValidationError) -> list[dict[str, Any]]:
             and kind not in _OPAQUE_ERROR_TYPES
             and "parsing" not in kind
         )
-        field = ".".join(str(part) for part in error["loc"])
+        loc = error["loc"]
+        if kind == "extra_forbidden":
+            # The key itself is model-chosen input: name its parent, never the key.
+            loc = (*loc[:-1], "<extra>")
+        field = ".".join(str(part) for part in loc)
         details.append(
             {
                 # An extra key is text chosen by the model.
