@@ -379,22 +379,26 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 
 ## Checklist 16. Seguridad y fiabilidad
 
-- [ ] Crear permisos por módulo.
-- [ ] Crear permisos por operación.
+- [x] Crear permisos por módulo.
+- [x] Crear permisos por operación.
 - [x] Crear confirmaciones.
-  ⚠️ Permisos, confirmación pendiente y auditoría se construyen antes de la primera herramienta. Las casillas de esta checklist son revisión y endurecimiento finales.
+  ⚠️ Por la GUI funciona (409 → aprobar con `approver` → ejecutado, no reutilizable; CONF-55..71 BLOCKED). Camino del agente: el runtime de Hermes crea `ToolRegistry` con `DefaultToolGate`, así que las 7 herramientas CONFIRM y las escrituras en sesión contaminada se deniegan (`confirmation_unavailable`) en vez de crear una confirmación pendiente. Olvidar un recuerdo usa `DenyAllGate` y falla cerrado. Seguro, pero no completo.
 - [x] Proteger credenciales.
-- [ ] Validar rutas.
-- [ ] Limitar acceso a archivos.
-- [ ] Proteger operaciones destructivas.
+- [x] Validar rutas.
+- [x] Limitar acceso a archivos.
+- [x] Proteger operaciones destructivas.
+  ⚠️ Brechas de diseño del banco red-team que siguen abiertas: contaminación solo en memoria (CONF-46/INJ-26), canal de datos de `TurnRequest` y contaminación de `build_context` (INJ-11/14/25), eco de documentos con `trust=derived` (INJ-32), título y URL remotos fuera del sobre en `read_resource` (INJ-05). El informe las daba por no explotables mientras `build_context` no estuviera conectado; ya lo está (`df258b1`), así que hay que reevaluarlas.
 - [x] Crear auditoría.
-- [ ] Crear copias de seguridad.
-- [ ] Probar restauración.
+- [x] Crear copias de seguridad.
+- [x] Probar restauración.
 - [ ] Probar desconexiones.
+  ⚠️ Backend↔Hermes comprobado (el runner muere y se reconecta solo). La reconexión del WebSocket del escritorio (`eventsBridge.ts`) no se ha observado aislada.
 - [ ] Probar recuperación del backend.
-- [ ] Probar recuperación de Hermes.
-- [ ] Probar errores de memoria.
-- [ ] Revisar datos sensibles.
+  ⚠️ Pendiente: el informe de seguridad deja sin rellenar la prueba en Electron.
+- [x] Probar recuperación de Hermes.
+- [x] Probar errores de memoria.
+- [x] Revisar datos sensibles.
+  ⚠️ Sigue abierta FILE-DB-02 (TOCTOU en `connect`; exige escribir en el directorio de datos 0700, riesgo bajo).
 
 ## Checklist 17. Optimización y lanzamiento
 
