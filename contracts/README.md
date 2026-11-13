@@ -23,7 +23,8 @@ Backend (D-14): lo lanza Electron main, su único cliente, con `python -m app`. 
 |---|---|
 | `ui`, por stdin | `/health`, `/api/v1/**` y `WS /api/v1/events`, salvo lo de `approver` |
 | `approver`, por stdin, solo en Electron main | `approve` y `reject`, y métodos de escritura en `/api/v1/storage-locations/**` y `/api/v1/permissions/**`. El renderer no lo conoce |
-| `agent_tool_token`, aleatorio por arranque | Solo el servidor MCP, en un listener propio de loopback con **puerto efímero** (bind a `127.0.0.1:0`), ni fijo ni configurable. El backend lo pasa a Hermes por entorno filtrado. No alcanza ninguna ruta de la GUI |
+| `agent_tool_token`, aleatorio por arranque | Solo el servidor MCP, en un listener propio de loopback con **puerto efímero** (bind a `127.0.0.1:0`), ni fijo ni configurable. El backend lo pasa al runner de Hermes por entorno filtrado (`DRAKTER_MCP_TOKEN`, con la URL en `DRAKTER_MCP_URL`). No alcanza ninguna ruta de la GUI |
+| Runner de Hermes, sin credencial | Sin gateway ni `API_SERVER_KEY`: el backend lanza `integrations/hermes/runner/drakter_runner.py` como subproceso y le habla por JSONL en stdin/stdout; sin puerto. El runner termina con EOF en stdin (`DECISIONS.md`, «Hermes sin gateway») |
 
 Toda petición lleva `Authorization: Bearer <token>`, sin excepción: no hay ruta pública, y `/health` también exige token. Nada de token por consulta, cookie o subprotocolo. Cualquier cabecera `Origin` da 403 y no hay CORS. Token válido con rol equivocado: 403 `permission_denied`; desconocido, también el del agente en este puerto: 401.
 
@@ -35,7 +36,7 @@ Hermes no toca la BD ni el sistema de archivos: solo `app/tools/`, que llama a l
 
 - **UUID:** TEXT(36), minúsculas con guiones, lo genera solo el backend (v4). Opaco para el cliente.
 - **Instante:** `YYYY-MM-DDTHH:MM:SS.sssZ`, ancho fijo, en BD y JSON. Usa `format_instant`. Nunca `isoformat()`. Se rechaza lo que no tenga zona.
-- **Fecha:** `YYYY-MM-DD`. **Hora local:** `HH:MM`. **Fecha-hora local:** `YYYY-MM-DDTHH:MM:SS`. **Zona:** nombre IANA.
+- **Fecha:** `YYYY-MM-DD`. **Hora local:** `HH:MM`. **Fecha-hora local:** `YYYY-MM-DDTHH:MM`, sin segundos (lo que usan calendario, herramientas y GUI). **Zona:** nombre IANA.
 - **Enumerados:** inglés `snake_case`; el texto en español es cosa de la GUI.
 - **Listados:** `{items, next_cursor, total?}` con `limit` y `cursor`. El cursor es opaco y se calcula sobre (campo de orden, id), nunca sobre la versión del UUID; `limit` lo acota el servidor; `total` es opcional. `sort=campo,-campo` con lista blanca por ruta.
 - **Nombres de chat:** en la API, `session_id` y `text`; `conversations.id` y `messages.content` son solo nombres de la BD.
@@ -87,7 +88,7 @@ Exige confirmación: borrado definitivo, restaurar copias, consolidar recuerdos 
 
 ## 6. Herramientas
 
-`ToolSpec`, `ToolRegistry`, orden de `dispatch` y puente MCP: `backend/app/integrations/hermes/CONTRACT.md` §1 (rama `drakter/agente-hermes`). Cada módulo aporta `app/tools/<dominio>.py` con `TOOLS`; nadie edita un archivo común. `permission` = `<dominio>.<accion>`; dominios en `TOOL_DOMAINS`, y la búsqueda transversal es dominio `search`, permiso `search.read`. `risk` = `read|write|confirm`. Lo visible para el agente es `ToolOutcome`: `ok`, `error` o `confirmation_required`, con `isError:false` en rechazos previsibles para no disparar el corte de circuito de Hermes. En auditoría y GUI se usa el nombre canónico (`create_task`), no `mcp__drakter__create_task`.
+`ToolSpec`, `ToolRegistry`, orden de `dispatch` y puente MCP: `backend/app/integrations/hermes/CONTRACT.md` §1. Cada módulo aporta `app/tools/<dominio>.py` con `TOOLS`; nadie edita un archivo común. `permission` = `<dominio>.<accion>`; dominios en `TOOL_DOMAINS`, y la búsqueda transversal es dominio `search`, permiso `search.read`. `risk` = `read|write|confirm`. Lo visible para el agente es `ToolOutcome`: `ok`, `error` o `confirmation_required`, con `isError:false` en rechazos previsibles para no disparar el corte de circuito de Hermes. En auditoría y GUI se usa el nombre canónico (`create_task`), no `mcp__drakter__create_task`.
 
 ## 7. Eventos
 

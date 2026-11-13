@@ -13,7 +13,7 @@ from pydantic import AfterValidator, BaseModel, BeforeValidator, ConfigDict, Fie
 
 T = TypeVar("T")
 
-_LOCAL_DATETIME = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}")
+_LOCAL_DATETIME = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}")
 _LOCAL_TIME = re.compile(r"([01]\d|2[0-3]):[0-5]\d")
 
 
@@ -46,7 +46,7 @@ def _check_timezone(value: str) -> str:
 
 def _check_local_datetime(value: str) -> str:
     if not _LOCAL_DATETIME.fullmatch(value):
-        raise ValueError("se esperaba YYYY-MM-DDTHH:MM:SS")
+        raise ValueError("se esperaba YYYY-MM-DDTHH:MM")
     datetime.fromisoformat(value)
     return value
 
