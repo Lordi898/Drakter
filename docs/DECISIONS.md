@@ -641,3 +641,18 @@ Decisiones técnicas, cambios de tecnología y motivos.
 - **Motivo:** un único camino de confirmación con 300 s y auditoría.
 - **Comprobado:** por HTTP con el guardia real: 409 con ticket, el token `ui` no aprueba (403), el approver aprueba → `approved`, confirmación de un solo uso, aplicar publica la rama, revertir borra la rama, cambio intermedio → 409 `conflict`, TTL 300 s, aprobación en `audit_events`, el agente recibe DENY.
 - **Impacto:** `backend/app/services/improvement_actions.py`, `backend/app/api/improvement.py` (`2425da5`), `backend/app/permissions/wiring.py` (`b1a49a3`), ambos pendientes de fusión; Checklist 15 «Crear flujo de aprobación». `desktop/electron/shared/routes.generated.ts` debe regenerarse (lista `/approve`, no lista `approval-request` ni `revert-request`).
+
+## [2026-11-13] Calendario: fecha-hora local con segundos opcionales
+- **Contexto:** `drakter_contracts.common.LocalDateTime` y el catálogo e2e usaban `AAAA-MM-DDTHH:MM:SS`; `backend/app/schemas/calendar.py` y `HABITS_CALENDAR_CONTRACT.md` usan `AAAA-MM-DDTHH:MM`, que es lo que envía el escritorio. `POST /calendar/events` respondía 422 a los clientes del contrato compartido.
+- **Decisión:** el esquema del calendario acepta `:00` final y lo recorta; se sigue guardando y devolviendo `HH:MM`. Otros segundos se rechazan.
+- **Alternativas descartadas:** cambiar el escritorio y la base a segundos (migración y cambios en `occurrence_id` sin beneficio); cambiar `contracts/` desde el módulo de calendario (zona compartida).
+- **Motivo:** compatibilidad con ambos formatos sin tocar datos.
+- **Relación:** complementa «Fecha-hora local sin segundos», que alinea el contrato a `HH:MM`; la tolerancia a `:00` queda para clientes antiguos.
+- **Impacto:** `backend/app/schemas/calendar.py` (`f16753f`); Checklist 9.
+
+## [2026-11-13] Recursos de una asignatura vía relaciones, sin títulos
+- **Contexto:** `get_subject_resources` era un stub vacío «hasta que exista el módulo de relaciones», que ya existe. El catálogo declara la herramienta con `returns_untrusted: false`, y los títulos de recursos son datos no confiables en el almacén.
+- **Decisión:** se leen las filas de `relationships` asignatura↔recurso en ambos sentidos y se devuelven solo `resource_id`, `resource_type`, `availability_status`, `relationship_type` y `direction`. El detalle se obtiene con `get_resource`.
+- **Alternativas descartadas:** devolver títulos y marcar la herramienta como no confiable (cambia el catálogo compartido); dejar el stub.
+- **Motivo:** cerrar la casilla «Asociar recursos» sin cambiar el contrato ni meter texto no confiable en un resultado marcado como confiable.
+- **Impacto:** `backend/app/services/subjects.py`, `backend/app/tools/subjects.py` (`bbee4c4`); Checklist 9.

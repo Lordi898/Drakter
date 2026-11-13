@@ -202,22 +202,25 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 
 - [x] Crear interfaz de calendario.
 - [ ] Crear vista diaria.
-- [ ] Crear vista semanal.
+  ⚠️ Código presente (`DayView.tsx`, botón Día visible) y typecheck limpio; falta verla funcionar en la app (el informe la deja pendiente).
+- [x] Crear vista semanal.
 - [ ] Crear vista mensual.
-- [ ] Crear eventos.
-- [ ] Editar eventos.
-- [ ] Eliminar eventos.
-- [ ] Crear bloques de tiempo.
-- [ ] Asociar bloques a tareas.
-- [ ] Detectar solapamientos.
-- [ ] Gestionar zonas horarias.
-- [ ] Crear asignaturas.
-- [ ] Crear horarios recurrentes.
-- [ ] Crear sesiones de clase.
-- [ ] Asociar recursos.
-- [ ] Asociar tareas.
-- [ ] Crear herramientas Hermes.
-- [ ] Probar recurrencias y fechas.
+  ⚠️ Código presente (`MonthView.tsx`, botón Mes visible) y typecheck limpio; falta verla funcionar en la app (el informe la deja pendiente).
+- [x] Crear eventos.
+- [x] Editar eventos.
+- [x] Eliminar eventos.
+- [x] Crear bloques de tiempo.
+- [x] Asociar bloques a tareas.
+- [x] Detectar solapamientos.
+- [x] Gestionar zonas horarias.
+- [x] Crear asignaturas.
+- [x] Crear horarios recurrentes.
+- [x] Crear sesiones de clase.
+- [x] Asociar recursos.
+- [x] Asociar tareas.
+- [x] Crear herramientas Hermes.
+  ⚠️ Las 21 herramientas se registran y responden por `dispatch` (`d589bba`). Sin probar con el modelo real; los borrados del agente fallan cerrados mientras el runtime use `DefaultToolGate`.
+- [x] Probar recurrencias y fechas.
 
 ## Checklist 10. Almacén e indexación
 
