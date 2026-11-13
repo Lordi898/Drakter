@@ -140,9 +140,18 @@ export const GENERATED_ROUTES = [
   ['POST', '/api/v1/voice/listen/stop'],
   ['POST', '/api/v1/voice/listen/cancel'],
   ['POST', '/api/v1/voice/interrupt'],
+  ['GET', '/api/v1/improvement/feedback'],
+  ['POST', '/api/v1/improvement/feedback'],
+  ['GET', '/api/v1/improvement/feedback/{id}'],
+  ['PATCH', '/api/v1/improvement/feedback/{id}/classification'],
   ['GET', '/api/v1/improvement/proposals'],
+  ['POST', '/api/v1/improvement/proposals'],
   ['GET', '/api/v1/improvement/proposals/{id}'],
-  ['POST', '/api/v1/improvement/proposals/{id}/approve'],
+  ['POST', '/api/v1/improvement/proposals/{id}/evaluate'],
+  ['POST', '/api/v1/improvement/proposals/{id}/approval-request'],
+  ['POST', '/api/v1/improvement/proposals/{id}/revert-request'],
   ['POST', '/api/v1/improvement/proposals/{id}/reject'],
-  ['POST', '/api/v1/improvement/feedback']
+  ['GET', '/api/v1/improvement/reports/summary'],
+  ['POST', '/api/v1/improvement/reports/export'],
+  ['GET', '/api/v1/improvement/changelog']
 ] as const
