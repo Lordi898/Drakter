@@ -15,7 +15,7 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). A�
 - Memoria: los hábitos se clasifican como memoria procedimental antes que como perfil.
 - Relaciones: el filtro por tipo de la pantalla se envía como `type`, el nombre que lee el backend.
 - Identidad: el `SOUL.md` de Hermes compone los 14 archivos de `identity/`, `knowledge/` y `context/`; antes solo llegaban los 6 de `identity/`.
-- Automejora: migración `0012_improvement_cycle.sql` con el esquema del servicio y rutas REST montadas.
+- Automejora: migración `0013_improvement_cycle.sql` con el esquema del servicio y rutas REST montadas.
 - Evals: el arnés lee la identidad de sus tres carpetas y los esquemas de herramientas del árbol integrado.
 - Voz: cierre mínimo en v1; la capa de voz se rediseñará sobre Pipecat.
 - Agente: permiso `storage.write` concedido; las Skills citan solo herramientas registradas.

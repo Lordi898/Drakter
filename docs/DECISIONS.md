@@ -489,12 +489,12 @@ Decisiones técnicas, cambios de tecnología y motivos.
 - **Motivo:** que el prompt real lleve lo que dice la decisión vigente, sin tocar el texto de la identidad.
 - **Impacto:** Checklist 4 (carga de contexto). SOUL.md pasa de 21.922 a 46.227 caracteres, por debajo de `context_file_max_chars` = 120.000. La cifra de 20.000 caracteres que citan las entradas del 2026-11-04 ya no aplica: el tope configurado es `SOUL_MAX_CHARS`.
 
-## [2026-11-13] Esquema de automejora: manda el del servicio (migración 0012)
+## [2026-11-13] Esquema de automejora: manda el del servicio (migración 0013)
 - **Contexto:** la migración 0010 y `contracts/.../improvement.py` definían unas tablas `improvement_*` que ningún código usa. Los servicios de automejora se escribieron contra `backend/app/schemas/ddl_improvement.sql`, que nunca pasó a una migración, de modo que sobre una BD real todo el ciclo fallaba.
-- **Decisión:** `0012_improvement_cycle.sql` borra las tablas de 0010 (vacías) y crea el esquema del servicio, con CHECK/FK/UNIQUE con nombre y triggers de inmutabilidad (propuestas inmutables, evaluaciones e historial de solo añadir). Las rutas se montan con `backend/app/api/improvement.py`.
+- **Decisión:** `0013_improvement_cycle.sql` (renumerada desde 0012 por la colisión con `0012_confirmation_hardening.sql`) borra las tablas de 0010 (vacías) y crea el esquema del servicio, con CHECK/FK/UNIQUE con nombre y triggers de inmutabilidad (propuestas inmutables, evaluaciones e historial de solo añadir). Las rutas se montan con `backend/app/api/improvement.py`.
 - **Alternativas descartadas:** adaptar los servicios al esquema de 0010 (pierde el historial `improvement_events`, el parche, el digest de aprobación y los triggers de seguridad); tablas con otro nombre (dos esquemas vivos).
 - **Motivo:** el esquema del servicio es el único con código, y garantiza en la BD que nada cambia sin aprobación.
-- **Impacto:** `backend/migrations/0012_improvement_cycle.sql`, `check_migrations.py`, `backend/app/api/improvement.py`. `contracts/python/drakter_contracts/models/improvement.py` y `contracts/ts` quedan desalineados (categorías y estados distintos): hay que actualizarlos o marcarlos como obsoletos. Checklist 15.
+- **Impacto:** `backend/migrations/0013_improvement_cycle.sql`, `check_migrations.py`, `backend/app/api/improvement.py`. `contracts/python/drakter_contracts/models/improvement.py` y `contracts/ts` quedan desalineados (categorías y estados distintos): hay que actualizarlos o marcarlos como obsoletos. Checklist 15.
 
 ## [2026-11-13] Checklist 5 cerrada con el personaje provisional SVG
 - **Contexto:** el cierre verifica el personaje provisional (`desktop/src/character/`). El `.riv` sigue sin entregarse.
@@ -560,4 +560,13 @@ Decisiones técnicas, cambios de tecnología y motivos.
 - **Alternativas descartadas:** fusionar `tasks_confirmations.py` (segundo camino paralelo al de seguridad); cablear con `try/except` para tolerar el fallo (dejaría las confirmaciones a medias sin avisar).
 - **Motivo:** un único camino de confirmación (`contracts/README.md` §5), con caducidad de 300 s.
 - **Comprobado:** `check_security.py` 145/145, `check_confirmations.py` 0 fallos, borrado de tareas y proyectos 409 → aprobar → 404.
-- **Impacto:** `backend/app/main.py`, `backend/app/permissions/wiring.py`, `setup.py`, `tool_gate.py`, `backend/app/services/actions.py`, `backend/migrations/0012_confirmation_hardening.sql`; Checklists 2 (sistema de permisos), 7 (eliminar tareas, borrar proyectos), 9 y 16. ⚠️ El número `0012` coincide con `0012_improvement_cycle.sql` de automejora (`9a9a34e`, sin fusionar), que tendrá que renumerarse.
+- **Impacto:** `backend/app/main.py`, `backend/app/permissions/wiring.py`, `setup.py`, `tool_gate.py`, `backend/app/services/actions.py`, `backend/migrations/0012_confirmation_hardening.sql`; Checklists 2 (sistema de permisos), 7 (eliminar tareas, borrar proyectos), 9 y 16. La migración de automejora se renumeró a `0013_improvement_cycle.sql`.
+
+## [2026-11-13] Permisos de automejora para el agente: lectura libre, escritura siempre con confirmación
+- **Contexto:** el informe de Hermes (drakter-36) vio que `agent/configuration/permissions.json` no concedía `improvement.read` ni `improvement.write`, así que las 4 herramientas de automejora quedaban denegadas al agente.
+- **Decisión:** se conceden `improvement.read` e `improvement.write`, y las dos herramientas de escritura (`record_improvement_feedback`, `create_improvement_proposal`) pasan de `RiskClass.WRITE` a `RiskClass.CONFIRM`: toda escritura del agente pasa por confirmación en `ActionService`. El agente sigue sin herramientas para evaluar, aprobar, aplicar o revertir (solo GUI, `require_user`); sus escrituras solo insertan feedback o un borrador en SQLite y nunca tocan producción, permisos, confirmaciones ni auditoría.
+- **Alternativas descartadas:** dejar las escrituras en `WRITE` sin confirmar (solo pedirían confirmación en sesiones `tainted`).
+- **Motivo:** CLAUDE.md §8: la automejora no cambia nada sin autorización.
+- **Comprobado:** con el motor real (`tool_action_spec` + `ActionService` + `permissions.json`), las lecturas dan ALLOW; cada escritura da CONFIRM y deja la fila en `pending_confirmations` sin escribir; al aprobar con `approver` se ejecuta; sin el permiso, DENY.
+- **⚠️ En ejecución:** el runtime de Hermes usa `DefaultToolGate`, que deniega CONFIRM: hoy las escrituras del agente quedan denegadas (falla cerrado) hasta que el runtime use `BackendToolGate` (pendiente de drakter-34).
+- **Impacto:** `agent/configuration/permissions.json`, `backend/app/tools/improvement.py` (`fa511e7`, pendiente de fusión); Checklists 13 (permisos, confirmaciones) y 15.

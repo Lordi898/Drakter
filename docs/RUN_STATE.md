@@ -21,7 +21,7 @@ Cadena de integración: **`drakter/integracion` → `drakter/build` → `main` (
 | `drakter/build` | Ancestro de `drakter/integracion` (en `815976f`). Se adelantará al terminar el cierre. |
 | `main` | Ancestro de `drakter/build`; solo el commit inicial (`098e2df`). Se adelantará en local al final. |
 
-Las ramas `ao/<sesión>/root` de los finalizadores son de trabajo; sus commits entran en `drakter/integracion` cuando `drakter-32` los fusiona. Pendientes de fusión al escribir esto: `b5a0d25` y `9a9a34e` (automejora; su migración `0012_improvement_cycle.sql` choca en número con `0012_confirmation_hardening.sql` y hay que renumerarla), `46bdc88` y `78f25cd` (Skills y permiso `storage.write`). Las casillas que dependen de ellos llevan ⚠️ «pendiente de fusión».
+Las ramas `ao/<sesión>/root` de los finalizadores son de trabajo; sus commits entran en `drakter/integracion` cuando `drakter-32` los fusiona. Pendientes de fusión al escribir esto: `fa511e7` (permisos de automejora para el agente), `46bdc88` y `78f25cd` (Skills y permiso `storage.write`). Las casillas que dependen de ellos llevan ⚠️ «pendiente de fusión».
 
 ## Cómo arrancar y parar
 
@@ -56,8 +56,8 @@ scripts/drakter-local.sh stop
 - **Voz:** en v1 solo se estabiliza y documenta; la capa de voz y conversación se rediseñará sobre Pipecat (STT Whisper, TTS Fish Audio). Ver `DECISIONS.md`, 2026-11-13.
 - **Memoria sin conectar al turno:** la recuperación del backend (`memories_for_context` → `build_context`) no la llama el runner de Hermes; el agente solo accede a la memoria por herramientas. Olvidar un recuerdo falla cerrado: `POST /api/v1/memory/{id}/forget` da 409 y `forget_memory` se deniega.
 - **Automejora sin aprobación en la app:** el ciclo funciona (feedback, propuestas, evaluación en `bwrap`, rama `improvement/<id>`, revertir), pero aprobar desde la GUI da 403 porque no hay adaptador `ConfirmationGate` ni principal de GUI, y no existe pantalla de automejora. `recover_interrupted` aún no se llama al arrancar. Falla cerrado.
-- **Skills inertes:** `home.py` desactiva el toolset `skills` de Hermes (arrastra `skill_manage`); el agente se guía por las descripciones de las herramientas MCP. Además el agente no tiene `improvement.read`/`improvement.write` y la Skill de configuración cita herramientas que no existen.
-- **Confirmaciones del agente:** `AgentRuntime` crea `ToolRegistry` sin `gate=BackendToolGate`; las herramientas `risk=confirm` fallan cerradas sin crear la confirmación pendiente.
+- **Skills inertes:** `home.py` desactiva el toolset `skills` de Hermes (arrastra `skill_manage`); el agente se guía por las descripciones de las herramientas MCP. Además la Skill de configuración cita herramientas que no existen.
+- **Confirmaciones del agente:** `AgentRuntime` (`runtime.py`) crea `ToolRegistry` sin la puerta real y usa `DefaultToolGate`: las herramientas `risk=confirm` (borrados, escrituras de automejora) fallan cerradas sin crear la confirmación pendiente. Lo cierra `drakter-34`.
 - **Búsqueda global:** `SearchPalette` sigue sin montarse en `AppShell` (Ctrl+K no hace nada).
 - **Calendario:** el selector de zona horaria arranca en el primer valor de la lista (`Africa/Abidjan`) mientras `default_timezone` no esté fijado en Configuración.
 - **Deriva de catálogo:** el backend avisa (`tool_catalog_drift`) de herramientas que difieren de `contracts/tools/catalog.json` (p. ej. `get_related_items` debe pasar a `returns_untrusted: true`). No bloquea.
@@ -76,7 +76,7 @@ scripts/drakter-local.sh stop
 - **Hábitos (CL8):** las 12 casillas funcionan con el backend real y la pantalla pinta en Electron headless.
 - **Relaciones (CL11):** servicio, tipos, validaciones, consultas e integridad comprobados.
 - **Memoria SQLite + FTS5 (CL12):** adaptador, extracción, clasificación, deduplicación, contradicciones, registros y skill comprobados; la memoria recuperada no sobrescribe las reglas de seguridad (`check_memory_rules.py` 40/40).
-- **Automejora (CL15):** el esquema del servicio pasa a migración (`0012`) y las rutas REST se montan; la automejora no puede tocar producción, permisos, confirmaciones ni auditoría sin aprobación humana.
+- **Automejora (CL15):** el esquema del servicio pasa a migración (`0013_improvement_cycle.sql`) y las rutas REST se montan; la automejora no puede tocar producción, permisos, confirmaciones ni auditoría sin aprobación humana.
 
 ## Copias de seguridad
 
@@ -94,4 +94,4 @@ Historial Git de los repos que estaban anidados en el checkout del usuario:
 
 1. Clave de Anthropic válida y prueba de conversación, personalidad y herramientas con Haiku real (evals).
 2. Montar `SearchPalette`.
-3. Fusionar automejora con su migración renumerada.
+3. Cablear `BackendToolGate` en el runtime del agente (`drakter-34`).

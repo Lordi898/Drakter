@@ -323,7 +323,7 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
   ⚠️ El archivo existe, pero sus herramientas (`get_configuration`, `propose_configuration_change`) son PROPUESTA y no existen ni en el catálogo ni en el backend. Además está inerte.
 - [x] Definir parámetros.
 - [x] Definir permisos.
-  ⚠️ Arreglado: faltaba `storage.write` y se denegaban 4 herramientas del almacén (`78f25cd`, pendiente de fusión). `improvement.read`/`improvement.write` no están concedidos: las 4 herramientas de automejora quedan denegadas al agente (lo decide el dueño de automejora).
+  ⚠️ Arreglado: faltaba `storage.write` y se denegaban 4 herramientas del almacén (`78f25cd`, pendiente de fusión). `improvement.read`/`improvement.write` se conceden con las dos escrituras en `RiskClass.CONFIRM` (`fa511e7`, pendiente de fusión); hoy esas escrituras quedan denegadas porque el runtime usa `DefaultToolGate` (ver «Definir confirmaciones»).
 - [ ] Definir confirmaciones.
   ⚠️ 7 herramientas con `risk=confirm` y `summarize`; la puerta falla cerrada (`delete_task` del agente no se ejecuta y se audita `rejected`), pero nunca se crea la confirmación pendiente: `main.py` no llama a `install_security` y `AgentRuntime` crea `ToolRegistry` sin `gate=BackendToolGate`. `GET /api/v1/confirmations` da 503.
 - [x] Definir errores.
@@ -376,7 +376,6 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 ## Checklist 15. Automejora
 
 - [x] Crear registro de feedback.
-  ⚠️ Afecta a toda la Checklist 15: comprobado con `b5a0d25` (rutas REST) y `9a9a34e` (migración `0012_improvement_cycle.sql`), pendientes de fusión en `drakter/integracion`: sin ellos el ciclo de automejora falla sobre una BD real.
 - [x] Crear clasificación de incidencias.
 - [x] Crear propuestas.
 - [x] Crear evaluaciones.
