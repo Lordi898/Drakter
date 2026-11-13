@@ -21,7 +21,7 @@ Cadena de integración: **`drakter/integracion` → `drakter/build` → `main` (
 | `drakter/build` | Ancestro de `drakter/integracion` (en `815976f`). Se adelantará al terminar el cierre. |
 | `main` | Ancestro de `drakter/build`; solo el commit inicial (`098e2df`). Se adelantará en local al final. |
 
-Las ramas `ao/<sesión>/root` de los finalizadores son de trabajo; sus commits entran en `drakter/integracion` cuando `drakter-32` los fusiona. Pendientes de fusión al escribir esto: `a27c22a` (memoria), `78acfca` y `997ce07` (relaciones), `edbcf5e` (identidad), `b5a0d25` y `9a9a34e` (automejora, migración 0012), `95f53e5` (evals), `db85f3e` (confirmaciones de tareas y proyectos), `46bdc88` y `78f25cd` (Skills y permiso `storage.write`). Las casillas que dependen de ellos llevan ⚠️ «pendiente de fusión».
+Las ramas `ao/<sesión>/root` de los finalizadores son de trabajo; sus commits entran en `drakter/integracion` cuando `drakter-32` los fusiona. Pendientes de fusión al escribir esto: `78acfca` y `997ce07` (relaciones), `b5a0d25` y `9a9a34e` (automejora, migración 0012), `95f53e5` (evals), `db85f3e` (confirmaciones de tareas y proyectos), `46bdc88` y `78f25cd` (Skills y permiso `storage.write`). Las casillas que dependen de ellos llevan ⚠️ «pendiente de fusión».
 
 ## Cómo arrancar y parar
 

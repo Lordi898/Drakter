@@ -93,7 +93,6 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 - [x] Crear TOOL_GUIDE.md.
 - [x] Crear SYSTEM_GUIDE.md.
 - [x] Configurar carga de contexto.
-  ⚠️ Comprobado con el arreglo `edbcf5e` (`render_soul` compone los 14 archivos desde identity/knowledge/context), pendiente de fusión en `drakter/integracion`. Sin él, los 8 archivos de context/ y knowledge/ no llegan al prompt de Hermes.
 - [x] Configurar prioridades.
 - [ ] Probar consistencia de personalidad.
   ⚠️ Sin clave: la tubería está verificada con el stub (`agent/evals/run.py --suite personalidad`: 16/16 casos y 33/33 controles negativos), pero el stub no evalúa el modelo. Repetir con Claude Haiku 5.5: `--provider anthropic --suite personalidad --repeat 3`.
@@ -288,7 +287,6 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 - [x] Implementar y comprobar la extracción de recuerdos en el Memory Adapter.
   ⚠️ Funciona (`RuleExtractor` vía `MemoryService.extract_from_turn`), pero aún nadie la invoca tras un turno de chat (ver recuperación selectiva).
 - [x] Implementar y comprobar la clasificación en el Memory Adapter.
-  ⚠️ Comprobado con el arreglo `a27c22a` (hábitos antes que perfil), pendiente de fusión en `drakter/integracion`.
 - [x] Implementar y comprobar la deduplicación en el Memory Adapter.
 - [x] Implementar y comprobar la detección de contradicciones en el Memory Adapter.
 - [ ] Configurar y comprobar la memoria de trabajo en Hermes y OpenViking.
@@ -296,7 +294,6 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 - [x] Implementar y comprobar la memoria episódica en el Memory Adapter.
 - [x] Implementar y comprobar la memoria semántica en el Memory Adapter.
 - [x] Implementar y comprobar la memoria procedimental en el Memory Adapter.
-  ⚠️ Desde la extracción depende del arreglo `a27c22a`, pendiente de fusión.
 - [ ] Configurar y comprobar la recuperación selectiva.
   ⚠️ La búsqueda selectiva por herramienta funciona (filtros, límite, solo aprobados y vigentes), pero la recuperación del backend al turno (`MemoryService.memories_for_context` → `context.builder.build_context`) no está conectada al runner de Hermes.
 - [ ] Configurar y comprobar los límites de contexto.
