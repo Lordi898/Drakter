@@ -32,10 +32,11 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 - [x] Crear navegación lateral.
 - [x] Crear área central.
 - [x] Crear panel contextual.
-- [ ] Crear notificaciones.
+- [x] Crear notificaciones.
 - [x] Crear configuración.
 - [x] Crear gestión de errores.
-- [ ] Configurar empaquetado.
+- [x] Configurar empaquetado.
+  ⚠️ Configuración completa (`electron-builder.yml` con fuses endurecidos, `asar`, deb y AppImage, backend PyInstaller por `extraResources`). drakter-48 no la ejecutó (sin `electron-builder` en `node_modules`); la ejecutó drakter-50 en la Checklist 17 y generó el AppImage con el backend corregido. El `.deb` falta regenerarlo e instalarlo (ver Checklist 17 «Crear instalador»).
 
 ## Checklist 2. Backend
 

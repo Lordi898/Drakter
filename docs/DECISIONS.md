@@ -724,3 +724,17 @@ Decisiones técnicas, cambios de tecnología y motivos.
 - **Alternativas descartadas:** listar a mano los `hiddenimports` de `app` (se desincroniza con cada módulo nuevo); añadir `homepage` a `package.json` (archivo compartido); dejar que electron-builder recompile `node_modules` (compartido entre worktrees).
 - **Motivo:** que el instalador arranque un backend completo y que el build falle en voz alta si vuelve a perder módulos.
 - **Impacto:** `desktop/electron-builder.backend.spec`, `desktop/electron-builder.yml`, `desktop/electron-builder.README.md`, `docs/installation/paquete-deb.md`, Checklist 17 «Crear instalador».
+
+## [2026-11-13] La GUI no aplica ni revierte mejoras
+- **Contexto:** al regenerar `ALLOWED_ROUTES` desde `contracts/api/routes.md` entraban `POST /api/v1/improvement/proposals/{id}/apply` (y potencialmente `/revert`), rutas que cambian producción.
+- **Decisión:** el renderer (token `ui`) no puede llamarlas: `desktop/electron/scripts/generate-routes.mjs` las trata como solo `approver` y `desktop/electron/main/apiProxy.ts` aborta el arranque si aparecen en la lista. Aprobar y revertir siguen el flujo `approval-request`/`revert-request` → 409 → `/confirmations/{id}/approve`.
+- **Alternativas descartadas:** marcarlas `(approver)` solo en `routes.md` (frágil si la marca se pierde).
+- **Motivo:** CLAUDE.md §8: la automejora no modifica producción sin autorización. Decisión de drakter-33.
+- **Impacto:** `desktop/electron/scripts/generate-routes.mjs`, `desktop/electron/main/apiProxy.ts`, `desktop/electron/shared/routes.generated.ts` (`89a87b5`). Checklist 1 y 15.
+
+## [2026-11-13] Arranque de Electron en desarrollo y pruebas
+- **Contexto:** en la máquina de desarrollo `chrome-sandbox` no es SUID root, y Drakter usa `requestSingleInstanceLock`.
+- **Decisión:** en desarrollo y en e2e se arranca con `DRAKTER_DEV_NO_SANDBOX=1` y `--no-sandbox` en argv; las pruebas paralelas usan `--user-data-dir` propio. En producción el sandbox sigue siendo obligatorio (`sandbox.ts` aborta con `--no-sandbox`).
+- **Alternativas descartadas:** `chown root` + `chmod 4755` de `chrome-sandbox` (requiere sudo y se pierde con cada reinstalación de node_modules).
+- **Motivo:** sin estas dos cosas, Electron aborta (FATAL setuid sandbox) o sale sin ventana al haber otra instancia.
+- **Impacto:** `tests/e2e/stack.py`, `scripts/dev.sh`, documentación de desarrollo. Checklist 1.
