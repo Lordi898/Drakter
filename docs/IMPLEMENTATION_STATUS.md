@@ -266,7 +266,7 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 - [ ] Crear visualización de relaciones.
   ⚠️ El código existe (`RelationshipsPage`, `RelationGraph`, `RelatedPanel`, diálogos), está enrutado, tipa sin errores y su contrato coincide con el backend; arreglado el filtro por tipo (`78acfca`). Falta abrirla una vez en Electron (`scripts/dev.sh`) para confirmar que se ve bien.
 - [ ] Crear herramientas Hermes.
-  ⚠️ Las 4 de relaciones y las 3 de etiquetas se registran en el `ToolRegistry` real y sus handlers funcionan. Sin clave: no se han probado con el modelo real. Aviso `tool_catalog_drift` en `get_related_items` hasta alinear `contracts/tools/catalog.json` a `returns_untrusted: true` (pedido a drakter-32).
+  ⚠️ Con Claude Haiku 5.5 real por Hermes, leer, buscar y crear relaciones funcionan (`create_relationship`, `get_related_items`). `delete_relationship` queda denegado (`confirmation_unavailable`) hasta que el runtime use la puerta real de confirmación (drakter-34). El desvío de catálogo de `get_related_items` ya está corregido.
 - [x] Probar integridad y eliminación.
 
 ## Checklist 12. Memoria
