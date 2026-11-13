@@ -1,6 +1,6 @@
 # Hoy y Configuración
 
-> **Estado:** integrado en `drakter/build` (4a84a5d). Configuración está montada y su backend se registra solo (`_discover_routers()` incluye `settings` y `today`). La pantalla Hoy (`TodayPage`) existe pero sigue fuera de la navegación, y Electron aún no deja pasar `GET /api/v1/today` (ver Pendiente). NO COMPROBADO en la app real. Los pasos de Hoy describen lo que mostrará la pantalla cuando se conecte; los de Configuración, la pantalla tal como está.
+> **Estado:** integrado en `drakter/integracion` (`7fd30e1`): **Hoy** es la pantalla inicial y **Configuración** está en la navegación; las APIs `today` y `settings` se montan solas. Ojo: `GET /api/v1/today` no figura en la lista de rutas permitidas de Electron (`desktop/electron/shared/routes.generated.ts`), así que el puente puede rechazarla. Las notas «Pendiente» del cuerpo se escribieron sobre `drakter/build` (`2da8bef`) y alguna puede estar ya resuelta. NO COMPROBADO en la app real (ver «Estado de la integración» en [README](README.md)).
 
 ## Para qué sirve
 

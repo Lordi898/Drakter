@@ -1,6 +1,6 @@
 # Asignaturas
 
-> **Estado:** integrado en `drakter/build` (2da8bef). NO COMPROBADO en la app real: leído de `desktop/src/modules/subjects/` y `backend/app/services/subjects.py`. Ojo: en 2da8bef `backend/app/main.py` solo monta `health`, `auth` y `ws`; `api/subjects.py` existe pero no está incluido, así que la pantalla no recibirá datos hasta que se monte el router.
+> **Estado:** integrado en `drakter/integracion` (`7fd30e1`): pantalla **Asignaturas** en la navegación y API `subjects` montada. Las notas «Pendiente» del cuerpo se escribieron sobre `drakter/build` (`2da8bef`) y alguna puede estar ya resuelta. NO COMPROBADO en la app real (ver «Estado de la integración» en [README](README.md)).
 
 ## Para qué sirve
 

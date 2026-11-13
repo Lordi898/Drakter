@@ -1,8 +1,6 @@
 # Tareas y proyectos
 
-> **Estado:** sale de la rama `drakter/tareas-proyectos`, sin integrar en `drakter/build` (2da8bef). NO COMPROBADO en la app real: nadie ha ejecutado estos pasos; todo sale de leer `desktop/src/modules/tasks`, `desktop/src/modules/projects` y `backend/app` de esa rama.
-
-**Qué hay hoy en `drakter/build` (2da8bef):** solo las pantallas vacías. **Tareas** muestra «Todavía no hay tareas» y **Proyectos** «Todavía no hay proyectos», cada una con un botón desactivado (**Crear tarea** / **Crear proyecto**, motivo: «Disponible cuando el espacio de trabajo esté conectado»). En el backend de esa foto no hay servicio, rutas ni herramientas de tareas o proyectos (solo la migración `0002_projects_subjects_tasks.sql`). Todo lo que sigue describe la rama `drakter/tareas-proyectos` y no funciona en `drakter/build` hasta integrarla.
+> **Estado:** integrado en `drakter/integracion` (`7fd30e1`): pantallas **Tareas** y **Proyectos** en la navegación y APIs `tasks` y `projects` montadas. Las notas «Pendiente» del cuerpo se escribieron sobre `drakter/build` (`2da8bef`) y alguna puede estar ya resuelta. NO COMPROBADO en la app real (ver «Estado de la integración» en [README](README.md)).
 
 Las **tareas** son lo que haces (con subtareas, prioridad, fecha límite y dependencias). Los **proyectos** reúnen un objetivo, unas fechas y las tareas que lo hacen avanzar. Se usan desde dos secciones de la barra lateral: **Tareas** (atajo `Ctrl+3`) y **Proyectos** (atajo `Ctrl+4`).
 

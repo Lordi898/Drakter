@@ -1,27 +1,27 @@
 # Paquete .deb de Drakter
 
-> **Estado:** sale de la rama `drakter/automejora` (`desktop/electron-builder.README.md`, `electron-builder.yml`), sin integrar en `drakter/build` (2da8bef): en 2da8bef no hay `electron-builder.yml` ni script de empaquetado. NO COMPROBADO: el README de la rama declara la configuración "escrita, no ejecutada". No se ha generado ningún `.deb`.
+> **Estado:** construido en esta máquina el 2026-11-13 desde `drakter/integracion` (`7fd30e1`) con los pasos de abajo: salen `drakter-desktop_0.1.0_amd64.deb` y `Drakter-0.1.0.AppImage`, y el backend empaquetado responde. NO COMPROBADO: instalar el `.deb` (requiere sudo) y abrir la ventana instalada. Detalle de las comprobaciones: `desktop/electron-builder.README.md`.
 
 Sirve para instalar Drakter como aplicación de escritorio en Ubuntu en vez de lanzarla desde el repositorio. Para el modo desarrollo: [instalar.md](instalar.md).
 
 ## Requisitos
 
-- Node con `npm`, y `uv` en el PATH (falta en esta máquina: ver [instalar.md](instalar.md), **Pendiente**).
+- Node con `npm`, `uv` en el PATH y `desktop/node_modules` instalado ([instalar.md](instalar.md)).
 - Construir en el SO de destino: el backend no se cross-compila.
 - Config: electron-builder 26.18.0, Electron 45, electron-vite 6.
 
-## Pasos (según el README de la rama; NO COMPROBADO)
+## Pasos
 
 1. Backend congelado con PyInstaller:
    `cd desktop && node electron-builder.build-backend.mjs`
    Sale en `backend/dist/linux/drakter-backend/`.
-2. Desktop: `npm ci && npm run build` (genera `desktop/out/`).
-3. Empaquetar:
-   `npx electron-builder --config electron-builder.yml --linux deb AppImage`
-   Sale en `desktop/release/`.
-4. Instalar el `.deb` generado con `dpkg` (el nombre del archivo no consta: **Pendiente**).
+2. Desktop: `npm run build` (genera `desktop/out/`).
+3. Empaquetar (electron-builder no está en `package.json`, se usa con `npx`):
+   `npx --yes electron-builder@26.18.0 --config electron-builder.yml --linux deb AppImage -c.npmRebuild=false`
+   Sale en `desktop/release/`. Si `/tmp` es un tmpfs con poco hueco, antepón `TMPDIR=/var/tmp`.
+4. Instalar: `sudo apt install ./release/drakter-desktop_0.1.0_amd64.deb`. NO COMPROBADO.
 
-El `.spec` aborta si `backend/migrations/` no tiene ningún `.sql`. Eso solo ocurre en `drakter/automejora` (solo `.gitkeep`); en 2da8bef hay 10 (`0001_core_entities.sql` a `0010_memory_improvement.sql`), así que ese aborto ya no aplicaría. Sigue sin comprobar y el `.spec` no está en `build`.
+En esta máquina tardó unos 2-4 minutos en total. El `.spec` aborta si faltan migraciones o si no encuentra los routers del backend.
 
 ## Qué incluye y qué no
 
@@ -42,21 +42,20 @@ La actualización es manual. Antes de instalar una versión nueva:
 cd backend && python -m app.database.cli backup
 ```
 
-Crea una copia verificada en `<datos>/backups` (subcomandos reales en `backend/app/database/cli.py` de 2da8bef: `status`, `migrate`, `backup`, `restore`). Para restaurar: `python -m app.database.cli restore <archivo>`. Con el backend en marcha, el bundle `pre-update` se crea desde la API de copias (ver `backend/CONTRACT.md`). El backend nuevo aplica las migraciones al arrancar y hace su propia copia previa.
+Crea una copia verificada en `<datos>/backups` (subcomandos de `backend/app/database/cli.py`: `status`, `migrate`, `backup`, `restore`). Esa CLI es de la instalación desde el repositorio; el backend empaquetado no la incluye. Con la app instalada, crea una copia en Configuración → Copias de seguridad antes de actualizar. El backend nuevo aplica las migraciones al arrancar y hace su propia copia previa.
 
 ## Actualizar
 
 Manual: instala el `.deb` nuevo encima. `publish: null`, no hay auto-actualización (sin servidor, sin firma, y en Linux solo se actualizaría AppImage).
 
-## Comprobar tras instalar (del README; NO COMPROBADO)
+## Comprobar tras instalar (NO COMPROBADO: requiere sudo)
 
 - `ls -l /opt/Drakter/chrome-sandbox` y `ls /etc/apparmor.d/drakter`.
 - Lanzar `drakter` sin `--no-sandbox`; la ventana debe mostrar la interfaz.
 
 ## Pendiente
 
-- **Scripts:** `desktop/package.json` (también en 2da8bef) no tiene `electron-builder` ni scripts `build:backend`/`pack:linux`; el README los propone y no existen.
-- **Arranque del backend empaquetado:** en 2da8bef, `desktop/electron/main/backendProcess.ts` con `app.isPackaged` lanza `<datos>/runtime/backend/.venv/bin/python -m app` (ruta marcada "provisional" en el código), no `resources/backend/drakter-backend`. Sin cambiarlo, la app instalada no encontraría el backend empaquetado.
+- `desktop/package.json` sin `electron-builder` ni scripts `build:backend`/`pack:linux`.
 - Icono `desktop/build/icon.png` (sin él se usa el de Electron) y `.gitignore` de `desktop/release/`, `backend/dist/`, `backend/build/`.
 - Riesgo declarado: con el fuse `grantFileProtocolExtraPrivileges: false` y el renderer por `file://`, la ventana puede salir en blanco. No probado.
-- Sin firma de código. Windows (`nsis`) preparado y sin comprobar.
+- Sin firma de código. Windows (`nsis`) preparado y sin comprobar; el backend tiene código solo-POSIX.

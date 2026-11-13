@@ -1,6 +1,6 @@
 # Seguridad y copias de seguridad
 
-> **Estado:** parcialmente integrado en `drakter/build` (2da8bef): el diálogo nativo (`desktop/electron/main/approvals.ts`), el aviso del chat, la pantalla de copias, `backend/app/database/{backup,cli}.py` y las migraciones `0007_agent_confirmations.sql` y `0008_audit.sql`. Sigue solo en `drakter/seguridad`, sin integrar: la lógica de confirmaciones, permisos y auditoría del backend (en 2da8bef no hay ruta `/api/v1/confirmations` ni `backend/app/api/confirmations.py`). NO COMPROBADO en la app real: solo se ha leído el código.
+> **Estado:** integrado en `drakter/integracion` (`7fd30e1`): diálogo nativo (`desktop/electron/main/approvals.ts`), confirmaciones (`api/confirmations.py`), actividad (`api/activity.py`), copias en Configuración y `backend/app/database/{backup,cli}.py`. En la pasada de cierre un borrado sin confirmar respondió 503 en vez de 409, y `GET /api/v1/audit` no existe. Las notas «Pendiente» del cuerpo se escribieron sobre `drakter/build` (`2da8bef`) y alguna puede estar ya resuelta. NO COMPROBADO en la app real (ver «Estado de la integración» en [README](README.md)).
 
 Drakter pide tu confirmación antes de acciones destructivas, registra lo que hace el agente y te deja hacer copias de tu base de datos y restaurarlas.
 

@@ -1,6 +1,6 @@
 # Almacén
 
-> **Estado:** sale de la rama `drakter/almacen-relaciones`, sin integrar en `drakter/build` (2da8bef). En `drakter/build` (2da8bef) solo existen las migraciones `0005_storage.sql` y una pantalla **Almacén** vacía (`StoragePage.tsx`: «Todavía no hay recursos en el almacén», acción «Añadir archivos» deshabilitada); no hay servicio, API ni herramientas de almacén. NO COMPROBADO en la app real: los pasos salen de leer el código de la rama (`desktop/src/modules/storage/`, `backend/app/services/storage_*.py`).
+> **Estado:** integrado en `drakter/integracion` (`7fd30e1`): pantalla **Almacén** en la navegación y API `storage` montada. El selector de carpetas (`pickDirectory`) sigue sin existir en el puente de Electron. Las notas «Pendiente» del cuerpo se escribieron sobre `drakter/build` (`2da8bef`) y alguna puede estar ya resuelta. NO COMPROBADO en la app real (ver «Estado de la integración» en [README](README.md)).
 
 El Almacén es un catálogo de tus archivos, enlaces y notas. Drakter puede buscarlos y abrirlos cuando se lo pides. Catalogar no copia ni mueve nada: el archivo original se queda donde está.
 

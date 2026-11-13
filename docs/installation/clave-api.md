@@ -1,6 +1,6 @@
 # Clave de API de Anthropic
 
-> **Estado:** la pantalla de Ajustes y `scripts/check-env.sh` están integrados en `drakter/build` (2da8bef). La lectura de la clave sale de la rama `drakter/agente-hermes`, sin integrar: en `2da8bef`, `.env.example` marca `ANTHROPIC_API_KEY` como reservada y nada la lee aún. NO COMPROBADO en la app real.
+> **Estado:** contrastada con `drakter/integracion` (`7fd30e1`). La clave la lee `backend/app/integrations/hermes/settings.py` y Ajustes muestra su estado (`desktop/src/settings/AgentStatusSection.tsx`). NO COMPROBADO con una clave real: en las pruebas de cierre no había clave y el chat se probó con el LLM de pruebas.
 
 Drakter necesita una clave de API de Anthropic para hablar con el modelo. Se guarda solo en tu máquina, en `~/.config/drakter/.env`, fuera del repositorio.
 
@@ -13,7 +13,7 @@ Drakter necesita una clave de API de Anthropic para hablar con el modelo. Se gua
 ANTHROPIC_API_KEY=<tu-clave>
 ```
 
-- El nombre es `ANTHROPIC_API_KEY` a secas, sin prefijo `DRAKTER_` (alias declarado en `backend/app/integrations/hermes/settings.py`, rama `drakter/agente-hermes`).
+- El nombre es `ANTHROPIC_API_KEY` a secas, sin prefijo `DRAKTER_` (alias declarado en `backend/app/integrations/hermes/settings.py`).
 
 ## Pasos
 
@@ -43,11 +43,11 @@ ANTHROPIC_API_KEY=<tu-clave>
 
 Evita `echo "ANTHROPIC_API_KEY=..." >> .env`, `export` con la clave y cualquier forma de escribirla en la línea de comandos: quedaría en el historial de la shell.
 
-No necesitas copiar `.env.example`. Si lo haces, usa `cp -n` para no pisar tu `.env` y borra después toda línea sin valor: `DRAKTER_PORT=` vacía impide arrancar el backend.
+No necesitas copiar `.env.example`. Si lo haces, usa `cp -n` para no pisar tu `.env` y borra después toda línea sin valor: en las variables del agente una línea vacía no equivale a no definirla. Ojo: `.env.example` aún lista variables que ya no se leen (ver abajo).
 
 ## Qué dice la app
 
-En Ajustes (rama `drakter/hoy-ajustes`, `desktop/src/settings/AgentStatusSection.tsx`) aparece una de estas tres filas:
+En Configuración (`desktop/src/settings/AgentStatusSection.tsx`) aparece una de estas tres filas:
 
 - **Clave de API: Configurada.** El agente ya cargó la clave.
 - **Falta la clave de API.** Texto: "Añade ANTHROPIC_API_KEY a ~/.config/drakter/.env y reinicia Drakter."
@@ -68,12 +68,13 @@ Aun así, la regla es no poner espacios ni comillas. Motivos: no depender de una
 
 ## Variables opcionales
 
-Mismo archivo, prefijo `DRAKTER_` (de `settings.py` y `config.py`; no pongas valores reales en el repositorio):
+Mismo archivo, prefijo `DRAKTER_`. No pongas valores reales en el repositorio:
 
-- Backend: `DRAKTER_PORT`, `DRAKTER_DATA_DIR`, `DRAKTER_RUNTIME_DIR`, `DRAKTER_LOG_LEVEL`, `DRAKTER_ALLOWED_ORIGINS`. Pon solo las que quieras cambiar: una línea sin valor no equivale a no definirla.
-- Agente (rama `drakter/agente-hermes`): `DRAKTER_ENV`, `DRAKTER_AGENT_PROVIDER` (`hermes` o `fake`), `DRAKTER_MODEL_PROVIDER` (`anthropic` o `dev_stub`), `DRAKTER_MODEL_NAME`, `DRAKTER_DEV_STUB_URL`, `DRAKTER_HERMES_COMMAND`, `DRAKTER_HERMES_PORT`, `DRAKTER_AGENT_TOOLS_PORT`, `DRAKTER_AGENT_MAX_TURNS`, `DRAKTER_TURN_TIMEOUT_S`, `DRAKTER_IDLE_TIMEOUT_S`.
+- Backend (`backend/app/core/config.py`): `DRAKTER_DATA_DIR` (ruta absoluta) y `DRAKTER_LOG_LEVEL` (`DEBUG`, `INFO`, `WARNING`, `ERROR`). Ignora las líneas vacías.
+- Agente (`backend/app/integrations/hermes/settings.py`): `DRAKTER_ENV` (`development` o `production`), `DRAKTER_AGENT_PROVIDER` (`hermes` o `fake`), `DRAKTER_MODEL_PROVIDER` (`anthropic` o `dev_stub`), `DRAKTER_MODEL_NAME` (por defecto `claude-haiku-5-5`), `DRAKTER_DEV_STUB_URL`, `DRAKTER_HERMES_PYTHON` (Python del venv de Hermes; por defecto `hermes-python` en el PATH), `DRAKTER_AGENT_MAX_TURNS`, `DRAKTER_TURN_TIMEOUT_S`, `DRAKTER_IDLE_TIMEOUT_S`. Aquí una línea vacía sí cuenta como valor: pon solo las que quieras cambiar.
+- Voz: las variables `DRAKTER_STT_*`, `DRAKTER_TTS_*`, etc. de [voz.md](voz.md).
 
-Los valores por defecto sirven para el uso normal. `dev_stub` es solo para desarrollo y el código lo rechaza con `DRAKTER_ENV=production`.
+`DRAKTER_PORT`, `DRAKTER_RUNTIME_DIR` y `DRAKTER_ALLOWED_ORIGINS` ya no existen: el puerto es efímero y lo gestiona Electron. Los valores por defecto sirven para el uso normal. `dev_stub` es solo para desarrollo y el código lo rechaza con `DRAKTER_ENV=production`.
 
 ## Problemas frecuentes
 
@@ -83,7 +84,6 @@ Los valores por defecto sirven para el uso normal. `dev_stub` es solo para desar
 
 ## Pendiente
 
-- **Pendiente:** integrar la lectura de `ANTHROPIC_API_KEY` en `drakter/build`.
 - Los permisos 600 solo los avisa `scripts/check-env.sh`; el backend no se niega a arrancar si faltan.
-- **Pendiente:** no hay comando ni pantalla para guardar la clave desde la app; solo editar el archivo.
+- No hay comando ni pantalla para guardar la clave desde la app; solo editar el archivo.
 - Más pasos de instalación: [instalar.md](instalar.md).

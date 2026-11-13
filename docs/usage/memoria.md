@@ -1,6 +1,6 @@
 # Memoria
 
-> **Estado:** integrado en `drakter/build` (2da8bef) como código de backend (`backend/app/integrations/memory/`, `backend/app/tools/memory.py`, tablas en `backend/migrations/0010_memory_improvement.sql`), pero sin conectar: `main.py` solo monta `health`, `auth` y `ws`, y no hay pantalla de memoria en `desktop/src`. NO COMPROBADO en ejecución.
+> **Estado:** integrado en `drakter/integracion` (`7fd30e1`): el backend monta el router de memoria (`backend/app/integrations/memory/router.py`) y el agente recibe el servicio. No hay pantalla de memoria en `desktop/src`. Las notas «Pendiente» del cuerpo se escribieron sobre `drakter/build` (`2da8bef`) y alguna puede estar ya resuelta. NO COMPROBADO en la app real (ver «Estado de la integración» en [README](README.md)).
 
 La memoria guarda cosas estables sobre ti (preferencias, datos, decisiones) para que Drakter no te las pida dos veces. Tú decides qué se queda.
 

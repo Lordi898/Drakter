@@ -1,6 +1,6 @@
 # Búsqueda global
 
-> **Estado:** integrado en `drakter/build` (4a84a5d). El backend está enganchado (`search.router` se registra solo y el índice está en `backend/migrations/0009_search.sql`), pero `SearchPalette` sigue sin montarse en `AppShell`, así que Ctrl+K no hace nada en la interfaz. NO COMPROBADO en la app real.
+> **Estado:** integrado en `drakter/integracion` (`7fd30e1`): API `search` montada y `SearchPalette` montado en `AppShell`; **Ctrl+K** abre la búsqueda. Las notas «Pendiente» del cuerpo se escribieron sobre `drakter/build` (`2da8bef`) y alguna puede estar ya resuelta. NO COMPROBADO en la app real (ver «Estado de la integración» en [README](README.md)).
 
 ## Para qué sirve
 

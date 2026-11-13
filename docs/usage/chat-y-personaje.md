@@ -1,6 +1,6 @@
 # Chat y personaje
 
-> **Estado:** la interfaz (chat, personaje SVG, diálogo nativo de aprobación) está integrada en `drakter/build` (2da8bef): `desktop/src/chat/`, `desktop/src/character/`, `desktop/electron/main/approvals.ts`, y la personalidad en `agent/identity/`. El lado del agente (rutas de chat y herramientas, `backend/app/integrations/hermes/CONTRACT.md`) sale de `drakter/agente-hermes`, sin integrar: `backend/app/main.py` de 2da8bef solo monta `health`, `auth` y `ws`, así que hoy no hay quien responda al chat. NO COMPROBADO en la app real.
+> **Estado:** integrado en `drakter/integracion` (`7fd30e1`): chat, personaje SVG, diálogo nativo de aprobación, API `chat` y runtime de Hermes (`backend/app/integrations/hermes/`). Sin clave de API solo se ha probado con el LLM de pruebas, y en la pasada de cierre la sesión de chat respondía `agent_unavailable`. Las notas «Pendiente» del cuerpo se escribieron sobre `drakter/build` (`2da8bef`) y alguna puede estar ya resuelta. NO COMPROBADO en la app real (ver «Estado de la integración» en [README](README.md)).
 
 Hablas con Drakter por escrito en la barra de chat de la ventana y ves su estado en el personaje de la pantalla de inicio. Esta guía explica cómo conversar, cómo detenerlo y qué significa cada estado.
 
