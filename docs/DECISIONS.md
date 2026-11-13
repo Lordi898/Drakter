@@ -571,7 +571,7 @@ Decisiones técnicas, cambios de tecnología y motivos.
 - **Motivo:** CLAUDE.md §8: la automejora no cambia nada sin autorización.
 - **Comprobado:** con el motor real (`tool_action_spec` + `ActionService` + `permissions.json`), las lecturas dan ALLOW; cada escritura da CONFIRM y deja la fila en `pending_confirmations` sin escribir; al aprobar con `approver` se ejecuta; sin el permiso, DENY.
 - **⚠️ En ejecución:** el runtime de Hermes usa `DefaultToolGate`, que deniega CONFIRM: hoy las escrituras del agente quedan denegadas (falla cerrado) hasta que el runtime use `BackendToolGate` (pendiente de drakter-34).
-- **Impacto:** `agent/configuration/permissions.json`, `backend/app/tools/improvement.py` (`5dd55b1`, pendiente de fusión); Checklists 13 (permisos, confirmaciones) y 15.
+- **Impacto:** `agent/configuration/permissions.json`, `backend/app/tools/improvement.py` (`5dd55b1`); Checklists 13 (permisos, confirmaciones) y 15.
 
 ## [2026-11-13] Cierre del almacén: arreglos de integración
 - **Contexto:** al integrar `drakter/integracion`, el almacén no funcionaba: `Settings` ya no tiene `runtime_dir`, `untrusted_envelope` se movió a `app.tools.envelope`, el registro de herramientas rechaza claves de `audit` que no son argumentos y `uv.lock` no incluía pypdf.
@@ -579,7 +579,7 @@ Decisiones técnicas, cambios de tecnología y motivos.
 - **Alternativas descartadas:** añadir `runtime_dir` a `Settings` (es un archivo compartido y nadie más lo usa); quitar la validación de `audit` del registro (es un control de seguridad).
 - **Motivo:** dejar el almacén operativo sin tocar contratos compartidos.
 - **Comprobado:** `check_storage_paths.py` 127/127, `check_storage_archives.py` 35/35, `check_storage_catalog.py` y `check_storage_api.py` OK, flujo REST de extremo a extremo sobre la app real sin parches 27/27, con confirmaciones aprobadas (rutas denegadas, symlinks fuera de la raíz, SSRF, límites de comprimidos).
-- **Impacto:** `backend/app/services/storage_ports.py`, `backend/app/tools/storage.py`, `backend/app/services/storage_confirmed.py` (`0eaab3b`, pendiente de fusión), `backend/uv.lock`, `agent/configuration/permissions.json`, `desktop/src/modules/storage/StoragePage.tsx` (`2fe7cc6`, pendiente de fusión), Checklist 10.
+- **Impacto:** `backend/app/services/storage_ports.py`, `backend/app/tools/storage.py`, `backend/app/services/storage_confirmed.py` (`0eaab3b`), `backend/uv.lock`, `agent/configuration/permissions.json`, `desktop/src/modules/storage/StoragePage.tsx` (`2fe7cc6`), Checklist 10.
 
 ## [2026-11-13] Prefijo workspace_ en las confirmaciones de los servicios de tareas y proyectos
 - **Contexto:** `wiring.py` registraba los ejecutores de `TASK_CONFIRMABLE`/`PROJECT_CONFIRMABLE` con los nombres `delete_task`, `update_task` y `complete_task`, que también son herramientas del agente. `ActionService.approve` prefiere los ejecutores al registro, así que un `delete_task` del agente aprobado nunca llegaba a borrar.
@@ -601,7 +601,7 @@ Decisiones técnicas, cambios de tecnología y motivos.
 - **Alternativas descartadas:** mantener el estado por frente (inservible tras integrar).
 - **Motivo:** que el contrato sea la fuente fiable de lo que existe.
 - **Comprobado:** 175 pares método+ruta de la app real frente a `routes.md`: 0 rutas en código sin contrato y 0 filas «construida» sin código; `gen_ts.py` regenera `contracts/ts/index.ts` idéntico.
-- **Impacto:** `contracts/api/routes.md` (`dda565b`, `b31d1e8`, `6ba869a`, pendientes de fusión); al regenerar `desktop/electron/shared/routes.generated.ts` entran 12 rutas de automejora, incluidas `apply` y `revert` (decisión de desktop/integrador).
+- **Impacto:** `contracts/api/routes.md` (`dda565b`, `b31d1e8`, `6ba869a`); al regenerar `desktop/electron/shared/routes.generated.ts` entran 12 rutas de automejora, incluidas `apply` y `revert` (decisión de desktop/integrador).
 
 ## [2026-11-13] Contexto de cada turno de Hermes por build_context
 - **Contexto:** `build_context` (recuperación, límites, cercado) existía, pero el provider de Hermes enviaba el texto crudo del usuario y solo las instrucciones de seguridad. Los niveles 2 y 4 no llegaban al modelo.
@@ -609,7 +609,7 @@ Decisiones técnicas, cambios de tecnología y motivos.
 - **Alternativas descartadas:** meter la memoria en el prompt de sistema (Hermes la trataría como autoritativa durante toda la sesión); repetir el historial en `build_context` (duplicaría lo que ya guarda Hermes).
 - **Motivo:** aplicar "El backend recupera los recuerdos" y la prioridad de CLAUDE.md §8.
 - **Efecto conocido:** tras un turno con memoria la sesión queda `tainted` y las escrituras del agente escalan a `confirm`; mientras el runtime use `DefaultToolGate`, fallan cerradas (`confirmation_unavailable`).
-- **Impacto:** `backend/app/integrations/hermes/hermes_provider.py`, `runtime.py` (`f364b48`, pendiente de fusión), Checklist 12 (recuperación selectiva, límites de contexto, memoria de trabajo).
+- **Impacto:** `backend/app/integrations/hermes/hermes_provider.py`, `runtime.py` (`f364b48`), Checklist 12 (recuperación selectiva, límites de contexto, memoria de trabajo).
 
 ## [2026-11-13] Cierre de CL4: consistencia OK, estilo al rediseño
 - **Contexto:** con Claude Haiku 5.5 real, drakter-45 dio por buena «Probar consistencia de personalidad» (2 casos, 0 hallazgos, lectura humana conforme) y drakter-51 la dejó con ⚠️: el modelo a veces supera `max_sentences` (4 frases para máx. 3), abre dos veces con la muletilla «Mal asunto a medias:» y las rúbricas de `agent/evals` (`report.md`) no tienen lectura humana.
@@ -640,7 +640,7 @@ Decisiones técnicas, cambios de tecnología y motivos.
 - **Alternativas descartadas:** mantener la puerta propia de automejora (segundo camino de confirmación).
 - **Motivo:** un único camino de confirmación con 300 s y auditoría.
 - **Comprobado:** por HTTP con el guardia real: 409 con ticket, el token `ui` no aprueba (403), el approver aprueba → `approved`, confirmación de un solo uso, aplicar publica la rama, revertir borra la rama, cambio intermedio → 409 `conflict`, TTL 300 s, aprobación en `audit_events`, el agente recibe DENY.
-- **Impacto:** `backend/app/services/improvement_actions.py`, `backend/app/api/improvement.py` (`2425da5`), `backend/app/permissions/wiring.py` (`b1a49a3`), ambos pendientes de fusión; Checklist 15 «Crear flujo de aprobación». `desktop/electron/shared/routes.generated.ts` debe regenerarse (lista `/approve`, no lista `approval-request` ni `revert-request`).
+- **Impacto:** `backend/app/services/improvement_actions.py`, `backend/app/api/improvement.py` (`2425da5`), `backend/app/permissions/wiring.py` (`b1a49a3`); Checklist 15 «Crear flujo de aprobación». `desktop/electron/shared/routes.generated.ts` debe regenerarse (lista `/approve`, no lista `approval-request` ni `revert-request`).
 
 ## [2026-11-13] Calendario: fecha-hora local con segundos opcionales
 - **Contexto:** `drakter_contracts.common.LocalDateTime` y el catálogo e2e usaban `AAAA-MM-DDTHH:MM:SS`; `backend/app/schemas/calendar.py` y `HABITS_CALENDAR_CONTRACT.md` usan `AAAA-MM-DDTHH:MM`, que es lo que envía el escritorio. `POST /calendar/events` respondía 422 a los clientes del contrato compartido.
