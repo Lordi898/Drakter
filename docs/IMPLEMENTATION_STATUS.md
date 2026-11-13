@@ -202,10 +202,10 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 
 - [x] Crear interfaz de calendario.
 - [ ] Crear vista diaria.
-  ⚠️ Código presente (`DayView.tsx`, botón Día visible) y typecheck limpio; falta verla funcionar en la app (el informe la deja pendiente).
+  ⚠️ Código presente (`DayView.tsx`, botón Día visible) y typecheck limpio; falta la captura en la app (en cola del lock).
 - [x] Crear vista semanal.
 - [ ] Crear vista mensual.
-  ⚠️ Código presente (`MonthView.tsx`, botón Mes visible) y typecheck limpio; falta verla funcionar en la app (el informe la deja pendiente).
+  ⚠️ Código presente (`MonthView.tsx`, botón Mes visible) y typecheck limpio; falta la captura en la app (en cola del lock).
 - [x] Crear eventos.
 - [x] Editar eventos.
 - [x] Eliminar eventos.
@@ -219,7 +219,6 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 - [x] Asociar recursos.
 - [x] Asociar tareas.
 - [x] Crear herramientas Hermes.
-  ⚠️ Las 21 herramientas se registran y responden por `dispatch` (`d589bba`). Sin probar con el modelo real; los borrados del agente fallan cerrados mientras el runtime use `DefaultToolGate`.
 - [x] Probar recurrencias y fechas.
 
 ## Checklist 10. Almacén e indexación
@@ -363,7 +362,7 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 - [x] Crear gestión de errores.
 - [ ] Probar conversación por voz completa.
   ⚠️ Rediseño previsto sobre Pipecat (STT Whisper, TTS Fish Audio); en v1 `voice/` solo se estabiliza y documenta.
-  ⚠️ No es posible hoy: `backend/app/integrations/voice` no está registrado en `main.py` (a propósito, `DRAKTER_VOICE_ENABLED=false` por defecto) y el escritorio no tiene cliente de voz (botón de micrófono desactivado).
+  ⚠️ No es posible hoy: `backend/app/integrations/voice` no está registrado en `main.py` (a propósito, `DRAKTER_VOICE_ENABLED=false` por defecto) y el escritorio no tiene cliente de voz (botón de micrófono desactivado). El puente del backend (`VoiceService`, supervisor, cliente IPC, `VoiceBridge`) no se ha ejecutado contra el proceso real.
 
 ## Checklist 15. Automejora
 
