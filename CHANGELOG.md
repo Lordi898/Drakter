@@ -21,6 +21,7 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). A�
 - Evals: el arnés lee la identidad de sus tres carpetas y los esquemas de herramientas del árbol integrado.
 - Voz: cierre mínimo en v1; la capa de voz se rediseñará sobre Pipecat.
 - Calendario: acepta `:00` final en la fecha-hora local; los recursos de una asignatura se leen de las relaciones.
+- Hoy se recarga cuando el servicio local conecta (antes podía quedarse en «no conectado» al abrir la app).
 - Búsqueda global: una sola ruta `GET /api/v1/search` que indexa tareas, proyectos, hábitos, eventos y asignaturas.
 - Almacén: arreglos de integración (`runtime_dir`, `untrusted_envelope`, mapas de auditoría) y pypdf en `uv.lock`.
 - Agente: permiso `storage.write` concedido; las Skills citan solo herramientas registradas.
