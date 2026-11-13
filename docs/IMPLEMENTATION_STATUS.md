@@ -224,6 +224,7 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 ## Checklist 10. Almacén e indexación
 
 - [x] Crear interfaz del almacén.
+  ⚠️ Comprobada en Electron (crear nota, buscar, ver detalle). La rejilla quedaba en ~30 px con 1280 px de ancho; arreglada en `2fe7cc6`, pendiente de fusión.
 - [x] Crear catálogo de recursos.
 - [x] Crear carpetas.
 - [x] Crear metadatos.
@@ -246,8 +247,9 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 - [x] Implementar lectura de enlaces.
 - [x] Implementar límites de comprimidos.
 - [x] Implementar permisos.
+  ⚠️ Las confirmaciones del almacén (escanear, refresh-index, borrar recurso, carpeta o ubicación) se aprueban y ejecutan con el cableado de seguridad; aprobar el borrado de una ubicación necesita `0eaab3b` (antes `outcome_uncertain`), pendiente de fusión.
 - [x] Crear herramientas Hermes.
-  ⚠️ Las 8 herramientas se registran sin deriva del catálogo y funcionan por `ToolRegistry.dispatch`; ya cargan en la app (`abd56b4`, `ce830cb`) y el agente tiene `storage.write`. Sin clave: no se han probado en una conversación real.
+  ⚠️ Las 8 herramientas se registran sin deriva del catálogo y funcionan por `ToolRegistry.dispatch`; no se ha probado una conversación real con ellas.
 - [x] Probar formatos y errores.
 
 ## Checklist 11. Relaciones avanzadas
