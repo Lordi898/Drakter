@@ -22,6 +22,40 @@
        "total": 1
       }
      }
+    ],
+    "search_all": [
+     {
+      "status": "ok",
+      "data": {
+       "items": [
+        {
+         "id": "5e1a0000-0000-4000-8000-000000000101",
+         "title": "Pagar la factura de la luz",
+         "type": "task",
+         "due_date": "2026-11-12"
+        }
+       ],
+       "total": 1,
+       "next_cursor": null
+      }
+     }
+    ],
+    "search_workspace": [
+     {
+      "status": "ok",
+      "data": {
+       "items": [
+        {
+         "id": "5e1a0000-0000-4000-8000-000000000101",
+         "title": "Pagar la factura de la luz",
+         "type": "task",
+         "due_date": "2026-11-12"
+        }
+       ],
+       "total": 1,
+       "next_cursor": null
+      }
+     }
     ]
    },
    "expect": {
