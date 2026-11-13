@@ -530,3 +530,24 @@ Decisiones técnicas, cambios de tecnología y motivos.
 - **Alternativas descartadas:** terminar y verificar ahora toda la tubería actual (trabajo que el rediseño sustituiría); retirar `voice/` de v1 (se perdería lo que ya funciona hasta tener el nuevo diseño).
 - **Motivo:** indicación de `drakter-1`; no invertir en una tubería que se va a sustituir.
 - **Impacto:** `voice/`, Checklist 14, `MASTER_PLAN` (parte de voz) y `ROADMAP` (fase de voz), que se actualizarán cuando se planifique el rediseño; el módulo de voz del escritorio y la sincronización labial (CL5).
+
+## [2026-11-13] Skills de agent/ inertes en Hermes
+- **Contexto:** el toolset `skills` de Hermes v0.22.7 incluye `skill_manage`, con el que el agente podría escribir sus propias Skills e instrucciones (H-06/F14).
+- **Decisión:** `home.py` desactiva el toolset `skills`; las Skills de `agent/skills/` existen como fuente y documentación, pero Hermes no las carga. El modelo se guía por la descripción y el esquema de cada herramienta MCP `mcp__drakter__*`.
+- **Alternativas descartadas:** activar `skills` con `skill_manage` (persistencia de instrucciones controlada por el modelo, contraria a CLAUDE.md §8).
+- **Motivo:** la automejora nunca modifica instrucciones sin autorización.
+- **Impacto:** Checklists 3 ("Crear primera Skill") y 13 (Skills por dominio) quedan con ⚠️ hasta poder bloquear `skill_manage` por separado.
+
+## [2026-11-13] El agente recibe storage.write
+- **Contexto:** `agent/configuration/permissions.json` no concedía `storage.write`, y la política denegaba `create_resource`, `update_resource_metadata`, `index_resource` y `refresh_resource_index`, que el contrato de almacén define como herramientas del agente.
+- **Decisión:** se añade `storage.write`. Las acciones de riesgo `confirm` siguen pasando por la confirmación de la GUI.
+- **Alternativas descartadas:** dejar las cuatro herramientas inaccesibles (contradice el contrato y la Skill de almacén).
+- **Motivo:** completar la configuración ya diseñada.
+- **Impacto:** `agent/configuration/permissions.json`, Checklist 13.
+
+## [2026-11-13] Pruebas del agente sin clave con guiones MCP de Drakter
+- **Contexto:** los guiones del stub usaban herramientas nativas de Hermes (`read_file`, `terminal`) que Drakter nunca ofrece al modelo.
+- **Decisión:** las pruebas de herramienta permitida, cadena y acción destructiva usan herramientas `drakter__*`, y el arnés espera a `agent/status = idle` antes del primer turno.
+- **Alternativas descartadas:** reactivar toolsets nativos para la prueba (rompería la lista blanca que se quiere comprobar).
+- **Motivo:** probar el cableado real del producto.
+- **Impacto:** `tests/e2e/`, `tools/dev-llm-stub/scenarios/` (pendiente: lo hace drakter-32).

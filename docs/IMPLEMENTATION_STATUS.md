@@ -59,7 +59,8 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 - [x] Instalar Hermes.
 - [ ] Configurar Claude Haiku 5.5.
   ⚠️ 2026-11-13: la `ANTHROPIC_API_KEY` de `~/.config/drakter/.env` da 401 `invalid x-api-key` (también en llamada directa a la API). Sin clave válida no hay prueba con el modelo real.
-- [ ] Configurar credenciales.
+  ⚠️ `render_config` genera `model: {default: claude-haiku-5-5, provider: anthropic}`; sin ejecutar contra el modelo real.
+- [x] Configurar credenciales.
   ⚠️ El backend lee la clave y Hermes la recibe redactada en logs; falta una clave válida (ver arriba).
 - [x] Conectar Hermes con backend.
 - [x] Crear adaptador.
@@ -67,8 +68,9 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 - [x] Crear envío de mensajes.
 - [x] Crear recepción de respuestas.
 - [x] Crear eventos de agente.
-- [ ] Crear gestión de desconexiones.
+- [x] Crear gestión de desconexiones.
 - [ ] Crear primera Skill.
+  ⚠️ Las Skills existen y son coherentes con las herramientas reales, pero están inertes: `home.py` desactiva el toolset `skills` de Hermes porque arrastra `skill_manage`, que permitiría al agente escribir sus propias instrucciones (H-06/F14). Ver `DECISIONS.md` «Skills de agent/ inertes en Hermes».
 - [ ] Probar conversación completa.
   ⚠️ Conversación completa GUI → backend → Hermes (b200f5b) → respuesta en el chat comprobada SOLO con `tools/dev-llm-stub` (2 s). Falta con Haiku real.
   ⚠️ Sin clave de API no se cierra: el adaptador usa un doble identificado como mock, y ninguna casilla de conversación, personalidad, selección de herramientas o memoria se marca hasta probarla con clave.
@@ -309,24 +311,36 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 
 ## Checklist 13. Skills y herramientas
 
-- [ ] Crear estructura de Skills.
+- [x] Crear estructura de Skills.
   ⚠️ Las 78 herramientas cargan en el registro y Hermes arranca con ellas (tras arreglar imports y auditorías en la integración), pero el stub no las usa: selección y encadenado sin probar con modelo real.
 - [ ] Crear Skill de tareas.
+  ⚠️ Creada y coherente con las herramientas reales, pero **inerte**: `home.py` desactiva el toolset `skills` de Hermes porque arrastra `skill_manage` (H-06/F14). Hermes no la carga; el modelo se guía por la descripción y el esquema de cada herramienta MCP. Corregidas las herramientas citadas en `workspace-subjects` y `workspace-storage` (`46bdc88`, pendiente de fusión).
 - [ ] Crear Skill de proyectos.
+  ⚠️ Creada y coherente con las herramientas reales, pero **inerte**: `home.py` desactiva el toolset `skills` de Hermes porque arrastra `skill_manage` (H-06/F14). Hermes no la carga; el modelo se guía por la descripción y el esquema de cada herramienta MCP. Corregidas las herramientas citadas en `workspace-subjects` y `workspace-storage` (`46bdc88`, pendiente de fusión).
 - [ ] Crear Skill de hábitos.
+  ⚠️ Creada y coherente con las herramientas reales, pero **inerte**: `home.py` desactiva el toolset `skills` de Hermes porque arrastra `skill_manage` (H-06/F14). Hermes no la carga; el modelo se guía por la descripción y el esquema de cada herramienta MCP. Corregidas las herramientas citadas en `workspace-subjects` y `workspace-storage` (`46bdc88`, pendiente de fusión).
 - [ ] Crear Skill de calendario.
+  ⚠️ Creada y coherente con las herramientas reales, pero **inerte**: `home.py` desactiva el toolset `skills` de Hermes porque arrastra `skill_manage` (H-06/F14). Hermes no la carga; el modelo se guía por la descripción y el esquema de cada herramienta MCP. Corregidas las herramientas citadas en `workspace-subjects` y `workspace-storage` (`46bdc88`, pendiente de fusión).
 - [ ] Crear Skill de asignaturas.
+  ⚠️ Creada y coherente con las herramientas reales, pero **inerte**: `home.py` desactiva el toolset `skills` de Hermes porque arrastra `skill_manage` (H-06/F14). Hermes no la carga; el modelo se guía por la descripción y el esquema de cada herramienta MCP. Corregidas las herramientas citadas en `workspace-subjects` y `workspace-storage` (`46bdc88`, pendiente de fusión).
 - [ ] Crear Skill de almacén.
+  ⚠️ Creada y coherente con las herramientas reales, pero **inerte**: `home.py` desactiva el toolset `skills` de Hermes porque arrastra `skill_manage` (H-06/F14). Hermes no la carga; el modelo se guía por la descripción y el esquema de cada herramienta MCP. Corregidas las herramientas citadas en `workspace-subjects` y `workspace-storage` (`46bdc88`, pendiente de fusión).
 - [ ] Crear Skill de relaciones.
+  ⚠️ Creada y coherente con las herramientas reales, pero **inerte**: `home.py` desactiva el toolset `skills` de Hermes porque arrastra `skill_manage` (H-06/F14). Hermes no la carga; el modelo se guía por la descripción y el esquema de cada herramienta MCP. Corregidas las herramientas citadas en `workspace-subjects` y `workspace-storage` (`46bdc88`, pendiente de fusión).
 - [ ] Crear Skill de configuración.
-- [ ] Definir parámetros.
-- [ ] Definir permisos.
+  ⚠️ El archivo existe, pero sus herramientas (`get_configuration`, `propose_configuration_change`) son PROPUESTA y no existen ni en el catálogo ni en el backend. Además está inerte.
+- [x] Definir parámetros.
+- [x] Definir permisos.
+  ⚠️ Arreglado: faltaba `storage.write` y se denegaban 4 herramientas del almacén (`78f25cd`, pendiente de fusión). `improvement.read`/`improvement.write` no están concedidos: las 4 herramientas de automejora quedan denegadas al agente (lo decide el dueño de automejora).
 - [ ] Definir confirmaciones.
-- [ ] Definir errores.
+  ⚠️ 7 herramientas con `risk=confirm` y `summarize`; la puerta falla cerrada (`delete_task` del agente no se ejecuta y se audita `rejected`), pero nunca se crea la confirmación pendiente: `main.py` no llama a `install_security` y `AgentRuntime` crea `ToolRegistry` sin `gate=BackendToolGate`. `GET /api/v1/confirmations` da 503.
+- [x] Definir errores.
+  ⚠️ 6 herramientas de lectura no declaran `errors` (`get_memory_status`, `search_relationships`, `list_subjects`, `get_timetable`, `get_agent_status`, `get_system_status`).
 - [ ] Probar selección de herramientas.
   ⚠️ Sin clave. Suite `seleccion` (19 casos) lista y verificada con el stub: `agent/evals/run.py --provider anthropic --suite seleccion`.
 - [ ] Probar operaciones encadenadas.
   ⚠️ Sin clave. Suite `encadenadas` (11 casos) lista y verificada con el stub: `agent/evals/run.py --provider anthropic --suite encadenadas`.
+  ⚠️ Cableado comprobado con el stub por Hermes y MCP: `create_task` → `search_tasks` en un mismo turno, y la segunda encuentra lo creado por la primera.
 
 ## Checklist 14. Voz
 
