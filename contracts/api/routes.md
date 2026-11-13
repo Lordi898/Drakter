@@ -21,9 +21,13 @@ Tabla única de rutas. Manda `contracts/README.md`; después, lo ya construido e
 | GET | `/api/v1/auth/check` | - | `{authenticated:true}` | construida | read | seguridad (12) |
 | WS | `/api/v1/events` | `after_seq`, `boot_id` | eventos `{event_id,seq,boot_id,timestamp,type,version,correlation_id,payload}` | especificada (`events.py`); servidor sin construir | read | contratos / chat (17) |
 | GET | `/api/v1/system/status` | - | versión, `boot_id`, BD y migración, salud de módulos, hora y zona | (sin construir) | read | seguridad (12) |
-| GET | `/api/v1/system/backups` | `limit`, `cursor` | `{items,next_cursor}` copias (fecha, tamaño, esquema) | (sin construir) | read | seguridad (12) |
-| POST | `/api/v1/system/backups` | - | 201 copia creada | (sin construir) | write | seguridad (12) |
-| POST | `/api/v1/system/backups/{id}/restore` | - | 409 `confirmation_required`; tras aprobar, restaura | (sin construir) | confirm | seguridad (12) |
+| GET | `/api/v1/backups` | - | `BundleInfo[]`, lista completa sin paginar | construida | read | automejora (20) |
+| POST | `/api/v1/backups` | opciones de copia | `BundleInfo` | construida | write | automejora (20) |
+| POST | `/api/v1/backups/export` | - | `ExportResponse` | construida | write | automejora (20) |
+| POST | `/api/v1/backups/{name}/verify` | - | `VerifyResponse` | construida | read | automejora (20) |
+| POST | `/api/v1/backups/{name}/restore` | sin cuerpo | 409 `confirmation_required`; se ejecuta en `/confirmations/{id}/approve` | construida, ver desviaciones | confirm | automejora (20) |
+| DELETE | `/api/v1/backups/{name}` | sin cuerpo | 409 `confirmation_required`; se ejecuta en `/confirmations/{id}/approve` | construida, ver desviaciones | confirm | automejora (20) |
+| GET | `/api/v1/today` | `timezone` (obligatoria, IANA) | `TodayResponse`; 422 `invalid_timezone` | construida | read | hoy-ajustes |
 | GET | `/api/v1/settings` | - | `{persisted, items:[SettingOut]}` | construida | read | hoy-ajustes |
 | GET | `/api/v1/settings/status` | - | estado de agente y clave, solo presencia | construida | read | hoy-ajustes |
 | GET | `/api/v1/settings/backups` | - | copias | construida | read | hoy-ajustes |
@@ -36,9 +40,9 @@ Tabla única de rutas. Manda `contracts/README.md`; después, lo ya construido e
 | Método | Ruta | Entrada | Respuesta | Estado | Riesgo | Dueño |
 |---|---|---|---|---|---|---|
 | GET | `/api/v1/confirmations` | `status`, `limit`, `cursor` | `{items,next_cursor}` | construida | read | seguridad (12) |
-| GET | `/api/v1/confirmations/{id}` | - | acción, `summary`, `affected_count`, `targets`, `status`, `expires_at`, `params_hash` | construida | read | seguridad (12) |
-| POST | `/api/v1/confirmations/{id}/approve` | `ConfirmationApprove`: `{params_hash}` (`approver`) | resultado de la operación ejecutada; 409 `conflict` si `targets_json` cambió; 410/`expired` si caducó | construida | write (ejecuta lo guardado) | seguridad (12) |
-| POST | `/api/v1/confirmations/{id}/reject` | - (`approver`) | confirmación en `rejected` | construida | write | seguridad (12) |
+| GET | `/api/v1/confirmations/{id}` | - (`ui`; `approver` no lee: 403) | acción, `summary`, `affected_count`, `targets`, `status`, `expires_at`, `params_hash` | construida | read | seguridad (12) |
+| POST | `/api/v1/confirmations/{id}/approve` | `ConfirmationApprove`: `{params_hash}` (`approver`) | resultado de la operación ejecutada; 409 `conflict` si `targets_json` cambió o `confirmation_already_resolved`; 410 `confirmation_expired`; 404; 422 | construida | write (ejecuta lo guardado) | seguridad (12) |
+| POST | `/api/v1/confirmations/{id}/reject` | sin cuerpo (`approver`) | confirmación en `rejected` | construida | write | seguridad (12) |
 
 ## Agente y chat
 
@@ -183,7 +187,7 @@ Router escrito en `drakter-13/backend/app/api/projects.py`.
 
 ## Etiquetas, relaciones y búsqueda
 
-`relations.py` es de drakter-15. Etiquetas y búsqueda global no están construidas.
+`relations.py` es de drakter-15. La búsqueda global es de drakter-27 (`backend/app/api/search.py`).
 
 | Método | Ruta | Entrada | Respuesta | Estado | Riesgo | Dueño |
 |---|---|---|---|---|---|---|
@@ -198,7 +202,7 @@ Router escrito en `drakter-13/backend/app/api/projects.py`.
 | PATCH | `/api/v1/relationships/{id}` | `RelationshipUpdate` | `RelationshipOut` | construida | write | relaciones (15) |
 | DELETE | `/api/v1/relationships/{id}` | - | 409 `confirmation_required` | construida | confirm | relaciones (15) |
 | GET | `/api/v1/entities/{id}/related` | `direction=in\|out\|both`, `type` | `RelatedItems` (incluye aristas virtuales de columnas) | construida | read | relaciones (15) |
-| GET | `/api/v1/search` | `q`, `types`, `limit`, `cursor` (sin sintaxis FTS) | `{items,next_cursor}` con `snippet`, sin archivados | (sin construir) | read | almacén (15) |
+| GET | `/api/v1/search` | `q`, `types`, `limit`, `cursor` (sin sintaxis FTS) | `SearchPage` `{items,next_cursor}` con `snippet`, sin archivados | construida | read | búsqueda (27) |
 
 ## Notificaciones y recordatorios
 
@@ -224,7 +228,7 @@ Router escrito en `drakter-13/backend/app/api/projects.py`.
 | POST | `/api/v1/memory/search` | `SearchBody` | `{items,next_cursor}` `MemoryHit` | construida | read | memoria (18) |
 | GET | `/api/v1/memory/{id}` | - | `MemoryRecord` | construida | read | memoria (18) |
 | PATCH | `/api/v1/memory/{id}` | `MemoryPatch` | `MemoryRecord` | construida | write | memoria (18) |
-| POST | `/api/v1/memory/{id}/approve` | - | `MemoryRecord` | construida | write | memoria (18) |
+| POST | `/api/v1/memory/{id}/approve` | - | 409 `confirmation_required`; se ejecuta en `/confirmations/{id}/approve` y devuelve `MemoryRecord` | construida, ver desviaciones | confirm | memoria (18) |
 | POST | `/api/v1/memory/{id}/reject` | - | `MemoryRecord` | construida | write | memoria (18) |
 | POST | `/api/v1/memory/{id}/forget` | - (sin `confirmation_id`) | 409 `confirmation_required`; al aprobar, `ForgetReport` | construida | confirm | memoria (18) |
 
@@ -256,13 +260,6 @@ El frente 20 solo tiene puertos (`services/improvement_ports.py`, `get_principal
 
 ## Desviaciones que deben corregirse
 
-### Aprobación y credenciales (D-14)
-
-| Frente | archivo:línea | Qué hace | Qué debe hacer |
-|---|---|---|---|
-| seguridad (12) | `backend/app/permissions/README.md` | `runtime_dir/approver.json` y cabecera `X-Drakter-Approver` | Token `approver` por stdin; nada en disco |
-| Electron (24) | `desktop/electron/main/approvals.ts:47` | Exige `affected_count` numérico | Aceptar `null`: la columna y `ConfirmationTicket` lo admiten |
-
 ### Ajustes
 
 | Frente | archivo:línea | Qué hace | Qué debe hacer |
@@ -291,6 +288,9 @@ Decisión: se adopta el cursor, que ya usan tareas, hábitos/calendario, almacé
 | hábitos/calendario (14) | `backend/app/api/subjects.py:85,133`; `api/calendar.py:77,127`; forma en `services/habits_calendar_support.py:46-53` | `DELETE` responde **202** `ConfirmationRef{status,confirmation_id,summary,expires_at}` | 409 con sobre de error + `confirmation{id,summary,affected_count,expires_at,params_hash}` |
 | almacén (15) | `backend/app/api/storage.py:42,92,123,145,151,199`; `api/relations.py:58-63` | El cliente reenvía la operación con `?confirmation_id=`; `DELETE` responde 204 si el id vale; `DenyAllConfirmations` da 503 (`services/storage_ports.py:133-149`) | La ruta no recibe `confirmation_id`: devuelve 409 y ejecuta `approve` con los argumentos guardados |
 | memoria (18) | `backend/app/integrations/memory/router.py:103-105,189`; `service.py:193-195` | `forget` recibe `confirmation_id` en el cuerpo; 409 sin objeto `confirmation` | Sin cuerpo; 409 con `confirmation` en el sobre |
+| memoria (18) | `backend/app/integrations/memory/router.py` | `POST /memory/{id}/approve` aprueba directamente con riesgo `write` | 409 y camino único: consolidar un recuerdo candidato exige confirmación |
+| automejora (20) | `backend/app/services/backup_api.py:117-152,214-221,224-227,260-263` | Puerta propia `get_gate`, rutas `restore-request` y `delete-request`, `confirmation_id` en el cuerpo | Quitar esas dos rutas y la puerta; `restore` y `DELETE` sin cuerpo, 409 y ejecución en `/confirmations/{id}/approve` |
+| hoy-ajustes | `backend/app/api/settings.py:35,40` | `/settings/backups`, segunda superficie de copias | Usar `/api/v1/backups` y retirar estas rutas |
 | tareas (13) | `backend/app/api/tasks_http.py:62-70` | 409 correcto pero `confirmation` = `required.ticket` sin garantía de `id`/`params_hash` | Validar contra `ConfirmationRequiredEnvelope` |
 
 ### WebSocket distinto de `/api/v1/events`

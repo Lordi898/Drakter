@@ -25,7 +25,7 @@ export type ConfirmationStatus = "pending" | "approved" | "rejected" | "expired"
 
 export type EntityType = "task" | "project" | "habit" | "calendar_event" | "time_block" | "subject" | "class_session" | "resource" | "folder";
 
-export type ErrorCode = "validation_error" | "internal_error" | "unauthorized" | "forbidden_client" | "forbidden_host" | "forbidden_origin" | "service_unavailable" | "not_found" | "conflict" | "invalid_query" | "permission_denied" | "revision_mismatch" | "hierarchy_cycle" | "relationship_not_allowed" | "has_dependents" | "nonexistent_local_time" | "confirmation_required" | "confirmation_expired" | "confirmation_unavailable" | "confirmation_already_resolved" | "path_not_allowed" | "file_too_large" | "archive_limit_exceeded" | "unsupported_media_type" | "resource_unavailable" | "agent_unavailable" | "agent_busy" | "agent_timeout" | "agent_disconnected" | "provider_auth" | "provider_error" | "no_active_turn" | "tool_timeout" | "memory_unavailable" | "voice_unavailable" | "rate_limited";
+export type ErrorCode = "validation_error" | "internal_error" | "unauthorized" | "forbidden_client" | "forbidden_host" | "forbidden_origin" | "service_unavailable" | "not_found" | "conflict" | "invalid_query" | "permission_denied" | "revision_mismatch" | "hierarchy_cycle" | "relationship_not_allowed" | "has_dependents" | "nonexistent_local_time" | "invalid_timezone" | "unknown_setting" | "confirmation_required" | "confirmation_expired" | "confirmation_unavailable" | "confirmation_already_resolved" | "path_not_allowed" | "file_too_large" | "archive_limit_exceeded" | "unsupported_media_type" | "resource_unavailable" | "agent_unavailable" | "agent_busy" | "agent_timeout" | "agent_disconnected" | "provider_auth" | "provider_error" | "no_active_turn" | "tool_timeout" | "memory_unavailable" | "voice_unavailable" | "rate_limited";
 
 export type EvaluationOutcome = "passed" | "failed" | "inconclusive";
 
@@ -392,11 +392,6 @@ export interface ConfirmationCreate {
   risk: ConfirmationRisk;
 }
 
-/** Cuerpo opcional de reject. */
-export interface ConfirmationDecision {
-  reason?: string | null;
-}
-
 /** `args` ya sin secretos (lista blanca de auditoría). `params_hash` es la columna `args_hash`. */
 export interface ConfirmationOut {
   id: string;
@@ -456,11 +451,6 @@ export interface ConfirmationTicket {
   affected_count: number | null;
   expires_at: string;
   params_hash: string;
-}
-
-/** Cuerpo opcional de reject. */
-export interface ConfirmationUpdate {
-  reason?: string | null;
 }
 
 export interface ConversationCreate {

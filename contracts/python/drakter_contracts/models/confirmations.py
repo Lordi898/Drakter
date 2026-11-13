@@ -41,15 +41,6 @@ class ConfirmationCreate(ContractModel):
     risk: ConfirmationRisk
 
 
-class ConfirmationDecision(ContractModel):
-    """Cuerpo opcional de reject."""
-
-    reason: str | None = None
-
-
-ConfirmationUpdate = ConfirmationDecision
-
-
 class ConfirmationApprove(ContractModel):
     """Cuerpo de approve, con rol `approver`."""
 

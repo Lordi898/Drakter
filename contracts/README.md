@@ -67,7 +67,7 @@ Todo error HTTP: `{"error":{"code","message","request_id","details":[{"field","c
 Pipeline único en backend, para GUI y agente, independiente de Hermes:
 
 1. Una operación con riesgo efectivo `confirm` crea fila en `pending_confirmations` con argumentos, `targets_json` (ids y `revision` resueltos), `summary` y `affected_count`, calculados por el backend. Emite `confirmation.requested` y devuelve `confirmation_required`.
-2. Solo Electron main aprueba, con el token `approver`: `GET /api/v1/confirmations/{id}` da el detalle con `params_hash`, y `POST /api/v1/confirmations/{id}/approve` recibe solo `{params_hash}`. Un `params_hash` distinto de `args_hash` se rechaza. `reject` no lleva cuerpo obligatorio. El agente no tiene herramienta de aprobar y su token no es válido en ese listener.
+2. Solo Electron main aprueba: `GET /api/v1/confirmations/{id}`, con token `ui`, da el detalle con `params_hash`; `approver` no lee (403). Con token `approver`, `POST /api/v1/confirmations/{id}/approve` recibe solo `{params_hash}`. Un `params_hash` distinto de `args_hash` se rechaza. `reject` va sin cuerpo. El agente no tiene herramienta de aprobar y su token no es válido en ese listener.
 3. Al aprobar se ejecutan exactamente los argumentos guardados, una vez: `pending → approved → executing → executed|failed`. Decidir es `UPDATE ... WHERE status='pending'`; reclamar la ejecución es `UPDATE ... SET status='executing' WHERE status='approved'`, y solo quien afecta una fila ejecuta. Al arrancar, lo que siga en `executing` pasa a `failed` sin reejecutar. Si `targets_json` ya no coincide: `conflict`.
 4. Expirar no ejecuta nunca. Voz en v1: confirmar solo en la GUI.
 
@@ -82,7 +82,9 @@ Pipeline único en backend, para GUI y agente, independiente de Hermes:
 
 **Plantilla de `summary`,** calculada por el backend: `Vas a eliminar {n} {tipo}: «{nombre}»[ y {m} dependientes]. Esta acción {no se puede deshacer|se puede deshacer}.` Verbo único para borrar: eliminar. `{nombre}` es dato del usuario: la GUI lo muestra como texto, nunca como marcado.
 
-Exige confirmación: borrado definitivo, operaciones por encima de `bulk_threshold` (ajuste), cambios de configuración sensible y escrituras de un turno contaminado por contenido no confiable. Prohibido siempre, sin herramienta: ampliar permisos, alterar auditoría, gestionar ubicaciones permitidas, comandos arbitrarios.
+**Restauración:** restaurar devuelve `pending_confirmations` y `audit_events` al estado de la copia. Tras restaurar y antes de aceptar peticiones, toda fila `pending` pasa a `expired` y toda `approved` o `executing` a `failed`, sin ejecutar nada, y se audita la restauración. Una aprobación antigua nunca revive por una copia.
+
+Exige confirmación: borrado definitivo, restaurar copias, consolidar recuerdos candidatos, operaciones por encima de `bulk_threshold` (ajuste), cambios de configuración sensible y escrituras de un turno contaminado por contenido no confiable. Prohibido siempre, sin herramienta: ampliar permisos, alterar auditoría, gestionar ubicaciones permitidas, comandos arbitrarios.
 
 ## 6. Herramientas
 

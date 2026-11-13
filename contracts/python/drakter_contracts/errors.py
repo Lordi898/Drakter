@@ -63,6 +63,8 @@ class ErrorCode(StrEnum):
     RELATIONSHIP_NOT_ALLOWED = "relationship_not_allowed"
     HAS_DEPENDENTS = "has_dependents"
     NONEXISTENT_LOCAL_TIME = "nonexistent_local_time"
+    INVALID_TIMEZONE = "invalid_timezone"
+    UNKNOWN_SETTING = "unknown_setting"
     # Confirmaciones
     CONFIRMATION_REQUIRED = "confirmation_required"
     CONFIRMATION_EXPIRED = "confirmation_expired"
@@ -106,6 +108,8 @@ HTTP_STATUS: Final[dict[ErrorCode, int]] = {
     ErrorCode.RELATIONSHIP_NOT_ALLOWED: 422,
     ErrorCode.HAS_DEPENDENTS: 409,
     ErrorCode.NONEXISTENT_LOCAL_TIME: 422,
+    ErrorCode.INVALID_TIMEZONE: 422,
+    ErrorCode.UNKNOWN_SETTING: 404,
     ErrorCode.CONFIRMATION_REQUIRED: 409,
     ErrorCode.CONFIRMATION_EXPIRED: 410,
     ErrorCode.CONFIRMATION_UNAVAILABLE: 503,
