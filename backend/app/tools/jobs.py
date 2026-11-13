@@ -81,8 +81,10 @@ TOOLS: Final = (
         name="jobs_start",
         description=(
             "Lanza un trabajo largo en segundo plano con un título corto y un encargo completo y "
-            "autosuficiente; usted sigue atendiendo al usuario. Solo hay un carril: si está "
-            "ocupado, devuelve jobs_full."
+            "autosuficiente; usted sigue atendiendo al usuario. Al terminar, Drakter avisa solo "
+            "(frase hablada y notificación) y el resumen le llega a usted en el turno siguiente: "
+            "no hace falta que el usuario pregunte. Solo hay un carril: si está ocupado, devuelve "
+            "jobs_full."
         ),
         domain=_DOMAIN,
         args_model=JobsStartArgs,

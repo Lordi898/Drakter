@@ -102,15 +102,20 @@ class VoicePolicy:
         self._min_words = min_words
         self._queued: list[str] = []
         self._pending_confirmations: set[str] = set()
+        self._reminded: set[str] = set()  # recordado ya en un turno de voz: una vez por acción
         self._lock = asyncio.Lock()  # one decision at a time: active_turn() must not race
 
     # ── confirmations (fed from the hub by the orchestrator) ────────────────
     def confirmation_requested(self, action_id: str) -> None:
+        if action_id in self._pending_confirmations:
+            return  # reanuncio del mismo action_id (Jobs, resync): ya se dijo
         self._pending_confirmations.add(action_id)
+        self._reminded.add(action_id)
         self._speech.phrase("confirm_on_screen")
 
     def confirmation_resolved(self, action_id: str) -> None:
         self._pending_confirmations.discard(action_id)
+        self._reminded.discard(action_id)
 
     # ── events from voice ───────────────────────────────────────────────────
     async def user_turn(self, evt: EvtUserTurn) -> Decision:
@@ -144,7 +149,8 @@ class VoicePolicy:
 
     # ── internals ───────────────────────────────────────────────────────────
     async def _decide(self, text: str, overlap: str) -> Decision:
-        if self._pending_confirmations:
+        if self._pending_confirmations - self._reminded:
+            self._reminded |= self._pending_confirmations
             self._speech.phrase("confirm_on_screen")
         active = self._runtime.active_turn()
         if active is None:

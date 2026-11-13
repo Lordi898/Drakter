@@ -142,7 +142,9 @@ class DrakterStartStrategy(BaseUserTurnStartStrategy):
         if kind == "stop_speech":
             await self._stop_speech()
         elif kind == "backchannel":
-            await self._discard()
+            # Un parcial «sí…» puede seguir («sí, confirmo, bórrala»): solo el final descarta.
+            if final:
+                await self._discard()
         elif kind in ("rest", "close"):
             await self._open()
         elif self._is_echo(text):
