@@ -21,7 +21,7 @@ Cadena de integración: **`drakter/integracion` → `drakter/build` → `main` (
 | `drakter/build` | Ancestro de `drakter/integracion` (en `815976f`). Se adelantará al terminar el cierre. |
 | `main` | Ancestro de `drakter/build`; solo el commit inicial (`098e2df`). Se adelantará en local al final. |
 
-Las ramas `ao/<sesión>/root` de los finalizadores son de trabajo; sus commits entran en `drakter/integracion` cuando `drakter-32` los fusiona. Pendientes de fusión al escribir esto: `fa511e7` (permisos de automejora para el agente), `46bdc88` y `78f25cd` (Skills y permiso `storage.write`). Las casillas que dependen de ellos llevan ⚠️ «pendiente de fusión».
+Las ramas `ao/<sesión>/root` de los finalizadores son de trabajo; sus commits entran en `drakter/integracion` cuando `drakter-32` los fusiona. Pendientes de fusión al escribir esto: `fa511e7` (permisos de automejora para el agente), `46bdc88` (Skills). Las casillas que dependen de ellos llevan ⚠️ «pendiente de fusión».
 
 ## Cómo arrancar y parar
 
@@ -66,6 +66,7 @@ scripts/drakter-local.sh stop
 
 ### Cerrados en el cierre
 
+- **Almacén (CL10):** catálogo, índice FTS5, lectores (texto, PDF, imágenes, enlaces con bloqueo SSRF), límites de comprimidos y permisos de rutas comprobados (`check_storage_paths.py` 127/127, `check_storage_archives.py` 35/35).
 - **Seguridad cableada en el arranque (`4d2bcd1`):** `main.py` llama a `wire_security`/`start_security`; `check_security.py` 145/145, `check_confirmations.py` 0 fallos y borrado de tareas y proyectos 409 → aprobar → 404. Un único camino de confirmación (`ActionService`, 300 s).
 - **Hermes (CL3):** runner propio sobre Hermes v0.22.7 (`b200f5bc`), sin gateway, herramientas por MCP de loopback; sesiones, mensajes, eventos y recuperación tras SIGKILL del runner (vuelve a `ready` en unos 6 s) comprobados con el stub.
 - **Ramas sin fusionar:** las 22 ramas `drakter/*` están en `drakter/integracion`, con los conflictos semánticos resueltos (ver `DECISIONS.md`, «Integración de las 22 ramas»).

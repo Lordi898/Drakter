@@ -570,3 +570,11 @@ Decisiones técnicas, cambios de tecnología y motivos.
 - **Comprobado:** con el motor real (`tool_action_spec` + `ActionService` + `permissions.json`), las lecturas dan ALLOW; cada escritura da CONFIRM y deja la fila en `pending_confirmations` sin escribir; al aprobar con `approver` se ejecuta; sin el permiso, DENY.
 - **⚠️ En ejecución:** el runtime de Hermes usa `DefaultToolGate`, que deniega CONFIRM: hoy las escrituras del agente quedan denegadas (falla cerrado) hasta que el runtime use `BackendToolGate` (pendiente de drakter-34).
 - **Impacto:** `agent/configuration/permissions.json`, `backend/app/tools/improvement.py` (`fa511e7`, pendiente de fusión); Checklists 13 (permisos, confirmaciones) y 15.
+
+## [2026-11-13] Cierre del almacén: arreglos de integración
+- **Contexto:** al integrar `drakter/integracion`, el almacén no funcionaba: `Settings` ya no tiene `runtime_dir`, `untrusted_envelope` se movió a `app.tools.envelope`, el registro de herramientas rechaza claves de `audit` que no son argumentos y `uv.lock` no incluía pypdf.
+- **Decisión:** `denied_roots` usa `runtime_dir` solo si existe; `tools/storage.py` importa de `envelope` y filtra `audit` por los campos de cada `args_model`; se regenera `uv.lock` con pypdf; el agente necesita `storage.write` para crear notas (DECISIONS «Almacén en v1»).
+- **Alternativas descartadas:** añadir `runtime_dir` a `Settings` (es un archivo compartido y nadie más lo usa); quitar la validación de `audit` del registro (es un control de seguridad).
+- **Motivo:** dejar el almacén operativo sin tocar contratos compartidos.
+- **Comprobado:** `check_storage_paths.py` 127/127, `check_storage_archives.py` 35/35, `check_storage_catalog.py` y `check_storage_api.py` OK, flujo REST de extremo a extremo 19/19 (rutas denegadas, symlinks fuera de la raíz, SSRF, límites de comprimidos).
+- **Impacto:** `backend/app/services/storage_ports.py`, `backend/app/tools/storage.py`, `backend/uv.lock`, `agent/configuration/permissions.json`, Checklist 10.

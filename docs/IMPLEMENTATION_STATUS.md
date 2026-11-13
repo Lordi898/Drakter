@@ -226,30 +226,31 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 ## Checklist 10. Almacén e indexación
 
 - [x] Crear interfaz del almacén.
-- [ ] Crear catálogo de recursos.
-- [ ] Crear carpetas.
-- [ ] Crear metadatos.
-- [ ] Crear descripciones opcionales.
-- [ ] Crear etiquetas.
-- [ ] Crear registro de rutas.
+- [x] Crear catálogo de recursos.
+- [x] Crear carpetas.
+- [x] Crear metadatos.
+- [x] Crear descripciones opcionales.
+- [x] Crear etiquetas.
+- [x] Crear registro de rutas.
 - [x] Crear índice FTS5.
-- [ ] Indexar nombres.
-- [ ] Indexar tipos.
-- [ ] Indexar descripciones.
-- [ ] Indexar rutas y metadatos.
-- [ ] Indexar texto extraído, de forma opcional.
-- [ ] Implementar búsqueda.
-- [ ] Implementar actualización del índice.
-- [ ] Detectar archivos ausentes.
-- [ ] Implementar lectura bajo demanda.
-- [ ] Implementar lectores PDF.
-- [ ] Implementar lectores de texto.
-- [ ] Implementar lectores de imágenes mediante metadatos.
-- [ ] Implementar lectura de enlaces.
-- [ ] Implementar límites de comprimidos.
-- [ ] Implementar permisos.
-- [ ] Crear herramientas Hermes.
-- [ ] Probar formatos y errores.
+- [x] Indexar nombres.
+- [x] Indexar tipos.
+- [x] Indexar descripciones.
+- [x] Indexar rutas y metadatos.
+- [x] Indexar texto extraído, de forma opcional.
+- [x] Implementar búsqueda.
+- [x] Implementar actualización del índice.
+- [x] Detectar archivos ausentes.
+- [x] Implementar lectura bajo demanda.
+- [x] Implementar lectores PDF.
+- [x] Implementar lectores de texto.
+- [x] Implementar lectores de imágenes mediante metadatos.
+- [x] Implementar lectura de enlaces.
+- [x] Implementar límites de comprimidos.
+- [x] Implementar permisos.
+- [x] Crear herramientas Hermes.
+  ⚠️ Las 8 herramientas se registran sin deriva del catálogo y funcionan por `ToolRegistry.dispatch`; ya cargan en la app (`abd56b4`, `ce830cb`) y el agente tiene `storage.write`. Sin clave: no se han probado en una conversación real.
+- [x] Probar formatos y errores.
 
 ## Checklist 11. Relaciones avanzadas
 
@@ -323,7 +324,7 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
   ⚠️ El archivo existe, pero sus herramientas (`get_configuration`, `propose_configuration_change`) son PROPUESTA y no existen ni en el catálogo ni en el backend. Además está inerte.
 - [x] Definir parámetros.
 - [x] Definir permisos.
-  ⚠️ Arreglado: faltaba `storage.write` y se denegaban 4 herramientas del almacén (`78f25cd`, pendiente de fusión). `improvement.read`/`improvement.write` se conceden con las dos escrituras en `RiskClass.CONFIRM` (`fa511e7`, pendiente de fusión); hoy esas escrituras quedan denegadas porque el runtime usa `DefaultToolGate` (ver «Definir confirmaciones»).
+  ⚠️ Arreglado: faltaba `storage.write` y se denegaban 4 herramientas del almacén (ya concedido en `drakter/integracion`). `improvement.read`/`improvement.write` se conceden con las dos escrituras en `RiskClass.CONFIRM` (`fa511e7`, pendiente de fusión); hoy esas escrituras quedan denegadas porque el runtime usa `DefaultToolGate` (ver «Definir confirmaciones»).
 - [ ] Definir confirmaciones.
   ⚠️ 7 herramientas con `risk=confirm` y `summarize`; la puerta falla cerrada (`delete_task` del agente no se ejecuta y se audita `rejected`), pero nunca se crea la confirmación pendiente: `main.py` no llama a `install_security` y `AgentRuntime` crea `ToolRegistry` sin `gate=BackendToolGate`. `GET /api/v1/confirmations` da 503.
 - [x] Definir errores.
