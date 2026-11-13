@@ -381,7 +381,7 @@ Decisiones técnicas, cambios de tecnología y motivos.
 ## [2026-11-04] Almacén en v1
 - **Contexto:** `drakter-15` comunica por el orquestador el alcance del almacén.
 - **Decisión:** en v1 las ubicaciones son `read_only=1`. Borrar un recurso no toca el archivo. El agente solo crea notas con `create_resource`. Las imágenes se leen sin Pillow (solo metadatos con parser propio). `.docx` no tiene lector. La caducidad de la confirmación se queda en 300 s.
-- **⚠️ Desajuste con el código:** `CONFIRMATION_TTL_SECONDS = 300` está en `backend/app/services/actions.py` de `drakter/seguridad`, pero `drakter/build` (`488b83d`) tiene en `backend/app/services/habits_calendar_support.py` una caducidad propia de 15 minutos. Son dos caminos de confirmación con plazos distintos, y `contracts/README.md` §5 pide uno solo.
+- **Desajuste con el código (resuelto el 2026-11-13, ver «Cierre del desajuste de caducidad de confirmaciones»):** `CONFIRMATION_TTL_SECONDS = 300` está en `backend/app/services/actions.py` de `drakter/seguridad`, pero `drakter/build` (`488b83d`) tiene en `backend/app/services/habits_calendar_support.py` una caducidad propia de 15 minutos. Son dos caminos de confirmación con plazos distintos, y `contracts/README.md` §5 pide uno solo.
 - **Alternativas descartadas:** añadir Pillow y un lector de `.docx` (más dependencias y más superficie para archivos no confiables).
 - **Motivo:** menor superficie en v1.
 - **Impacto:** `backend/app/services/`, `backend/app/tools/storage.py`.
@@ -515,6 +515,7 @@ Decisiones técnicas, cambios de tecnología y motivos.
 - **Decisión:** se da por cerrado. Desde a123a90 todos los borrados de hábitos, calendario y asignaturas pasan por `run_confirmable` → `ActionService` (300 s), con sus `ActionSpec` en `services/calendar_actions.py`. Se retira el bucle heredado `CONFIRMED_ACTIONS` de `permissions/setup.py`.
 - **Alternativas descartadas:** restaurar `CONFIRMED_ACTIONS` vacío en `habits_calendar_support.py` como compatibilidad (mantendría un segundo camino muerto).
 - **Motivo:** contracts/README.md §5 pide un único camino de confirmación.
+- **Comprobado (drakter-38, sobre `612d8e4` con la seguridad cableada):** en la app real, DELETE de evento o asignatura → 409 con `expires_at` a +300 s; el token `ui` no aprueba; un hash distinto se rechaza; aprobar borra y rechazar conserva.
 - **Impacto:** backend/app/permissions/setup.py, backend/app/main.py (instalar la seguridad al arrancar), Checklist 8/9.
 
 ## [2026-11-13] Confirmaciones de tareas y proyectos sobre pending_confirmations
