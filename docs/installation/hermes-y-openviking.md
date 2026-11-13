@@ -13,14 +13,20 @@ Hermes es el agente que razona y llama a las herramientas. Corre como proceso ap
 
 ## Instalar Hermes (v0.22.7, commit fijado)
 
-Versión y commit salen de `backend/app/integrations/hermes/CONTRACT.md` (línea 5): v0.22.7, commit `b200f5bc60e31588ba2cb60e288029c4a54ba5fa`.
+```bash
+scripts/install-hermes.sh
+```
 
-1. Clona el repositorio. La URL (`homepage` de `.claude/skills/hermes-agent/SKILL.md` en `drakter/agente-hermes`) es `https://github.com/NousResearch/hermes-agent`.
-2. Cámbiate al commit fijado: `git checkout b200f5bc60e31588ba2cb60e288029c4a54ba5fa`.
-3. Crea el venv con Python 3.14 y las dependencias: `uv sync --frozen --extra anthropic --extra mcp`. Los extras salen del contrato, que cita `--extra anthropic --extra mcp` al explicar que `aiohttp` no entra con ellos y que el preflight lo comprueba.
-4. El backend no usa el binario `hermes`, sino el Python de ese venv (`<venv>/bin/python`): ponlo en `DRAKTER_HERMES_PYTHON` o enlázalo como `hermes-python` en el PATH. `scripts/check-env.sh` comprueba que exista.
+Es idempotente (a la segunda vez no toca nada si el clon está en el commit y el venv funciona). Versión y commit salen de `backend/app/integrations/hermes/CONTRACT.md`: v0.22.7, commit `b200f5bc60e31588ba2cb60e288029c4a54ba5fa`, fijados en el propio script. Hace esto, siempre en ubicaciones estables (`DRAKTER_RUNTIME_DIR`, por defecto `~/.local/share/drakter`; el script se niega a usar `/tmp` o `/var/tmp`):
 
-**Pendiente:** el comando exacto de `uv` con Python 3.14 (`--python`) no consta en ninguna rama; el contrato solo dice "Python >=3.14, `uv sync --frozen`".
+1. `uv python install 3.14` y `~/.local/bin/python3.14` apuntando al Python gestionado por uv (`~/.local/share/uv/python/…`).
+2. Clona `https://github.com/NousResearch/hermes-agent` en `<runtime>/src/hermes-agent` y lo deja en el commit fijado (se comprueba el commit, no la versión).
+3. `uv sync --frozen --extra anthropic --extra mcp` con ese Python, con el venv en `<runtime>/venvs/hermes`. Se instala desde git: nunca `pip install hermes-agent` (la versión de PyPI, 0.19.0, está retirada a propósito).
+4. Crea `~/.local/bin/hermes-python`, que ejecuta `<runtime>/venvs/hermes/bin/python`. El backend usa ese Python (no el binario `hermes`): también puedes ponerlo en `DRAKTER_HERMES_PYTHON`.
+
+Sin gateway no hace falta `aiohttp`, así que no entra con esos extras. `scripts/check-env.sh` comprueba que `hermes-python` exista y no resuelva a `/tmp` o `/var/tmp`.
+
+**Regla:** los runtimes (Python, venvs, clon de Hermes) nunca viven en directorios temporales: una limpieza los borra y deja enlaces rotos. Ver `DECISIONS.md`, «Los runtimes nunca viven en directorios temporales».
 
 ## Dónde lo espera el backend
 

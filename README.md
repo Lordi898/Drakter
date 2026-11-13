@@ -72,10 +72,10 @@ cd Drakter
 scripts/check-env.sh
 ```
 
-Hermes va aparte, en su propio venv con Python >= 3.14: sigue [`docs/installation/hermes-y-openviking.md`](docs/installation/hermes-y-openviking.md).
+Hermes va aparte, en su propio venv con Python >= 3.14: `scripts/install-hermes.sh` lo instala (v0.22.7, commit fijado, desde git) en `~/.local/share/drakter/venvs/hermes` y crea `hermes-python`. Detalle en [`docs/installation/hermes-y-openviking.md`](docs/installation/hermes-y-openviking.md). Los runtimes nunca van en `/tmp` ni `/var/tmp`.
 
 - Electron 45 ya no trae `postinstall` y descarga su binario al primer arranque; por eso `desktop/package.json` tiene un `postinstall` propio (`desktop/scripts/ensure-electron.cjs`, idempotente) que lo baja durante `npm ci`. Si lo instalaste sin él: `node desktop/scripts/ensure-electron.cjs`.
-- `scripts/check-env.sh` imprime líneas `OK`, `AVISO` o `FALTA` y sale con 1 si falta algo. Comprueba Python 3.12, que haya un Python >= 3.14 para Hermes (no comprueba que Hermes esté instalado), Node, npm, `uv`, `~/.config/drakter/.env` (sin leerlo), el sandbox de Electron y la sesión gráfica.
+- `scripts/check-env.sh` imprime líneas `OK`, `AVISO` o `FALTA` y sale con 1 si falta algo. Comprueba Python 3.12, que haya un Python >= 3.14 para Hermes (no comprueba que Hermes esté instalado), que `python3.12`, `python3.14`, `hermes-python`, `backend/.venv` y los venvs de `~/.local/share/drakter/venvs/` no resuelvan a `/tmp` o `/var/tmp` ni sean enlaces rotos (y da el comando para arreglarlo), Node, npm, `uv`, `~/.config/drakter/.env` (sin leerlo), el sandbox de Electron y la sesión gráfica.
 
 ## Configuración
 

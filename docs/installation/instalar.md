@@ -13,7 +13,7 @@ El backend monta solo cada `backend/app/api/<módulo>.py` que tenga `router` (`_
 - Ubuntu 26.04 (la máquina de referencia) con sesión gráfica.
 - Node 24 con `npm`. Aquí: v24.21.0, en `~/.local/bin`.
 - `python3.12` para el backend (`requires-python = ">=3.12,<3.13"`).
-- Python >=3.14 solo para Hermes, en su propio venv: [hermes-y-openviking.md](hermes-y-openviking.md).
+- Python >=3.14 solo para Hermes, en su propio venv: `scripts/install-hermes.sh` ([hermes-y-openviking.md](hermes-y-openviking.md)).
 - `uv` en el PATH (aquí: 0.13.8, en `~/.local/bin`). Instalación: <https://docs.astral.sh/uv/>. Comprueba con `uv --version`.
 
 ## Pasos

@@ -21,7 +21,7 @@ scripts/check-env.sh
 scripts/drakter-local.sh start          # con el stub, sin clave de API
 ```
 
-El stub solo sustituye al modelo: el agente sigue necesitando **Hermes** en su propio venv con Python >= 3.14 (`hermes-python` en el `PATH` o `DRAKTER_HERMES_PYTHON`). Instálalo con [`docs/installation/hermes-y-openviking.md`](docs/installation/hermes-y-openviking.md); sin él la app abre, pero el chat no funciona.
+El stub solo sustituye al modelo: el agente sigue necesitando **Hermes** en su propio venv con Python >= 3.14 (`hermes-python` en el `PATH` o `DRAKTER_HERMES_PYTHON`). Instálalo con `scripts/install-hermes.sh` (idempotente, ver [`docs/installation/hermes-y-openviking.md`](docs/installation/hermes-y-openviking.md)); los runtimes nunca van en `/tmp` ni `/var/tmp`; sin él la app abre, pero el chat no funciona.
 
 Si usas Claude Code, instala también las skills de terceros que no se versionan:
 
