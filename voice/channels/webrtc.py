@@ -31,6 +31,7 @@ if TYPE_CHECKING:
 log = logging.getLogger("voice.webrtc")
 
 LOOPBACK = "127.0.0.1"
+LOOPBACK_V6 = "::1"
 _loopback_enabled = False
 
 
@@ -53,8 +54,9 @@ def enable_loopback_candidates() -> None:
     def with_loopback(use_ipv4: bool = True, use_ipv6: bool = True) -> list[str]:
         # aioice la llama por nombre (`use_ipv4=..., use_ipv6=...`): se reenvían igual.
         addresses = original(use_ipv4=use_ipv4, use_ipv6=use_ipv6)
-        if use_ipv4 and LOOPBACK not in addresses:
-            addresses.insert(0, LOOPBACK)
+        for wanted, loopback in ((use_ipv6, LOOPBACK_V6), (use_ipv4, LOOPBACK)):
+            if wanted and loopback not in addresses:
+                addresses.insert(0, loopback)
         return addresses
 
     aioice.ice.get_host_addresses = with_loopback
@@ -85,13 +87,13 @@ class WebRTCChannel:
     ) -> dict[str, Any]:
         async with self._lock:
             current = self._current
-            if current is None or pc_id != current.pc_id:
-                # Conexión nueva. Si quedaba otra viva, el cliente se recargó: se cierra,
-                # porque en modo SINGLE el manejador rechazaría la oferta.
+            if current is None or pc_id != current.pc_id or restart_pc:
+                # Conexión nueva (también con `restart_pc`, que es como reoferta el escritorio).
+                # Si quedaba otra viva se cierra, porque en modo SINGLE el manejador la rechazaría.
                 if current is not None:
                     log.info("replacing_connection", extra={"data": {}})
                     await self._drop_current()
-                pc_id = None
+                pc_id, restart_pc = None, None
             request = SmallWebRTCRequest(sdp=sdp, type=type, pc_id=pc_id, restart_pc=restart_pc)
             answer = await self._handler.handle_web_request(request, self._on_webrtc_connection)
             if answer is None:

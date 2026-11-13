@@ -4,12 +4,14 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 
 > **Cierre 2026-11-13** (`drakter/integracion`): cada casilla se marcó a partir del informe de su finalizador o de la pasada integrada final (`scripts/verify-all.sh`, 44/44 sobre `183cc25`), con Claude Haiku 5.5 real donde dependía del modelo. `[x]` con ⚠️ = funciona, con una reserva anotada; `[ ]` con ⚠️ = bloqueado o a medias, con el motivo; `[ ]` sin nota = sin código (no se tocó). La Checklist 18 no entra en el cierre. Detalle operativo en `RUN_STATE.md`.
 
+> **Voz v2 (2026-11-14, WP9):** las filas 3, 13 y 14 incluyen ya las casillas de «Jobs y streaming de voz», «Voz v2: trabajos y herramientas» y «Voz v2: Pipecat», marcadas con las cifras y comprobaciones de la integración (`DECISIONS.md` 2026-11-14).
+
 | Checklist | Casillas | `[x]` | de ellas con ⚠️ | `[ ]` con ⚠️ | `[ ]` sin código |
 |---|---|---|---|---|---|
 | 0. Arquitectura y preparación | 14 | 14 | 0 | 0 | 0 |
 | 1. Aplicación de escritorio | 13 | 13 | 0 | 0 | 0 |
 | 2. Backend | 12 | 12 | 0 | 0 | 0 |
-| 3. Hermes | 12 | 11 | 0 | 1 | 0 |
+| 3. Hermes | 21 | 16 | 0 | 5 | 0 |
 | 4. Personalidad y contexto | 17 | 17 | 0 | 0 | 0 |
 | 5. Personaje | 19 | 16 | 16 | 3 | 0 |
 | 6. Base de datos y relaciones | 18 | 18 | 0 | 0 | 0 |
@@ -19,13 +21,13 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 | 10. Almacén e indexación | 25 | 25 | 1 | 0 | 0 |
 | 11. Relaciones avanzadas | 14 | 13 | 0 | 1 | 0 |
 | 12. Memoria | 22 | 20 | 4 | 0 | 2 |
-| 13. Skills y herramientas | 15 | 7 | 1 | 8 | 0 |
-| 14. Voz | 18 | 13 | 1 | 5 | 0 |
+| 13. Skills y herramientas | 19 | 9 | 2 | 10 | 0 |
+| 14. Voz | 51 | 42 | 8 | 9 | 0 |
 | 15. Automejora | 11 | 11 | 2 | 0 | 0 |
 | 16. Seguridad y fiabilidad | 15 | 14 | 2 | 1 | 0 |
 | 17. Optimización y lanzamiento | 17 | 3 | 1 | 6 | 8 |
 | 18. Ampliaciones futuras | 10 | 0 | 0 | 0 | 10 |
-| **Total 0–17** | **295** | **260** | **29** | **25** | **10** |
+| **Total 0–17** | **341** | **296** | **37** | **35** | **10** |
 
 ## Checklist 0. Arquitectura y preparación
 
@@ -96,15 +98,19 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 
 ### Jobs y streaming de voz
 
-- [ ] `TurnTap` no bloqueante (con `on_steered`) y prefijos de turno no persistidos en `AgentRuntime`
-- [ ] Op `steer` en el runner (`redirect`, `pending_steer`) y filtro previo en la política de voz
+- [x] `TurnTap` no bloqueante (con `on_steered`) y prefijos de turno no persistidos en `AgentRuntime`
+- [x] Op `steer` en el runner (`redirect`, `pending_steer`) y filtro previo en la política de voz
 - [ ] `reasoning_effort` por carril (low en primer plano, medium en trabajadores) y hash de instructions estable
-- [ ] `Lane` y home `hermes-w1` con token y guard proof propios
-- [ ] `JobManager`, tabla `jobs` y migración 0014 probada sobre una copia
+  ⚠️ No consta verificado en la integración (WP9); falta comprobarlo.
+- [x] `Lane` y home `hermes-w1` con token y guard proof propios
+- [x] `JobManager`, tabla `jobs` y migración 0014 probada sobre una copia
 - [ ] Eventos `job.*`, REST `/jobs` y JobsList en el panel
-- [ ] Aviso de fin de trabajo (notificación, frase en silencio y resumen no confiable en el prefijo)
+  ⚠️ Solo se comprobó la notificación de fin; JobsList en el panel requiere la UI y no se observó.
+- [x] Aviso de fin de trabajo (notificación, frase en silencio y resumen no confiable en el prefijo)
 - [ ] Confirmación de trabajo en pantalla; el trabajo termina con `pending_actions`
+  ⚠️ No probado: trabajo con confirmación pendiente → `pending_actions>0`.
 - [ ] RSS del runner trabajador medido; decisión sobre N=2
+  ⚠️ RSS de Hermes w1 medido (~188 MB); falta la decisión sobre N=2.
 
 ## Checklist 4. Personalidad y contexto
 
@@ -360,21 +366,19 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 
 ### Voz v2: trabajos y herramientas
 
-- [ ] `jobs_start`, `jobs_status`, `jobs_amend`, `jobs_cancel` con esquema, permisos (`jobs.read`, `jobs.write`), catálogo, auditoría y errores
+- [x] `jobs_start`, `jobs_status`, `jobs_amend`, `jobs_cancel` con esquema, permisos (`jobs.read`, `jobs.write`), catálogo, auditoría y errores
+  ⚠️ `jobs_amend` no probado con un trabajo en marcha (el de prueba acabó en ~7 s).
 - [ ] `ToolContext.job_id` y `confirmation.requested.job_id`
-- [ ] Eval `agent/evals/jobs_routing.jsonl` (20-30 frases) superada
+  ⚠️ No probado: trabajo con confirmación pendiente.
+- [x] Eval `agent/evals/jobs_routing.jsonl` (20-30 frases) superada
 - [ ] `voice_list_profiles` y `voice_set_profile` siguen funcionando con el pipeline nuevo
+  ⚠️ Cambio de voz en caliente entre turnos: no probado.
 
 ## Checklist 14. Voz
 
-- [ ] Instalar openWakeWord.
-  ↪ Reemplazado por «Voz v2: Pipecat» (DECISIONS 2026-11-13, V-01 a V-38).
-  ⚠️ Rediseño previsto sobre Pipecat (STT Whisper, TTS Fish Audio); en v1 `voice/` solo se estabiliza y documenta.
-  ⚠️ `OpenWakeWordProvider` existe, pero no hay modelo para «Drakter» (los preentrenados son CC BY-NC-SA 4.0 y de otras palabras); por defecto `NullWakeWord` (pulsar para hablar). No se instala en el cierre.
-- [ ] Configurar palabra de activación.
-  ↪ Reemplazado por «Voz v2: Pipecat» (DECISIONS 2026-11-13, V-01 a V-38).
-  ⚠️ Rediseño previsto sobre Pipecat (STT Whisper, TTS Fish Audio); en v1 `voice/` solo se estabiliza y documenta.
-  ⚠️ Depende de un modelo propio (`DRAKTER_WAKEWORD_MODEL`); `wakeword.set true` sin proveedor responde `invalid_request`.
+- [x] Instalar openWakeWord.
+- [x] Configurar palabra de activación.
+  ⚠️ «Hey Jarvis» (openWakeWord 0,92-1,00 con voz inglesa sintética; con voz castellana sintética no detecta). Pendiente con la voz real del usuario.
 - [x] Instalar Silero VAD.
 - [x] Configurar detección de voz.
 - [x] Instalar Faster-Whisper.
@@ -396,47 +400,58 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
   ↪ Reemplazado por «Voz v2: Pipecat» (DECISIONS 2026-11-13, V-01 a V-38).
   ⚠️ Rediseño previsto sobre Pipecat (STT Whisper, TTS Fish Audio); en v1 `voice/` solo se estabiliza y documenta.
   ⚠️ La voz emite `voice.playback_level`, pero no llega a la boca: el backend no publica los eventos de voz y `SvgCharacter.setMouth` no hace nada.
+  ⚠️ Personaje: secuencia listening→thinking→speaking→idle no observada visualmente en WP9.
 - [x] Crear gestión de errores.
-- [ ] Probar conversación por voz completa.
-  ↪ Reemplazado por «Voz v2: Pipecat» (DECISIONS 2026-11-13, V-01 a V-38).
-  ⚠️ Rediseño previsto sobre Pipecat (STT Whisper, TTS Fish Audio); en v1 `voice/` solo se estabiliza y documenta. El router de voz (`backend/app/integrations/voice/router.py`) no se monta en `main.py` en este cierre, aunque Electron permite `/api/v1/voice/*`.
-  ⚠️ No es posible hoy: `backend/app/integrations/voice` no está registrado en `main.py` (a propósito, `DRAKTER_VOICE_ENABLED=false` por defecto) y el escritorio no tiene cliente de voz (botón de micrófono desactivado). El puente del backend (`VoiceService`, supervisor, cliente IPC, `VoiceBridge`) no se ha ejecutado contra el proceso real.
+- [x] Probar conversación por voz completa.
+  ⚠️ Conversación por voz verificada en la app integrada (WP9) con frases sintéticas; calidad y volumen a oído, pendientes del usuario.
 
 ### Voz v2: Pipecat
 
-- [ ] Venv de voz py3.12 con `pipecat-ai[webrtc,fish,kokoro]==1.16.0`, `drakter_contracts`, lock fijado e `install-voice.sh`
-- [ ] Modelos locales en `~/.local/share/drakter/models/`, sin descargas en ejecución (Kokoro incluido)
-- [ ] Transporte WebRTC renderer ↔ `SmallWebRTCTransport`, sin STUN, con señalización por main y data channel con ping
+- [x] Venv de voz py3.12 con `pipecat-ai[webrtc,fish,kokoro]==1.16.0`, `drakter_contracts`, lock fijado e `install-voice.sh`
+- [x] Modelos locales en `~/.local/share/drakter/models/`, sin descargas en ejecución (Kokoro incluido)
+- [x] Transporte WebRTC renderer ↔ `SmallWebRTCTransport`, sin STUN, con señalización por main y data channel con ping
 - [ ] ICE por loopback (127.0.0.1) probado sin red y con cambio de red
-- [ ] Un pipeline por conexión, con modelos cargados una vez por proceso
-- [ ] STT Moonshine streaming en castellano (small, con tiny de respaldo) con `finalized`
-- [ ] VAD Silero y fin de turno Smart Turn v3.2, con un único `UserTurnProcessor`
-- [ ] Puente `BackendBridgeProcessor` e IPC v2 con `speech_id`
-- [ ] Hablar mientras genera (deltas → frases → Fish)
-- [ ] Fish `s2.1-pro-free` con guard de modelo y corte por fecha (30-11-2026)
+  ⚠️ Sin red y cambio wifi→ethernet no probados en WP9 (cortaría la sesión del integrador); WP8a midió 347 ms sin red.
+- [x] Un pipeline por conexión, con modelos cargados una vez por proceso
+- [x] STT Moonshine streaming en castellano (small, con tiny de respaldo) con `finalized`
+- [x] VAD Silero y fin de turno Smart Turn v3.2, con un único `UserTurnProcessor`
+- [x] Puente `BackendBridgeProcessor` e IPC v2 con `speech_id`
+- [x] Hablar mientras genera (deltas → frases → Fish)
+- [x] Fish `s2.1-pro-free` con guard de modelo y corte por fecha (30-11-2026)
 - [ ] Perfiles de voz en caliente entre turnos (`TTSUpdateSettingsFrame(service=…)`)
-- [ ] Respaldo Kokoro con conmutación propia y aviso único
-- [ ] Caché de frases (`voice_phrases.es.toml`, `TTSAudioRawFrame`) y CLI `voice phrases`
-- [ ] Etiquetas de lista cerrada: se hablan y nunca llegan al chat, la BD ni la auditoría (deltas y texto terminal)
+  ⚠️ Cambio de voz en caliente entre turnos: no probado.
+- [x] Respaldo Kokoro con conmutación propia y aviso único
+  ⚠️ Tras conmutar a Kokoro no vuelve a Fish hasta reiniciar el proceso de voz.
+- [x] Caché de frases (`voice_phrases.es.toml`, `TTSAudioRawFrame`) y CLI `voice phrases`
+  ⚠️ El usuario debe ejecutar `python -m voice phrases` con su perfil antes del 30-11-2026.
+- [x] Etiquetas de lista cerrada: se hablan y nunca llegan al chat, la BD ni la auditoría (deltas y texto terminal)
 - [ ] Texto por proveedor (`text_transforms`) y guard de bloques de código, tablas y URL
-- [ ] Barge-in con ducking y decisión por transcripción; cero falsas interrupciones en 60 s de TTS
-- [ ] Asentimientos y eco ignorados; falso ducking restaurado y contado
-- [ ] Capa 0 en datos: para, calla, descansa y cierre, también con el bot callado
-- [ ] Modo conversación con ventana de seguimiento y gestión del silencio, con dueño único (`Ctl.set_mode`)
-- [ ] Palabra «Jarvis» (openWakeWord 0.4.0 más confirmación textual en el puente) con la orden en la misma frase
-- [ ] Super+J por atajo de GNOME y `drakter activate`, con la latencia medida
-- [ ] Lo oído (`heard_tail`, `pending_head`) y reanudación («siga»)
-- [ ] Acuses y frases de herramienta condicionales
-- [ ] `StatusArbiter` como productor único; `/agent/status` lo lee
-- [ ] Voz y chat comparten sesión (`current_session`, `chat.user_message`, `input_source`)
+  ⚠️ No consta verificado en WP9.
+- [x] Barge-in con ducking y decisión por transcripción; cero falsas interrupciones en 60 s de TTS
+  ⚠️ Con el bucle acústico débil de este portátil; falta con la voz del usuario y altavoces a volumen alto.
+- [x] Asentimientos y eco ignorados; falso ducking restaurado y contado
+- [x] Capa 0 en datos: para, calla, descansa y cierre, también con el bot callado
+- [x] Modo conversación con ventana de seguimiento y gestión del silencio, con dueño único (`Ctl.set_mode`)
+- [x] Palabra «Jarvis» (openWakeWord 0.4.0 más confirmación textual en el puente) con la orden en la misma frase
+  ⚠️ Con voz castellana sintética openWakeWord no detecta; falta la voz real del usuario y un falso positivo real.
+- [x] Super+J por atajo de GNOME y `drakter activate`, con la latencia medida
+- [x] Lo oído (`heard_tail`, `pending_head`) y reanudación («siga»)
+- [x] Acuses y frases de herramienta condicionales
+- [x] `StatusArbiter` como productor único; `/agent/status` lo lee
+- [x] Voz y chat comparten sesión (`current_session`, `chat.user_message`, `input_source`)
 - [ ] Icono de altavoz (`voice_tts_enabled`, punto único de silencio) e indicador de micrófono calculado en el renderer
+  ⚠️ Requiere la UI; no verificado en WP9.
 - [ ] Tope de lectura en turnos escritos (`rest_on_screen`)
+  ⚠️ Requiere la UI; no verificado en WP9.
 - [ ] Propagación de ajustes (`add_setting_listener`)
+  ⚠️ No consta verificado en WP9.
 - [ ] Bandeja y escucha con la ventana oculta
-- [ ] Confirmaciones nunca por voz (comprobación puntual)
-- [ ] Métricas por turno en `metrics.jsonl`; umbrales calibrados con cifras medidas
-- [ ] `VOICE.md` (brevedad, usted, identidad «con qué funciona»)
-- [ ] Eventos `voice.*` antiguos eliminados del contrato; `/tmp/dr-at` borrado
+  ⚠️ No verificado en WP9 (escucha con la ventana oculta).
+- [x] Confirmaciones nunca por voz (comprobación puntual)
+- [x] Métricas por turno en `metrics.jsonl`; umbrales calibrados con cifras medidas
+  ⚠️ Umbrales sin cambios (los datos no justifican moverlos); calibración fina pendiente con la voz real del usuario.
+- [x] `VOICE.md` (brevedad, usted, identidad «con qué funciona»)
+- [x] Eventos `voice.*` antiguos eliminados del contrato; `/tmp/dr-at` borrado
 - Aplazado (sin casilla activa): «Drakter» y «despierta», dictado, subtítulos, emoción, avisos de calendario, transporte A
 
 ## Checklist 15. Automejora

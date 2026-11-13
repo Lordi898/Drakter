@@ -96,7 +96,7 @@ python -m voice.providers.stt.check_wp2 <wav> [--model small|tiny] # STT, Smart 
 python -m voice.conversation.check_conversation                   # capa 0, barge-in, eco y ruido sobre un UserTurnProcessor real
 ```
 
-Cada una imprime PASS/FAIL por paso y sale con 1 si algo falla. Latencias y consumo medidos: {{CIFRA: cierre del STT, TTFA de Fish y de Kokoro, latencia total de un turno y RSS del proceso de voz, medidos por el usuario}}.
+Cada una imprime PASS/FAIL por paso y sale con 1 si algo falla. Latencias y consumo medidos: cierre del turno 375-388 ms con frase única (1,2-2,3 s en otras), STT final 98-302 ms (Moonshine small), TTFA de Fish 0,71-0,96 s y de Kokoro 0,72 s, primer audio tras callar el usuario 2,36-2,88 s (normalmente el acuse), RSS del proceso de voz ~990 MB (i7-8665U, sin GPU, voz sintética).
 
 ## Instalación y modelos
 

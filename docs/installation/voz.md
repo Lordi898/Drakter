@@ -1,118 +1,83 @@
 # Instalar la voz
 
-> **Estado:** `voice/` está en `drakter/integracion` (`2e05ba6`), con su propio `pyproject.toml` (extras `stt`, `kokoro`, `wakeword`). En esta máquina solo hay modelo Kokoro en `/var/tmp/drakter-voz/models` y ningún venv de voz con sus extras. El router de voz del backend no se monta todavía. NO COMPROBADO de principio a fin.
+La voz es un proceso aparte (Pipecat 1.16.0, Python 3.12, venv propio) que arranca y supervisa el backend. Todo se instala una vez; en ejecución no se descarga nada. Cómo se usa: [Usar la voz](../usage/voz.md). Diseño para desarrolladores: [`voice/README.md`](../../voice/README.md).
 
-La voz es un proceso aparte con su propio entorno Python, que arranca el backend. Escucha, transcribe (Whisper) y habla (Kokoro, con Piper de respaldo), todo en local y en CPU.
+## Requisitos
 
-## Qué falta en la rama hoy
-
-- `voice/CONTRACT.md` lista `manager.py`, `registry.py`, `ipc.py`, `service.py`, `__main__.py` y `metrics.py`, pero **no están en la rama** `drakter/voz`. Sin ellos `python -m voice` no puede arrancar.
-- `backend/app/main.py` de esa rama no registra el servicio de voz (el contrato dice que lo hace el integrador).
-- `desktop/src` no tiene ninguna pantalla ni botón de voz.
-
-Mientras tanto solo se puede preparar el entorno, los modelos y los scripts de `voice/tests/`.
+- Lo de [Instalar Drakter](instalar.md) ya hecho (backend, `npm ci`, Hermes).
+- `uv` en el `PATH` (el script instala Python 3.12 con él si falta).
+- Los modelos ya en `~/.local/share/drakter/models/` (ver más abajo). El script no los descarga.
+- Sesión GNOME si quieres el atajo Super+J.
+- Una clave `FISH_API_KEY` en `~/.config/drakter/.env` para la voz de Fish; sin ella habla Kokoro ([clave de API](clave-api.md)).
 
 ## 1. Entorno de voz
 
-Requiere Python 3.12 y `uv`. Desde la raíz del repositorio:
+Ejecútalo **desde el checkout principal, no desde un worktree**: `drakter-contracts` queda instalado en editable apuntando al checkout donde lo ejecutes, y si ese es un worktree que luego se borra, el venv se rompe (el script avisa en ese caso).
 
 ```bash
-cd voice
-uv venv --python 3.12 .venv
-uv sync --extra stt --extra kokoro
+scripts/install-voice.sh
 ```
 
-`--extra wakeword` solo si tienes un modelo propio de palabra de activación (ver [Uso de la voz](../usage/voz.md)).
+Crea `~/.local/share/drakter/venvs/voice` (Python 3.12), instala `voice/requirements.lock` y `contracts/python`, copia Kokoro si falta y comprueba que están todos los modelos. Es idempotente: repítelo tras fusionar o mover el repositorio. `--relock` regenera el lock desde `voice/pyproject.toml`. El script se niega a instalar en `/tmp` o `/var/tmp`.
 
-## 2. Entorno de Piper (respaldo)
+## 2. Modelos
 
-Piper es GPL y va en un venv separado, invocado solo como proceso:
+Carpeta: `~/.local/share/drakter/models/`. El script se detiene con la ruta exacta si falta alguno.
 
-```bash
-uv venv --python 3.12 ~/.local/share/drakter/voice/piper-venv
-uv pip install --python ~/.local/share/drakter/voice/piper-venv/bin/python piper-tts
-export DRAKTER_PIPER_PYTHON=~/.local/share/drakter/voice/piper-venv/bin/python
-```
-
-Sin `DRAKTER_PIPER_PYTHON` el respaldo no funciona. Para desactivarlo, `DRAKTER_TTS_FALLBACK=` (vacío).
-
-## 3. Modelos
-
-La voz **nunca descarga nada**. Si falta un modelo da el error `model_missing` con la ruta esperada. Carpeta base: `DRAKTER_VOICE_MODELS_DIR`, o `~/.local/share/drakter/voice/models`. Los comandos vienen del README de la rama y **no se han ejecutado**; comprueba la sintaxis con tu versión de cada herramienta.
-
-| Motor | Carpeta | Archivos / comando (según el README) |
-|---|---|---|
-| Whisper | `<models>/whisper` | `hf download Systran/faster-whisper-small --cache-dir <models>/whisper` (`...-medium` para probar `medium`) |
-| Kokoro | `<models>/kokoro` | `kokoro-v1.0.int8.onnx` y `voices-v1.0.bin`, de las releases de `thewh1teagle/kokoro-onnx` (`model-files-v1.0`) con `curl -L -o <archivo> <url>` |
-| Piper | `<models>/piper` | `es_ES-davefx-medium.onnx` y `.onnx.json`: `hf download rhasspy/piper-voices --include 'es/es_ES/davefx/medium/*' --local-dir <tmp>` y copiar los dos archivos |
-| Silero VAD | incluido en `faster-whisper` | Opcional: `<models>/silero/silero_vad_v6.onnx` lo sustituye. Sin modelo se usa `EnergyVAD` |
-
-Los nombres de archivo coinciden con el código (`voice/tts/kokoro.py`, `voice/tts/piper.py`, `voice/vad/silero.py`). Revisa la licencia de cada voz antes de distribuir nada.
-
-## 4. Activar en el backend
-
-El backend solo lanza la voz con estas dos variables (en el entorno o en `~/.config/drakter/.env`):
-
-```bash
-DRAKTER_VOICE_ENABLED=true
-DRAKTER_VOICE_PYTHON=/ruta/absoluta/a/voice/.venv/bin/python
-```
-
-Por defecto `DRAKTER_VOICE_ENABLED=false`. `DRAKTER_VOICE_PYTHON` debe ser absoluta y existir; si no, el backend arranca igual y reporta `dependency_missing`. Opcional: `DRAKTER_VOICE_PROJECT_ROOT` (por defecto, la raíz del repo).
-
-## 5. Variables DRAKTER_*
-
-El backend pasa al proceso de voz solo estas variables (lista cerrada, tomadas del entorno o del `.env`). Valores por defecto de `voice/config.py`:
-
-| Variable | Defecto |
+| Carpeta | Contenido |
 |---|---|
-| `DRAKTER_VOICE_MODELS_DIR` | `<data_dir>/voice/models` |
-| `DRAKTER_STT_PROVIDER` / `_MODEL` / `_LANGUAGE` | `faster_whisper` / `small` / `es` |
-| `DRAKTER_STT_DEVICE` / `_COMPUTE_TYPE` | `cpu` (solo admite `cpu`) / `int8` |
-| `DRAKTER_STT_BEAM_SIZE` / `_THREADS` | `1` / `4` |
-| `DRAKTER_TTS_PROVIDER` / `_FALLBACK` / `_VOICE` | `kokoro` / `piper` / `ef_dora` |
-| `DRAKTER_TTS_THREADS` | `4` |
-| `DRAKTER_PIPER_PYTHON` / `_VOICE` | sin definir / `es_ES-davefx-medium` |
-| `DRAKTER_VAD_PROVIDER` / `_THRESHOLD` | `silero` / `0.5` |
-| `DRAKTER_VAD_SILENCE_MS` / `_PREROLL_MS` | `800` / `320` |
-| `DRAKTER_VOICE_MAX_UTTERANCE_S` | `30` |
-| `DRAKTER_WAKEWORD_ENABLED` / `_PROVIDER` | `false` / `null` |
-| `DRAKTER_WAKEWORD_MODEL` / `_THRESHOLD` | sin definir / `0.5` |
-| `DRAKTER_VOICE_BARGE_IN` (+ `_THRESHOLD`, `_MIN_MS`) | `false` (`0.8`, `320`) |
-| `DRAKTER_AUDIO_BACKEND` | `auto` (`pipewire`, `alsa`, `null`) |
-| `DRAKTER_AUDIO_INPUT` / `_OUTPUT` | vacío (dispositivo por defecto) |
-| `DRAKTER_VOICE_LEVEL_HZ` / `_OUTPUT_LATENCY_MS` | `15` / `0` |
+| `moonshine/` | modelos `small-streaming-es` y `tiny-streaming-es` (STT) |
+| `smart-turn/` | `smart-turn-v3.2-cpu.onnx` (fin de turno) |
+| `openwakeword/` | `hey_jarvis_v0.1.onnx`, `melspectrogram.onnx`, `embedding_model.onnx` |
+| `kokoro/` | `kokoro-v1.0.int8.onnx` y `voices-v1.0.bin` (voz local) |
 
-## 6. Prueba guiada del micrófono (te toca a ti)
+Si Kokoro no está, el script lo copia desde la ruta de `DRAKTER_KOKORO_SRC` (por defecto, una copia local de seguridad). Licencias de los modelos: `THIRD_PARTY_NOTICES.md`.
 
-Desde la raíz del repo, con el Python del venv de voz:
+## 3. Atajo Super+J
 
 ```bash
-PY=voice/.venv/bin/python
-export TMPDIR=/var/tmp/drakter-voz
-$PY voice/tests/mic_check.py             # dispositivos, nivel, VAD, turno STT -> TTS
-$PY voice/tests/mic_check.py --barge-in  # eco del altavoz en el micrófono
-$PY voice/tests/mic_check.py --voices    # oír Kokoro y Piper en español
+scripts/install-shortcut.sh install   # crea el atajo de GNOME Super+J → scripts/drakter activate
+scripts/install-shortcut.sh remove    # lo retira
 ```
 
-El script pide confirmación antes de abrir el micrófono (responde `s`). Graba 5 s por defecto (`--seconds`), solo en memoria. Anota qué te sale en cada paso: dispositivo elegido, si el VAD detecta tu voz, si la transcripción es correcta y qué voz prefieres. Usa `--barge-in` con tus altavoces antes de poner `DRAKTER_VOICE_BARGE_IN=true`.
+Es idempotente y solo toca su propia entrada. Si instalas con `DRAKTER_DEV_NO_SANDBOX=1` en el entorno (desarrollo), el atajo arranca también así.
 
-## 7. Benchmark de latencia
+## 4. Comprobar
 
-Necesitas un WAV tuyo con una frase en español (`frase.wav`) y los modelos en su sitio. Con la máquina en reposo:
+Desde la raíz del repositorio:
 
 ```bash
-$PY voice/tests/bench_engines.py --stt-model small  --wav frase.wav --tts kokoro --out $TMPDIR/small_kokoro.json
-$PY voice/tests/bench_engines.py --stt-model medium --wav frase.wav --out $TMPDIR/medium.json
-$PY voice/tests/bench_engines.py --tts piper --out $TMPDIR/piper.json
+~/.local/share/drakter/venvs/voice/bin/python -m voice check
 ```
 
-Opciones: `--threads N`, `--reps N`, `--min-available-mb N`. Cada cifra sale con `loadavg` y RSS. Esta guía no da tiempos esperados: compara `small` y `medium` con tus propios datos. Los números del README (carga de CPU alta, 4 hilos) son orientativos y no valen como referencia.
+Imprime `OK` o `FALL` por cada proveedor y modelo, y acaba con `Todo en orden.`. No abre audio ni red. Comprobaciones de punta a punta, opcionales: `voice/README.md`, sección «Comprobaciones».
 
-Para comprobar sin hardware: `$PY voice/tests/check_pipeline.py`. Declara NO COMPROBADO hasta que exista `voice/manager.py`.
+## 5. Arrancar con voz
+
+La voz está activada por defecto (`DRAKTER_VOICE_ENABLED=true`). Arranca la app con el lanzador, que añade `--allow-loopback-in-peer-connection` (sin él no hay WebRTC sin red):
+
+```bash
+scripts/drakter-local.sh start anthropic   # o: scripts/drakter
+```
+
+El backend arranca el proceso de voz con el Python de `~/.local/share/drakter/venvs/voice`. Para usar otro: `DRAKTER_VOICE_PYTHON` (ruta absoluta) en `~/.config/drakter/.env`. Si falta el venv, la app arranca igual y publica un error de voz `dependency_missing`.
+
+## 6. Frases fijas con tu perfil
+
+Antes del 30-11-2026, con tu `voces.toml` ya rellenado ([Perfiles de voz](../usage/voces.md)):
+
+```bash
+~/.local/share/drakter/venvs/voice/bin/python -m voice phrases
+```
+
+## Configuración opcional
+
+`~/.config/drakter/voice.toml` (claves planas con el nombre del campo de `VoiceConfig`) o variables `DRAKTER_VOICE_<CAMPO>`. La lista completa de campos y su precedencia está en [`voice/README.md`](../../voice/README.md#configuración). Ejemplos: `stt_model = "tiny"` (STT más ligero), `tts = ["kokoro"]` (solo voz local), `allow_paid = true` (permite Fish de pago tras el 30-11-2026).
 
 ## Problemas frecuentes
 
-- `model_missing`: falta un modelo; la ruta esperada va en el mensaje. Descárgalo a mano (paso 3).
-- `dependency_missing`: `DRAKTER_VOICE_PYTHON` no es una ruta absoluta a un archivo existente.
-- No suena el respaldo: falta `DRAKTER_PIPER_PYTHON`.
+- **`ERROR: falta el modelo <ruta>`:** copia el modelo a esa ruta y repite el script.
+- **`AVISO: drakter-contracts queda enlazado a un worktree`:** repite el script desde el checkout principal.
+- **`FALL tts/fish` o un `FALL` de módulo:** el paquete no se importa; repite el script con el venv correcto.
+- **Error `dependency_missing` en la app:** falta `~/.local/share/drakter/venvs/voice` o `DRAKTER_VOICE_PYTHON` apunta a algo que no existe.
+- **No hay voz de Fish:** falta `FISH_API_KEY` o no hay red; habla Kokoro, con un único aviso.

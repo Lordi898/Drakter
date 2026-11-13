@@ -68,7 +68,7 @@ class VoiceConfig:
     turn_stop_secs: float = 3.0  # tope de silencio de Smart Turn
     turn_final_timeout_s: float = 1.0  # espera a la transcripción final tras el fin de turno
     followup_s: float = 20.0  # sin voz tras responder → reposo
-    idle_nudge_s: float = 10.0  # user_idle_timeout del UserTurnProcessor
+    idle_nudge_s: float = 8.0  # user_idle_timeout del UserTurnProcessor
     bargein_min_words: int = 3
     bargein_decide_ms: int = 700
     duck_gain: float = 0.25

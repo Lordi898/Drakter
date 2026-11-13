@@ -227,6 +227,9 @@ class Session:
         if fish is None:
             return
         profile = resolve_profile(self.state.profile)
+        set_profile = getattr(self._parts.phrases, "set_profile", None)
+        if set_profile is not None:
+            set_profile(profile)  # la caché de frases va por perfil
         if profile.voice is None:
             return
         from pipecat.frames.frames import TTSUpdateSettingsFrame

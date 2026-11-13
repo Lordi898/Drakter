@@ -890,3 +890,43 @@ Decisiones técnicas, cambios de tecnología y motivos.
 - **Alternativas descartadas:** renombrar `EVENTS` (rompería el hub y el generador); `voice`/`jobs` opcionales en `DrakterApi` (obligaría a comprobaciones en toda la UI).
 - **Motivo:** congelar lo más simple que cumple la sección 4 sin romper lo que ya funciona.
 - **Impacto:** `contracts/**`, `voice/{ports,registry,CONTRACT}.*`, `backend/app/services/settings_models.py`, `backend/app/integrations/hermes/CONTRACT.md`, `desktop/electron/{shared,preload}`, `desktop/src/voice/contract.ts`.
+
+## [2026-11-14] WP9: integración de la voz v2
+- **Contexto:** fusión de WP1..WP8b en `ao/voice-integration/root` y primera ejecución de la voz v2 con la app integrada (arrancada con `scripts/drakter`, switch de loopback y `DRAKTER_DATA_DIR` sobre una copia de la BD real; altavoces y micrófono internos del portátil, frases sintéticas de Kokoro `em_alex` y, para «Hey Jarvis», `am_adam` en inglés inyectadas por una fuente virtual de PipeWire). Sin conflictos de fusión; `python -m voice check` «Todo en orden», check_pipeline 21 PASS, check_conversation OK, check_wp2 OK con modelos reales, check_sim 22/22, typecheck y build del escritorio limpios.
+- **Decisión:** arreglos de integración aplicados:
+  1. Fábricas `create()` de WP3 (guard, phrases, playback) y alias de config (`phrases_cache_dir`, `tts_threads`, campos `stt_*`/`vad_*` en `VoiceConfig`); `wake_models` con o sin `.onnx`; aioice por nombre (`use_ipv4`/`use_ipv6`).
+  2. Fish no daba audio si una frase fija (`TTSSpeakFrame`) caía dentro de un contexto de respuesta abierto (se reproducía aislado): el puente abre el `LLMFullResponseStart` de forma perezosa con el primer texto y `speak.flush` cierra sin reabrir.
+  3. Pipecat 1.16 suelta los `TTSTextFrame` de todo un contexto con su primer audio: `awaiting_answer` solo cuenta con el bot callado, y lo oído al interrumpir se estima por tiempo hablado (15 car/s).
+  4. Barge-in en el hueco entre texto y audio: `Session.speech_open`; con tramo pendiente o agente pensando, el VAD no abre turno al instante (decide por transcripción). «para …» con turno en curso es parada. Un parcial «sí…» no descarta el tramo.
+  5. Backend: sesión de los turnos ya terminados para registrar lo oído («siga»); `confirm_on_screen` una vez por `action_id` (dedupe del reanuncio de Jobs); un steer aceptado se guarda y sale como `chat.user_message` (voz); el supervisor pasa `DRAKTER_VOICE_<CAMPO>` leídos de `voice/config.py` y `DRAKTER_VOICE_PIPECAT_LOG`; layer0 de fuente única (TOML); auditoría real de la voz.
+  6. Escritorio: switch de loopback en `npm run dev` (argv tras `--`) y `appendSwitch` de respaldo; etiqueta de bandeja Silenciar/Activar micrófono (canal `voice:mic-state`); `pc_id` se olvida ante cualquier rechazo; mensajes de voz por turno sin duplicar.
+  7. `CAPABILITIES.md` decía que Drakter no trabaja en segundo plano: corregido. `VOICE.md` gana reglas de enrutado a `jobs_*` (eval `jobs_routing` 13/26 → 26/26).
+  8. Eval `jobs_routing`: ejecutor nuevo `agent/evals/jobs_routing.py` (prompt = `SOUL.md` real del home de Hermes; `jobs_status` falso con UUID; hasta 4 rondas). Resultado 26/26 con `claude-haiku-5-5`.
+  Además: `python -m voice phrases` toma `FISH_API_KEY` de `~/.config/drakter/.env`; borrados los eventos `voice.*` antiguos del contrato y `/tmp/dr-at` (574 MB, nada lo referenciaba).
+- **Alternativas descartadas:** probar con voz real del usuario en esta pasada (no disponible: se anota como pendiente); micrófono simulado sin pasar por el bucle acústico (el bucle altavoz→micro llega a ~−28 dBFS, demasiado débil para el VAD, por eso se mezcla una fuente virtual con el micrófono real).
+- **Motivo:** dejar la voz v2 funcionando de extremo a extremo en la app integrada con lo comprobable sin el usuario.
+- **Impacto:** `voice/`, `backend/app/integrations/voice/`, supervisor y `main.py`, `desktop/electron/`, `agent/evals/jobs_routing.py`, `VOICE.md`, `CAPABILITIES.md`; Checklists 3, 13 y 14 (`IMPLEMENTATION_STATUS.md`). Pendientes ⚠️ en `RUN_STATE.md`.
+
+## [2026-11-14] WP9: cifras medidas y umbrales
+- **Contexto:** primera medición en la máquina de desarrollo (i7-8665U, 14 GB, sin GPU) con la app integrada.
+- **Decisión:** cifras medidas (sin extrapolar):
+  - Arranque en frío: pipeline de voz listo ~4,3 s; Hermes listo ~4,5 s.
+  - Fin de voz → turno cerrado (endpointing): 375-388 ms con frase única; 1,2-2,3 s en otras (Smart Turn esperando). Smart Turn v3.2 devuelve COMPLETE en 92-145 ms.
+  - STT final tras el fin de voz: 98-302 ms (Moonshine small).
+  - Primer audio tras callar el usuario (`total_ms`, normalmente el acuse): 2,36-2,88 s.
+  - Fish TTFA 0,71-0,96 s (picos de 1,1-1,6 s); Kokoro TTFA 0,72 s.
+  - Haiku, primer delta (`voice_agent_ttft`): 0,93-8,0 s; típico 1,8-4,2 s (más con herramientas).
+  - Super+J / `drakter activate` → modo conversación ~0,29 s. Barge-in: interrupción ~170 ms tras la transcripción final de «para», audio apagado ~0,66 s después; 83 s de TTS con micrófono abierto, 0 falsas interrupciones y 0 falsos duckings.
+  - CPU (top, 8 hilos): voz en conversación media 79 % de un núcleo (p90 130 %, pico 425 % al cargar modelos); en reposo ~53 % de un núcleo constante (silencio continuo del mixer + Opus + openWakeWord); backend ~1 %; runners Hermes ~0,5 %; Electron ~24 %.
+  - RAM (RSS): voz ~990 MB; backend ~110 MB; Hermes primer plano ~230 MB; Hermes w1 ~188 MB. Trabajo simple en w1 ~7 s.
+  Umbrales **sin cambios**: `filler_after_ms` 1200, `wake_threshold` 0.3, `turn_stop_secs` 3.0, `followup_s` 20, `bargein_decide_ms` 700, `bargein_min_words` 3, `duck_gain` 0.25.
+- **Alternativas descartadas:** mover umbrales con estas cifras: se midió con voz sintética y un bucle acústico débil, y no hay datos que justifiquen un cambio (p. ej. `filler_after_ms` 1200: el acuse suena antes que la respuesta casi siempre, con TTFT típico de 2-4 s). Reducir ya el CPU en reposo: se deja para otra fase.
+- **Motivo:** no calibrar sobre una voz que no es la del usuario; la calibración fina queda pendiente con su voz real.
+- **Impacto:** Checklist 14 («umbrales calibrados con cifras medidas»: cifras medidas, umbrales intactos); `voice/README.md`, `docs/usage/voz.md`, `README.md`, `docs/installation/voz.md`. Optimización del CPU en reposo (~53 %): Checklist 17.
+
+## [2026-11-14] WP9: sin instalaciones de terceros nuevas
+- **Contexto:** cierre de la integración de la voz v2.
+- **Decisión:** WP9 no instala ni copia nada de terceros; usa el venv de voz, los modelos locales y las dependencias ya registradas (Pipecat 1.16.0, openWakeWord 0.4.0, Moonshine, Silero, Smart Turn v3.2, Kokoro, Fish Audio).
+- **Alternativas descartadas:** ninguna.
+- **Motivo:** no hacía falta.
+- **Impacto:** ninguno en `THIRD_PARTY_NOTICES.md`.
