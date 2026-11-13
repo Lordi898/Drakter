@@ -2,19 +2,29 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+from dataclasses import replace
 from typing import Annotated, Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
+from drakter_contracts.common import Origin
 from fastapi import APIRouter, Query, Request
 from pydantic import AwareDatetime
 
 from app.core.config import Settings
-from app.services import improvement_feedback, improvement_proposals, improvement_reports
+from app.core.errors import AppError
+from app.permissions.models import ActorContext
+from app.permissions.models import Principal as SecurityPrincipal
+from app.services import (
+    improvement_actions,
+    improvement_feedback,
+    improvement_proposals,
+    improvement_reports,
+)
 from app.services.improvement_models import (
     MAX_OFFSET,
     MAX_PAGE_SIZE,
     Category,
-    ConfirmationBody,
     FeedbackCreate,
     FeedbackOrigin,
     FeedbackReclassify,
@@ -24,7 +34,7 @@ from app.services.improvement_models import (
     ReportExportBody,
     Severity,
 )
-from app.services.improvement_ports import get_audit, get_gate, get_principal
+from app.services.improvement_ports import ApprovalRequest, get_audit, get_principal
 from app.services.improvement_proposals import FlowContext
 
 router = APIRouter(prefix="/api/v1/improvement")
@@ -47,9 +57,30 @@ def _flow(request: Request) -> FlowContext:
     return FlowContext(
         settings=_settings(request),
         principal=get_principal(request),
-        gate=get_gate(request),
         audit=get_audit(request),
         correlation_id=_correlation_id(request),
+    )
+
+
+def _confirm(request: Request, action: str, approval: ApprovalRequest) -> Mapping[str, Any]:
+    """Hand the decision to `ActionService`, the single confirmation path."""
+    actions = getattr(request.app.state, "actions", None)
+    spec = actions.registry.get(action) if actions is not None else None
+    if spec is None:
+        raise AppError(
+            "confirmation_unavailable", "El mecanismo de confirmación no está disponible", 503
+        )
+    actor = ActorContext(
+        principal=SecurityPrincipal.UI,
+        origin=Origin.REST,
+        correlation_id=_correlation_id(request) or str(uuid4()),
+    )
+    params = improvement_actions.ProposalDecisionArgs(
+        proposal_id=approval.target_id, digest=approval.digest
+    )
+    summary = approval.summary
+    return actions.unwrap(
+        actions.execute_or_request(actor, replace(spec, summarize=lambda _: summary), params)
     )
 
 
@@ -137,13 +168,10 @@ def evaluate(proposal_id: UUID, request: Request) -> dict[str, Any]:
 
 
 @router.post("/proposals/{proposal_id}/approval-request")
-def approval_request(proposal_id: UUID, request: Request) -> dict[str, str]:
-    return improvement_proposals.request_approval(_flow(request), str(proposal_id))
-
-
-@router.post("/proposals/{proposal_id}/approve")
-def approve(proposal_id: UUID, body: ConfirmationBody, request: Request) -> dict[str, Any]:
-    return improvement_proposals.approve(_flow(request), str(proposal_id), body.confirmation_id)
+def approval_request(proposal_id: UUID, request: Request) -> Mapping[str, Any]:
+    """409 `confirmation_required`: approve at `/api/v1/confirmations/{id}/approve`."""
+    approval = improvement_proposals.prepare_approval(_flow(request), str(proposal_id))
+    return _confirm(request, improvement_actions.APPROVE_ACTION, approval)
 
 
 @router.post("/proposals/{proposal_id}/apply")
@@ -152,13 +180,10 @@ def apply(proposal_id: UUID, request: Request) -> dict[str, Any]:
 
 
 @router.post("/proposals/{proposal_id}/revert-request")
-def revert_request(proposal_id: UUID, request: Request) -> dict[str, str]:
-    return improvement_proposals.request_revert(_flow(request), str(proposal_id))
-
-
-@router.post("/proposals/{proposal_id}/revert")
-def revert(proposal_id: UUID, body: ConfirmationBody, request: Request) -> dict[str, Any]:
-    return improvement_proposals.revert(_flow(request), str(proposal_id), body.confirmation_id)
+def revert_request(proposal_id: UUID, request: Request) -> Mapping[str, Any]:
+    """409 `confirmation_required`: confirm at `/api/v1/confirmations/{id}/approve`."""
+    approval = improvement_proposals.prepare_revert(_flow(request), str(proposal_id))
+    return _confirm(request, improvement_actions.REVERT_ACTION, approval)
 
 
 @router.post("/proposals/{proposal_id}/reject")
