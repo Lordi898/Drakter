@@ -11,6 +11,7 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). A�
 - Integradas todas las ramas `drakter/*` en `drakter/integracion`; cadena de publicación local `drakter/integracion` → `drakter/build` → `main`.
 - Verificación módulo a módulo y marcado en `docs/IMPLEMENTATION_STATUS.md` solo de lo comprobado: Checklists 0, 2, 3 (Hermes con el stub, ⚠️ sin clave), 4 (personalidad, con la consistencia comprobada con el modelo real), 5 (personaje provisional SVG, con ⚠️ en Rive y sincronización labial), 6, 7 (tareas y proyectos), 8 (hábitos), 10 (almacén), 11 (relaciones, con ⚠️ en la visualización y las herramientas Hermes) y 12 (memoria, con ⚠️ en recuperación al turno, límites de contexto y memoria de trabajo), 13 (parámetros, permisos y errores de herramientas; Skills inertes ⚠️) y 15 (automejora, con ⚠️ en el flujo de aprobación).
 - Pasada integrada: la app arranca con Electron como dueño del backend; `scripts/drakter-local.sh start|stop|status`; conexiones SQLite por petición sin `check_same_thread`; runner de Hermes con `-B`; rutas permitidas de Electron regeneradas desde el contrato.
+- `scripts/drakter-local.sh stop` vuelve a parar la app (el pid se tomaba antes del fork de `setsid`).
 - `docs/RUN_STATE.md` reescrito con el estado real, los bloqueos y cómo arrancar y parar la app; `README.md` «Estado real» actualizado.
 - Memoria: los hábitos se clasifican como memoria procedimental antes que como perfil.
 - Relaciones: el filtro por tipo de la pantalla se envía como `type`, el nombre que lee el backend.

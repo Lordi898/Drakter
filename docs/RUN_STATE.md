@@ -70,6 +70,7 @@ scripts/drakter-local.sh stop
 
 ### Cerrados en el cierre
 
+- **`drakter-local.sh stop` no paraba la app:** el pid se guardaba mal porque `setsid` hace fork; corregido en `f0f084b`.
 - **Clave de Anthropic:** sustituida por una válida (`claude-haiku-5-5`); la app arranca con el modelo real.
 - **Almacén (CL10):** catálogo, índice FTS5, lectores (texto, PDF, imágenes, enlaces con bloqueo SSRF), límites de comprimidos y permisos de rutas comprobados (`check_storage_paths.py` 127/127, `check_storage_archives.py` 35/35).
 - **Seguridad cableada en el arranque (`4d2bcd1`):** `main.py` llama a `wire_security`/`start_security`; `check_security.py` 145/145, `check_confirmations.py` 0 fallos y borrado de tareas y proyectos 409 → aprobar → 404. Un único camino de confirmación (`ActionService`, 300 s).
