@@ -334,6 +334,9 @@ class VoiceOrchestrator:
             session_id = self._bridge.session_of(turn_id) if turn_id else None
             if session_id is not None:
                 self.heard.record(session_id, evt.heard_tail, evt.pending_head)
+            logger.info("Voice playback interrupted", extra={
+                "event": "voice_interrupted", "has_session": session_id is not None,
+                "heard_chars": len(evt.heard_tail or ""), "pending_chars": len(evt.pending_head or "")})
             self._signal("interrupted", turn_id)
         if turn_id is not None:
             self._publish(

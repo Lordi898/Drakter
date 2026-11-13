@@ -13,6 +13,7 @@ del `speech_id` activo del puente; ante una interrupción añade `heard_tail` (�
 
 from __future__ import annotations
 
+import time
 from collections.abc import Callable
 from typing import Final
 
@@ -34,6 +35,18 @@ from voice.ports import Ctl
 TAIL_STATE: Final = 200
 HEARD_TAIL: Final = 80
 PENDING_HEAD: Final = 200
+# Ritmo de habla para estimar lo oído al interrumpir. Pipecat suelta los TTSTextFrame de un
+# contexto entero con su primer audio (medido en WP9), así que el texto que pasa por aquí va por
+# delante de lo que suena: lo oído se estima con el tiempo hablado.
+CHARS_PER_S: Final = 15.0
+
+
+def split_heard(full: str, spoken_s: float) -> tuple[str, str]:
+    """(lo oído, lo pendiente) de `full` tras `spoken_s` segundos de habla, en límite de palabra."""
+    n = min(len(full), int(spoken_s * CHARS_PER_S))
+    while 0 < n < len(full) and not full[n].isspace():
+        n += 1
+    return full[:n].strip(), full[n:].strip()
 
 
 def pending_after(full: str, heard: str, tail: str) -> str:
@@ -58,6 +71,8 @@ class PlaybackTracker(FrameProcessor):
         self._index = 0
         self._heard = ""
         self._closed = False
+        self._spoken_s = 0.0  # segundos con el bot hablando en este tramo
+        self._talk_since: float | None = None
 
     async def process_frame(self, frame: Frame, direction: FrameDirection) -> None:
         await super().process_frame(frame, direction)
@@ -70,9 +85,14 @@ class PlaybackTracker(FrameProcessor):
     async def _track(self, frame: Frame, direction: FrameDirection) -> None:
         state = self._ctl.state
         if isinstance(frame, BotStartedSpeakingFrame):
+            self._talk_since = time.monotonic()
             state.bot_speaking = True
+            # La pregunta de la respuesta anterior ya no está pendiente: la nueva habla manda
+            # (si no, un «ajá» durante la primera frase contaría como respuesta y cortaría).
+            state.awaiting_answer = False
             await self._open_if_needed()
         elif isinstance(frame, BotStoppedSpeakingFrame):
+            self._stop_talk()
             state.bot_speaking = False
             if self._speech and self._closed:
                 await self._finish("finished")
@@ -96,9 +116,15 @@ class PlaybackTracker(FrameProcessor):
                 if not state.bot_speaking:
                     await self._finish("finished")
         elif isinstance(frame, InterruptionFrame):
+            self._stop_talk()
             state.bot_speaking = False
             if self._speech:
                 await self._finish("interrupted")
+
+    def _stop_talk(self) -> None:
+        if self._talk_since is not None and self._speech:
+            self._spoken_s += time.monotonic() - self._talk_since
+        self._talk_since = None
 
     async def _open_if_needed(self) -> None:
         state = self._ctl.state
@@ -112,9 +138,13 @@ class PlaybackTracker(FrameProcessor):
     async def _finish(self, kind: str) -> None:
         extra: dict[str, str] = {}
         if kind == "interrupted":
-            tail = self._heard[-HEARD_TAIL:]
-            full = self._text_source() if self._text_source else ""
-            extra = {"heard_tail": tail, "pending_head": pending_after(full, self._heard, tail)}
+            full = " ".join((self._text_source() if self._text_source else "").split())
+            if full:
+                heard, pending = split_heard(full, self._spoken_s)
+                extra = {"heard_tail": heard[-HEARD_TAIL:], "pending_head": pending[:PENDING_HEAD]}
+            else:
+                tail = self._heard[-HEARD_TAIL:]
+                extra = {"heard_tail": tail, "pending_head": ""}
         await self._emit(kind, **extra)
         self._last_closed = self._speech[1] if self._speech else None
         self._reset_speech()

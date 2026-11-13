@@ -22,6 +22,8 @@ de fin (`TurnAnalyzerUserTurnStopStrategy`) vacía su texto en `handle_user_turn
 
 from __future__ import annotations
 
+from loguru import logger
+
 import asyncio
 import uuid
 from typing import TYPE_CHECKING, Literal
@@ -110,7 +112,9 @@ class DrakterStartStrategy(BaseUserTurnStartStrategy):
     async def _on_vad_start(self) -> None:
         if self._turn_open or self._deciding:
             return
-        if not self._bot_speaking:
+        state = self._ctl.state
+        busy = getattr(self._ctl, "speech_open", False) or state.turn_phase in ("thinking", "executing")
+        if not self._bot_speaking and not busy:
             await self._open()
             return
         self._deciding = True
@@ -127,7 +131,14 @@ class DrakterStartStrategy(BaseUserTurnStartStrategy):
             return
         self._heard = text
         state = self._ctl.state
-        kind = classify(text, True, state.awaiting_answer)
+        # Con el bot hablando, `awaiting_answer` no es fiable: los TTSTextFrame de toda la
+        # respuesta (también su «¿…?» final) llegan antes que su audio. Solo cuenta ya callado.
+        awaiting = state.awaiting_answer and not self._bot_speaking
+        kind = classify(text, True, awaiting)
+        logger.debug(
+            f"barge-in: kind={kind} words={len(normalize(text))} final={final} "
+            f"awaiting={awaiting} echo={self._is_echo(text)}"
+        )
         if kind == "stop_speech":
             await self._stop_speech()
         elif kind == "backchannel":
@@ -144,7 +155,7 @@ class DrakterStartStrategy(BaseUserTurnStartStrategy):
             await self._open()
         elif final:
             # Pocas palabras al acabar el tramo: solo cuentan si el bot esperaba respuesta («sí»).
-            if state.awaiting_answer:
+            if awaiting:
                 await self._open()
             else:
                 await self._discard()

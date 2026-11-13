@@ -70,6 +70,9 @@ class VoiceBridge:
         self._observer = observer
         self._queue: asyncio.Queue[tuple[str, tuple[Any, ...]]] = asyncio.Queue(_QUEUE_SIZE)
         self._turns: dict[UUID, _Turn] = {}
+        # Sesión de los últimos turnos ya terminados: su audio sigue sonando tras el final del
+        # turno y un corte (`voice.playback{interrupted}`) llega después.
+        self._ended: dict[UUID, UUID] = {}
         self._task: asyncio.Task[None] | None = None
 
     # ── lifecycle ──────────────────────────────────────────────────────────
@@ -121,7 +124,7 @@ class VoiceBridge:
 
     def session_of(self, turn_id: UUID) -> UUID | None:
         turn = self._turns.get(turn_id)
-        return turn.session_id if turn else None
+        return turn.session_id if turn else self._ended.get(turn_id)
 
     def speech_turn(self, speech_id: int) -> UUID | None:
         for turn_id, turn in self._turns.items():
@@ -240,6 +243,10 @@ class VoiceBridge:
 
     async def _do_terminal(self, turn_id: UUID, outcome: Outcome) -> None:
         turn = self._turns.pop(turn_id, None)
+        if turn is not None:
+            self._ended[turn_id] = turn.session_id
+            while len(self._ended) > 8:
+                self._ended.pop(next(iter(self._ended)))
         if turn is None:
             return
         await self._close(turn, outcome)

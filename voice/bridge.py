@@ -130,6 +130,8 @@ class BackendBridgeProcessor(FrameProcessor):
         elif isinstance(frame, InterruptionFrame):
             self._mark_cut()
         elif isinstance(frame, BotStoppedSpeakingFrame):
+            if not self._open:
+                self._session.speech_open = False
             await self._session.apply_pending_voice()
         elif isinstance(frame, (EndFrame, CancelFrame)):
             await self._cancel_final_timer()
@@ -208,7 +210,10 @@ class BackendBridgeProcessor(FrameProcessor):
             if not text:
                 return
 
-        command = _classify(text, state.bot_speaking, state.awaiting_answer)
+        # Con un turno del agente en curso (aún sin audio, o entre el acuse y la respuesta),
+        # «para …» también es una orden de parada.
+        busy = state.bot_speaking or utt.overlap != "none" or state.turn_phase in ("thinking", "executing")
+        command = _classify(text, busy, state.awaiting_answer)
         if command in ("rest", "close"):
             await session.emit("voice.local_command", {"command": command, "utt_id": utt.utt_id})
             await session.play_phrase("goodbye")
@@ -246,6 +251,7 @@ class BackendBridgeProcessor(FrameProcessor):
         self._speech_id, self._open, self._cut, self._seq = speech_id, True, False, None
         self._stripper = IncrementalStripper()
         self._session.speech_text = ""
+        self._session.speech_open = True
 
     async def speak_delta(self, speech_id: int, seq: int, text: str) -> bool:
         """Devuelve `True` si se ignora: speech desconocido, cortado, cerrado o `seq` repetido."""
@@ -275,6 +281,8 @@ class BackendBridgeProcessor(FrameProcessor):
         if speech_id != self._speech_id or not self._open:
             return
         self._open = False
+        if not self._session.speech_text.strip() and not self._ctx:
+            self._session.speech_open = False  # tramo sin texto: no va a sonar nada
         if not self._cut:
             self._session.speech_text += self._stripper.flush()
             if self._ctx:
@@ -295,6 +303,7 @@ class BackendBridgeProcessor(FrameProcessor):
         if self._open:
             self._cut = True
         self._ctx = False  # la interrupción descarta el contexto aguas abajo
+        self._session.speech_open = False
 
     async def turn_phase(self, phase: str) -> None:
         """Mientras el agente piensa o ejecuta, el silencio del usuario no cuenta como inactividad."""

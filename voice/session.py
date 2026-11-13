@@ -84,6 +84,9 @@ class Session:
         self.cfg = cfg
         self.state = SessionState()
         self.speech_text = ""
+        # Hay un tramo de habla del bot abierto o por sonar (lo mantiene el puente): el VAD no
+        # abre turno al instante, igual que con el bot hablando.
+        self.speech_open = False
         self.duck = False
         self.false_ducks = 0
         self.metrics_last: dict[str, Any] | None = None
@@ -183,6 +186,7 @@ class Session:
         if not connected:
             s.mode, s.trigger = "standby", None
             s.bot_speaking = False  # el pipeline que lo mantenía ya no existe
+            self.speech_open = False
             self.set_duck(False)
         if changed:
             await self.emit_state()
