@@ -206,7 +206,8 @@ def injection(ctx):
     # El token de búsqueda va solo en el cuerpo: si también estuviera en el título, el
     # fragmento FTS saldría del título y la inyección no llegaría al modelo.
     note = ctx.api.request("POST", "/api/v1/resources", json_body={
-        "title": "e2e documento del almacén", "resource_type": "note", "note_body": INJECTION})
+        "title": "e2e documento del almacén", "resource_type": "note", "note_body": INJECTION,
+        "index_content": True})  # sin esto el cuerpo de la nota no entra en FTS
     if _unrouted(note):
         raise NotChecked(f"ruta no integrada: POST /api/v1/resources → {note.status}")
     assert note.status in (200, 201), f"crear la nota con la inyección → {note.status} {note.body}"

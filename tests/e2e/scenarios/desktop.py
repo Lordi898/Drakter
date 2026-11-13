@@ -344,7 +344,7 @@ def confirmation(ctx):
             raise AssertionError(f"{section}: «{label}» en «{row[:40]}» no abrió diálogo de "
                                  f"confirmación en 5 s; avisos: {toasts or 'ninguno'}") from exc
         _mark(cdp, "[...document.querySelectorAll('[role=\"alertdialog\"] button, [role=\"dialog\"] button')]"
-              ".find(b => /^\\s*(cancelar|no)\\b/i.test(b.innerText))", "cancel", timeout=3)
+              ".find(b => /^\\s*(cancelar|no|cerrar|rechazar)\\b/i.test(b.innerText))", "cancel", timeout=3)
         cdp.click("[data-e2e=cancel]")
         cdp.wait_for("!document.querySelector('[role=\"alertdialog\"], [role=\"dialog\"]')", 5)
         assert row in _main_text(cdp), f"{section}: tras cancelar el dato desapareció: {row!r}"

@@ -210,7 +210,7 @@ method = "DELETE"
 path = "/api/v1/tasks/{id}"
 expect = [409]
 assert = { "error.code" = "confirmation_required" }
-capture = { confirmation_id = "confirmation.id" }
+capture = { confirmation_id = "confirmation.id", params_hash = "confirmation.params_hash" }
 [[flow.step]]
 name = "el recurso sigue existiendo"
 method = "GET"
@@ -222,6 +222,7 @@ unrouted_ok = true
 role = "approver"  # solo este token aprueba (backend/CONTRACT.md, matriz)
 method = "POST"
 path = "/api/v1/confirmations/{confirmation_id}/approve"
+json = { params_hash = "{params_hash}" }  # ApproveBody: el hash del ticket del 409
 expect = [200]
 [[flow.step]]
 name = "el recurso ya no existe"
