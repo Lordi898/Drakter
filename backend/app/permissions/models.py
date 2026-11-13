@@ -145,5 +145,9 @@ class ActionRegistry:
     def freeze(self) -> None:
         self._frozen = True
 
+    @property
+    def frozen(self) -> bool:
+        return self._frozen
+
     def get(self, name: str) -> ActionSpec | None:
         return self._specs.get(name)

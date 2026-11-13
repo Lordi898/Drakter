@@ -91,7 +91,8 @@ def load_confirmed_executors(settings: Settings) -> dict[str, ConfirmedExecutor]
     if support is not None:
         for name in _HABITS_CALENDAR_MODULES:
             _optional(name)
-        for tool in support.CONFIRMED_ACTIONS:
+        # Hábitos y calendario now register `ActionSpec`s (calendar_actions.py) instead.
+        for tool in getattr(support, "CONFIRMED_ACTIONS", {}):
             add(tool, partial(_run_habits_calendar, support, tool))
     return executors
 
