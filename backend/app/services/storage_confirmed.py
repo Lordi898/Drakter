@@ -32,4 +32,10 @@ def execute_confirmed(
     conn: sqlite3.Connection, settings: Settings, actor: Actor, tool: str, args: Mapping[str, Any]
 ) -> Any:
     executor = CONFIRMED_ACTIONS[tool]
-    return executor(conn, StorageDeps(settings=settings, gate=ApprovedByDispatcher()), actor, args)
+    # The pipeline's connection returns tuples; storage code reads columns by name.
+    previous = conn.row_factory
+    conn.row_factory = sqlite3.Row
+    try:
+        return executor(conn, StorageDeps(settings=settings, gate=ApprovedByDispatcher()), actor, args)
+    finally:
+        conn.row_factory = previous
