@@ -18,7 +18,7 @@ python agent/evals/run.py --provider anthropic --suite personalidad --case <id>
 
 Salida: `report.json` y `report.md` en un directorio bajo `$TMPDIR` (o `--out`). Códigos: `0` bien, `1` algún fallo, `2` bloqueado (sin credenciales o escenarios inválidos).
 
-Cada caso ofrece al modelo las herramientas de `schemas/tool_inputs.json` (esquemas reales; regenerar con `tools/extract_schemas.py`) y como `system` las reglas de seguridad más `agent/identity/` en el orden de `home.py`. Antes de integrar, catálogo, stub y reglas se leen de sus ramas (`git show`); después, del árbol.
+Cada caso ofrece al modelo las herramientas de `schemas/tool_inputs.json` (esquemas reales; regenerar con `tools/extract_schemas.py`) y como `system` las reglas de seguridad más los 14 archivos de `agent/identity/`, `agent/knowledge/` y `agent/context/` en el orden de `home.py`. Antes de integrar, catálogo, stub y reglas se leen de sus ramas (`git show`); después, del árbol.
 
 ## Por qué los casos llevan controles negativos
 

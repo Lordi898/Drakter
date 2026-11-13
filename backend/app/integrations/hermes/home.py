@@ -41,21 +41,23 @@ _GUARD_FILES: Final = frozenset({*_GUARD_SOURCES, _GUARD_ALLOWLIST})
 # Under HERMES_HOME these change behaviour without going through config.yaml.
 _FORBIDDEN_IN_ROOT: Final = (".env",)
 _CONTEXT_MARKERS: Final = (".git", ".hermes.md", "HERMES.md")
+# (folder under agent/, file). The 14 files live in identity/, knowledge/ and context/ (DECISIONS:
+# "Identidad repartida en identity/, context/ y knowledge/"); all of them reach SOUL.md.
 _IDENTITY_ORDER: Final = (
-    "SOUL.md",
-    "VALUES.md",
-    "PERSONALITY.md",
-    "COMMUNICATION.md",
-    "EMOTIONAL_STYLE.md",
-    "BEHAVIOR.md",
-    "CAPABILITIES.md",
-    "TOOL_GUIDE.md",
-    "WORKSPACE_GUIDE.md",
-    "SYSTEM_GUIDE.md",
-    "ENVIRONMENT.md",
-    "PREFERENCES.md",
-    "USER.md",
-    "CURRENT_CONTEXT.md",
+    ("identity", "SOUL.md"),
+    ("identity", "VALUES.md"),
+    ("identity", "PERSONALITY.md"),
+    ("identity", "COMMUNICATION.md"),
+    ("identity", "EMOTIONAL_STYLE.md"),
+    ("identity", "BEHAVIOR.md"),
+    ("knowledge", "CAPABILITIES.md"),
+    ("knowledge", "TOOL_GUIDE.md"),
+    ("knowledge", "WORKSPACE_GUIDE.md"),
+    ("knowledge", "SYSTEM_GUIDE.md"),
+    ("context", "ENVIRONMENT.md"),
+    ("context", "PREFERENCES.md"),
+    ("context", "USER.md"),
+    ("context", "CURRENT_CONTEXT.md"),
 )
 _NEUTRAL_SOUL: Final = "# Drakter\n\nEres Drakter, el asistente personal de una sola persona. Responde en español.\n"
 
@@ -303,13 +305,17 @@ def render_soul(repo_root: Path) -> str:
     """Safety rules first, then the identity files in a fixed order."""
     configuration = repo_root / "agent" / "configuration"
     safety = _read_regular(configuration / "safety_instructions.md").decode("utf-8")
-    identity_dir = repo_root / "agent" / "identity"
+    agent_dir = repo_root / "agent"
     identity: list[str] = []
+    files = list(_IDENTITY_ORDER)
+    identity_dir = agent_dir / "identity"
     if identity_dir.is_dir() and not identity_dir.is_symlink():
-        extra = sorted(p.name for p in identity_dir.glob("*.md") if p.name not in _IDENTITY_ORDER)
-        for name in (*_IDENTITY_ORDER, *extra):
-            if os.path.lexists(identity_dir / name):
-                identity.append(_read_regular(identity_dir / name).decode("utf-8").strip() + "\n")
+        known = {name for _, name in _IDENTITY_ORDER}
+        files += [("identity", p.name) for p in sorted(identity_dir.glob("*.md")) if p.name not in known]
+    for folder, name in files:
+        directory = agent_dir / folder
+        if directory.is_dir() and not directory.is_symlink() and os.path.lexists(directory / name):
+            identity.append(_read_regular(directory / name).decode("utf-8").strip() + "\n")
     soul = "\n\n".join([safety.strip() + "\n", *(identity or [_NEUTRAL_SOUL])])
     if len(soul) > SOUL_MAX_CHARS:
         raise HomeError("the identity is too long for SOUL.md")
