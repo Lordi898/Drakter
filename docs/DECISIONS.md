@@ -713,7 +713,7 @@ Decisiones técnicas, cambios de tecnología y motivos.
 
 ## [2026-11-13] Revisión adversarial de seguridad cerrada
 - **Contexto:** `RUN_STATE.md` tenía pendiente la revisión adversarial de `drakter/seguridad`.
-- **Decisión:** se da por hecha. Banco de 200 ataques: de 125/27/47/1 (BLOCKED/BREACH/N/A/ERROR) a 169/12/19/0. Quedan abiertas, de diseño: contaminación solo en memoria (CONF-46/INJ-26), canal de datos de `TurnRequest` y contaminación de `build_context` (INJ-11/14/25, no explotables mientras `build_context` no esté conectado), INJ-32, INJ-05 y FILE-DB-02 (TOCTOU, riesgo bajo). Las herramientas CONFIRM del agente siguen denegadas (`DefaultToolGate` en el runtime): falla cerrado.
+- **Decisión:** se da por hecha. Banco de 200 ataques: de 125/27/47/1 (BLOCKED/BREACH/N/A/ERROR) a 169/12/19/0. Quedan abiertas, de diseño: contaminación solo en memoria (CONF-46/INJ-26), canal de datos de `TurnRequest` y contaminación de `build_context` (INJ-11/14/25, no explotables mientras `build_context` no esté conectado), INJ-32, INJ-05 y FILE-DB-02 (TOCTOU, riesgo bajo). Las herramientas CONFIRM del agente siguen denegadas (`DefaultToolGate` en el runtime): falla cerrado. (Resuelto después: `b722aca` y `42a0a17` ponen `BackendToolGate` en el registro del agente.)
 - **Motivo:** `CLAUDE.md` §8.
 - **Estado posterior:** `build_context` ya está conectado (`df258b1`), así que INJ-11/14/25 hay que reevaluarlas: tainted ya se propaga (`df258b1`); repaso de drakter-34 pendiente.
 - **Impacto:** `RUN_STATE.md` (quitar "Seguridad sin revisar"), Checklist 16.
