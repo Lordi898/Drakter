@@ -468,6 +468,7 @@ Decisiones técnicas, cambios de tecnología y motivos.
 - **Alternativas descartadas:** conectarlo en el cierre (integración nueva en `app/integrations/hermes/` y en el flujo de confirmaciones, fuera del alcance de cierre).
 - **Motivo:** el protocolo de cierre solo termina lo empezado.
 - **Impacto:** Checklist 12; siguiente paso: llamar a `build_context` en el runner y enchufar `memory.forget` a `app/services/actions.py`.
+- **Estado (2026-11-13, más tarde):** la recuperación al turno ya está conectada (ver «Contexto de cada turno de Hermes por build_context»). El olvido sigue sin conectar.
 
 ## [2026-11-13] Caducidad única de confirmaciones: 300 s
 - **Contexto:** convivían tres plazos de confirmación: `ActionService` 300 s (`backend/app/services/actions.py`), `habits_calendar_support` 15 min y `storage_ports` 600 s («propuesto»). `contracts/README.md` §5 pide un único camino de confirmación.
@@ -601,3 +602,18 @@ Decisiones técnicas, cambios de tecnología y motivos.
 - **Motivo:** que el contrato sea la fuente fiable de lo que existe.
 - **Comprobado:** 175 pares método+ruta de la app real frente a `routes.md`: 0 rutas en código sin contrato y 0 filas «construida» sin código; `gen_ts.py` regenera `contracts/ts/index.ts` idéntico.
 - **Impacto:** `contracts/api/routes.md` (`dda565b`, `b31d1e8`, `6ba869a`, pendientes de fusión); al regenerar `desktop/electron/shared/routes.generated.ts` entran 12 rutas de automejora, incluidas `apply` y `revert` (decisión de desktop/integrador).
+
+## [2026-11-13] Contexto de cada turno de Hermes por build_context
+- **Contexto:** `build_context` (recuperación, límites, cercado) existía, pero el provider de Hermes enviaba el texto crudo del usuario y solo las instrucciones de seguridad. Los niveles 2 y 4 no llegaban al modelo.
+- **Decisión:** antes de cada turno, el backend recupera memorias (`memories_for_context`) y llama a `build_context`. `turn_prompt` es la entrada del turno, con la memoria cercada como `untrusted_data`. Las instrucciones efímeras son `safety_instructions.md` + niveles 1, 2 y 4, y la identidad sigue en `SOUL.md`. La conversación la guarda la sesión de Hermes (`conversation=()`). Un turno con memoria marca la sesión como `tainted`.
+- **Alternativas descartadas:** meter la memoria en el prompt de sistema (Hermes la trataría como autoritativa durante toda la sesión); repetir el historial en `build_context` (duplicaría lo que ya guarda Hermes).
+- **Motivo:** aplicar "El backend recupera los recuerdos" y la prioridad de CLAUDE.md §8.
+- **Efecto conocido:** tras un turno con memoria la sesión queda `tainted` y las escrituras del agente escalan a `confirm`; mientras el runtime use `DefaultToolGate`, fallan cerradas (`confirmation_unavailable`).
+- **Impacto:** `backend/app/integrations/hermes/hermes_provider.py`, `runtime.py` (`f364b48`, pendiente de fusión), Checklist 12 (recuperación selectiva, límites de contexto, memoria de trabajo).
+
+## [2026-11-13] Cierre de CL4: consistencia OK, estilo al rediseño
+- **Contexto:** con Claude Haiku 5.5 real, drakter-45 dio por buena «Probar consistencia de personalidad» (2 casos, 0 hallazgos, lectura humana conforme) y drakter-51 la dejó con ⚠️: el modelo a veces supera `max_sentences` (4 frases para máx. 3), abre dos veces con la muletilla «Mal asunto a medias:» y las rúbricas de `agent/evals` (`report.md`) no tienen lectura humana.
+- **Decisión (drakter-33):** la casilla queda `[x]` sin ⚠️, con una nota informativa. Los dos finalizadores verificaron que la personalidad es mecánicamente consistente (2 casos × 2 sesiones, respuestas estables), que es el criterio de CLAUDE.md §4. Los matices de estilo y la lectura humana de las rúbricas se tratan en el rediseño de personalidad, que se planifica aparte con el usuario.
+- **Alternativas descartadas:** dejar la casilla en `[ ]` hasta ajustar el estilo (exigiría tocar los textos de identidad, fuera del alcance del cierre).
+- **Motivo:** la consistencia está comprobada; ajustar el estilo es trabajo de personalidad, no de cierre.
+- **Impacto:** `IMPLEMENTATION_STATUS.md` Checklist 4. Sin cambios en `agent/identity/`.

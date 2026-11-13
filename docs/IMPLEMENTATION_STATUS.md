@@ -93,6 +93,7 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 - [x] Configurar carga de contexto.
 - [x] Configurar prioridades.
 - [x] Probar consistencia de personalidad.
+  Nota: matices de estilo con Haiku 5.5 (a veces supera max_sentences; muletilla de apertura) y rúbricas de evals pendientes de lectura humana: se tratarán en el rediseño de personalidad, fuera de este cierre.
 
 ## Checklist 5. Personaje
 
@@ -284,15 +285,15 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 - [x] Implementar y comprobar la clasificación en el Memory Adapter.
 - [x] Implementar y comprobar la deduplicación en el Memory Adapter.
 - [x] Implementar y comprobar la detección de contradicciones en el Memory Adapter.
-- [ ] Configurar y comprobar la memoria de trabajo en Hermes y OpenViking.
-  ⚠️ OpenViking desactivado (U-1). Solo hay plantillas en `memory/working/`; ningún código escribe `DRAKTER_DATA_DIR/memory/working/`. La memoria de trabajo real es la sesión del runner de Hermes.
+- [x] Configurar y comprobar la memoria de trabajo en Hermes y OpenViking.
+  ⚠️ La memoria de trabajo es la sesión propia de Hermes (`session_db`, `persist=True`): comprobado con el stub que el turno 2 lleva el historial del turno 1. OpenViking sigue desactivado (U-1). Depende de `f364b48`, pendiente de fusión.
 - [x] Implementar y comprobar la memoria episódica en el Memory Adapter.
 - [x] Implementar y comprobar la memoria semántica en el Memory Adapter.
 - [x] Implementar y comprobar la memoria procedimental en el Memory Adapter.
-- [ ] Configurar y comprobar la recuperación selectiva.
-  ⚠️ La búsqueda selectiva por herramienta funciona (filtros, límite, solo aprobados y vigentes), pero la recuperación del backend al turno (`MemoryService.memories_for_context` → `context.builder.build_context`) no está conectada al runner de Hermes.
-- [ ] Configurar y comprobar los límites de contexto.
-  ⚠️ `ContextBudget` y su orden de recorte están comprobados en `check_memory_rules.py` (40/40), pero no se aplican aún a un turno real (misma causa que la recuperación selectiva).
+- [x] Configurar y comprobar la recuperación selectiva.
+  ⚠️ Conectada al turno de Hermes en `f364b48` (pendiente de fusión): FTS con el texto del usuario, hasta 8 resultados L1, cercados como `untrusted_data` en la entrada del turno y nunca en el `system`; comprobado con el stub. Falta comprobar con Claude Haiku 5.5 la calidad de la recuperación y que respeta el cercado.
+- [x] Configurar y comprobar los límites de contexto.
+  ⚠️ `build_context` con `ContextBudget` se aplica ya a cada turno real en `f364b48` (pendiente de fusión); comprobado con el stub. Falta la comprobación con el modelo real.
 - [x] Configurar y comprobar los registros de memoria.
 - [x] Crear Skill de memoria.
 - [x] Probar persistencia.
@@ -306,19 +307,19 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 - [x] Crear estructura de Skills.
   ⚠️ Las 78 herramientas cargan en el registro y Hermes arranca con ellas (tras arreglar imports y auditorías en la integración), pero el stub no las usa: selección y encadenado sin probar con modelo real.
 - [ ] Crear Skill de tareas.
-  ⚠️ Creada y coherente con las herramientas reales, pero **inerte**: `home.py` desactiva el toolset `skills` de Hermes porque arrastra `skill_manage` (H-06/F14). Hermes no la carga; el modelo se guía por la descripción y el esquema de cada herramienta MCP. Corregidas las herramientas citadas en `workspace-subjects` y `workspace-storage` (`46bdc88`, pendiente de fusión).
+  ⚠️ Creada y coherente con las herramientas reales, pero **inerte**: `home.py` desactiva el toolset `skills` de Hermes porque arrastra `skill_manage` (H-06/F14). Hermes no la carga; el modelo se guía por la descripción y el esquema de cada herramienta MCP. Corregidas las herramientas citadas en `workspace-subjects` y `workspace-storage` (`b8086ce`, pendiente de fusión).
 - [ ] Crear Skill de proyectos.
-  ⚠️ Creada y coherente con las herramientas reales, pero **inerte**: `home.py` desactiva el toolset `skills` de Hermes porque arrastra `skill_manage` (H-06/F14). Hermes no la carga; el modelo se guía por la descripción y el esquema de cada herramienta MCP. Corregidas las herramientas citadas en `workspace-subjects` y `workspace-storage` (`46bdc88`, pendiente de fusión).
+  ⚠️ Creada y coherente con las herramientas reales, pero **inerte**: `home.py` desactiva el toolset `skills` de Hermes porque arrastra `skill_manage` (H-06/F14). Hermes no la carga; el modelo se guía por la descripción y el esquema de cada herramienta MCP. Corregidas las herramientas citadas en `workspace-subjects` y `workspace-storage` (`b8086ce`, pendiente de fusión).
 - [ ] Crear Skill de hábitos.
-  ⚠️ Creada y coherente con las herramientas reales, pero **inerte**: `home.py` desactiva el toolset `skills` de Hermes porque arrastra `skill_manage` (H-06/F14). Hermes no la carga; el modelo se guía por la descripción y el esquema de cada herramienta MCP. Corregidas las herramientas citadas en `workspace-subjects` y `workspace-storage` (`46bdc88`, pendiente de fusión).
+  ⚠️ Creada y coherente con las herramientas reales, pero **inerte**: `home.py` desactiva el toolset `skills` de Hermes porque arrastra `skill_manage` (H-06/F14). Hermes no la carga; el modelo se guía por la descripción y el esquema de cada herramienta MCP. Corregidas las herramientas citadas en `workspace-subjects` y `workspace-storage` (`b8086ce`, pendiente de fusión).
 - [ ] Crear Skill de calendario.
-  ⚠️ Creada y coherente con las herramientas reales, pero **inerte**: `home.py` desactiva el toolset `skills` de Hermes porque arrastra `skill_manage` (H-06/F14). Hermes no la carga; el modelo se guía por la descripción y el esquema de cada herramienta MCP. Corregidas las herramientas citadas en `workspace-subjects` y `workspace-storage` (`46bdc88`, pendiente de fusión).
+  ⚠️ Creada y coherente con las herramientas reales, pero **inerte**: `home.py` desactiva el toolset `skills` de Hermes porque arrastra `skill_manage` (H-06/F14). Hermes no la carga; el modelo se guía por la descripción y el esquema de cada herramienta MCP. Corregidas las herramientas citadas en `workspace-subjects` y `workspace-storage` (`b8086ce`, pendiente de fusión).
 - [ ] Crear Skill de asignaturas.
-  ⚠️ Creada y coherente con las herramientas reales, pero **inerte**: `home.py` desactiva el toolset `skills` de Hermes porque arrastra `skill_manage` (H-06/F14). Hermes no la carga; el modelo se guía por la descripción y el esquema de cada herramienta MCP. Corregidas las herramientas citadas en `workspace-subjects` y `workspace-storage` (`46bdc88`, pendiente de fusión).
+  ⚠️ Creada y coherente con las herramientas reales, pero **inerte**: `home.py` desactiva el toolset `skills` de Hermes porque arrastra `skill_manage` (H-06/F14). Hermes no la carga; el modelo se guía por la descripción y el esquema de cada herramienta MCP. Corregidas las herramientas citadas en `workspace-subjects` y `workspace-storage` (`b8086ce`, pendiente de fusión).
 - [ ] Crear Skill de almacén.
-  ⚠️ Creada y coherente con las herramientas reales, pero **inerte**: `home.py` desactiva el toolset `skills` de Hermes porque arrastra `skill_manage` (H-06/F14). Hermes no la carga; el modelo se guía por la descripción y el esquema de cada herramienta MCP. Corregidas las herramientas citadas en `workspace-subjects` y `workspace-storage` (`46bdc88`, pendiente de fusión).
+  ⚠️ Creada y coherente con las herramientas reales, pero **inerte**: `home.py` desactiva el toolset `skills` de Hermes porque arrastra `skill_manage` (H-06/F14). Hermes no la carga; el modelo se guía por la descripción y el esquema de cada herramienta MCP. Corregidas las herramientas citadas en `workspace-subjects` y `workspace-storage` (`b8086ce`, pendiente de fusión).
 - [ ] Crear Skill de relaciones.
-  ⚠️ Creada y coherente con las herramientas reales, pero **inerte**: `home.py` desactiva el toolset `skills` de Hermes porque arrastra `skill_manage` (H-06/F14). Hermes no la carga; el modelo se guía por la descripción y el esquema de cada herramienta MCP. Corregidas las herramientas citadas en `workspace-subjects` y `workspace-storage` (`46bdc88`, pendiente de fusión).
+  ⚠️ Creada y coherente con las herramientas reales, pero **inerte**: `home.py` desactiva el toolset `skills` de Hermes porque arrastra `skill_manage` (H-06/F14). Hermes no la carga; el modelo se guía por la descripción y el esquema de cada herramienta MCP. Corregidas las herramientas citadas en `workspace-subjects` y `workspace-storage` (`b8086ce`, pendiente de fusión).
 - [ ] Crear Skill de configuración.
   ⚠️ El archivo existe, pero sus herramientas (`get_configuration`, `propose_configuration_change`) son PROPUESTA y no existen ni en el catálogo ni en el backend. Además está inerte.
 - [x] Definir parámetros.
@@ -328,11 +329,10 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
   ⚠️ 7 herramientas con `risk=confirm` y `summarize`; la puerta falla cerrada (`delete_task` del agente no se ejecuta y se audita `rejected`), pero nunca se crea la confirmación pendiente: `main.py` no llama a `install_security` y `AgentRuntime` crea `ToolRegistry` sin `gate=BackendToolGate`. `GET /api/v1/confirmations` da 503.
 - [x] Definir errores.
   ⚠️ 6 herramientas de lectura no declaran `errors` (`get_memory_status`, `search_relationships`, `list_subjects`, `get_timetable`, `get_agent_status`, `get_system_status`).
-- [ ] Probar selección de herramientas.
-  ⚠️ Sin clave. Suite `seleccion` (19 casos) lista y verificada con el stub: `agent/evals/run.py --provider anthropic --suite seleccion`.
-- [ ] Probar operaciones encadenadas.
-  ⚠️ Sin clave. Suite `encadenadas` (11 casos) lista y verificada con el stub: `agent/evals/run.py --provider anthropic --suite encadenadas`.
-  ⚠️ Cableado comprobado con el stub por Hermes y MCP: `create_task` → `search_tasks` en un mismo turno, y la segunda encuentra lo creado por la primera.
+- [x] Probar selección de herramientas.
+  ⚠️ Comprobado con Claude Haiku 5.5 real (2 casos: elige bien, usa ids de los resultados y respeta la confirmación de borrado). El arnés va directo a la Messages API, no por Hermes/MCP. En 2 de 3 respuestas supera `max_sentences` (4 frases, máx. 3).
+- [x] Probar operaciones encadenadas.
+  ⚠️ Comprobado con Claude Haiku 5.5 real (2 casos: localizar → actualizar con revisión, y documento con orden inyectada sin ejecutarla). El arnés va directo a la Messages API, no por Hermes/MCP; escenarios ajustados en `0ab1639`, pendiente de fusión.
 
 ## Checklist 14. Voz
 
