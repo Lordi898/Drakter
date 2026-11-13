@@ -56,10 +56,8 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 
 - [x] Instalar Hermes.
 - [ ] Configurar Claude Haiku 5.5.
-  ⚠️ 2026-11-13: la `ANTHROPIC_API_KEY` de `~/.config/drakter/.env` da 401 `invalid x-api-key` (también en llamada directa a la API). Sin clave válida no hay prueba con el modelo real.
-  ⚠️ `render_config` genera `model: {default: claude-haiku-5-5, provider: anthropic}`; sin ejecutar contra el modelo real.
+  ⚠️ (c) Pendiente de prueba por Hermes con clave: `render_config` genera `model: {default: claude-haiku-5-5, provider: anthropic}` y la clave es válida (evals la usa con la Messages API directa), pero ningún turno ha pasado aún por Hermes con el modelo real. Ver `informes/conciliacion-cl3-cl4.md`.
 - [x] Configurar credenciales.
-  ⚠️ El backend lee la clave y Hermes la recibe redactada en logs; falta una clave válida (ver arriba).
 - [x] Conectar Hermes con backend.
 - [x] Crear adaptador.
 - [x] Crear sesiones.
@@ -68,11 +66,9 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 - [x] Crear eventos de agente.
 - [x] Crear gestión de desconexiones.
 - [ ] Crear primera Skill.
-  ⚠️ Las Skills existen y son coherentes con las herramientas reales, pero están inertes: `home.py` desactiva el toolset `skills` de Hermes porque arrastra `skill_manage`, que permitiría al agente escribir sus propias instrucciones (H-06/F14). Ver `DECISIONS.md` «Skills de agent/ inertes en Hermes».
+  ⚠️ (d) Las Skills existen y son coherentes con las herramientas reales, pero Hermes no las carga: `home.py` desactiva el toolset `skills` porque arrastra `skill_manage` (H-06/F14). Ver `DECISIONS.md` «Skills de agent/ inertes en Hermes».
 - [ ] Probar conversación completa.
-  ⚠️ Conversación completa GUI → backend → Hermes (b200f5b) → respuesta en el chat comprobada SOLO con `tools/dev-llm-stub` (2 s). Falta con Haiku real.
-  ⚠️ Sin clave de API no se cierra: el adaptador usa un doble identificado como mock, y ninguna casilla de conversación, personalidad, selección de herramientas o memoria se marca hasta probarla con clave.
-  ⚠️ Evals (cierre 2026-11-13): la tubería está verificada con el stub (`agent/evals/run.py`: encadenadas 11/11, personalidad 16/16, selección 19/19, 101/101 controles negativos). El arnés va directo a la Messages API, no pasa por Hermes ni MCP; el paso por Hermes se verifica en `tests/e2e` con el stub. Con `--provider anthropic` y sin clave sale BLOQUEADO.
+  ⚠️ (c) Con el stub la conversación completa funciona por Hermes (GUI/REST → backend → Hermes → respuesta, eventos, herramienta MCP, cadena, lista blanca); con Claude Haiku 5.5 real solo se ha probado por evals, que no pasa por Hermes ni MCP. Falta un turno real por Hermes (drakter-36). Ningún fallo del modelo. Ver `informes/conciliacion-cl3-cl4.md`.
 
 ## Checklist 4. Personalidad y contexto
 
