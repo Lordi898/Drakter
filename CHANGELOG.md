@@ -16,7 +16,7 @@ Primera versión publicada en GitHub (repositorio privado).
 - `.github/`: CI (comprobaciones críticas del backend y typecheck + build del escritorio), plantillas de issues y PR, `CODEOWNERS` y Dependabot.
 - Las 19 skills de `LLMTooling/agent-skills`, sin licencia, salen del árbol: se instalan con `scripts/install-agent-skills.sh`.
 - `.env.example` completo (voz y `FISH_API_KEY`) y `.gitignore` ampliado.
-- Licencia del proyecto pendiente de elegir.
+- Licencia del proyecto: Apache-2.0 (`LICENSE`, `NOTICE` y campo `license` en `package.json` y `pyproject.toml`).
 
 ### Cierre de la v1 (2026-11-13)
 

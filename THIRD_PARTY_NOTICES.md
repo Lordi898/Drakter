@@ -2,7 +2,7 @@
 
 Este documento recoge el código y el contenido de terceros que **se distribuye dentro de este repositorio** y las licencias de las dependencias que se instalan aparte. Auditoría del 2026-11-13 sobre `main` (`eff16d1`).
 
-La licencia del propio Drakter está pendiente de elegir (ver [README](README.md#licencia)). Nada de lo que hay aquí cambia la licencia de cada componente de terceros: cada uno conserva la suya.
+Drakter se distribuye bajo [Apache-2.0](LICENSE) (ver también [NOTICE](NOTICE)). Nada de lo que hay aquí cambia la licencia de cada componente de terceros: cada uno conserva la suya.
 
 **Cómo se ha verificado el origen:** comparando el hash de cada blob versionado con el árbol del repositorio de origen en el commit indicado (API de GitHub). «Idéntico» significa que todos los archivos coinciden byte a byte, salvo los que se indican como adaptados.
 

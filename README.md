@@ -1,6 +1,6 @@
 # Drakter
 
-> **English summary.** Drakter is a local-first personal AI agent with its own desktop app, built for a single user on Linux. An Electron + React desktop talks to a local FastAPI + SQLite backend, which drives a [Hermes Agent](https://github.com/NousResearch/hermes-agent) runtime backed by Claude Haiku 5.5. The agent manages tasks, projects, habits, calendar, subjects, a file storage with full-text search, relations between items and its own memory, always through validated backend tools with explicit confirmation for destructive actions. Status: v0.1.0 pre-release — the v1 scope is integrated and verified module by module; voice, the animated Rive character and the self-improvement screen are still in progress. Documentation is in Spanish. License: not chosen yet (see [Licencia](#licencia)).
+> **English summary.** Drakter is a local-first personal AI agent with its own desktop app, built for a single user on Linux. An Electron + React desktop talks to a local FastAPI + SQLite backend, which drives a [Hermes Agent](https://github.com/NousResearch/hermes-agent) runtime backed by Claude Haiku 5.5. The agent manages tasks, projects, habits, calendar, subjects, a file storage with full-text search, relations between items and its own memory, always through validated backend tools with explicit confirmation for destructive actions. Status: v0.1.0 pre-release — the v1 scope is integrated and verified module by module; voice, the animated Rive character and the self-improvement screen are still in progress. Documentation is in Spanish. License: [Apache-2.0](LICENSE); the license does not grant rights to the Drakter name.
 
 Agente personal de IA con aplicación de escritorio propia. Local-first, para un solo usuario, en Linux primero.
 
@@ -170,4 +170,8 @@ Más en [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
 ## Licencia
 
-**Pendiente.** El propietario todavía no ha elegido la licencia del proyecto, así que de momento no se concede ningún permiso de uso, copia ni redistribución más allá de lo que permite GitHub. Esta sección y el archivo `LICENSE` se completarán cuando se elija. El contenido de terceros conserva su propia licencia (ver [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)).
+Drakter se distribuye bajo la [Licencia Apache 2.0](LICENSE) (SPDX: `Apache-2.0`). Ver también [NOTICE](NOTICE).
+
+La licencia no concede permiso para usar el nombre «Drakter», sus logotipos ni el personaje como marca (Apache-2.0, §6), salvo lo razonable para describir el origen del software. Si publicas una versión modificada, usa otro nombre.
+
+El contenido de terceros conserva su propia licencia: ver [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
