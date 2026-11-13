@@ -56,7 +56,7 @@ Tabla única de rutas. Manda `contracts/README.md`; después, lo ya construido e
 | GET | `/api/v1/chat/sessions/{id}/messages` | `limit`, `cursor` | `{items,next_cursor}` `MessageOut` (`session_id`, `text`) | construida | read | agente/chat (16) |
 | POST | `/api/v1/chat/sessions/{id}/messages` | `MessageCreate`: `{text, client_message_id, input_source?}` | 202 `MessageAccepted` `{turn_id,message_id}`; 409 `agent_busy` | construida | write | agente/chat (16) |
 | POST | `/api/v1/chat/turns/{turn_id}/cancel` | - | 202 | construida | write | agente/chat (16) |
-| GET | `/api/v1/agent/status` | - | `AgentStatusOut` `{state,provider,model,detail}`; `state` entre los 9 del personaje | construida | read | agente/chat (16) |
+| GET | `/api/v1/agent/status` | - | `AgentStatusOut` `{state,provider,model,detail}`; `state` = `runtime.status_arbiter.current` (voz v2), entre los 9 del personaje | construida | read | agente/chat (16) |
 
 ## Tareas
 
@@ -234,17 +234,23 @@ Tabla única de rutas. Manda `contracts/README.md`; después, lo ya construido e
 
 ## Voz
 
-Router escrito en `backend/app/integrations/voice/router.py` (`voice/CONTRACT.md`), sin montar: no está en `app/api/` y `main.py` no lo incluye. En v1 se queda así (DECISIONS «Voz: cierre mínimo, rediseño posterior sobre Pipecat»). Sin ruta para hacer hablar a Drakter; voz no confirma en v1.
+Voz v2 sobre Pipecat (plan de voz v2 §4.3; modelos en `drakter_contracts/voice_ipc.py`). El router vive en `backend/app/integrations/voice/router.py` (WP5) y lo monta la integración (WP9). Sin ruta para hacer hablar a Drakter, para aprobar nada por voz ni para el micrófono (es local al renderer). `VoiceState` = payload de `voice.state`.
 
 | Método | Ruta | Entrada | Respuesta | Estado | Riesgo | Dueño |
 |---|---|---|---|---|---|---|
-| GET | `/api/v1/voice/status` | - | estado de voz, dispositivos, latencias medidas | escrita, sin montar | read | voz (19) |
-| POST | `/api/v1/voice/mic` | `{enabled}` | estado | escrita, sin montar | write | voz (19) |
-| POST | `/api/v1/voice/wakeword` | `{enabled}` | estado | escrita, sin montar | write | voz (19) |
-| POST | `/api/v1/voice/listen/start` | - | 202 | escrita, sin montar | write | voz (19) |
-| POST | `/api/v1/voice/listen/stop` | - | 202 | escrita, sin montar | write | voz (19) |
-| POST | `/api/v1/voice/listen/cancel` | - | 202 | escrita, sin montar | write | voz (19) |
-| POST | `/api/v1/voice/interrupt` | - | 202 | escrita, sin montar | write | voz (19) |
+| POST | `/api/v1/voice/offer` | `VoiceOfferIn` `{sdp, type:"offer", pc_id?, restart_pc?}` | `VoiceOfferOut` `{sdp, type:"answer", pc_id}`; op `voice.offer` | (sin construir) | write | voz v2 (WP5) |
+| POST | `/api/v1/voice/activate` | `VoiceActivateIn` `{trigger:"hotkey"\|"ui"}` | `VoiceState`; op `voice.activate` | (sin construir) | write | voz v2 (WP5) |
+| POST | `/api/v1/voice/mode` | `VoiceModeIn` `{mode:"standby"\|"conversation"}` | `VoiceState`; op `voice.mode` | (sin construir) | write | voz v2 (WP5) |
+| GET | `/api/v1/voice/status` | - | `VoiceStatusOut` (`VoiceState` + `metrics_last?`); op `voice.status` | (sin construir) | read | voz v2 (WP5) |
+
+## Trabajos en segundo plano (Drakter Jobs)
+
+Modelos en `drakter_contracts/jobs.py`. Cancelar es `write` sin confirmación propia (el gate la eleva a `confirm` con la sesión contaminada). Lo que el trabajo deje pendiente de confirmar se aprueba en `/confirmations/{id}/approve` como cualquier otra acción.
+
+| Método | Ruta | Entrada | Respuesta | Estado | Riesgo | Dueño |
+|---|---|---|---|---|---|---|
+| GET | `/api/v1/jobs` | - | `JobList` `{items: JobOut[]}`; op `jobs.list` | (sin construir) | read | jobs (WP7) |
+| POST | `/api/v1/jobs/{job_id}/cancel` | sin cuerpo | `JobOut`; 404 `job_not_found`, 409 `job_not_running`; op `jobs.cancel` | (sin construir) | write | jobs (WP7) |
 
 ## Automejora
 
@@ -308,7 +314,7 @@ Solo documentados: en v1 no se implementan emisores ni oyentes nuevos (decisión
 | `workspace.entity_*` | Tareas y proyectos ya los emiten con `actor_type` (`services/tasks.py:186`, `services/projects.py:113`); el resto de módulos no los emite, y el desktop no escucha `workspace.*` |
 | `workspace.relationship_*` | Ningún emisor en el backend |
 | `agent.expression_changed`, `storage.index_progress` | Ningún emisor en el backend |
-| `voice.*` | Los emite la integración de voz, que no se arranca. Excepción: `voice.profile_changed` lo publica `voice_set_profile`; el desktop no lo consume |
+| `voice.*` | Voz v1 (`listening_started`, `transcription_*`, `playback_*`…): sin emisor; se borran del contrato en la integración de voz v2 (WP9). Los v2 (`voice.state`, `voice.playback`, `voice.error`) los emite `VoiceOrchestrator`. `voice.profile_changed` lo publica `voice_set_profile` |
 | `system.health_changed` | Lo emite `integrations/hermes/runtime.py`; el desktop no lo escucha y deriva `offline` solo de la caída del socket (admitido en README §7) |
 
 ### Sobre de error

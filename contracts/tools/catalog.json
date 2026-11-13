@@ -1498,5 +1498,70 @@
   "args_model": "SetProfileArgs",
   "result_model": "SetProfileResult",
   "phase": "17"
+ },
+ {
+  "name": "jobs_start",
+  "domain": "jobs",
+  "description": "Lanza un trabajo largo en segundo plano con un título corto y un encargo completo y autosuficiente; usted sigue atendiendo al usuario. Solo hay un carril: si está ocupado, devuelve jobs_full.",
+  "permission": "jobs.write",
+  "risk": "write",
+  "idempotent": false,
+  "returns_untrusted": false,
+  "timeout_s": 10.0,
+  "errors": [
+   "jobs_full",
+   "lane_unavailable"
+  ],
+  "args_model": "JobsStartArgs",
+  "result_model": "JobsStartResult",
+  "phase": "voz-v2"
+ },
+ {
+  "name": "jobs_status",
+  "domain": "jobs",
+  "description": "Estado de los trabajos en segundo plano (o de uno, con job_id): título, estado, tiempo, herramientas usadas y acciones pendientes de confirmar.",
+  "permission": "jobs.read",
+  "risk": "read",
+  "idempotent": true,
+  "returns_untrusted": false,
+  "timeout_s": 5.0,
+  "errors": [],
+  "args_model": "JobsStatusArgs",
+  "result_model": "JobsStatusResult",
+  "phase": "voz-v2"
+ },
+ {
+  "name": "jobs_amend",
+  "domain": "jobs",
+  "description": "Añade una corrección o un dato a un trabajo en curso: lo redirige si está pensando o lo deja en cola para su siguiente paso.",
+  "permission": "jobs.write",
+  "risk": "write",
+  "idempotent": false,
+  "returns_untrusted": false,
+  "timeout_s": 10.0,
+  "errors": [
+   "job_not_found",
+   "job_not_running"
+  ],
+  "args_model": "JobsAmendArgs",
+  "result_model": "JobsAmendResult",
+  "phase": "voz-v2"
+ },
+ {
+  "name": "jobs_cancel",
+  "domain": "jobs",
+  "description": "Cancela un trabajo en curso. Lo que ya hizo no se deshace.",
+  "permission": "jobs.write",
+  "risk": "write",
+  "idempotent": true,
+  "returns_untrusted": false,
+  "timeout_s": 10.0,
+  "errors": [
+   "job_not_found",
+   "job_not_running"
+  ],
+  "args_model": "JobsCancelArgs",
+  "result_model": "JobsCancelResult",
+  "phase": "voz-v2"
  }
 ]

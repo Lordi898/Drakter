@@ -94,6 +94,18 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 - [x] Probar conversación completa.
   Nota: comprobado con Claude Haiku 5.5 real a través de Hermes (`informes/hermes.md`, «Recomprobación con modelo real»; de apoyo, `informes/relaciones.md`, 3 turnos reales por Hermes).
 
+### Jobs y streaming de voz
+
+- [ ] `TurnTap` no bloqueante (con `on_steered`) y prefijos de turno no persistidos en `AgentRuntime`
+- [ ] Op `steer` en el runner (`redirect`, `pending_steer`) y filtro previo en la política de voz
+- [ ] `reasoning_effort` por carril (low en primer plano, medium en trabajadores) y hash de instructions estable
+- [ ] `Lane` y home `hermes-w1` con token y guard proof propios
+- [ ] `JobManager`, tabla `jobs` y migración 0014 probada sobre una copia
+- [ ] Eventos `job.*`, REST `/jobs` y JobsList en el panel
+- [ ] Aviso de fin de trabajo (notificación, frase en silencio y resumen no confiable en el prefijo)
+- [ ] Confirmación de trabajo en pantalla; el trabajo termina con `pending_actions`
+- [ ] RSS del runner trabajador medido; decisión sobre N=2
+
 ## Checklist 4. Personalidad y contexto
 
 - [x] Crear SOUL.md.
@@ -346,12 +358,21 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 - [x] Probar selección de herramientas.
 - [x] Probar operaciones encadenadas.
 
+### Voz v2: trabajos y herramientas
+
+- [ ] `jobs_start`, `jobs_status`, `jobs_amend`, `jobs_cancel` con esquema, permisos (`jobs.read`, `jobs.write`), catálogo, auditoría y errores
+- [ ] `ToolContext.job_id` y `confirmation.requested.job_id`
+- [ ] Eval `agent/evals/jobs_routing.jsonl` (20-30 frases) superada
+- [ ] `voice_list_profiles` y `voice_set_profile` siguen funcionando con el pipeline nuevo
+
 ## Checklist 14. Voz
 
 - [ ] Instalar openWakeWord.
+  ↪ Reemplazado por «Voz v2: Pipecat» (DECISIONS 2026-11-13, V-01 a V-38).
   ⚠️ Rediseño previsto sobre Pipecat (STT Whisper, TTS Fish Audio); en v1 `voice/` solo se estabiliza y documenta.
   ⚠️ `OpenWakeWordProvider` existe, pero no hay modelo para «Drakter» (los preentrenados son CC BY-NC-SA 4.0 y de otras palabras); por defecto `NullWakeWord` (pulsar para hablar). No se instala en el cierre.
 - [ ] Configurar palabra de activación.
+  ↪ Reemplazado por «Voz v2: Pipecat» (DECISIONS 2026-11-13, V-01 a V-38).
   ⚠️ Rediseño previsto sobre Pipecat (STT Whisper, TTS Fish Audio); en v1 `voice/` solo se estabiliza y documenta.
   ⚠️ Depende de un modelo propio (`DRAKTER_WAKEWORD_MODEL`); `wakeword.set true` sin proveedor responde `invalid_request`.
 - [x] Instalar Silero VAD.
@@ -363,6 +384,7 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 - [x] Evaluar modelo medium.
 - [x] Instalar Kokoro.
 - [ ] Instalar Piper.
+  ↪ Reemplazado por «Voz v2: Pipecat» (DECISIONS 2026-11-13, V-01 a V-38).
   ⚠️ Rediseño previsto sobre Pipecat (STT Whisper, TTS Fish Audio); en v1 `voice/` solo se estabiliza y documenta.
   ⚠️ `PiperTTS` y `FallbackTTS` existen (proceso externo, venv propio), pero no se instaló `piper-tts` ni se probó.
 - [x] Crear Voice Manager.
@@ -371,12 +393,51 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 - [x] Crear interrupciones.
 - [x] Crear cancelación de audio.
 - [ ] Sincronizar boca.
+  ↪ Reemplazado por «Voz v2: Pipecat» (DECISIONS 2026-11-13, V-01 a V-38).
   ⚠️ Rediseño previsto sobre Pipecat (STT Whisper, TTS Fish Audio); en v1 `voice/` solo se estabiliza y documenta.
   ⚠️ La voz emite `voice.playback_level`, pero no llega a la boca: el backend no publica los eventos de voz y `SvgCharacter.setMouth` no hace nada.
 - [x] Crear gestión de errores.
 - [ ] Probar conversación por voz completa.
+  ↪ Reemplazado por «Voz v2: Pipecat» (DECISIONS 2026-11-13, V-01 a V-38).
   ⚠️ Rediseño previsto sobre Pipecat (STT Whisper, TTS Fish Audio); en v1 `voice/` solo se estabiliza y documenta. El router de voz (`backend/app/integrations/voice/router.py`) no se monta en `main.py` en este cierre, aunque Electron permite `/api/v1/voice/*`.
   ⚠️ No es posible hoy: `backend/app/integrations/voice` no está registrado en `main.py` (a propósito, `DRAKTER_VOICE_ENABLED=false` por defecto) y el escritorio no tiene cliente de voz (botón de micrófono desactivado). El puente del backend (`VoiceService`, supervisor, cliente IPC, `VoiceBridge`) no se ha ejecutado contra el proceso real.
+
+### Voz v2: Pipecat
+
+- [ ] Venv de voz py3.12 con `pipecat-ai[webrtc,fish,kokoro]==1.16.0`, `drakter_contracts`, lock fijado e `install-voice.sh`
+- [ ] Modelos locales en `~/.local/share/drakter/models/`, sin descargas en ejecución (Kokoro incluido)
+- [ ] Transporte WebRTC renderer ↔ `SmallWebRTCTransport`, sin STUN, con señalización por main y data channel con ping
+- [ ] ICE por loopback (127.0.0.1) probado sin red y con cambio de red
+- [ ] Un pipeline por conexión, con modelos cargados una vez por proceso
+- [ ] STT Moonshine streaming en castellano (small, con tiny de respaldo) con `finalized`
+- [ ] VAD Silero y fin de turno Smart Turn v3.2, con un único `UserTurnProcessor`
+- [ ] Puente `BackendBridgeProcessor` e IPC v2 con `speech_id`
+- [ ] Hablar mientras genera (deltas → frases → Fish)
+- [ ] Fish `s2.1-pro-free` con guard de modelo y corte por fecha (30-11-2026)
+- [ ] Perfiles de voz en caliente entre turnos (`TTSUpdateSettingsFrame(service=…)`)
+- [ ] Respaldo Kokoro con conmutación propia y aviso único
+- [ ] Caché de frases (`voice_phrases.es.toml`, `TTSAudioRawFrame`) y CLI `voice phrases`
+- [ ] Etiquetas de lista cerrada: se hablan y nunca llegan al chat, la BD ni la auditoría (deltas y texto terminal)
+- [ ] Texto por proveedor (`text_transforms`) y guard de bloques de código, tablas y URL
+- [ ] Barge-in con ducking y decisión por transcripción; cero falsas interrupciones en 60 s de TTS
+- [ ] Asentimientos y eco ignorados; falso ducking restaurado y contado
+- [ ] Capa 0 en datos: para, calla, descansa y cierre, también con el bot callado
+- [ ] Modo conversación con ventana de seguimiento y gestión del silencio, con dueño único (`Ctl.set_mode`)
+- [ ] Palabra «Jarvis» (openWakeWord 0.4.0 más confirmación textual en el puente) con la orden en la misma frase
+- [ ] Super+J por atajo de GNOME y `drakter activate`, con la latencia medida
+- [ ] Lo oído (`heard_tail`, `pending_head`) y reanudación («siga»)
+- [ ] Acuses y frases de herramienta condicionales
+- [ ] `StatusArbiter` como productor único; `/agent/status` lo lee
+- [ ] Voz y chat comparten sesión (`current_session`, `chat.user_message`, `input_source`)
+- [ ] Icono de altavoz (`voice_tts_enabled`, punto único de silencio) e indicador de micrófono calculado en el renderer
+- [ ] Tope de lectura en turnos escritos (`rest_on_screen`)
+- [ ] Propagación de ajustes (`add_setting_listener`)
+- [ ] Bandeja y escucha con la ventana oculta
+- [ ] Confirmaciones nunca por voz (comprobación puntual)
+- [ ] Métricas por turno en `metrics.jsonl`; umbrales calibrados con cifras medidas
+- [ ] `VOICE.md` (brevedad, usted, identidad «con qué funciona»)
+- [ ] Eventos `voice.*` antiguos eliminados del contrato; `/tmp/dr-at` borrado
+- Aplazado (sin casilla activa): «Drakter» y «despierta», dictado, subtítulos, emoción, avisos de calendario, transporte A
 
 ## Checklist 15. Automejora
 

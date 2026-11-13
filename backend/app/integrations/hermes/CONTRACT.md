@@ -122,12 +122,16 @@ Arranque: duplica el fd 1 para el protocolo y redirige `sys.stdout` a stderr (na
 Protocolo JSONL, una línea por mensaje, tamaño acotado, entrada no reconocida → error y sin ejecutar nada:
 
 ```text
-entrada:  {"op":"turn","turn_id","session_id","input","instructions"} | {"op":"stop","turn_id"} | {"op":"shutdown"}
+entrada:  {"op":"turn","turn_id","session_id","input","instructions"} | {"op":"stop","turn_id"}
+          | {"op":"steer","turn_id","text"} | {"op":"shutdown"}
 salida:   {"ev":"ready","nonce","commit","tools":[...]}
           {"ev":"thinking","turn_id"} {"ev":"delta","turn_id","text"}
           {"ev":"tool_started","turn_id","tool","call_id"} {"ev":"tool_completed","turn_id","tool","call_id","error"}
-          {"ev":"completed","turn_id","output","usage"} {"ev":"cancelled","turn_id"} {"ev":"failed","turn_id","code","message"}
+          {"ev":"steered","turn_id","accepted":bool}
+          {"ev":"completed","turn_id","output","usage","pending_steer"?} {"ev":"cancelled","turn_id"} {"ev":"failed","turn_id","code","message"}
 ```
+
+`steer` (voz v2, V-22): el lector de stdin llama a `agent.redirect(text)` sobre el turno activo y responde `steered{accepted}`. El `turn_id` no cambia. Si el agente ya no admite redirección, el texto queda en `pending_steer` y sale en `completed`; el backend decide si abre otro turno con él. Un `steer` para un turno que no es el activo responde `accepted:false`. `reasoning_effort` va en la config del home (`agent.reasoning_effort`): `low` en primer plano (`hermes`), `medium` en los carriles de trabajo (`hermes-w1`).
 
 Un lector de stdin en su hilo atiende `stop` con `agent.hard_interrupt()` mientras `run_conversation` corre en otro hilo. Si no llega terminal en `grace_s`, el supervisor mata el grupo de procesos y rearranca: el turno acaba en `TurnCancelled` o `agent_disconnected`, nunca se repite. Un solo turno a la vez. `ready` debe traer el nonce del guardián y `commit == b200f5bc…`; `tools` se compara con el catálogo. Sin `ready` válido no hay turnos. Historial: `SessionDB` del home con `session_id` del backend, o lista en memoria reanudada desde ahí; un `AIAgent` por sesión para mantener `system` y `tools` estables (H-21).
 
@@ -161,11 +165,11 @@ Todo tras `SecurityGuardMiddleware`, prefijo `/api/v1`, errores con el sobre com
 | GET | `/chat/sessions?limit&offset` | `{items,total}` |
 | POST | `/chat/sessions/{id}/close` | 200 `ChatSession` |
 | GET | `/chat/sessions/{id}/messages?limit&offset` | `{items,total}` |
-| POST | `/chat/sessions/{id}/messages` `{text, client_message_id}` | 202 `{turn_id, message_id}`; 409 `agent_busy` |
+| POST | `/chat/sessions/{id}/messages` `{text, client_message_id, input_source?}` | 202 `{turn_id, message_id}`; 409 `agent_busy` |
 | POST | `/chat/turns/{turn_id}/cancel` | 202 |
-| GET | `/agent/status` | `{state, provider, model, detail}` |
+| GET | `/agent/status` | `{state, provider, model, detail}`; `state` = `runtime.status_arbiter.current.state` |
 
-Eventos: **no hay WS de chat**. Todo sale por el flujo único `WS /api/v1/events?after_seq=N&boot_id=<id>` (`contracts/README.md` §7), con `EventEnvelope` y los modelos de `drakter_contracts.events`. El turno emite `agent.turn_started`, `agent.message_started`, `agent.message_delta`, `agent.message_completed`, `agent.tool_started`, `agent.tool_completed`, `agent.turn_finished`, `agent.status_changed`, `agent.error`. Una herramienta con `confirmation_required` emite `confirmation.requested`. Si el búfer no cubre `after_seq` o cambia `boot_id`: `system.resync_required`.
+Eventos: **no hay WS de chat**. Todo sale por el flujo único `WS /api/v1/events?after_seq=N&boot_id=<id>` (`contracts/README.md` §7), con `EventEnvelope` y los modelos de `drakter_contracts.events`. `submit_message` publica `chat.user_message` (texto o voz, con `input_source`) al guardar el mensaje del usuario. El turno emite `agent.turn_started` (con `input_source`), `agent.message_started`, `agent.message_delta`, `agent.message_completed`, `agent.tool_started`, `agent.tool_completed`, `agent.turn_finished` y `agent.error`. `agent.status_changed` lo publica **solo** el `StatusArbiter` (§5bis); el runtime le pasa señales. Una herramienta con `confirmation_required` emite `confirmation.requested`. Si el búfer no cubre `after_seq` o cambia `boot_id`: `system.resync_required`.
 
 ### Bus: `backend/app/events/`
 
@@ -191,3 +195,36 @@ class AgentRuntime:
 ```
 
 Conexión en `app/main.py` (lo hace el integrador, tres líneas): crear `AgentRuntime(settings)`, guardarlo en `app.state.agent_runtime` y su `hub` en `app.state.event_hub`, `await start()` tras `migrate` y `await stop()` al apagar, `include_router(chat.router)` e `include_router(events.router)`, y retirar `/ws`.
+
+## 5bis. Voz v2 y trabajos: puertos del runtime (`runtime.py`, `events/status.py`, `lanes.py`)
+
+Congelados por WP0 (plan de voz v2 §4.6). Las etiquetas de expresión `[tag]` llegan crudas al tap y
+se limpian con `drakter_contracts.speech_markup` antes del chat, la BD y la auditoría: deltas con
+`IncrementalStripper`, texto terminal con `strip_tags`.
+
+```python
+class TurnTap(Protocol):     # lo implementa VoiceOrchestrator. Métodos SÍNCRONOS y NO bloqueantes (put_nowait; nunca lanzan)
+    def on_turn_started(self, turn_id: UUID, session_id: UUID, source: Literal["text","voice"]) -> None
+    def on_raw_delta(self, turn_id: UUID, text: str) -> None          # ANTES del stripper
+    def on_tool_started(self, turn_id: UUID, tool: str) -> None
+    def on_steered(self, turn_id: UUID, accepted: bool) -> None       # accepted → el tap abre un speech_id nuevo
+    def on_terminal(self, turn_id: UUID, outcome: Literal["completed","cancelled","failed"]) -> None
+
+AgentRuntime.submit_message(session_id: UUID, text: str, client_message_id: UUID | None, *,
+                            source: Literal["text","voice"] = "text") -> tuple[UUID, UUID]   # (turn_id, message_id); publica chat.user_message
+async AgentRuntime.current_session() -> UUID          # la última sesión abierta, o crea una (voz y chat la comparten)
+AgentRuntime.set_turn_tap(tap: TurnTap | None) -> None
+AgentRuntime.add_turn_prefix(fn: Callable[[UUID, str], str | None]) -> None   # (session_id, source). Solo al turn_prompt: ni BD ni chat.user_message
+async AgentRuntime.steer(turn_id: UUID, text: str) -> bool
+AgentRuntime.active_turn() -> ActiveTurnInfo | None   # {turn_id, session_id, phase: "generating"|"executing"}
+AgentRuntime.status_arbiter: StatusArbiter            # lo crea el runtime junto al hub
+
+class StatusArbiter:                                  # events/status.py; único productor de agent.status_changed
+    def __init__(self, hub: EventHub) ; current: StatusPayload
+    def signal(self, source: Literal["agent","voice"], state: CharacterState | None, *,
+               turn_id: UUID | None = None, reason: str | None = None) -> None
+```
+
+- **Prefijos de turno** (V-21): canal (`[canal: voz]`), nota de «lo oído» y bloque «Trabajos en curso» se anteponen al `turn_prompt`. Las instructions (con `agent/identity/VOICE.md`) son estables: cambiar el system por turno rompe la caché.
+- **Arbiter**: prioridad `offline` > `error` (2 s) > `interrupted` (0,8 s) > `speaking` > `executing` > `thinking` > `listening` > `success` (1,2 s) > `idle`; mínimo 350 ms por estado; fuentes `agent` y `voice`. Los trabajos no alimentan el personaje.
+- **Carriles** (`lanes.py`, V-24): `Lane` = TurnTracker + ToolRegistry sin `jobs_*` + AgentToolsServer con token propio + Supervisor + home `hermes-w1`. N=1 sin cola (`jobs_full`). No se usa `delegate_task`. `ToolContext.job_id: UUID | None`; `confirmation.requested` lleva `job_id`. Con la sesión contaminada, `jobs_start` y `jobs_cancel` suben a `confirm`.
