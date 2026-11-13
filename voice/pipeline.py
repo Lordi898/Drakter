@@ -10,7 +10,7 @@ tirar, porque un `FrameProcessor` no sobrevive a su pipeline.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from pipecat.pipeline.pipeline import Pipeline
 from pipecat.pipeline.worker import PipelineParams, PipelineWorker
@@ -19,6 +19,7 @@ from pipecat.turns.user_turn_processor import UserTurnProcessor
 from pipecat.turns.user_turn_strategies import UserTurnStrategies
 
 from voice.bridge import BackendBridgeProcessor
+from voice.config import NULL
 from voice.metrics import MetricsSink, create_observer
 from voice.ports import ResolvedProfile
 from voice.registry import create
@@ -40,20 +41,22 @@ def build(transport: BaseTransport, ctl: Session, shared: Shared, cfg: VoiceConf
     wake = create("wake", cfg.wake, cfg, shared, ctl)
     vad = VADProcessor(vad_analyzer=create("vad", cfg.vad, cfg))
     stt = create("stt", cfg.stt, cfg, shared)
+    start = create("turn_start", cfg.turn_start, cfg, ctl)
     turns = UserTurnProcessor(
         user_turn_strategies=UserTurnStrategies(
-            start=create("turn_start", cfg.turn_start, cfg, ctl),
-            stop=[create("turn_stop", cfg.turn_stop, cfg, shared)],
+            start=start, stop=[create("turn_stop", cfg.turn_stop, cfg, shared)]
         ),
         user_idle_timeout=cfg.idle_nudge_s,
     )
     create("idle", cfg.idle, turns, ctl, cfg)  # engancha on_user_turn_idle
-    bridge = BackendBridgeProcessor(ctl, cfg)
-    guard = create("guard", cfg.guard, cfg, ctl)
+    bridge = BackendBridgeProcessor(ctl, cfg, start_strategies=start)
+    guard = _speech("guard", cfg.guard)
     providers = [create("tts", name, cfg, shared, profile) for name in cfg.tts]
     tts = create("tts_chain", cfg.tts_chain, cfg, ctl, providers)
-    phrases = create("phrases", cfg.phrases, cfg, ctl)
-    playback = create("playback", cfg.playback, cfg, ctl)  # DESPUÉS de la salida: cuenta lo oído
+    providers = getattr(tts, "tts_providers", providers)  # los que el failover dejó en uso
+    phrases = _speech("phrases", cfg.phrases, cfg, ctl, profile)
+    # DESPUÉS de la salida: cuenta lo oído. El texto del speech lo acumula el guard.
+    playback = _speech("playback", cfg.playback, ctl, text_source=getattr(guard, "speech_text", None))
 
     pipeline = Pipeline(
         [transport.input(), wake, vad, stt, turns, bridge, guard, tts, phrases, transport.output(), playback]
@@ -65,5 +68,22 @@ def build(transport: BaseTransport, ctl: Session, shared: Shared, cfg: VoiceConf
         idle_timeout_secs=None,  # en reposo el pipeline calla durante horas: no es inactividad
         enable_rtvi=False,  # cliente WebRTC propio, sin RTVI
     )
-    ctl.bind(Parts(worker=worker, bridge=bridge, phrases=phrases, tts=providers))
+    ctl.bind(Parts(worker=worker, bridge=bridge, phrases=phrases, tts=list(providers)))
     return worker
+
+
+def _speech(kind: str, name: str, *args: Any, **kwargs: Any) -> Any:
+    """Piezas de `voice/speech/` (sin entrada en la tabla del registro), o su versión vacía."""
+    if name == NULL:
+        return create(kind, NULL, *args, **kwargs)
+    if kind == "guard":
+        from voice.speech.guard import SpeechGuard
+
+        return SpeechGuard()
+    if kind == "phrases":
+        from voice.speech.phrases import PhrasePlayer
+
+        return PhrasePlayer(*args)
+    from voice.speech.playback import PlaybackTracker
+
+    return PlaybackTracker(*args, **kwargs)

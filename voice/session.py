@@ -130,6 +130,12 @@ class Session:
         except Exception as exc:  # noqa: BLE001 - una frase fija nunca tumba el turno
             log.warning("phrase_failed", extra={"data": {"key": key, "error": type_name(exc)}})
 
+    def arm_filler(self) -> None:
+        """Fin de turno de usuario: el PhrasePlayer dirá un `ack_*` si el agente tarda."""
+        arm = getattr(getattr(self._parts, "phrases", None), "arm_filler", None)
+        if arm is not None:
+            arm()
+
     def set_duck(self, on: bool) -> None:
         self.duck = bool(on)
         setter = getattr(self._mixer, "set_duck", None)
@@ -208,6 +214,9 @@ class Session:
         if fish is None:
             return
         profile = resolve_profile(self.state.profile)
+        set_profile = getattr(self._parts.phrases, "set_profile", None)
+        if set_profile is not None:
+            set_profile(profile)  # la caché de frases va por perfil
         if profile.voice is None:
             return
         from pipecat.frames.frames import TTSUpdateSettingsFrame
@@ -239,6 +248,9 @@ class Session:
                 self.state.turn_id, self.state.turn_phase = payload.turn_id, payload.phase
                 if bridge:
                     await bridge.turn_phase(payload.phase)
+                on_tool = getattr(getattr(self._parts, "phrases", None), "on_tool", None)
+                if payload.phase == "executing" and on_tool is not None:
+                    await on_tool(payload.turn_id)  # `tool_generic`, con su propio límite de frecuencia
             case ipc.CmdVoiceConfig():
                 await self.apply_config(payload)
             case ipc.CmdModeSet():

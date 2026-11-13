@@ -12,6 +12,7 @@ import logging
 import time
 import unicodedata
 import uuid
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
@@ -40,8 +41,7 @@ if TYPE_CHECKING:
 
 log = logging.getLogger("voice.bridge")
 
-_WAKE_WORD = "jarvis"
-_WAKE_LEAD = frozenset({"hey", "ey", "hei", "oye"})  # cómo transcribe el STT el «hey»
+_WAKE_LEAD = frozenset({"hey", "ey", "hei", "oye", "e"})  # cómo transcribe el STT el «hey»
 
 
 def _fold(token: str) -> str:
@@ -50,13 +50,16 @@ def _fold(token: str) -> str:
     return "".join(ch for ch in plain if ch.isalnum())
 
 
-def strip_wake_word(text: str) -> str | None:
-    """Quita «jarvis» o «hey jarvis» del inicio. `None` si el texto no empieza así."""
+def strip_wake_word(text: str, wake_words: Iterable[str] = ("jarvis",)) -> str | None:
+    """Quita «jarvis» o «hey jarvis» del inicio. `None` si el texto no empieza así.
+
+    `wake_words` son las formas en que el STT transcribe la palabra (`VoiceConfig.wake_words`).
+    """
     tokens = text.split()
     words = [(i, w) for i, w in enumerate(map(_fold, tokens)) if w]
     if words and words[0][1] in _WAKE_LEAD:
         words = words[1:]
-    if not words or words[0][1] != _WAKE_WORD:
+    if not words or words[0][1] not in {_fold(w) for w in wake_words}:
         return None
     return " ".join(tokens[words[0][0] + 1 :]).lstrip(" ,.;:!?")
 
@@ -83,10 +86,11 @@ class _Utterance:
 
 
 class BackendBridgeProcessor(FrameProcessor):
-    def __init__(self, session: Session, cfg: VoiceConfig, **kwargs) -> None:
+    def __init__(self, session: Session, cfg: VoiceConfig, start_strategies: Iterable = (), **kwargs) -> None:
         super().__init__(**kwargs)
         self._session = session
         self._cfg = cfg
+        self._start_strategies = tuple(start_strategies)  # su `turn_overlap` dice si hubo barge-in
         # Turno de usuario
         self._utt: _Utterance | None = None
         self._final_timer: asyncio.Task | None = None
@@ -131,6 +135,8 @@ class BackendBridgeProcessor(FrameProcessor):
             overlap = "agent_busy"
         else:
             overlap = "none"
+        if any(getattr(s, "turn_overlap", "none") == "bot_speaking" for s in self._start_strategies):
+            overlap = "bot_speaking"
         self._utt = _Utterance(overlap=overlap)
         await self._session.emit("voice.user_speech", {"utt_id": self._utt.utt_id, "phase": "started"})
 
@@ -185,7 +191,7 @@ class BackendBridgeProcessor(FrameProcessor):
         trigger = session.consume_trigger()
         if trigger == "wake":
             # openWakeWord va a umbral bajo: la confirmación es el texto.
-            rest = strip_wake_word(text)
+            rest = strip_wake_word(text, self._cfg.wake_words)
             if rest is None:
                 await session.set_mode("standby", "wake")  # falso positivo: sin sonido
                 return
@@ -206,6 +212,7 @@ class BackendBridgeProcessor(FrameProcessor):
         if command == "backchannel":
             return
 
+        session.arm_filler()
         await session.emit(
             "voice.user_turn",
             {
@@ -238,11 +245,10 @@ class BackendBridgeProcessor(FrameProcessor):
         if self._seq is not None and seq <= self._seq:
             return True
         self._seq = seq
-        clean = self._stripper.feed(text)
-        self._session.speech_text += clean
-        spoken = clean if self._session.state.expression == "off" else text
-        if spoken:
-            await self.push_frame(LLMTextFrame(spoken))
+        self._session.speech_text += self._stripper.feed(text)
+        # Las etiquetas viajan hasta el TTS: cada proveedor decide (Fish las interpreta o las quita
+        # según `expression`; Kokoro las quita siempre).
+        await self.push_frame(LLMTextFrame(text))
         return False
 
     async def speak_flush(self, speech_id: int) -> None:

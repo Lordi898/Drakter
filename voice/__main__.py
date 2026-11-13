@@ -198,10 +198,16 @@ def _check(cfg: VoiceConfig) -> int:
         failures += not ok
         print(f"{'OK  ' if ok else 'FALL'} {label}: {detail}")
 
-    kinds = ("stt", "vad", "turn_start", "turn_stop", "wake", "tts_chain", "mixer", "channel",
-             "guard", "phrases", "playback", "idle")
-    for kind, name in [(k, getattr(cfg, k)) for k in kinds] + [("tts", n) for n in cfg.tts]:
-        module, _, attr = resolve(kind, name).partition(":")
+    kinds = ("stt", "vad", "turn_start", "turn_stop", "wake", "tts_chain", "mixer", "channel", "idle")
+    speech = {"guard": "voice.speech.guard:SpeechGuard", "phrases": "voice.speech.phrases:PhrasePlayer",
+              "playback": "voice.speech.playback:PlaybackTracker"}
+    targets = [(k, getattr(cfg, k), resolve(k, getattr(cfg, k))) for k in kinds]
+    targets += [("tts", n, resolve("tts", n)) for n in cfg.tts]
+    for kind, path in speech.items():
+        name = getattr(cfg, kind)
+        targets.append((kind, name, resolve(kind, NULL) if name == NULL else path))
+    for kind, name, target in targets:
+        module, _, attr = target.partition(":")
         try:
             ok = hasattr(importlib.import_module(module), attr)
             report(ok, f"{kind}/{name}", f"{module}:{attr}" if ok else f"{module} no define {attr}")
@@ -214,22 +220,28 @@ def _check(cfg: VoiceConfig) -> int:
         (cfg.turn_stop != NULL, models / "smart-turn/smart-turn-v3.2-cpu.onnx"),
         ("kokoro" in cfg.tts, models / "kokoro/kokoro-v1.0.int8.onnx"),
         ("kokoro" in cfg.tts, models / "kokoro/voices-v1.0.bin"),
-        *((cfg.wake != NULL, models / "openwakeword" / name) for name in cfg.wake_models),
+        *((cfg.wake != NULL, models / "openwakeword" / f"{name}.onnx") for name in cfg.wake_models),
+        (cfg.phrases != NULL, cfg.phrases_path),
     ]
     for needed, path in wanted:
         if needed:
-            report(path.exists(), "modelo", str(path))
+            report(path.exists(), "fichero", str(path))
     print("Todo en orden." if not failures else f"{failures} comprobaciones fallidas.")
     return 1 if failures else 0
 
 
 def _phrases(cfg: VoiceConfig, argv: list[str]) -> int:
     try:
+        from voice.speech.phrases import PhrasesError
         from voice.speech.phrases import main as phrases_main
     except ImportError as exc:
         print(f"ERROR: la caché de frases no está disponible ({exc.name or exc}).", file=sys.stderr)
         return 1
-    return int(phrases_main(cfg, argv) or 0)
+    try:
+        return int(phrases_main(argv, cfg) or 0)
+    except PhrasesError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 1
 
 
 def main(argv: list[str] | None = None) -> int:

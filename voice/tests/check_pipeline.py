@@ -9,6 +9,9 @@ Arranca `python -m voice run --null` con un STT simulado, se conecta como haría
   4. `speak.open/delta/close` produce audio (TTS simulado) y `speak.stop` lo corta;
   5. una segunda oferta (reconexión) monta un pipeline nuevo sin recargar `Shared`.
 
+Con `--real --wav habla.wav` usa los proveedores reales (Moonshine, Silero, Smart Turn,
+openWakeWord, Kokoro, DuckMixer), todo local: sin Fish, sin red y sin leer `voces.toml`.
+
 Uso, desde la raíz del repo, con el Python del venv de voz (~/.local/share/drakter/venvs/voice):
     python voice/tests/check_pipeline.py [--wav habla.wav]
 Imprime PASS/FAIL por paso y sale con 1 si algo falla.
@@ -37,6 +40,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 FAKE_TEXT = "qué hora es"
+REAL_DATA_DIR = Path(os.environ.get("XDG_DATA_HOME") or Path.home() / ".local/share") / "drakter"  # modelos
 RTC_RATE = 48000
 
 
@@ -140,7 +144,7 @@ class Renderer:
         self._mic = _Microphone()
         self._tasks: list[asyncio.Task[None]] = []
 
-    async def connect(self, backend: Backend) -> dict[str, Any]:
+    async def connect(self, backend: Backend, **extra: Any) -> dict[str, Any]:
         from aiortc import RTCSessionDescription
 
         self.pc.addTrack(self._mic)
@@ -156,7 +160,7 @@ class Renderer:
 
         await self.pc.setLocalDescription(await self.pc.createOffer())  # reúne los candidatos ICE
         offer = self.pc.localDescription
-        answer = await backend.cmd("rtc.offer", sdp=offer.sdp, type=offer.type)
+        answer = await backend.cmd("rtc.offer", sdp=offer.sdp, type=offer.type, **extra)
         await self.pc.setRemoteDescription(RTCSessionDescription(answer["sdp"], answer["type"]))
         self.pc_id = answer["pc_id"]
         return answer
@@ -245,7 +249,7 @@ def _log_events(log_path: Path, event: str) -> list[dict[str, Any]]:
     return found
 
 
-async def run_checks(wav: Path | None, workdir: Path, report: Report) -> None:
+async def run_checks(wav: Path | None, workdir: Path, report: Report, real: bool = False) -> None:
     from voice.channels.webrtc import enable_loopback_candidates
 
     enable_loopback_candidates()  # el renderer real lo consigue con el switch de Chromium
@@ -253,14 +257,19 @@ async def run_checks(wav: Path | None, workdir: Path, report: Report) -> None:
         **os.environ,
         "DRAKTER_RUNTIME_DIR": str(workdir / "run"),
         "DRAKTER_DATA_DIR": str(workdir / "data"),
-        "DRAKTER_VOICE_STT": "voice.tests.check_pipeline:fake_stt",
         "DRAKTER_VOICE_RTC_PING_TIMEOUT_S": "2",
         "PYTHONPATH": str(ROOT),
     }
+    if real:  # solo proveedores locales: sin Fish no se resuelve ningún ID de voz
+        env |= {"DRAKTER_VOICE_TTS": "kokoro", "DRAKTER_DATA_DIR": str(REAL_DATA_DIR),
+                "DRAKTER_VOICE_NULL": "0"}
+        env.pop("FISH_API_KEY", None)
+    else:
+        env |= {"DRAKTER_VOICE_NULL": "1", "DRAKTER_VOICE_STT": "voice.tests.check_pipeline:fake_stt"}
     log_path = workdir / "voice.log"
     with log_path.open("wb") as log_file:
         process = await asyncio.create_subprocess_exec(
-            sys.executable, "-m", "voice", "run", "--null", cwd=ROOT, env=env, stderr=log_file
+            sys.executable, "-m", "voice", "run", cwd=ROOT, env=env, stderr=log_file
         )
     socket_path = workdir / "run" / "voice.sock"
     backend: Backend | None = None
@@ -270,7 +279,7 @@ async def run_checks(wav: Path | None, workdir: Path, report: Report) -> None:
             if socket_path.exists() or process.returncode is not None:
                 break
             await asyncio.sleep(0.1)
-        report.step(socket_path.exists(), "1. `python -m voice run` arranca con proveedores null")
+        report.step(socket_path.exists(), f"1. `python -m voice run` arranca ({'reales' if real else 'null'})")
         if not socket_path.exists():
             return
         backend = Backend(*await asyncio.open_unix_connection(str(socket_path)))
@@ -321,10 +330,12 @@ async def run_checks(wav: Path | None, workdir: Path, report: Report) -> None:
         mark = len(backend.events)
         first.say(speech)
         turn = await backend.wait_event("voice.user_turn", timeout=len(speech) / RTC_RATE + 8, since=mark)
-        heard = turn["text"].replace(FAKE_TEXT, "").strip() == ""  # una vez por segmento de VAD del turno
+        # Simulado: la frase fija, una vez por segmento de VAD. Real: lo que transcriba Moonshine.
+        heard = len(turn["text"].split()) >= 3 if real else turn["text"].replace(FAKE_TEXT, "").strip() == ""
         report.step(heard and turn["trigger"] == "ui" and turn["overlap"] == "none",
                     "3. el wav produce voice.user_turn",
-                    f"audio_ms={turn['audio_ms']} eot_ms={turn['eot_ms']} stt_ms={turn['stt_ms']}")
+                    f"audio_ms={turn['audio_ms']} eot_ms={turn['eot_ms']} stt_ms={turn['stt_ms']} "
+                    f"palabras={len(turn['text'].split())}")
         phases = [e["payload"]["phase"] for e in backend.events[mark:] if e["type"] == "voice.user_speech"]
         report.step(phases[:2] == ["started", "stopped"], "3. voice.user_speech started/stopped", str(phases))
 
@@ -343,7 +354,7 @@ async def run_checks(wav: Path | None, workdir: Path, report: Report) -> None:
                     "4. un seq repetido se ignora (ok{ignored:true})")
         await backend.cmd("turn.phase", turn_id="t1", phase="done")
         metrics = [e["payload"] for e in backend.events if e["type"] == "voice.metrics"]
-        written = (workdir / "data" / "voice" / "metrics.jsonl").exists()
+        written = (Path(env["DRAKTER_DATA_DIR"]) / "voice" / "metrics.jsonl").exists()
         report.step(bool(metrics) and "total_ms" in metrics[-1] and written,
                     "4. voice.metrics emitido y metrics.jsonl escrito", str(metrics[-1] if metrics else None))
 
@@ -363,15 +374,18 @@ async def run_checks(wav: Path | None, workdir: Path, report: Report) -> None:
         second = Renderer()
         peers.append(second)
         mark = len(backend.events)
-        answer2 = await second.connect(backend)
+        # Como el cliente del escritorio: reoferta con el pc_id anterior y restart_pc.
+        answer2 = await second.connect(backend, pc_id=first.pc_id, restart_pc=True)
         await backend.wait_event("voice.state", since=mark, connected=True, timeout=15)
         started = _log_events(log_path, "pipeline_started")
         report.step(answer2["pc_id"] != answer["pc_id"] and len(started) == 2,
                     "5. la segunda oferta monta un pipeline nuevo", f"pipelines={len(started)}")
-        report.step([s.get("models_loaded") for s in started] == [1, 1],
-                    "5. Shared no se recarga en la reconexión", f"cargas={[s.get('models_loaded') for s in started]}")
+        loads = [s.get("models_loaded") for s in started]
+        report.step(loads[0] >= 1 and loads[0] == loads[1],
+                    "5. Shared no se recarga en la reconexión", f"cargas={loads}")
         status = await backend.cmd("status")
-        report.step(status["state"]["connected"] and status["state"]["mode"] == "conversation",
+        # Con proveedores reales, el vigilante de silencio puede haber vuelto ya a reposo.
+        report.step(status["state"]["connected"] and (real or status["state"]["mode"] == "conversation"),
                     "5. SessionState sobrevive a la reconexión", f"mode={status['state']['mode']}")
         second.peak = 0.0
         await backend.cmd("speak.open", turn_id="t3", speech_id=3)
@@ -423,13 +437,16 @@ async def run_checks(wav: Path | None, workdir: Path, report: Report) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--wav", type=Path, help="wav mono o estéreo de 16 bits con la voz a enviar")
+    parser.add_argument("--real", action="store_true", help="proveedores reales locales (exige --wav)")
     args = parser.parse_args()
+    if args.real and args.wav is None:
+        parser.error("--real necesita --wav con voz en castellano")
     # Directorio efímero de la comprobación (socket y métricas), fuera de los datos reales.
     base = Path(os.environ.get("XDG_RUNTIME_DIR") or tempfile.gettempdir())
     workdir = Path(tempfile.mkdtemp(prefix="drakter-voice-check-", dir=base))
     report = Report()
     try:
-        asyncio.run(run_checks(args.wav, workdir, report))
+        asyncio.run(run_checks(args.wav, workdir, report, args.real))
     except Exception as exc:  # noqa: BLE001 - se informa como fallo de la comprobación
         report.step(False, "la comprobación terminó", f"{type(exc).__name__}: {exc}")
     finally:

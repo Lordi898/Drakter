@@ -1,8 +1,18 @@
 """Configuración del proceso de voz. Sin secretos: las claves llegan por el entorno.
 
 Orden de precedencia: valores por defecto → `~/.config/drakter/voice.toml` (claves planas con
-el nombre del campo) → variables `DRAKTER_VOICE_<CAMPO>` → `DRAKTER_RUNTIME_DIR` y
-`DRAKTER_DATA_DIR`, que fija el supervisor del backend.
+el nombre del campo) → variables de entorno.
+
+Variables de entorno (las únicas que lee este proceso):
+- `DRAKTER_RUNTIME_DIR`: directorio del socket IPC; el socket es `<runtime_dir>/voice.sock`.
+- `DRAKTER_DATA_DIR`: raíz de datos (`models/`, `voice/metrics.jsonl`, `voice/cache/`).
+- `DRAKTER_VOICE_<CAMPO>`: cualquier campo de `VoiceConfig`, con su nombre en mayúsculas
+  (`DRAKTER_VOICE_STT_MODEL`, `DRAKTER_VOICE_DUCK_GAIN`, `DRAKTER_VOICE_FISH_FREE_UNTIL`=AAAA-MM-DD,
+  `DRAKTER_VOICE_TTS`=fish,kokoro …). Las tuplas van separadas por comas; los booleanos, `true`/`false`.
+- `DRAKTER_VOICE_NULL=1`: proveedores vacíos (equivale a `python -m voice run --null`).
+- `DRAKTER_VOICE_PIPECAT_LOG`: nivel de los logs de Pipecat (por defecto `WARNING`).
+- `FISH_API_KEY`: la lee el proveedor Fish directamente del entorno; nunca pasa por esta clase.
+- `XDG_CONFIG_HOME` (o `~/.config`): dónde están `voice.toml` y `voces.toml`.
 
 Los umbrales son PROVISIONALES y están sin calibrar (se miden en WP9). No son ajustes de usuario:
 esos (`voice_tts_enabled`, `voice_profile`, …) llegan por el comando IPC `voice.config`.
@@ -49,21 +59,30 @@ class VoiceConfig:
     tts_chain: str = "failover"
     mixer: str = "duck"
     channel: str = "webrtc"
-    # Piezas fuera de la tabla del registro; fábricas `create(cfg, ctl) -> FrameProcessor`.
-    guard: str = "voice.speech.guard:create"
-    phrases: str = "voice.speech.phrases:create"  # el procesador expone `async play(key, when)`
-    playback: str = "voice.speech.playback:create"
+    # Piezas fuera de la tabla del registro: "drakter" (voice/speech/*) o "null".
+    guard: str = "drakter"  # SpeechGuard
+    phrases: str = "drakter"  # PhrasePlayer
+    playback: str = "drakter"  # PlaybackTracker
     idle: str = "voice.conversation.idle:attach"  # attach(utp, ctl, cfg)
 
     # ── STT, activación y turnos (provisionales, sin calibrar)
     stt_model: str = "small"  # small | tiny (respaldo)
-    threads: int = 2  # hilos por modelo local (CPU sin GPU dedicada)
-    wake_models: tuple[str, ...] = ("hey_jarvis_v0.1.onnx",)  # en models/openwakeword/
+    stt_update_interval: float = 0.25  # cada cuánto da parciales Moonshine
+    stt_preroll_ms: int = 500
+    vad_confidence: float = 0.7
+    vad_start_secs: float = 0.2
+    vad_min_volume: float = 0.6
+    wake_models: tuple[str, ...] = ("hey_jarvis_v0.1",)  # <nombre>.onnx en models/openwakeword/
     wake_threshold: float = 0.3
+    # Cómo transcribe el STT la palabra de activación (sin tildes, en minúsculas). El puente
+    # exige que el primer turno tras una activación por voz empiece por una de ellas.
+    wake_words: tuple[str, ...] = (
+        "jarvis", "jarbis", "jarbes", "jarves", "yarvis", "yarbis", "yarbes", "harvis", "harbis", "charvis",
+    )
     turn_stop_secs: float = 3.0  # tope de silencio de Smart Turn
     turn_final_timeout_s: float = 1.0  # espera a la transcripción final tras el fin de turno
     followup_s: float = 20.0  # sin voz tras responder → reposo
-    idle_nudge_s: float = 10.0  # user_idle_timeout del UserTurnProcessor
+    idle_nudge_s: float = 8.0  # user_idle_timeout del UserTurnProcessor
     bargein_min_words: int = 3
     bargein_decide_ms: int = 700
     duck_gain: float = 0.25
@@ -73,6 +92,7 @@ class VoiceConfig:
     fish_free_until: date = date(2026, 11, 30)  # después, Kokoro salvo allow_paid
     allow_paid: bool = False
     kokoro_voice: str = "ef_dora"
+    tts_threads: int = 2  # hilos de Kokoro (CPU sin GPU dedicada)
     filler_after_ms: int = 1200
     tool_phrase_gap_s: float = 8.0
 
@@ -98,7 +118,7 @@ class VoiceConfig:
         return self.voice_dir / "metrics.jsonl"
 
     @property
-    def phrase_cache_dir(self) -> Path:
+    def phrases_cache_dir(self) -> Path:
         return self.voice_dir / "cache"
 
     @property

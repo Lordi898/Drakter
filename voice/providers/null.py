@@ -147,7 +147,7 @@ def create(kind: str, *args: Any, **kwargs: Any) -> Any:
             providers: list[TTSProvider] = args[2]
             return providers[0].service  # sin conmutación
         case "playback":
-            return NullPlayback(args[1])
+            return NullPlayback(args[0])
         case "wake" | "guard" | "phrases":
             return Passthrough()
         case "mixer" | "idle":

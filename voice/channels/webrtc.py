@@ -1,9 +1,12 @@
 """Canal WebRTC por loopback (transporte B): `SmallWebRTCTransport` sin servidores ICE.
 
 El renderer captura con `getUserMedia` y negocia por señalización propia (renderer → main →
-backend → IPC `rtc.offer` → aquí). Una sola conexión a la vez (`ConnectionMode.SINGLE`): una
-oferta nueva sin el `pc_id` vigente es una reconexión (recarga del renderer) y sustituye a la
-anterior. Por cada conexión nueva se llama a `on_connection(transport)`.
+backend → IPC `rtc.offer` → aquí). Una sola conexión a la vez (`ConnectionMode.SINGLE`). Una
+oferta es una conexión NUEVA, que sustituye a la anterior y monta su propio pipeline, si llega
+con `restart_pc` (así reoferta el cliente del escritorio) o sin el `pc_id` vigente (recarga del
+renderer, o un `pc_id` de antes de reiniciar este proceso). Solo una oferta con el `pc_id`
+vigente y sin `restart_pc` renegocia la conexión viva. Por cada conexión nueva se llama a
+`on_connection(transport)`.
 """
 
 from __future__ import annotations
@@ -31,6 +34,7 @@ if TYPE_CHECKING:
 log = logging.getLogger("voice.webrtc")
 
 LOOPBACK = "127.0.0.1"
+LOOPBACK_V6 = "::1"
 _loopback_enabled = False
 
 
@@ -51,9 +55,11 @@ def enable_loopback_candidates() -> None:
     original = aioice.ice.get_host_addresses
 
     def with_loopback(use_ipv4: bool, use_ipv6: bool) -> list[str]:
-        addresses = original(use_ipv4, use_ipv6)
-        if use_ipv4 and LOOPBACK not in addresses:
-            addresses.insert(0, LOOPBACK)
+        # aioice la llama con argumentos por nombre (use_ipv4=..., use_ipv6=...).
+        addresses = original(use_ipv4=use_ipv4, use_ipv6=use_ipv6)
+        for wanted, loopback in ((use_ipv6, LOOPBACK_V6), (use_ipv4, LOOPBACK)):
+            if wanted and loopback not in addresses:
+                addresses.insert(0, loopback)
         return addresses
 
     aioice.ice.get_host_addresses = with_loopback
@@ -84,13 +90,13 @@ class WebRTCChannel:
     ) -> dict[str, Any]:
         async with self._lock:
             current = self._current
-            if current is None or pc_id != current.pc_id:
-                # Conexión nueva. Si quedaba otra viva, el cliente se recargó: se cierra,
-                # porque en modo SINGLE el manejador rechazaría la oferta.
+            if current is None or pc_id != current.pc_id or restart_pc:
+                # Conexión nueva. Si quedaba otra viva se cierra antes, porque en modo SINGLE
+                # el manejador rechazaría la oferta (400).
                 if current is not None:
                     log.info("replacing_connection", extra={"data": {}})
                     await self._drop_current()
-                pc_id = None
+                pc_id, restart_pc = None, None
             request = SmallWebRTCRequest(sdp=sdp, type=type, pc_id=pc_id, restart_pc=restart_pc)
             answer = await self._handler.handle_web_request(request, self._on_webrtc_connection)
             if answer is None:
