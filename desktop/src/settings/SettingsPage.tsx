@@ -13,6 +13,7 @@ import { AgentStatusSection, DevModeBanner, isDevActive } from './AgentStatusSec
 import { BackupsSection } from './BackupsSection'
 import { Rows, Section, SettingRow, useLoad } from './settingsUi'
 import { TimezoneSection } from './TimezoneSection'
+import { VoiceSection } from './VoiceSection'
 import type { AppInfo } from '../../electron/shared/bridge'
 
 const THEME_OPTIONS: readonly {
@@ -184,6 +185,8 @@ export function SettingsPage() {
       </Section>
 
       <AgentStatusSection state={status} onRetry={reloadStatus} />
+
+      <VoiceSection />
 
       <TimezoneSection />
 

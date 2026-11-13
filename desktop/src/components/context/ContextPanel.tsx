@@ -1,3 +1,4 @@
+import { JobsList } from '@/components/jobs/JobsList'
 import { getSection } from '@/navigation/sections'
 import type { SectionId } from '@/navigation/sections'
 import { useCurrentSection } from '@/navigation/route'
@@ -53,7 +54,9 @@ export function ContextPanel() {
 
       <p className="text-sm leading-relaxed text-chassis-muted">{SELECTION_HELP[section.id]}</p>
 
-      <section aria-labelledby="context-shortcuts" className="mt-auto border-t border-chassis-line pt-4">
+      <div className="mt-auto flex flex-col gap-6">
+      <JobsList />
+      <section aria-labelledby="context-shortcuts" className="border-t border-chassis-line pt-4">
         <h3 id="context-shortcuts" className="mb-3 text-sm font-medium">
           Atajos
         </h3>
@@ -70,6 +73,7 @@ export function ContextPanel() {
           ))}
         </ul>
       </section>
+      </div>
     </aside>
   )
 }

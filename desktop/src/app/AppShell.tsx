@@ -1,7 +1,8 @@
-import { useEffect, useLayoutEffect, useRef, useSyncExternalStore } from 'react'
+import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useSyncExternalStore, type ComponentType } from 'react'
 import { PanelRightClose, PanelRightOpen } from 'lucide-react'
 import { toggleContextPanel, useAppShortcuts } from '@/app/useAppShortcuts'
 import { ChatDock } from '@/chat/ChatDock'
+import { ConfirmationHost } from '@/chat/ConfirmationDialog'
 import { ContextPanel } from '@/components/context/ContextPanel'
 import { ErrorBoundary } from '@/components/errors/ErrorBoundary'
 import { NotificationCenter } from '@/components/notifications/NotificationCenter'
@@ -16,6 +17,13 @@ import { Sidebar } from '@/navigation/Sidebar'
 import { usePreferences } from '@/stores/preferences'
 
 const CONTEXT_PANEL_ID = 'context-panel'
+
+// VoiceHost lo aporta WP8a (src/voice/VoiceHost.tsx). Hasta la fusión el glob queda vacío y no se monta nada.
+const voiceHostModules = import.meta.glob<{ VoiceHost: ComponentType }>('../voice/VoiceHost.tsx')
+const voiceHostLoader = Object.values(voiceHostModules)[0]
+const VoiceHost = voiceHostLoader
+  ? lazy(async () => ({ default: (await voiceHostLoader()).VoiceHost }))
+  : null
 
 const wideWindow = window.matchMedia('(min-width: 1100px)')
 
@@ -116,6 +124,12 @@ export function AppShell() {
       </div>
 
       <SearchPalette />
+      <ConfirmationHost />
+      {VoiceHost ? (
+        <Suspense fallback={null}>
+          <VoiceHost />
+        </Suspense>
+      ) : null}
     </div>
   )
 }

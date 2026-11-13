@@ -90,6 +90,13 @@ export type EventType = Extract<
   | 'confirmation.resolved'
   | 'notification.created'
   | 'system.resync_required'
+  | 'chat.user_message'
+  | 'voice.state'
+  | 'voice.playback'
+  | 'voice.error'
+  | 'job.started'
+  | 'job.progress'
+  | 'job.finished'
 >
 
 /** Unión discriminada generada: `switch (event.type)` estrecha `payload`. */
@@ -134,6 +141,12 @@ const CONFIRMATION = {
 }
 const RESYNC_REASONS = new Set(['buffer_overflow', 'boot_changed', 'client_lagging'])
 const NOTIFICATION_SEVERITIES = new Set(['info', 'success', 'warning', 'error'])
+const VOICE_MODES = new Set(['standby', 'conversation'])
+const VOICE_TTS = new Set(['fish', 'local'])
+const JOB_FINAL = new Set(['completed', 'failed', 'cancelled'])
+const INPUT_SOURCES = new Set(['text', 'voice'])
+const VOICE_STAGES = new Set(['transport', 'stt', 'turn', 'tts', 'ipc', 'wake'])
+const PLAYBACK_STATES = new Set(['started', 'sentence_done', 'finished', 'interrupted'])
 const TURN_OUTCOMES = new Set(['completed', 'failed', 'cancelled', 'interrupted'])
 
 export function isPendingConfirmation(value: unknown): value is PendingConfirmation {
@@ -212,7 +225,49 @@ const PAYLOAD_CHECKS: { readonly [T in EventType]: (payload: Json) => boolean } 
       title: isString,
       severity: (v) => v === undefined || NOTIFICATION_SEVERITIES.has(v as string)
     }),
-  'system.resync_required': (p) => RESYNC_REASONS.has(p['reason'] as string)
+  'system.resync_required': (p) => RESYNC_REASONS.has(p['reason'] as string),
+  'chat.user_message': (p) =>
+    has(p, {
+      message_id: isString,
+      session_id: isString,
+      turn_id: isString,
+      text: isString,
+      input_source: (v) => INPUT_SOURCES.has(v as string),
+      created_at: isDate
+    }),
+  'voice.state': (p) =>
+    has(p, {
+      connected: isBoolean,
+      mode: (v) => VOICE_MODES.has(v as string),
+      tts: (v) => VOICE_TTS.has(v as string),
+      profile: isString,
+      wake_enabled: isBoolean
+    }),
+  'voice.playback': (p) =>
+    has(p, {
+      turn_id: isString,
+      speech_id: isCount,
+      state: (v) => PLAYBACK_STATES.has(v as string),
+      sentence_index: isCount
+    }),
+  'voice.error': (p) =>
+    has(p, {
+      code: isString,
+      stage: (v) => VOICE_STAGES.has(v as string),
+      recoverable: isBoolean,
+      turn_id: isOptionalString
+    }),
+  'job.started': (p) => has(p, { job_id: isString, title: isString, lane: isString, created_at: isDate }),
+  'job.progress': (p) =>
+    has(p, { job_id: isString, state: (v) => v === 'running', elapsed_s: isCount, tool_calls: isCount, last_tool: isOptionalString }),
+  'job.finished': (p) =>
+    has(p, {
+      job_id: isString,
+      state: (v) => JOB_FINAL.has(v as string),
+      reason: isOptionalString,
+      pending_actions: isCount,
+      finished_at: isDate
+    })
 }
 
 /** Tipos del catálogo v1 que esta capa no consume: se ignoran sin avisar. */
