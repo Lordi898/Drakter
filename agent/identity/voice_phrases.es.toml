@@ -1,0 +1,46 @@
+# Frases fijas de la voz de Drakter (plan de voz v2 V-14). Una clave por PhraseKey de
+# drakter_contracts.voice_ipc; cada una con sus variantes. El cargador valida que no falte ninguna.
+# Se sintetizan una vez a PCM (python -m voice phrases) y suenan desde la caché.
+# Tratamiento: «señor», «señor Imanol» y «señor Magaña», repartidos.
+
+ack_1 = ["Entendido, señor.", "Ahora mismo, señor Imanol.", "De acuerdo, señor."]
+ack_2 = ["Un momento, señor.", "Enseguida, señor Magaña.", "Voy con ello."]
+ack_3 = ["Déjeme ver, señor.", "Lo miro ahora mismo.", "Muy bien, señor Imanol."]
+
+wait_1 = ["Sigo con ello, señor.", "Un momento más, por favor."]
+wait_2 = ["Casi lo tengo, señor Imanol.", "Ya queda poco."]
+wait_3 = ["Esto está tardando un poco más de lo normal, señor.", "Sigo trabajando en ello, señor Magaña."]
+
+tool_generic = ["Lo compruebo, señor.", "Déjeme consultarlo.", "Un segundo, lo reviso."]
+
+confirm_on_screen = [
+    "Necesito su confirmación en pantalla, señor.",
+    "Le dejo la confirmación en pantalla, señor Imanol.",
+]
+rest_on_screen = [
+    "El resto se lo dejo en pantalla, señor.",
+    "Tiene el resto en pantalla, señor Magaña.",
+]
+
+busy = [
+    "Ahora mismo estoy con otro trabajo, señor.",
+    "Tengo un trabajo en curso; en cuanto termine me pongo con ello, señor Imanol.",
+]
+
+job_started = ["Me pongo con ello en segundo plano, señor.", "Lo hago en segundo plano, señor Imanol."]
+job_done = ["Señor, he terminado el trabajo.", "Trabajo terminado, señor Magaña."]
+job_failed = ["Señor, el trabajo no ha podido completarse.", "Lo siento, señor Imanol, el trabajo ha fallado."]
+
+tts_fallback = [
+    "Señor, paso a mi voz local.",
+    "Cambio a la voz local, señor Imanol.",
+]
+
+offline = [
+    "Señor, ahora mismo no puedo conectar con mi cerebro.",
+    "Estoy sin conexión con el agente, señor Magaña.",
+]
+
+idle_nudge = ["¿Sigue ahí, señor?", "¿Necesita algo más, señor Imanol?"]
+
+goodbye = ["A su disposición, señor.", "Aquí estaré, señor Imanol.", "Cuando quiera, señor Magaña."]
