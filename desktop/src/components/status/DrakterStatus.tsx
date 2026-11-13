@@ -1,9 +1,11 @@
+import { Mic, MicOff } from 'lucide-react'
 import { CHARACTER_STATE_LABELS } from '@/character/labels'
 import type { CharacterState } from '@/character/types'
 import { retryBackendLink } from '@/services/ws'
 import { useDrakterState } from '@/stores/agent'
 import { useLinkStatus } from '@/stores/connection'
 import { cn } from '@/lib/utils'
+import { useVoice } from '@/stores/voice'
 
 type Tone = 'active' | 'off' | 'error'
 
@@ -35,6 +37,16 @@ const LINK_TEXT = {
 export function DrakterStatus() {
   const state = useDrakterState()
   const link = useLinkStatus()
+  const { mic, voiceState } = useVoice()
+  const MicIcon = mic === 'off' ? MicOff : Mic
+  const micText =
+    mic === 'off'
+      ? 'Micrófono apagado'
+      : mic === 'live'
+        ? 'Escuchando'
+        : voiceState?.wake_enabled === false
+          ? 'Micrófono en espera'
+          : 'Esperando "Jarvis"'
   const tone = TONES[state]
   const linkText = state === 'offline' && link in LINK_TEXT ? LINK_TEXT[link as keyof typeof LINK_TEXT] : null
 
@@ -44,6 +56,10 @@ export function DrakterStatus() {
         <span aria-hidden="true" className={cn('size-2.5 shrink-0 rounded-full', LIGHT[tone])} />
         <span>{CHARACTER_STATE_LABELS[state]}</span>
       </div>
+      <p className="mt-1 flex items-center gap-1.5 pl-[1.125rem] text-xs text-chassis-muted">
+        <MicIcon aria-hidden="true" className="size-3 shrink-0" />
+        {micText}
+      </p>
       {linkText && <p className="mt-1 pl-[1.125rem] text-xs text-chassis-muted">{linkText}</p>}
       {link === 'disconnected' && (
         <button
