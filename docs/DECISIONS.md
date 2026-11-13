@@ -463,6 +463,7 @@ Decisiones técnicas, cambios de tecnología y motivos.
 - **Impacto:** `backend/app/integrations/memory/pipeline/classify.py`, Checklist 12.
 
 ## [2026-11-13] Memoria v1: recuperación al turno y olvido sin conectar al cierre
+- **Estado:** SUPERADA el mismo día (drakter-42): la recuperación al turno se conectó (`df258b1`) y el olvido y la aprobación desde la GUI pasan por confirmación (`effda18`, `6270011`). Se conserva como historia.
 - **Contexto:** en el cierre se comprobó que `memories_for_context` + `build_context` no los llama el runner de Hermes, y que olvidar usa `DenyAllGate` (GUI) y `DefaultToolGate` (agente).
 - **Decisión:** se cierra la v1 con la memoria accesible al agente solo por herramientas (`search_memory`, `get_memory_item`) y con el olvido fallando cerrado. Quedan con ⚠️ "recuperación selectiva", "límites de contexto" y "memoria de trabajo".
 - **Alternativas descartadas:** conectarlo en el cierre (integración nueva en `app/integrations/hermes/` y en el flujo de confirmaciones, fuera del alcance de cierre).
@@ -754,8 +755,7 @@ Decisiones técnicas, cambios de tecnología y motivos.
   - Resuelto: DESK-20 (`89a87b5`: el renderer ya no puede aprobar propuestas de automejora).
   - Ya decidido: INJ-24, contradicción del propio banco con CONF-54 (ver «Contradicción INJ-24 / CONF-54 del banco red-team»).
   - Arreglado en código, falta ajustar la sonda: INJ-32 (`1588c04`).
-  - En curso: INJ-05 (drakter-42).
-  - Quedan con ⚠️ de diseño: CONF-46/INJ-26 (la contaminación de la sesión no persiste al reiniciar), INJ-11/25 (`TurnRequest` sin canal de datos aparte; mitigado porque tainted se propaga y fuerza confirmación, `df258b1`, `1588c04`) y FILE-DB-02 (TOCTOU en `connect`, bajo riesgo).
+  - Quedan con ⚠️ de diseño: INJ-05 (título y URL de `read_resource` fuera del sobre; no se hizo en el cierre), CONF-46/INJ-26 (la contaminación de la sesión no persiste al reiniciar), INJ-11/25 (`TurnRequest` sin canal de datos aparte; mitigado porque tainted se propaga y fuerza confirmación, `df258b1`, `1588c04`) y FILE-DB-02 (TOCTOU en `connect`, bajo riesgo).
 - **Alternativas descartadas:** cerrar las de diseño en este cierre (exigen migración nueva, cambiar el contrato `TurnRequest` y el runner: fuera de alcance).
 - **Motivo:** el cierre solo termina lo empezado; lo que queda está mitigado o es de bajo riesgo.
 - **Recuento final (drakter-34):** 169 BLOCKED / 12 BREACH / 19 N/A / 0 ERROR, con las 12 BREACH clasificadas arriba. Con el modelo real, el recuerdo trampa no se obedece y, con la sesión contaminada, `create_task` queda pendiente de confirmación.

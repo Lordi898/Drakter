@@ -8,29 +8,40 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). A�
 
 ### Cierre de la v1 (2026-11-13)
 
-- Integradas todas las ramas `drakter/*` en `drakter/integracion`; cadena de publicación local `drakter/integracion` → `drakter/build` → `main`.
-- Verificación módulo a módulo y marcado en `docs/IMPLEMENTATION_STATUS.md` solo de lo comprobado: Checklists 0, 1 (escritorio), 2, 3 (Hermes, con la conversación completa comprobada con Claude Haiku 5.5 real), 4 (personalidad, con la consistencia comprobada con el modelo real), 5 (personaje provisional SVG, con ⚠️ en Rive y sincronización labial), 6, 7 (tareas y proyectos), 8 (hábitos), 9 (calendario y asignaturas), 10 (almacén), 11 (relaciones, con ⚠️ en el borrado desde el agente) y 12 (memoria, con ⚠️ en recuperación al turno, límites de contexto y memoria de trabajo), 13 (parámetros, permisos y errores de herramientas; Skills inertes ⚠️) 14 (voz como proceso aislado, ⚠️ sin conectar a la app) 15 (automejora, con ⚠️ en el flujo de aprobación) 16 (seguridad, con revisión adversarial) y 17 (documentación de instalación y pruebas de aceptación; instalador y mediciones con ⚠️).
-- Pasada integrada: la app arranca con Electron como dueño del backend; `scripts/drakter-local.sh start|stop|status`; conexiones SQLite por petición sin `check_same_thread`; runner de Hermes con `-B`; rutas permitidas de Electron regeneradas desde el contrato.
-- `scripts/drakter-local.sh stop` vuelve a parar la app (el pid se tomaba antes del fork de `setsid`).
-- `.env.example` solo lista las variables que lee el código y las líneas vacías se ignoran en todos los ajustes; la API de copias se monta con borrado por `ActionService`; los modelos del contrato se alinean con la API; las 4 herramientas de automejora entran en el catálogo de herramientas.
-- `docs/RUN_STATE.md` reescrito con el estado real, los bloqueos y cómo arrancar y parar la app; `README.md` «Estado real» actualizado.
-- Memoria: los hábitos se clasifican como memoria procedimental antes que como perfil.
-- Relaciones: el filtro por tipo de la pantalla se envía como `type`, el nombre que lee el backend.
-- Identidad: el `SOUL.md` de Hermes compone los 14 archivos de `identity/`, `knowledge/` y `context/`; antes solo llegaban los 6 de `identity/`.
-- Automejora: migración `0013_improvement_cycle.sql` con el esquema del servicio y rutas REST montadas.
-- Evals: el arnés lee la identidad de sus tres carpetas y los esquemas de herramientas del árbol integrado.
-- Voz: cierre mínimo en v1; la capa de voz se rediseñará sobre Pipecat.
+**Resultado:** en las Checklists 0–17, 260 de 295 casillas en `[x]` (29 con una reserva ⚠️), 25 sin marcar con ⚠️ y 10 sin código. Pasada integrada final `scripts/verify-all.sh`: 44/44 sobre `183cc25`. Banco red-team final: 169 BLOCKED / 12 BREACH / 19 N/A / 0 ERROR. Detalle en `docs/IMPLEMENTATION_STATUS.md` y `docs/RUN_STATE.md`.
+
+#### Integración y arranque
+- Las 22 ramas `drakter/*` integradas en `drakter/integracion`; cadena local `drakter/integracion` → `drakter/build` → `main` por fast-forward, sin push; respaldo de `main` en `respaldo/main-local-2026-11-13`.
+- Electron es dueño del backend (handshake por stdin, puerto efímero); `scripts/drakter-local.sh start [anthropic]|stop|status` (y `stop` vuelve a parar la app); conexiones SQLite por petición sin `check_same_thread`; runner de Hermes con `-B`; Hoy se recarga cuando el servicio local conecta.
+- `.env.example` lista solo las variables que lee el código y las líneas vacías se ignoran en todos los ajustes.
+- Empaquetado: el backend congelado incluye todos los módulos de `app` (antes respondía 404 en todas las rutas) y el `.deb` lleva `homepage`.
+
+#### Confirmaciones y seguridad
+- Seguridad cableada en el arranque y un único camino de confirmación (`ActionService`, 300 s) para tareas, proyectos, calendario, asignaturas, relaciones, almacén, copias, automejora y memoria; las acciones del agente que lo requieren pasan por `BackendToolGate`.
+- `0012_confirmation_hardening.sql`: las confirmaciones nacen pendientes y no se reescriben al cerrarse.
+- Revisión adversarial: auditoría de rechazos, redactor de logs, regla única de caracteres invisibles, restauración sin `-wal` huérfano; lo que propone el agente en una sesión contaminada entra como de terceros y la conversación también marca la contaminación.
+- La GUI no puede aplicar ni revertir mejoras; `ALLOWED_ROUTES` se regenera desde el contrato.
+
+#### Agente y memoria
+- Hermes con Claude Haiku 5.5 real: conversación completa, selección y encadenado de herramientas y consistencia de personalidad comprobados.
+- El `SOUL.md` compone los 14 archivos de `identity/`, `knowledge/` y `context/` (antes solo llegaban los 6 de `identity/`).
+- Cada turno de Hermes pasa por `build_context`: recuperación de memoria cercada como dato no confiable, nunca en el `system`.
+- Memoria: los hábitos se clasifican como procedimentales; olvidar y aprobar recuerdos desde la GUI pasa por confirmación.
+- Catálogo de herramientas sin deriva (automejora dentro, `get_related_items` no confiable); permiso `storage.write` para el agente; las Skills citan solo herramientas registradas (Hermes no las carga: `skill_manage` desactivado).
+- Evals: el arnés lee la identidad de sus tres carpetas y los esquemas del árbol integrado.
+
+#### Módulos
+- Búsqueda global con una sola ruta `GET /api/v1/search`, que indexa tareas, proyectos, hábitos, eventos y asignaturas; Ctrl+K montado.
 - Calendario: acepta `:00` final en la fecha-hora local; los recursos de una asignatura se leen de las relaciones.
-- Escritorio: `ALLOWED_ROUTES` regenerado desde el contrato; la GUI no puede aplicar ni revertir mejoras.
-- Hoy se recarga cuando el servicio local conecta (antes podía quedarse en «no conectado» al abrir la app).
-- Búsqueda global: una sola ruta `GET /api/v1/search` que indexa tareas, proyectos, hábitos, eventos y asignaturas.
-- Almacén: arreglos de integración (`runtime_dir`, `untrusted_envelope`, mapas de auditoría) y pypdf en `uv.lock`.
-- Agente: permiso `storage.write` concedido; las Skills citan solo herramientas registradas.
-- Pasada integrada `scripts/verify-all.sh`: 44/44 comprobaciones sobre `183cc25`; el arnés e2e usa guiones propios del stub y espera al agente.
-- Empaquetado: el backend congelado incluye todos los módulos de `app` (antes respondía 404) y el `.deb` lleva `homepage`; guías de instalación y uso alineadas con la integración.
-- Seguridad: revisión adversarial con banco red-team; auditoría de rechazos, redactor de logs, regla única de caracteres invisibles y restauración sin `-wal` huérfano.
-- Seguridad cableada en el arranque: confirmaciones con un único camino (`ActionService`, 300 s) para tareas, proyectos y calendario; migración `0012_confirmation_hardening.sql`.
-- Registradas en `docs/DECISIONS.md` las decisiones del cierre (2026-11-13).
+- Relaciones: el filtro por tipo de la pantalla se envía como `type`.
+- Almacén: arreglos de integración y pypdf en `uv.lock`.
+- Automejora: esquema del servicio en `0013_improvement_cycle.sql`, rutas REST montadas, aprobación y reversión por `ActionService`, recuperación de evaluaciones cortadas al arrancar.
+- Copias: API montada con borrado por `ActionService`; los modelos del contrato se alinean con la API.
+- Voz: verificada como proceso aislado y congelada; se rediseñará sobre Pipecat.
+
+#### Documentación
+- `docs/IMPLEMENTATION_STATUS.md` con las casillas verificadas y un resumen de cierre; `docs/RUN_STATE.md` con el estado de cierre, los bloqueos y cómo arrancar y parar; `README.md` «Estado real»; guías de `docs/installation/` y `docs/usage/` alineadas con la integración.
+- Decisiones del cierre registradas en `docs/DECISIONS.md` (2026-11-13).
 
 ### Añadido
 
