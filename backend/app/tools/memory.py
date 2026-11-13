@@ -142,6 +142,12 @@ def _read(ctx: ToolContext, args: ReadArgs) -> ReadResult:
     )
 
 
+def _session_tainted(ctx: ToolContext) -> bool:
+    """Fail closed: if the turn tracker is not reachable, treat the session as tainted."""
+    turns = getattr(getattr(ctx.state, "agent_runtime", None), "turns", None)
+    return True if turns is None else bool(turns.is_tainted(ctx.session_id))
+
+
 def _propose(ctx: ToolContext, args: ProposeArgs) -> ProposeResult:
     draft = MemoryDraft(
         kind=args.kind, category=args.category, subject=args.subject, content=args.content,
@@ -149,7 +155,8 @@ def _propose(ctx: ToolContext, args: ProposeArgs) -> ProposeResult:
                               captured_at=datetime.now(UTC)),
         trust=TrustLevel.DERIVED, confidence=args.confidence,
     )
-    r = _wrap(lambda: _svc(ctx).ingest(draft, AGENT))
+    tainted = _session_tainted(ctx)
+    r = _wrap(lambda: _svc(ctx).ingest(draft, AGENT, tainted=tainted))
     return ProposeResult(
         id=str(r.record.id) if r.record else None,
         status=r.record.status.value if r.record else None,

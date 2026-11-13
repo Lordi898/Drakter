@@ -254,7 +254,7 @@ def build_context(
         turn_prompt=_join(s for s in sections if s.level > PriorityLevel.USER_CONTEXT),
         memory_ids=tuple(memories[i].id for i in kept_memories),
         dropped_memory_ids=tuple(m.id for i, m in enumerate(memories) if i not in kept),
-        tainted=bool(kept_memories),
+        tainted=bool(kept_memories) or turn_start < len(turns),
     )
 
 
