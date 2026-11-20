@@ -451,6 +451,8 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 - [x] Métricas por turno en `metrics.jsonl`; umbrales calibrados con cifras medidas
   ⚠️ Umbrales sin cambios (los datos no justifican moverlos); calibración fina pendiente con la voz real del usuario.
 - [x] `VOICE.md` (brevedad, usted, identidad «con qué funciona»)
+- [x] Calidad de la voz tras la prueba del usuario (2026-11-20): STT en la nube (Deepgram/Groq) con respaldo Moonshine, volcado de audio opcional, fin de turno con umbral y regla de texto, activación difusa, sin respuestas solapadas, acuse cortable y petición de longitud explícita en `VOICE.md`
+  ⚠️ Groq solo probado con clave falsa (conmuta a Moonshine); no hay clave real. Todo con voz sintética: falta repetirlo con la voz del usuario (`DRAKTER_VOICE_DUMP_AUDIO=1` para diagnosticar).
 - [x] Eventos `voice.*` antiguos eliminados del contrato; `/tmp/dr-at` borrado
 - Aplazado (sin casilla activa): «Drakter» y «despierta», dictado, subtítulos, emoción, avisos de calendario, transporte A
 

@@ -12,15 +12,15 @@ Decisiones V-01 a V-38 en `docs/DECISIONS.md`.
 - **Audio por WebRTC loopback** (transporte B): el renderer captura con `getUserMedia` (AEC3, NS, AGC) y reproduce el `<audio>` remoto; la voz usa `SmallWebRTCTransport` con `ConnectionMode.SINGLE` e `ice_servers=[]`. La señalización va renderer → `window.api.voice.offer` → main → `POST /api/v1/voice/offer` → IPC `rtc.offer` → voz. Ni audio ni SDP pasan por el WebSocket de eventos.
 - Voz **no** conoce Hermes, la BD, el hub de eventos ni las confirmaciones. Entrega texto de usuario (`voice.user_turn`) y recibe texto para decir (`speak.*`). Quien habla con el agente es `VoiceOrchestrator` (`backend/app/integrations/voice/service.py`).
 - **Ninguna frase hablada aprueba nada.** Ante `confirmation.requested` se dice `confirm_on_screen` y se enfoca la ventana.
-- Ni audio ni transcripciones se guardan ni se registran. `metrics.jsonl` lleva tiempos y contadores, nunca texto. Los IDs de voz (`ResolvedProfile.voice`) nunca se loguean.
+- Ni audio ni transcripciones se guardan ni se registran (única excepción: el volcado de diagnóstico `DRAKTER_VOICE_DUMP_AUDIO=1`, desactivado por defecto, en `voice/dumps/` 0700/0600 y borrado a las 24 h). `metrics.jsonl` lleva tiempos y contadores, nunca texto. Los IDs de voz (`ResolvedProfile.voice`) nunca se loguean.
 - **Sin descargas en ejecución**: todo modelo sale de `~/.local/share/drakter/models/`. Si falta, la fábrica falla con la ruta esperada.
 - Fish solo con `s2.1-pro-free` (lista blanca) y hasta `fish_free_until` (2026-11-30); después, Kokoro salvo `allow_paid`.
 
 ## Pipeline (uno por conexión; modelos una vez por proceso)
 
 ```
-input → WakeGate (oWW, prebúfer 2 s; solo audio) → VADProcessor (Silero) → STT Moonshine streaming
-      → UserTurnProcessor (único; start=[DrakterStartStrategy], stop=[SmartTurn v3.2], user_idle_timeout)
+input → WakeGate (oWW, prebúfer 2 s; solo audio) → VADProcessor (Silero) → [AudioDump] → STT (auto: Deepgram | Groq | Moonshine)
+      → UserTurnProcessor (único; start=[DrakterStartStrategy], stop=[DrakterTurnStop: Smart Turn v3.2 + texto], user_idle_timeout)
       → BackendBridgeProcessor (turno final; prefijo «jarvis»; capa 0; speak.* → LLM frames)
       → SpeechGuard → ServiceSwitcher[Fish | Kokoro] (text_transforms por proveedor)
       → PhrasePlayer (caché PCM) → output [DuckMixer] → PlaybackTracker (→ voice.playback)
@@ -35,6 +35,7 @@ Los puertos son fábricas `create(...)` que devuelven objetos de Pipecat. El reg
 | kind | name | módulo | firma de `create` |
 |---|---|---|---|
 | `stt` | `moonshine` | `voice.providers.stt.moonshine_streaming` | `(cfg, shared) -> STTService` |
+| `stt` | `auto`, `deepgram`, `groq` | `voice.providers.stt.cloud` | `(cfg, shared) -> FrameProcessor` (`ServiceSwitcher[nube, Moonshine]`; el núcleo pone `strategy.ctl`) |
 | `vad` | `silero` | `voice.providers.vad.silero` | `(cfg) -> VADAnalyzer` |
 | `turn_stop` | `smart_turn` | `voice.providers.turn.smart_turn` | `(cfg, shared) -> BaseUserTurnStopStrategy` |
 | `turn_start` | `drakter` | `voice.conversation.start_strategy` | `(cfg, ctl) -> list[BaseUserTurnStartStrategy]` |
@@ -57,7 +58,7 @@ def classify(text: str, bot_speaking: bool, awaiting_answer: bool) -> Literal["s
 
 UDS JSONL (`voice/ipc.py`, socket 0600 con `SO_PEERCRED`): la voz es servidor y el backend cliente; máximo 256 KiB por línea. Sobre `IpcMessage{kind: evt|cmd|ok|err, id, type, payload}`. `Trigger = wake|hotkey|ui|followup`.
 
-Voz → backend (`evt`, modelos en `EVTS`): `voice.ready`, `voice.state`, `voice.user_speech`, `voice.user_turn`, `voice.playback` (con `heard_tail` ≤80 y `pending_head` ≤200 solo en `interrupted`), `voice.local_command`, `voice.tts_fallback` (una vez por arranque), `voice.metrics`, `voice.error`.
+Voz → backend (`evt`, modelos en `EVTS`): `voice.ready`, `voice.state`, `voice.user_speech`, `voice.user_turn`, `voice.playback` (con `heard_tail` ≤80 y `pending_head` ≤200 solo en `interrupted`), `voice.local_command`, `voice.tts_fallback` (una vez por arranque), `voice.metrics`, `voice.error` (incluye `stt_fallback`, una vez por arranque, al pasar de la nube a Moonshine).
 
 Backend → voz (`cmd`, modelos en `CMDS`; respuesta `ok` con `CMD_RESULTS[type]` o `{}`, o `err{code, message}`): `rtc.offer` → `RtcAnswer`, `speak.open`, `speak.delta` → `SpeakAck{ignored}`, `speak.flush`, `speak.close`, `speak.stop`, `speak.phrase`, `turn.phase`, `voice.config`, `mode.set`, `status` → `StatusResult`, `shutdown`.
 
@@ -70,5 +71,5 @@ Backend → voz (`cmd`, modelos en `CMDS`; respuesta `ok` con `CMD_RESULTS[type]
 
 - REST (`contracts/api/routes.md` §Voz): `POST /voice/offer`, `POST /voice/activate`, `POST /voice/mode`, `GET /voice/status`. No hay ruta para el micrófono ni para aprobar nada.
 - Eventos WS (los publica `VoiceOrchestrator`, nunca este proceso): `voice.state` (snapshot, sin `mic`), `voice.playback` (sin texto), `voice.error`, y `notification.created` para el respaldo de TTS. Los `voice.*` de la v1 se retiran en la integración (WP9).
-- Ajustes de usuario (`SETTING_KEYS`): `voice_tts_enabled`, `voice_profile`, `voice_wake_enabled`, `voice_expression`. Llegan a la voz por `voice.config`. Los umbrales (`stt_model`, `wake_threshold`, `followup_s`, `idle_nudge_s`, `turn_stop_secs`, `filler_after_ms`, `bargein_min_words`, `bargein_decide_ms`, `duck_gain`, `tool_phrase_gap_s`, `fish_free_until`, `allow_paid`) viven en `VoiceConfig`, sin calibrar hasta WP9.
+- Ajustes de usuario (`SETTING_KEYS`): `voice_tts_enabled`, `voice_profile`, `voice_wake_enabled`, `voice_expression`. Llegan a la voz por `voice.config`. Los umbrales (`stt_model`, `stt_keyterms`, `turn_complete_threshold`, `turn_grace_s`, `turn_hanging_secs`, `wake_threshold`, `followup_s`, `idle_nudge_s`, `turn_stop_secs`, `filler_after_ms`, `bargein_min_words`, `bargein_decide_ms`, `duck_gain`, `tool_phrase_gap_s`, `fish_free_until`, `allow_paid`) viven en `VoiceConfig`, sin calibrar hasta WP9.
 - Micrófono: lo calcula el renderer (`mic = !client?.micOpen() ? "off" : mode === "conversation" ? "live" : "standby"`).

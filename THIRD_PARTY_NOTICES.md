@@ -63,8 +63,9 @@ Todas permisivas: MIT, BSD-3-Clause, Apache-2.0, PSF-2.0 y MIT-0 (`fastapi`, `st
 | Componente | Licencia | Cómo se usa |
 |---|---|---|
 | [Hermes Agent](https://github.com/NousResearch/hermes-agent) v0.22.7 | MIT | Venv propio, instalado desde git; el backend lo lanza como proceso |
-| Voz v2: [Pipecat](https://github.com/pipecat-ai/pipecat) `pipecat-ai[webrtc,fish,kokoro]==1.16.0` | BSD-2-Clause | Venv de voz propio (`~/.local/share/drakter/venvs/voice`) |
+| Voz v2: [Pipecat](https://github.com/pipecat-ai/pipecat) `pipecat-ai[webrtc,fish,kokoro,deepgram]==1.16.0` | BSD-2-Clause | Venv de voz propio (`~/.local/share/drakter/venvs/voice`) |
 | Voz v2: `aiortc` (WebRTC) | BSD-3-Clause | Transporte `SmallWebRTCTransport` de Pipecat |
+| Voz: [deepgram-sdk](https://github.com/deepgram/deepgram-python-sdk) `7.19.0` | MIT | STT Deepgram Nova-3 opcional (`DeepgramSTTService` de Pipecat), solo con `DEEPGRAM_API_KEY` |
 | Voz v2: PyAV (`av`) | BSD-3-Clause; **sus wheels incluyen FFmpeg (LGPL-2.1+)** | Dependencia de aiortc; se usa como biblioteca dinámica sin modificar |
 | Voz v2: `moonshine-voice==0.1.6` | MIT (código) | STT. ⚠️ La licencia del modelo en castellano (`small-streaming-es`) es ambigua: válida para uso personal, revisar antes de distribuir |
 | Voz v2: Smart Turn v3.2 (`LocalSmartTurnAnalyzerV3`) | BSD-2-Clause | Fin de turno, modelo ONNX incluido en Pipecat |
