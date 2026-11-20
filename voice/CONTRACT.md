@@ -60,12 +60,14 @@ UDS JSONL (`voice/ipc.py`, socket 0600 con `SO_PEERCRED`): la voz es servidor y 
 
 Voz → backend (`evt`, modelos en `EVTS`): `voice.ready`, `voice.state`, `voice.user_speech`, `voice.user_turn`, `voice.playback` (con `heard_tail` ≤80 y `pending_head` ≤200 solo en `interrupted`), `voice.local_command`, `voice.tts_fallback` (una vez por arranque), `voice.metrics`, `voice.error` (incluye `stt_fallback`, una vez por arranque, al pasar de la nube a Moonshine).
 
+`voice.error{code, stage, recoverable, message?}`: `message` es un texto corto y fijo en español para la interfaz (`voice/errors.py`), sin datos del usuario ni de la excepción. Lo emite `Session.report_error` (un mismo código, como mucho cada 60 s) y el proceso sigue vivo. Códigos: `stt_fallback`, `stt_unavailable` y `tts_unavailable` (sin respaldo), `models_missing` y `pipeline_build_failed` (al montar el pipeline de una conexión), `pipeline_failed` (error fatal o excepción del pipeline en marcha) y `service_failed` (otro procesador inservible).
+
 Backend → voz (`cmd`, modelos en `CMDS`; respuesta `ok` con `CMD_RESULTS[type]` o `{}`, o `err{code, message}`): `rtc.offer` → `RtcAnswer`, `speak.open`, `speak.delta` → `SpeakAck{ignored}`, `speak.flush`, `speak.close`, `speak.stop`, `speak.phrase`, `turn.phase`, `voice.config`, `mode.set`, `status` → `StatusResult`, `shutdown`.
 
 - `speech_id` es monótono por proceso de backend y abre un tramo de habla; `seq` es monótono por `speech_id`. Un delta duplicado o de un speech cortado responde `ok{ignored: true}`.
 - **Regla de corte:** el puente marca el `speech_id` activo como cortado ante **cualquier** `InterruptionFrame` (local o por `speak.stop`) y emite `voice.playback{interrupted}`. Tras un `steered accepted`, el backend abre un `speech_id` nuevo con el mismo `turn_id`.
 - `PhraseKey` es una lista cerrada (`PHRASE_KEYS`); los textos viven en `agent/identity/voice_phrases.es.toml` y el cargador valida que no falte ninguna.
-- Etiquetas de expresión: lista cerrada en `drakter_contracts/speech_markup.py` (`TAGS`). Fish recibe `keep_allowed`; Kokoro, `strip_tags`.
+- Etiquetas de expresión: lista cerrada en `drakter_contracts/speech_markup.py` (`TAGS`). Antes del TTS, `voice/speech/tags.py` quita cualquier `[..]` con forma de etiqueta: Fish con expresión (`keep_known`) conserva solo las de `TAGS`; Kokoro, Fish sin expresión y las frases no expresivas (`strip_all`) las quitan todas.
 
 ## Superficie hacia fuera
 

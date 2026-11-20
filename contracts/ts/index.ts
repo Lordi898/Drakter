@@ -594,6 +594,7 @@ export interface EvtError {
   stage: "transport" | "stt" | "turn" | "tts" | "ipc" | "wake";
   recoverable: boolean;
   turn_id: string | null;
+  message: string | null;
 }
 
 export interface EvtLocalCommand {
@@ -1702,6 +1703,7 @@ export interface VoiceError {
   stage: "transport" | "stt" | "turn" | "tts" | "ipc" | "wake";
   recoverable: boolean;
   turn_id: string | null;
+  message: string | null;
 }
 
 export interface VoiceModeIn {

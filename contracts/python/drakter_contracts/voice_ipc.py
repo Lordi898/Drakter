@@ -118,6 +118,8 @@ class EvtError(BaseModel):
     stage: ErrorStage
     recoverable: bool
     turn_id: str | None = None
+    message: Annotated[str, Field(max_length=160)] | None = None
+    """Texto corto en español para la interfaz (opcional; nunca lleva datos del usuario ni del error)."""
 
 
 EVTS: Final[dict[str, type[BaseModel]]] = {

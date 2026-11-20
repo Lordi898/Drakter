@@ -84,6 +84,11 @@ class DrakterFailover(ServiceSwitcherStrategyFailover):
         target = self._next_service()
         if target is None:
             logger.error("TTS: no hay otro servicio al que conmutar")
+            if not failed.is_usable:  # sin respaldo: el switcher lo reporta y lo avisa pipeline.py
+                return None
+            report = getattr(self.ctl, "report_error", None)
+            if report is not None:  # sigue «usable» pero falla una y otra vez: se avisa aquí
+                await report("tts_unavailable", "tts", recoverable=True)
             return None
         switched = await self._set_active_if_available(target)
         if switched is not None:

@@ -8,9 +8,9 @@
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import Any, Final, Literal
+from typing import Annotated, Any, Final, Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from .common import ActorType, EntityType, Id, Instant
 
@@ -227,6 +227,8 @@ class VoiceError(BaseModel):
     stage: Literal["transport", "stt", "turn", "tts", "ipc", "wake"]
     recoverable: bool
     turn_id: Id | None = None
+    message: Annotated[str, Field(max_length=160)] | None = None
+    """Texto corto en español para la interfaz (opcional; nunca lleva datos del usuario ni del error)."""
 
 
 EVENTS: Final[dict[str, type[BaseModel]]] = {

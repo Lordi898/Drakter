@@ -10,6 +10,7 @@ from __future__ import annotations
 import dataclasses
 import logging
 import threading
+import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -97,6 +98,7 @@ class Session:
         self._parts: Parts | None = None
         self._mixer: Any = None
         self._voice_pending = False
+        self._errors_sent: dict[str, float] = {}  # código → último aviso (report_error)
 
     # ── pipeline activo ─────────────────────────────────────────────────────
     def new_mixer(self) -> Any:
@@ -117,10 +119,28 @@ class Session:
 
     # ── Ctl ─────────────────────────────────────────────────────────────────
     async def emit(self, type: str, payload: dict[str, Any]) -> None:
+        if type == "voice.error" and "message" not in payload:
+            from voice.errors import message_for
+
+            payload = {**payload, "message": message_for(str(payload.get("code", "")))}
         try:
             self._publish(type, payload)
         except (ValueError, ValidationError) as exc:
             log.error("event_rejected", extra={"data": {"type": type, "error": type_name(exc)}})
+
+    async def report_error(self, code: str, stage: str, recoverable: bool) -> None:
+        """`voice.error` con su texto corto, una vez por código cada `REPEAT_S`. Nunca lanza."""
+        from voice.errors import REPEAT_S
+
+        now = time.monotonic()
+        if now - self._errors_sent.get(code, -REPEAT_S) < REPEAT_S:
+            return
+        self._errors_sent[code] = now
+        log.warning("voice_error", extra={"data": {"code": code, "stage": stage}})
+        try:
+            await self.emit("voice.error", {"code": code, "stage": stage, "recoverable": recoverable})
+        except Exception as exc:  # noqa: BLE001 - el aviso nunca rompe la voz
+            log.error("voice_error_not_sent", extra={"data": {"error": type_name(exc)}})
 
     async def interrupt(self, reason: str) -> None:
         if self._parts is not None:
