@@ -21,8 +21,12 @@ def entities_by_ids(conn: sqlite3.Connection, ids: Sequence[str]) -> dict[str, s
     for i in range(0, len(unique), _CHUNK):
         chunk = unique[i : i + _CHUNK]
         rows = conn.execute(
-            "SELECT e.id, e.entity_type, e.archived_at, l.label FROM entities e"
-            f" LEFT JOIN v_entity_labels l ON l.id = e.id WHERE e.id IN ({_marks(len(chunk))})",
+            # Subconsulta correlacionada: SQLite empuja `l.id = e.id` a cada rama del UNION ALL
+            # y busca por clave primaria. Con LEFT JOIN materializaba la vista entera (todas las
+            # tablas) en cada llamada: 15,7 ms frente a 0,3 ms con ~9.000 entidades.
+            "SELECT e.id, e.entity_type, e.archived_at,"
+            " (SELECT l.label FROM v_entity_labels l WHERE l.id = e.id) AS label FROM entities e"
+            f" WHERE e.id IN ({_marks(len(chunk))})",
             chunk,
         ).fetchall()
         out.update({r["id"]: r for r in rows})
