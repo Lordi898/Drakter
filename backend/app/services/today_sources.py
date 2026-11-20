@@ -7,6 +7,7 @@ import logging
 import sqlite3
 from collections.abc import Callable, Iterable, Sequence
 from datetime import date, datetime, time, timedelta, timezone
+from functools import lru_cache
 from typing import Any, TypeVar
 from zoneinfo import ZoneInfo, available_timezones
 
@@ -22,6 +23,15 @@ from app.services.today_models import (
 log = logging.getLogger("drakter.today")
 
 OPEN_STATUSES = ("pending", "in_progress", "on_hold")
+# Prefiltro de «Hoy»: lo que no tenga forma ISO pasa a Python, que lo cuenta como ilegible.
+_ISO_INSTANT = "[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T*"
+_ISO_DATE = "[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]"
+
+
+@lru_cache(maxsize=1)
+def _valid_zones() -> frozenset[str]:
+    """`available_timezones()` recorre tzdata en disco (~25 ms): una vez por proceso."""
+    return frozenset(available_timezones())
 _PRIORITY_RANK = {"urgent": 0, "high": 1, "medium": 2, "low": 3}
 T = TypeVar("T")
 
@@ -132,8 +142,13 @@ def tasks_sections(
                 JOIN entities e ON e.id = t.id
                 LEFT JOIN projects p ON p.id = t.project_id
                 WHERE t.status IN ({_open_marks()}) AND e.archived_at IS NULL
-                  AND (t.due_at IS NOT NULL OR t.due_date IS NOT NULL)""",  # noqa: S608
-            OPEN_STATUSES,
+                  AND ((t.due_at IS NOT NULL AND (t.due_at < ? OR t.due_at NOT GLOB ?))
+                    OR (t.due_at IS NULL AND t.due_date IS NOT NULL
+                        AND (t.due_date <= ? OR t.due_date NOT GLOB ?)))""",  # noqa: S608
+            # Solo descarta lo que seguro no es de hoy: `_task_due` decide el resto. Un día de
+            # margen en `due_at` cubre cualquier desfase horario escrito en el texto.
+            (*OPEN_STATUSES, (next_start + timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%S"),
+             _ISO_INSTANT, today.isoformat(), _ISO_DATE),
         ).fetchall()
         overdue: list[tuple[tuple[Any, ...], TodayTask]] = []
         due_today: list[tuple[tuple[Any, ...], TodayTask]] = []
@@ -263,7 +278,7 @@ def agenda_section(conn: sqlite3.Connection, tz_name: str, now: datetime) -> Sec
 def habits_section(conn: sqlite3.Connection, now: datetime) -> Section[TodayHabit]:
     def produce() -> Section[TodayHabit]:
         recurrence = importlib.import_module("app.services.calendar_recurrence")
-        valid_zones = available_timezones()
+        valid_zones = _valid_zones()
         habits = conn.execute(
             """SELECT h.id, h.name, h.timezone, h.preferred_local_time, h.start_date, h.end_date
                FROM habits h JOIN entities e ON e.id = h.id

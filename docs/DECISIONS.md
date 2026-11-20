@@ -1083,3 +1083,38 @@ Decisiones técnicas, cambios de tecnología y motivos.
 - **Motivo:** es la vía más simple y segura. Las Skills son de solo lectura por construcción, no añade herramientas ni latencia, y el prefijo sigue en caché (unos 16 KB más en `SOUL.md`, que pasa de ~52 KB a ~68 KB y sigue por debajo de los 120 KB del tope).
 - **Comprobación:** preflight OK, con hash del system idéntico entre turnos y `SOUL.md` idéntico entre generaciones. Entre arranques cambian la línea `Conversation started` y el Session ID que añade Hermes. Con Claude Haiku 5.5 real, 8 turnos y 19 llamadas, desde un backend propio del worktree: usó la herramienta de cada dominio en el orden de su Skill (`check_availability` antes de `create_event`, `complete_task` en vez de editar, `delete_task` → `confirmation_required`, `search_resources` → `read_resource`, `propose_memory` pendiente) y se negó a crear o modificar Skills.
 - **Impacto:** revoca «Skills de agent/ inertes en Hermes». Afecta a `backend/app/integrations/hermes/home.py` y `preflight.py`, a `agent/skills/**` y a las Checklists 3, 12 y 13. Editar una Skill cambia el hash de `SOUL.md` y, por tanto, el prefijo en caché: es un cambio de producción y pasa por revisión (CLAUDE.md §8).
+
+## [2026-11-20] OPT-1: optimización de consultas SQLite, recuperación de memoria y carga de la interfaz
+- **Contexto:** Checklist 17 pide «Optimizar consultas SQLite», «Optimizar recuperación de memoria» y «Optimizar carga de interfaz». Se midió con una base sembrada por la API (5.000 tareas, 200 proyectos, 3.000 eventos, 1.000 bloques, 40 hábitos con 14.600 registros, 3.000 relaciones y 3.000 recuerdos). Se capturó con `trace_callback` todo el SQL de 29 rutas y se pasó `EXPLAIN QUERY PLAN` a cada sentencia. Para comparar, el mismo banco se ejecutó sobre `f82dda9` y sobre la rama, tomando el mínimo de 15 repeticiones en dos rondas alternas, porque la máquina estaba cargada (load ~5 en 8 núcleos). En las rutas que no se tocan las cifras varían ±25 % por ruido; solo se citan cambios que superan ese margen.
+- **Decisión:**
+  1. **Migración `0015_query_indexes.sql`**, solo con índices:
+     - `habit_records (occurrence_date)`, para «Hoy»: de 3,5 ms a 0,04 ms. Antes recorría la tabla entera.
+     - `tasks (status, due_date)`, para los recordatorios de tareas con fecha sin hora: de 1,35 ms a 0,04 ms.
+     - `memory_records (created_at, seq)` y `(status, created_at, seq)`, que sustituye a `(status)` (es su prefijo), para el listado de memoria: de 12,9 ms a 0,23 ms y sin B-tree temporal.
+  2. **`relations.entities_by_ids`:** la etiqueta pasa a sacarse con una subconsulta correlacionada sobre `v_entity_labels` en lugar de `LEFT JOIN`. Con `LEFT JOIN`, SQLite materializaba la vista entera (las 9 tablas) en cada llamada; con la subconsulta empuja `id = ?` a cada rama del `UNION ALL` y busca por clave. Pasa de 15,7 ms a 0,3 ms con resultado idéntico, y relacionados baja de 12–14 ms a 8 ms por petición.
+  3. **«Hoy»:**
+     - `available_timezones()` se llamaba en cada petición (~25 ms recorriendo tzdata); ahora se llama una vez por proceso.
+     - Las tareas que seguro no son de hoy se descartan en SQL: `due_at` con un día de margen y `due_date <= hoy`. Lo que no tiene forma ISO sigue llegando a Python, que lo cuenta como ilegible.
+     - La ruta pasa de 62 ms a 41 ms. La salida es idéntica (mismo hash de JSON) en tres instantes distintos.
+  4. **PRAGMA sin cambios.** WAL y `synchronous=NORMAL` ya estaban. El coste fijo de cada conexión es analizar el esquema en la primera sentencia (~2,3 ms). Fijar o leer `journal_mode` no lo cambia, y `cache_size` y `mmap_size` no ayudan con una conexión por petición (medido).
+  5. **Memoria por turno:** `SqliteMemoryAdapter.search_with_text` devuelve la búsqueda y el texto del nivel en una consulta y una conexión. Antes eran 9 conexiones: una búsqueda y un `read` por recuerdo. Es una capacidad opcional del adaptador: el puerto `MemoryAdapter`, que está congelado, no cambia, y `memories_for_context` vuelve al camino anterior si el adaptador no la tiene. Usa los mismos filtros (`approved`, `valid_until`), el mismo orden bm25 y la misma auditoría `memory.search`. Pasa de 44–62 ms a 14–30 ms, con resultados idénticos en 18 consultas comparadas (6 textos × 3 niveles).
+  6. **`build_context`:** los niveles 2-4 se cachean por identidad de archivo (`lstat`: modo, inodo, tamaño, mtime y ctime de los 14 archivos). La clave se toma antes de leer. Un symlink cambia el modo y deja de ser válido, la falta de una regla de nivel 2 lanza error en cada turno (los errores nunca se cachean) y los avisos de archivos ausentes se repiten como antes. Sanear `agent/context/` costaba ~5 ms por turno. Pasa de 7–9 ms a 3–4 ms; `check_memory_rules` da 40/40.
+  7. **Interfaz:**
+     - electron-vite fija `minify: false` en el renderer, y salía un solo chunk legible de 1.660 kB. Ahora va `minify: true`.
+     - `navigation/pages.ts` carga con `React.lazy` cada sección salvo «Hoy», la primera pantalla.
+     - Las demás secciones se precargan 1,5 s después del montaje, en reposo, para no competir con los datos de «Hoy».
+     - El `Suspense` usa `fallback={null}`: sin cambio visual.
+     - El chunk principal pasa a 362 kB.
+     - Electron real (Xvfb, mediana de 7 recargas, 3 rondas): DOMContentLoaded de 74–109 ms a 42–60 ms, primer pintado de 112–152 ms a 88–120 ms y heap de 16,0 a 15,0 MB. El tiempo hasta «Hoy» con datos lo marca la respuesta del backend y no cambia de forma medible.
+- **Alternativas descartadas:**
+  - Una conexión SQLite reutilizada por hilo, que quitaría los ~2,3 ms por petición: cambia el modelo de conexiones endurecidas de `connection.py` y afecta a todo el backend. Queda para cuando haga falta.
+  - Indexar `relationships (source_type)` y `(target_type)`: es un filtro poco usado y la consulta ya tarda <1 ms.
+  - Sustituir el `LIKE '%q%'` de tareas por FTS: cambiaría resultados.
+  - Rehacer `reconcile_structured`, que cuesta 20–33 ms por búsqueda: es lineal con índice, se cerró en «Optimizar FTS5» y quitarlo exige rastrear cambios con disparadores.
+  - Acelerar la expansión de recurrencias de la agenda: es coste Python, no consulta.
+  - `ANALYZE` en la migración: con una base recién creada fijaría estadísticas engañosas.
+- **Comprobación:**
+  - Migración sobre una **copia** de la base real (abierta con `mode=ro&immutable=1`; el original queda con el mismo SHA-256): versión 14→15, solo se aplica la 0015, integridad y claves foráneas OK, mismas filas (salvo `schema_version` +1), una segunda pasada no aplica nada y la restauración de la copia `pre-migrate` devuelve la versión 14 sin los índices nuevos y con las mismas filas.
+  - `check_migrations`, `check_database` (76/76), `check_relations`, `check_tags_search`, `check_memory_rules` (40/40), `check_memory_confirm` (14/14), `critical/check_confirmations` y `check_security` (145/145): todo OK.
+  - E2E de escritorio (`--only desktop`, stub): navegación por las 10 secciones, calendario, configuración, notificaciones y 0 errores de consola. `conexion_backend` falla igual en `f82dda9`: es del entorno sin Hermes.
+- **Impacto:** `backend/migrations/0015_query_indexes.sql`, `backend/app/repositories/relations.py`, `backend/app/services/today_sources.py`, `backend/app/integrations/memory/{store_sqlite,service}.py`, `backend/app/integrations/memory/context/builder.py`, `desktop/electron.vite.config.ts`, `desktop/src/navigation/pages.ts` y `desktop/src/app/AppShell.tsx`. Checklist 17.

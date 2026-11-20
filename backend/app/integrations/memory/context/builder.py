@@ -8,7 +8,9 @@ keeps it for the whole session.
 from __future__ import annotations
 
 import logging
+import os
 import secrets
+import threading
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from datetime import datetime
@@ -134,20 +136,63 @@ def _fit_turns(rendered: list[str], limit: int, overhead: int) -> int:
     return start
 
 
-def _load_trusted_levels(agent_dir: Path) -> tuple[str, str, str]:
+_TrustedLevels = tuple[str, str, str]
+_Warning = tuple[str, tuple[object, ...]]
+_FilesKey = tuple[tuple[int, int, int, int, int] | None, ...]
+_CACHE_MAX: Final = 8
+_trusted_cache: dict[Path, tuple[_FilesKey, _TrustedLevels, tuple[_Warning, ...]]] = {}
+_trusted_lock = threading.Lock()
+
+
+def _files_key(agent_dir: Path) -> _FilesKey:
+    """Identity of every fixed file (lstat: a symlink changes the mode). Any edit changes it."""
+    key: list[tuple[int, int, int, int, int] | None] = []
+    for level in (PriorityLevel.SYSTEM_RULES, PriorityLevel.IDENTITY, PriorityLevel.USER_CONTEXT):
+        for relative in LEVEL_FILES[level]:
+            try:
+                info = os.lstat(agent_dir / relative)
+            except OSError:
+                key.append(None)
+                continue
+            key.append((info.st_mode, info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns))
+    return tuple(key)
+
+
+def _read_trusted_levels(agent_dir: Path) -> tuple[_TrustedLevels, tuple[_Warning, ...]]:
     system_rules, missing = _read_level(agent_dir, PriorityLevel.SYSTEM_RULES)
     if missing:
         raise MissingRulesError("missing system rules: " + ", ".join(missing))
+    warnings: list[_Warning] = []
     identity, missing = _read_level(agent_dir, PriorityLevel.IDENTITY)
-    for relative in missing:
-        logger.warning("identity file not available, skipped: %s", relative)
+    warnings.extend(("identity file not available, skipped: %s", (relative,)) for relative in missing)
     user_context, missing = _read_level(agent_dir, PriorityLevel.USER_CONTEXT)
-    for relative in missing:
-        logger.warning("user context file not available, skipped: %s", relative)
+    warnings.extend(("user context file not available, skipped: %s", (relative,)) for relative in missing)
     for level, text in ((PriorityLevel.SYSTEM_RULES, system_rules), (PriorityLevel.IDENTITY, identity)):
         if len(text) > _LARGE_LEVEL_CHARS:
-            logger.warning("level %s is large and is never cut: %d chars", level.name, len(text))
-    return system_rules, identity, sanitize_untrusted(user_context)
+            warnings.append(("level %s is large and is never cut: %d chars", (level.name, len(text))))
+    return (system_rules, identity, sanitize_untrusted(user_context)), tuple(warnings)
+
+
+def _load_trusted_levels(agent_dir: Path) -> _TrustedLevels:
+    """Levels 2-4, cached by the identity of their files (sanitizing level 4 costs ~5 ms a turn).
+
+    The key is taken before reading, so a file edited mid-read is read again next turn.
+    A missing level 2 file raises every time: errors are never cached. Warnings repeat each turn.
+    """
+    key = _files_key(agent_dir)
+    with _trusted_lock:
+        cached = _trusted_cache.get(agent_dir)
+    if cached is not None and cached[0] == key:
+        levels, warnings = cached[1], cached[2]
+    else:
+        levels, warnings = _read_trusted_levels(agent_dir)
+        with _trusted_lock:
+            if len(_trusted_cache) >= _CACHE_MAX:
+                _trusted_cache.clear()
+            _trusted_cache[agent_dir] = (key, levels, warnings)
+    for message, args in warnings:
+        logger.warning(message, *args)
+    return levels
 
 
 def build_context(
