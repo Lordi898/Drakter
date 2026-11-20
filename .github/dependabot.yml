@@ -20,6 +20,11 @@ updates:
     groups:
       python:
         patterns: ["*"]
+    ignore:
+      # openwakeword>=0.5 exige tflite-runtime en Linux, que no tiene ruedas para
+      # Python 3.12 (el venv de voz lo fija Pipecat). Ver DECISIONS «DEP-OWW».
+      - dependency-name: "openwakeword"
+        versions: [">=0.5"]
 
   - package-ecosystem: npm
     directory: /desktop

@@ -10,13 +10,15 @@
 # Variables opcionales:
 #   DRAKTER_RUNTIME_DIR   raíz de runtimes (por defecto ~/.local/share/drakter)
 #   DRAKTER_KOKORO_SRC    de dónde copiar Kokoro si falta en models/kokoro
+#   DRAKTER_VOICE_VENV    venv a usar (por defecto $DRAKTER_RUNTIME_DIR/venvs/voice); útil para
+#                         probar dependencias sin tocar el venv que usa la app
 set -euo pipefail
 
 PY_VERSION="3.12"
 
 repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 runtime="${DRAKTER_RUNTIME_DIR:-$HOME/.local/share/drakter}"
-venv="$runtime/venvs/voice"
+venv="${DRAKTER_VOICE_VENV:-$runtime/venvs/voice}"
 models="$runtime/models"
 kokoro_src="${DRAKTER_KOKORO_SRC:-$HOME/.drakter-backup/tmp-drakter-3-work/models}"
 lock="$repo/voice/requirements.lock"
@@ -31,6 +33,11 @@ esac
 command -v uv >/dev/null || { echo "ERROR: falta uv en el PATH" >&2; exit 1; }
 
 mkdir -p "$runtime/venvs" "$models"
+case "$(realpath -m "$venv")" in
+  /tmp|/tmp/*|/var/tmp|/var/tmp/*)
+    echo "ERROR: $venv está en un directorio temporal; elige una ruta estable." >&2
+    exit 1 ;;
+esac
 
 # 1. Venv con Python 3.12 gestionado por uv.
 if [ ! -x "$venv/bin/python" ]; then
