@@ -87,6 +87,9 @@ class Session:
         # Hay un tramo de habla del bot abierto o por sonar (lo mantiene el puente): el VAD no
         # abre turno al instante, igual que con el bot hablando.
         self.speech_open = False
+        # Hay un tramo de respuesta sonando según el PlaybackTracker (de `started` a
+        # `finished`/`interrupted`), aunque haya huecos sin audio entre frases.
+        self.speech_playing = False
         self.duck = False
         self.false_ducks = 0
         self.metrics_last: dict[str, Any] | None = None
@@ -139,6 +142,10 @@ class Session:
         if arm is not None and self.state.tts_enabled:
             arm()
 
+    def filler_pending(self) -> bool:
+        pending = getattr(getattr(self._parts, "phrases", None), "filler_pending", None)
+        return bool(pending()) if pending is not None else False
+
     async def on_tool(self, turn_id: str | None) -> None:
         hook = getattr(getattr(self._parts, "phrases", None), "on_tool", None)
         if hook is None:
@@ -187,6 +194,7 @@ class Session:
             s.mode, s.trigger = "standby", None
             s.bot_speaking = False  # el pipeline que lo mantenía ya no existe
             self.speech_open = False
+            self.speech_playing = False
             self.set_duck(False)
         if changed:
             await self.emit_state()

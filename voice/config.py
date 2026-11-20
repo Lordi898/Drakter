@@ -40,7 +40,7 @@ class VoiceConfig:
     config_dir: Path = field(default_factory=lambda: _xdg("XDG_CONFIG_HOME", ".config") / "drakter")
 
     # ── Proveedores: nombre de `voice/registry.py` o "paquete.modulo:fabrica". "null" = vacío.
-    stt: str = "moonshine"
+    stt: str = "auto"  # auto: Deepgram → Groq → Moonshine según las claves (providers/stt/cloud.py)
     vad: str = "silero"
     turn_start: str = "drakter"
     turn_stop: str = "smart_turn"
@@ -60,12 +60,22 @@ class VoiceConfig:
     threads: int = 2  # hilos por modelo local (CPU sin GPU dedicada)
     stt_update_interval: float = 0.25  # s entre parciales del STT streaming
     stt_preroll_ms: int = 500
+    # STT en la nube (claves DEEPGRAM_API_KEY / GROQ_API_KEY por el entorno, nunca aquí)
+    stt_keyterms: tuple[str, ...] = ("Drakter", "Jarvis", "Imanol", "Magaña")
+    stt_deepgram_model: str = "nova-3"
+    stt_deepgram_base_url: str = "api.eu.deepgram.com"  # región UE; "" = la global
+    stt_groq_model: str = "whisper-large-v3-turbo"
+    dump_audio: bool = False  # DRAKTER_VOICE_DUMP_AUDIO=1: wav por turno en voice/dumps (24 h)
     vad_confidence: float = 0.7
     vad_start_secs: float = 0.2
     vad_min_volume: float = 0.6
     wake_models: tuple[str, ...] = ("hey_jarvis_v0.1.onnx",)  # en models/openwakeword/ (con o sin .onnx)
     wake_threshold: float = 0.3
-    turn_stop_secs: float = 3.0  # tope de silencio de Smart Turn
+    # Fin de turno (DECISIONS «Fin de turno»): silencio del VAD 0,2 s → Smart Turn → texto final.
+    turn_complete_threshold: float = 0.7  # probabilidad de Smart Turn para «completo» (Pipecat: 0,5)
+    turn_grace_s: float = 0.3  # silencio extra tras «completo» antes de cerrar
+    turn_hanging_secs: float = 2.0  # silencio total si el texto acaba colgando («… de la»)
+    turn_stop_secs: float = 3.0  # tope de silencio cuando Smart Turn dice «incompleto»
     turn_final_timeout_s: float = 1.0  # espera a la transcripción final tras el fin de turno
     followup_s: float = 20.0  # sin voz tras responder → reposo
     idle_nudge_s: float = 8.0  # user_idle_timeout del UserTurnProcessor

@@ -59,16 +59,55 @@ def _fold(token: str) -> str:
     return "".join(ch for ch in plain if ch.isalnum())
 
 
+def _wake_key(word: str) -> str:
+    """Clave fonética aproximada del castellano: «y ya revish», «llarvis» y «jarvis» se acercan."""
+    k = _fold(word)
+    for a, b in (("sh", "s"), ("ch", "y"), ("ll", "y"), ("j", "y"), ("z", "s"), ("v", "b"), ("h", "")):
+        k = k.replace(a, b)
+    return "".join(ch for i, ch in enumerate(k) if i == 0 or ch != k[i - 1])
+
+
+def _distance(a: str, b: str) -> int:
+    row = list(range(len(b) + 1))
+    for i, ca in enumerate(a, 1):
+        prev, row[0] = row[0], i
+        for j, cb in enumerate(b, 1):
+            prev, row[j] = row[j], min(row[j] + 1, row[j - 1] + 1, prev + (ca != cb))
+    return row[-1]
+
+
+_WAKE_KEY = _wake_key("jarvis")  # «yarbis»
+_WAKE_MAX_JOIN = 3  # el STT parte «Jarvis» hasta en tres palabras («y ya revish»)
+
+
+def is_wake(word: str, wake: frozenset[str]) -> bool:
+    """Variante de la lista, o a distancia de edición ≤ 1 de «jarvis» (solo con 5+ letras)."""
+    key = _wake_key(word)
+    if _fold(word) in wake or key in {_wake_key(w) for w in wake}:
+        return True
+    return len(key) >= 5 and _distance(key, _WAKE_KEY) <= 1
+
+
 def strip_wake_word(text: str) -> str | None:
-    """Quita «jarvis» o «hey jarvis» del inicio. `None` si el texto no empieza así."""
+    """Quita «jarvis» o «hey jarvis» del inicio. `None` si el texto no empieza así.
+
+    Tolera cómo lo parte el STT («y ya revish», «ya revish», «llarvis»): se prueban las 1-3
+    primeras palabras unidas, tras una muletilla opcional («hey», «oye»).
+    """
     wake, lead = _wake_lists()
     tokens = text.split()
     words = [(i, w) for i, w in enumerate(map(_fold, tokens)) if w]
+    starts = [0]
     if len(words) > 1 and words[0][1] in lead and words[0][1] not in wake:
-        words = words[1:]
-    if not words or words[0][1] not in wake:
-        return None
-    return " ".join(tokens[words[0][0] + 1 :]).lstrip(" ,.;:!?")
+        starts.append(1)
+    for start in starts:
+        for n in range(1, _WAKE_MAX_JOIN + 1):
+            group = words[start : start + n]
+            if len(group) < n:
+                break
+            if is_wake("".join(w for _, w in group), wake):
+                return " ".join(tokens[group[-1][0] + 1 :]).lstrip(" ,.;:!?")
+    return None
 
 
 def _classify(text: str, bot_speaking: bool, awaiting_answer: bool) -> str | None:
@@ -243,8 +282,14 @@ class BackendBridgeProcessor(FrameProcessor):
 
     # ── habla: comandos speak.* del backend ─────────────────────────────────
     async def speak_open(self, turn_id: str, speech_id: int) -> None:
-        if self._ctx and not self._cut:  # el anterior quedó sin cerrar
-            await self.push_frame(LLMFullResponseEndFrame())
+        # Nunca dos respuestas a la vez: si la anterior sigue abierta o sonando, se corta antes.
+        # Si no, Fish mezcla los dos textos en el mismo WebSocket (el audio va al contexto activo).
+        session = self._session
+        previous_alive = self._speech_id is not None and not self._cut and (
+            self._open or session.speech_open or session.speech_playing
+        )
+        if previous_alive and speech_id != self._speech_id:
+            await self.interrupt("new_turn")
         self._ctx = False
         state = self._session.state
         state.turn_id, state.speech_id = turn_id, speech_id
@@ -295,8 +340,12 @@ class BackendBridgeProcessor(FrameProcessor):
 
     async def interrupt(self, reason: str) -> None:
         log.info("interrupt", extra={"data": {"reason": reason}})
+        # Un turno nuevo corta la respuesta anterior, no el acuse que acaba de armarse para él.
+        rearm = reason == "new_turn" and self._session.filler_pending()
         self._mark_cut()
         await self.broadcast_interruption()
+        if rearm:
+            self._session.arm_filler()
 
     def _mark_cut(self) -> None:
         """Regla de corte: cualquier interrupción corta el speech abierto."""

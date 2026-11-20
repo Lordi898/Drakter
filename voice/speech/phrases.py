@@ -35,6 +35,9 @@ DEFAULT_CACHE_DIR: Final = Path.home() / ".local" / "share" / "drakter" / "voice
 SAMPLE_RATE: Final = 24000
 CHUNK_BYTES: Final = SAMPLE_RATE * 2 // 10  # 100 ms
 ACK_KEYS: Final = ("ack_1", "ack_2", "ack_3")
+# Rellenos: se emiten a ritmo real y se cortan en cuanto llega audio de la respuesta.
+FILLER_KEYS: Final = frozenset((*ACK_KEYS, "tool_generic"))
+FILLER_LEAD_S: Final = 0.3  # adelanto máximo del relleno sobre lo que ya suena
 ALWAYS_AUDIBLE: Final = frozenset({"confirm_on_screen"})
 KOKORO_MODEL_TAG: Final = "kokoro:ef_dora"
 
@@ -132,7 +135,9 @@ class PhrasePlayer(FrameProcessor):  # type: ignore[misc,valid-type]
         self._cache = cache or cache_dir(cfg)
         self._last_variant: dict[str, str] = {}
         self._user_speaking = False
-        self._filler_task: asyncio.Task | None = None
+        self._filler_task: asyncio.Task | None = None  # temporizador del acuse
+        self._filler_play: asyncio.Task | None = None  # relleno sonando (cortable)
+        self._filler_ctx: str | None = None
         self._pending: set[asyncio.Task] = set()
         self._tool_turn: str | None = None
         self._tool_at = 0.0
@@ -153,7 +158,11 @@ class PhrasePlayer(FrameProcessor):  # type: ignore[misc,valid-type]
             self._pending.add(task)
             task.add_done_callback(self._pending.discard)
         else:
-            await self._say(text)
+            await self._say(text, filler=key in FILLER_KEYS)
+
+    def filler_pending(self) -> bool:
+        """Hay un acuse armado que aún no ha sonado."""
+        return self._filler_task is not None and not self._filler_task.done()
 
     def arm_filler(self) -> None:
         """Fin de turno de usuario: si en `filler_after_ms` no hay primer audio, suena un `ack_*`."""
@@ -176,6 +185,9 @@ class PhrasePlayer(FrameProcessor):  # type: ignore[misc,valid-type]
 
     def cancel(self) -> None:
         self._cancel_filler()
+        if self._filler_play is not None:
+            self._filler_play.cancel()
+        self._filler_play, self._filler_ctx = None, None
         for task in list(self._pending):
             task.cancel()
 
@@ -207,7 +219,7 @@ class PhrasePlayer(FrameProcessor):  # type: ignore[misc,valid-type]
             await asyncio.sleep(0.1)
         await self._say(text)
 
-    async def _say(self, text: str) -> None:
+    async def _say(self, text: str, *, filler: bool = False) -> None:
         provider = "fish" if self._ctl.state.tts_active == "fish" else "kokoro"
         voice_id = getattr(self._profile, "voice", None)
         name = getattr(self._profile, "name", "natural")
@@ -220,12 +232,40 @@ class PhrasePlayer(FrameProcessor):  # type: ignore[misc,valid-type]
             await self.push_frame(TTSSpeakFrame(text, append_to_context=False), FrameDirection.UPSTREAM)
             return
         context_id = f"phrase-{time.monotonic_ns()}"
+        if filler:
+            await self._cut_filler()
+            self._filler_ctx = context_id
+            self._filler_play = asyncio.get_running_loop().create_task(self._stream_filler(pcm, context_id))
+            return
         await self.push_frame(TTSStartedFrame(context_id=context_id))
         for i in range(0, len(pcm), CHUNK_BYTES):
             await self.push_frame(
                 TTSAudioRawFrame(pcm[i : i + CHUNK_BYTES], SAMPLE_RATE, 1, context_id=context_id)
             )
         await self.push_frame(TTSStoppedFrame(context_id=context_id))
+
+    async def _stream_filler(self, pcm: bytes, context_id: str) -> None:
+        """Empuja el relleno a ritmo real, para que el audio de la respuesta lo pueda cortar."""
+        await self.push_frame(TTSStartedFrame(context_id=context_id))
+        t0, sent = time.monotonic(), 0.0
+        for i in range(0, len(pcm), CHUNK_BYTES):
+            chunk = pcm[i : i + CHUNK_BYTES]
+            await self.push_frame(TTSAudioRawFrame(chunk, SAMPLE_RATE, 1, context_id=context_id))
+            sent += len(chunk) / (SAMPLE_RATE * 2)
+            ahead = sent - (time.monotonic() - t0)
+            if ahead > FILLER_LEAD_S:
+                await asyncio.sleep(ahead - FILLER_LEAD_S)
+        self._filler_play, self._filler_ctx = None, None
+        await self.push_frame(TTSStoppedFrame(context_id=context_id))
+
+    async def _cut_filler(self) -> None:
+        """Llega audio real: el relleno se calla (como mucho suena su adelanto, ~0,3 s)."""
+        task, ctx = self._filler_play, self._filler_ctx
+        self._filler_play, self._filler_ctx = None, None
+        if task is None or task.done():
+            return
+        task.cancel()
+        await self.push_frame(TTSStoppedFrame(context_id=ctx))
 
     async def process_frame(self, frame: Frame, direction: FrameDirection) -> None:
         await super().process_frame(frame, direction)
@@ -236,8 +276,11 @@ class PhrasePlayer(FrameProcessor):  # type: ignore[misc,valid-type]
             self._user_speaking = False
         elif isinstance(frame, InterruptionFrame):
             self.cancel()
-        elif isinstance(frame, (TTSStartedFrame, TTSAudioRawFrame, BotStartedSpeakingFrame)):
-            self._cancel_filler()  # ya hay primer audio
+        elif isinstance(frame, (TTSStartedFrame, TTSAudioRawFrame)):
+            self._cancel_filler()  # ya hay primer audio de la respuesta
+            await self._cut_filler()
+        elif isinstance(frame, BotStartedSpeakingFrame):
+            self._cancel_filler()  # suena algo (también el propio acuse): no se arma otro
         await self.push_frame(frame, direction)
 
     async def cleanup(self) -> None:
