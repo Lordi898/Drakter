@@ -20,13 +20,16 @@ voice/               python -m voice run (py3.12, venv propio)
 Lo monta `pipeline.py` (`build`), en este orden:
 
 ```
-transport.input() → WakeGate → VADProcessor(Silero) → STT (Moonshine streaming)
-  → UserTurnProcessor (único; inicio: DrakterStartStrategy, fin: Smart Turn v3.2)
+transport.input() → WakeGate → VADProcessor(Silero) → [AudioDump] → STT (auto: Deepgram | Groq | Moonshine)
+  → UserTurnProcessor (único; inicio: DrakterStartStrategy, fin: DrakterTurnStop = Smart Turn v3.2 + texto)
   → BackendBridgeProcessor → SpeechGuard → cadena TTS (Fish | Kokoro)
   → PhrasePlayer → transport.output() [DuckMixer] → PlaybackTracker
 ```
 
-- `WakeGate` (openWakeWord, `hey_jarvis`) es solo una puerta de audio; en `standby` el STT no recibe audio. La confirmación textual de «jarvis» la hace el puente sobre el turno final.
+- `WakeGate` (openWakeWord, `hey_jarvis`) es solo una puerta de audio; en `standby` el STT no recibe audio. La confirmación textual de «jarvis» la hace el puente sobre el turno final, con comparación difusa («y ya revish», «llarvis»).
+- STT: con clave de Deepgram (Nova-3, región UE, `keyterm` con `stt_keyterms`, `mip_opt_out`) o de Groq (`whisper-large-v3-turbo` con el léxico en el prompt). Si la nube falla (red, 401, cuota) pasa a Moonshine con un único `voice.error{stt_fallback}`.
+- Fin de turno (`providers/turn/smart_turn.py`): Smart Turn con umbral `turn_complete_threshold` (0,7) y silencio mínimo de 0,7 s; si el texto acaba colgando («… de la», «… y»), 2 s; si Smart Turn dice incompleto, `turn_stop_secs` (3 s).
+- Acuses (`ack_*`, `tool_generic`): suenan a ritmo real y se cortan en cuanto llega el audio de la respuesta. Una respuesta nueva corta la anterior si aún suena.
 - `DrakterStartStrategy` implementa «bajar primero, decidir después»: con el bot hablando baja el volumen (`DuckMixer`) y solo abre turno si la transcripción parcial confirma al menos `bargein_min_words` palabras que no sean eco.
 - `BackendBridgeProcessor` (`bridge.py`) aplica la capa 0 (`conversation/layer0.py` y `layer0.es.toml`: «para», «descansa», cierres, asentimientos) y, si el turno procede, emite `voice.user_turn` al backend. Las respuestas del agente llegan como `speak.*` y se convierten en frames de texto para el TTS.
 - La cadena TTS (`providers/tts/failover.py`) conmuta de Fish a Kokoro por errores de autenticación, cuota, petición inválida o 3 fallos seguidos, con un único aviso hablado. Fish se corta por fecha (`fish_free_until`) salvo `allow_paid`.
@@ -44,6 +47,7 @@ transport.input() → WakeGate → VADProcessor(Silero) → STT (Moonshine strea
 
 | Tipo | Por defecto | Fábrica |
 |---|---|---|
+| `stt` | `auto` | `voice.providers.stt.cloud:create` (Deepgram si hay `DEEPGRAM_API_KEY`, si no Groq con `GROQ_API_KEY`, si no Moonshine; la nube con respaldo Moonshine) |
 | `stt` | `moonshine` | `voice.providers.stt.moonshine_streaming:create` |
 | `vad` | `silero` | `voice.providers.vad.silero:create` |
 | `turn_start` | `drakter` | `voice.conversation.start_strategy:create` |
@@ -106,4 +110,4 @@ Los modelos están en `~/.local/share/drakter/models/` (`moonshine/`, `smart-tur
 
 ## Privacidad
 
-Ni el audio ni las transcripciones se guardan. Los logs de Pipecat se limitan a `WARNING` (en `DEBUG` imprimirían el texto) y el formateador de logs omite trazas. Solo persisten `metrics.jsonl` (sin texto) y la caché de frases fijas, en `~/.local/share/drakter/voice/`.
+Ni el audio ni las transcripciones se guardan, salvo el volcado de diagnóstico: con `DRAKTER_VOICE_DUMP_AUDIO=1` se guarda un wav por turno tal como entra al STT y un `.json` con niveles en `~/.local/share/drakter/voice/dumps/` (0700/0600), que se borra solo a las 24 h. Con STT en la nube, el audio de cada turno va a Deepgram (UE, sin programa de mejora) o a Groq. Los logs de Pipecat se limitan a `WARNING` (en `DEBUG` imprimirían el texto) y el formateador de logs omite trazas. Solo persisten `metrics.jsonl` (sin texto) y la caché de frases fijas, en `~/.local/share/drakter/voice/`.

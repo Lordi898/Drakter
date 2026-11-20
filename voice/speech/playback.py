@@ -133,6 +133,7 @@ class PlaybackTracker(FrameProcessor):
         if state.speech_id == self._last_closed:
             return  # p. ej. una frase fija tras el cierre: no es un tramo nuevo
         self._speech = (state.turn_id, state.speech_id)
+        self._set_playing(True)
         await self._emit("started")
 
     async def _finish(self, kind: str) -> None:
@@ -148,6 +149,11 @@ class PlaybackTracker(FrameProcessor):
         await self._emit(kind, **extra)
         self._last_closed = self._speech[1] if self._speech else None
         self._reset_speech()
+        self._set_playing(False)
+
+    def _set_playing(self, on: bool) -> None:
+        if hasattr(self._ctl, "speech_playing"):
+            self._ctl.speech_playing = on  # type: ignore[attr-defined]
 
     async def _emit(self, kind: str, **extra: str) -> None:
         if not self._speech:

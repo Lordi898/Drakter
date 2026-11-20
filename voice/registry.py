@@ -12,6 +12,9 @@ from typing import Any, Final
 
 TABLE: Final[dict[tuple[str, str], str]] = {
     ("stt", "moonshine"): "voice.providers.stt.moonshine_streaming:create",
+    ("stt", "auto"): "voice.providers.stt.cloud:create",
+    ("stt", "deepgram"): "voice.providers.stt.cloud:create",
+    ("stt", "groq"): "voice.providers.stt.cloud:create",
     ("vad", "silero"): "voice.providers.vad.silero:create",
     ("turn_stop", "smart_turn"): "voice.providers.turn.smart_turn:create",
     ("turn_start", "drakter"): "voice.conversation.start_strategy:create",
