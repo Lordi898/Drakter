@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import sqlite3
 from collections.abc import Callable
+from pathlib import Path
 from typing import Annotated, Final, TypeVar
 from uuid import UUID
 
@@ -244,8 +245,29 @@ def _delete_task(ctx: ToolContext, args: DeleteTaskArgs) -> Deleted:
     return Deleted(deleted=True, id=args.task_id)
 
 
+# El resumen solo recibe los argumentos: la base la fija el arranque (`configure_summary_source`).
+_summary_db: Path | None = None
+
+
+def configure_summary_source(db_path: Path | None) -> None:
+    global _summary_db
+    _summary_db = db_path
+
+
+def _task_title(task_id: str) -> str | None:
+    if _summary_db is None:
+        return None
+    conn = connect(_summary_db)
+    try:
+        row = conn.execute("SELECT title FROM tasks WHERE id = ?", (task_id,)).fetchone()
+    finally:
+        conn.close()
+    return row[0] if row and row[0] else None
+
+
 def _summarize_delete(args: DeleteTaskArgs) -> str:
-    return f"Vas a eliminar 1 tarea: «{args.task_id}». Esta acción no se puede deshacer."
+    name = _task_title(str(args.task_id)) or str(args.task_id)
+    return f"Vas a eliminar 1 tarea: «{name}». Esta acción no se puede deshacer."
 
 
 # --- Catálogo ------------------------------------------------------------------------------
