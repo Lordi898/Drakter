@@ -77,6 +77,7 @@ class VoiceConfig:
     turn_hanging_secs: float = 2.0  # silencio total si el texto acaba colgando («… de la»)
     turn_stop_secs: float = 3.0  # tope de silencio cuando Smart Turn dice «incompleto»
     turn_final_timeout_s: float = 1.0  # espera a la transcripción final tras el fin de turno
+    turn_final_grace_s: float = 0.3  # ídem, si ya hay texto pero no llegó `finalized` (Deepgram)
     followup_s: float = 20.0  # sin voz tras responder → reposo
     idle_nudge_s: float = 8.0  # user_idle_timeout del UserTurnProcessor
     bargein_min_words: int = 3

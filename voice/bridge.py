@@ -179,6 +179,9 @@ class BackendBridgeProcessor(FrameProcessor):
     # ── turno de usuario ────────────────────────────────────────────────────
     async def _on_user_started(self) -> None:
         await self._cancel_final_timer()
+        # El turno anterior aún esperaba su texto final y no ha salido al backend: el usuario
+        # solo hizo una pausa. Su texto pasa al turno nuevo (antes se perdía).
+        pending = self._utt if self._utt is not None and self._utt.stopped is not None else None
         state = self._session.state
         if state.bot_speaking or (self._open and not self._cut):
             overlap = "bot_speaking"
@@ -187,6 +190,10 @@ class BackendBridgeProcessor(FrameProcessor):
         else:
             overlap = "none"
         self._utt = _Utterance(overlap=overlap)
+        if pending is not None and pending.texts:
+            self._utt.texts = list(pending.texts)
+            self._utt.started = pending.started
+            self._utt.overlap = pending.overlap
         await self._session.emit("voice.user_speech", {"utt_id": self._utt.utt_id, "phase": "started"})
 
     async def _on_transcription(self, frame: TranscriptionFrame) -> None:
@@ -211,13 +218,18 @@ class BackendBridgeProcessor(FrameProcessor):
         await self._session.emit("voice.user_speech", {"utt_id": utt.utt_id, "phase": "stopped"})
         # El stop es un SystemFrame y adelanta al texto: si falta la transcripción final,
         # se espera un poco y se emite con lo que haya.
+        # Con texto pero sin `finalized` (Deepgram no lo marca si su respuesta a `Finalize` llega
+        # vacía) basta un margen corto para recoger lo que venga en cola; sin texto, el tope entero.
         if utt.texts and utt.last_final:
             await self._finish(utt)
         else:
-            self._final_timer = self.create_task(self._final_timeout(utt), "final_transcript_timeout")
+            wait = self._cfg.turn_final_timeout_s
+            if utt.texts:
+                wait = min(wait, float(getattr(self._cfg, "turn_final_grace_s", 0.3)))
+            self._final_timer = self.create_task(self._final_timeout(utt, wait), "final_transcript_timeout")
 
-    async def _final_timeout(self, utt: _Utterance) -> None:
-        await asyncio.sleep(self._cfg.turn_final_timeout_s)
+    async def _final_timeout(self, utt: _Utterance, wait: float) -> None:
+        await asyncio.sleep(wait)
         self._final_timer = None
         await self._finish(utt)
 
