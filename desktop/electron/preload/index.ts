@@ -89,7 +89,8 @@ const api: DrakterApi = {
     mode: (body) => op('voice.mode', body),
     status: () => op('voice.status'),
     onMicToggle,
-    reportMicState: (open) => ipcRenderer.invoke(IPC_CHANNELS.voiceMicState, open)
+    reportMicState: (open) => ipcRenderer.invoke(IPC_CHANNELS.voiceMicState, open),
+    defaultDevices: () => ipcRenderer.invoke(IPC_CHANNELS.voiceDefaultDevices)
   },
   jobs: {
     list: () => op('jobs.list'),

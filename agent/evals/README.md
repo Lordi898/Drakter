@@ -69,6 +69,10 @@ Un caso guionizado acierta por construcción, así que su `ok` no demuestra nada
 - Los identificadores en resultados son UUID ficticios; se usan tal cual en el guion, porque `tool.invented_id` comprueba que vinieran de un resultado o del usuario.
 - El reloj es fijo: lunes 9 de noviembre de 2026, 10:00, Europe/Madrid.
 
+## Voz (`voice_behavior.py`)
+
+Casos de una conversación real por voz (`voice_behavior.jsonl`): frase larga a petición, no ofrecer la agenda sin motivo, «Jarvis» como palabra de activación, terminal y nada de metáforas del dragón. Compone el prompt con `render_soul` desde este árbol y antepone `[canal: voz]`. Una o dos llamadas a Haiku por caso: `<venv-backend>/bin/python agent/evals/voice_behavior.py [--case ID]`.
+
 ## Límites
 
 - **No pasa por Hermes ni por MCP.** Es un bucle directo sobre la API de Messages con el mismo `system` y los mismos esquemas. Mide la decisión del modelo, no `mcp_bridge.py`, el `drakter_guard` ni el backend real. Hermes expone los nombres con prefijo `mcp__drakter__`, y aquí son canónicos.

@@ -35,7 +35,9 @@ export const IPC_CHANNELS = {
   /** Main → renderer: alternar el micrófono desde la bandeja (voz v2). */
   voiceMicToggle: 'voice:mic-toggle',
   /** Renderer → main: el micrófono quedó abierto o cerrado (etiqueta de la bandeja). */
-  voiceMicState: 'voice:mic-state'
+  voiceMicState: 'voice:mic-state',
+  /** Renderer → main: nombres de la entrada y la salida predeterminadas del sistema. */
+  voiceDefaultDevices: 'voice:default-devices'
 } as const
 
 export interface AppInfo {
@@ -112,6 +114,12 @@ export type ApiResult<T> =
   | { readonly ok: true; readonly status: number; readonly data: T }
   | { readonly ok: false; readonly status: number; readonly code: string; readonly body: unknown }
 
+/** Descripciones de los dispositivos predeterminados (`null` = no se pudo averiguar). */
+export interface DefaultAudioDevices {
+  readonly input: string | null
+  readonly output: string | null
+}
+
 /** `window.api.voice` (voz v2). El micrófono no pasa por aquí: es local al renderer. */
 export interface VoiceApi {
   offer(body: VoiceOfferIn): Promise<ApiResult<VoiceOfferOut>>
@@ -122,6 +130,8 @@ export interface VoiceApi {
   onMicToggle(callback: () => void): () => void
   /** Canal renderer→main `voice:mic-state`: la bandeja refleja si el micrófono está abierto. */
   reportMicState(open: boolean): Promise<void>
+  /** Canal renderer→main `voice:default-devices`: entrada y salida predeterminadas del sistema. */
+  defaultDevices(): Promise<DefaultAudioDevices>
 }
 
 /** `window.api.jobs`: trabajos en segundo plano. */
