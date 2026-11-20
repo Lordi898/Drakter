@@ -1167,9 +1167,9 @@ Decisiones técnicas, cambios de tecnología y motivos.
   **Hallazgos sin arreglar** (fuera de mi zona o no pequeños):
   1. **Aviso doble de cada confirmación.** `confirmation.requested` sale una vez de `ActionService.announce_pending` (sin sesión ni `job_id`) y otra del observador del runtime o del carril. El escritorio se queda con el primero, así que pierde el `job_id`; hoy no se nota.
   2. **Silencio con la red caída.** Hermes reintenta solo y el usuario no recibe ningún aviso de que el modelo no responde: ~58 s con el turno «en curso» y, en voz, solo el acuse.
-  3. **Kokoro y las etiquetas.** `strip_tags` (Kokoro) solo quita las etiquetas de la lista, así que una etiqueta inventada como `[risa]` se leería; `keep_allowed` (Fish) sí la borra.
-  4. **Dominios sin `http`/`www`.** Se leen en voz alta: quedan fuera del diseño del guard.
-  5. **Fallo de arranque silencioso.** Si faltan los modelos de voz, el pipeline falla al construirse y la interfaz sigue mostrando «Esperando "Jarvis"». Le pasó a esta prueba antes de enlazar `models` en sus datos.
+  3. ✅ Arreglado (ver «Voz: etiquetas inventadas, dominios sueltos y `voice.error` en ejecución»). **Kokoro y las etiquetas.** `strip_tags` (Kokoro) solo quita las etiquetas de la lista, así que una etiqueta inventada como `[risa]` se leería; `keep_allowed` (Fish) sí la borra.
+  4. ✅ Arreglado (misma entrada). **Dominios sin `http`/`www`.** Se leen en voz alta: quedan fuera del diseño del guard.
+  5. ✅ Arreglado en la voz (misma entrada): emite `voice.error` con `message`; falta que lo muestre el escritorio. **Fallo de arranque silencioso.** Si faltan los modelos de voz, el pipeline falla al construirse y la interfaz sigue mostrando «Esperando "Jarvis"». Le pasó a esta prueba antes de enlazar `models` en sus datos.
 - **Alternativas descartadas:**
   - Cortar la red de la máquina: cortaría la app y la sesión del usuario.
   - Probar sobre la app del usuario: prohibido.
@@ -1223,3 +1223,26 @@ Decisiones técnicas, cambios de tecnología y motivos.
 - **Impacto:**
   - Código: `desktop/electron/main/rendererProtocol.ts`, `desktop/src/character/AdaptiveCharacter.tsx`, `tests/e2e/harness/cdp.py`.
   - Comprobado: `scripts/verify-all.sh --headless` da 45/45 PASA (`desktop.errores` con 0 errores y `desktop.personaje` PASA), y typecheck y build sin errores.
+
+## [2026-11-20] Voz: etiquetas inventadas, dominios sueltos y `voice.error` en ejecución
+- **Contexto:** la verificación del 2026-11-20 («Verificación de casillas pendientes y desconexiones») dejó tres fallos de voz sin arreglar. Kokoro leía en voz alta las etiquetas inventadas (`[risa]`), porque `strip_tags` solo quita las de `TAGS`. Los dominios sin `http`/`www` se leían tal cual. Y si el pipeline fallaba, la interfaz no recibía ningún aviso.
+- **Decisión:**
+  - **Etiquetas:** `voice/speech/tags.py` trata como etiqueta cualquier `[..]` con forma de etiqueta: letras, espacios y `-_'`, hasta 5 palabras y 40 caracteres, y que no sea texto de un enlace Markdown. Kokoro, Fish con la expresión apagada y las frases no expresivas usan `strip_all`, que las quita todas. Fish con expresión usa `keep_known`, que deja solo las de `TAGS`, normalizadas en minúsculas, y quita el resto. Así Fish tampoco recibe las de más de 3 palabras que `keep_allowed` dejaba pasar. `speech_markup.strip_tags` no cambia, porque es lo que el backend usa para el chat y la BD, y ahí `[1]` o `[nota]` del usuario deben seguir.
+  - **Dominios:** `SpeechGuard` retiene la palabra mientras solo tenga caracteres de URL y decide al terminarla. Un dominio con TLD conocido (`_TLDS`) se dice por el nombre del sitio («ejemplo», «github»), y si lleva ruta, «el enlace de github». El TLD tiene que ir en minúsculas en el texto, y quedan fuera a propósito las extensiones de archivo habituales (`py`, `md`, `sh`, `js`, `ts`…) y los TLD que son palabras corrientes (`no`, `me`, `se`, `de`, `it`, `at`, `be`, `us`). Así, «listo.No» o «ahora.Es» (frases sin espacio tras el punto), `3.5`, `v2.1.3`, `1.000`, `p. ej.`, `EE.UU.` y `main.py` no cambian. Los correos (`@`) no se tocan.
+  - **`voice.error`:** `Session.report_error(code, stage, recoverable)` emite el aviso con un `message` corto y fijo (`voice/errors.py`), como mucho una vez por código cada 60 s, y nunca lanza. Fuentes:
+    - `on_pipeline_error` del `PipelineWorker`: error fatal, procesador inservible o fallo que el `ServiceSwitcher` reporta como propio por quedarse sin respaldo. Da `stt_unavailable`, `tts_unavailable`, `service_failed` o `pipeline_failed`.
+    - `DrakterFailover`: el último TTS falla 3 veces seguidas aunque siga «usable», y da `tts_unavailable`.
+    - Montaje de la conexión: `models_missing` si falta un modelo (`FileNotFoundError`); si no, `pipeline_build_failed`.
+    - Excepción del pipeline en marcha: `pipeline_failed`.
+    El proceso de voz sigue vivo en todos los casos. El backend ya reenvía `voice.error` al WebSocket (`VoiceOrchestrator._evt_error`) y el `message` pasa sin tocar `backend/`.
+  - **Contrato:** `message: str | None` (≤160) opcional en `EvtError` (`voice_ipc.py`) y `VoiceError` (`events.py`), con `contracts/ts/index.ts` regenerado. Es compatible: quien no lo conoce lo ignora.
+- **Alternativas descartadas:**
+  - Cambiar `strip_tags` en `speech_markup`: borraría corchetes legítimos del chat y de la BD.
+  - Detectar dominios con cualquier `palabra.palabra`: rompería números, abreviaturas y nombres de archivo.
+  - Avisar con cada `ErrorFrame`: un servicio roto falla en cada frase, y los errores que el switcher resuelve conmutando no son fallos para el usuario.
+  - Mapear el código a texto solo en el escritorio: el contrato ya lleva el texto, y el escritorio puede ignorarlo.
+- **Motivo:** que la voz no diga cosas raras y que un fallo se vea en la interfaz sin cortar la app.
+- **Impacto:**
+  - Código: `voice/speech/tags.py` y `voice/errors.py` (nuevos); `voice/speech/guard.py`, `voice/providers/tts/_common.py`, `voice/speech/phrases.py`, `voice/providers/tts/failover.py`, `voice/session.py`, `voice/pipeline.py` y `voice/__main__.py`; `contracts/python/drakter_contracts/{voice_ipc,events}.py`, `contracts/ts/index.ts` y `voice/CONTRACT.md`.
+  - Comprobado: `voice/tests/check_pipeline.py` da 21 PASS. Una prueba rápida con un pipeline real de Pipecat (Fish y Kokoro simulados que fallan con error de autenticación) emite `voice.tts_fallback` y un único `voice.error{tts_unavailable}` válido contra el contrato. El guard da el mismo resultado troceado carácter a carácter que entero.
+  - Pendiente: que la interfaz muestre el aviso (otro worker, `desktop/`). Ojo: el venv de voz enlaza `drakter-contracts` al checkout del usuario, así que `message` no llega hasta que ese checkout tenga este cambio.

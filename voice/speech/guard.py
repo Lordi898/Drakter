@@ -3,7 +3,10 @@
 Va delante del TTS, sobre los `LLMTextFrame` que llegan a trozos:
 - los bloques de código (``` o ~~~) se omiten enteros;
 - las líneas de tabla (empiezan por `|`) se omiten;
-- las URL sueltas (`http…`, `www.…`) se sustituyen por «el enlace».
+- las URL sueltas (`http…`, `www.…`) se sustituyen por «el enlace»;
+- los dominios sin esquema (`ejemplo.com`, `github.com/usuario`) se dicen por el nombre del sitio
+  («ejemplo») o, si llevan ruta, «el enlace de github». Solo con un TLD conocido (`_TLDS`), así que
+  `3.5`, `p. ej.`, `EE.UU.` o `main.py` no se tocan.
 Lo demás (Markdown en línea, etiquetas, normalización) lo hace cada proveedor con sus
 `text_transforms`. No sabe qué TTS está activo ni mira `tts_enabled`.
 
@@ -13,6 +16,7 @@ de `pending_head` para `PlaybackTracker`.
 
 from __future__ import annotations
 
+import re
 from typing import Final
 
 from drakter_contracts.speech_markup import strip_tags
@@ -27,9 +31,38 @@ from pipecat.processors.frame_processor import FrameDirection, FrameProcessor
 
 LINK_WORD: Final = "el enlace"
 _URL_PREFIXES: Final = ("http://", "https://", "www.")
-_URL_TAIL: Final = ".,;:!?)»\"'"
-_WORD_LEAD: Final = "(«\"'<"
+_URL_TAIL: Final = ".,;:!?)»\"'*_`"
+_WORD_LEAD: Final = "(«\"'<*_`"
 _MAX_HELD: Final = 4096  # una «palabra» más larga se suelta tal cual
+# Caracteres que puede tener una URL o un dominio: mientras la palabra solo tenga estos, se retiene.
+_URLISH: Final = frozenset("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.-/_:?=&%#~+@!,;)»\"'*`(«<")
+# TLD habituales, siempre en minúsculas en el texto. Fuera a propósito los que casi siempre son
+# extensiones de archivo (py, md, sh, rs, js, ts, pl, so…) y los que son palabras corrientes
+# (no, me, se, de, it, at, be, us), para que «listo.no» o «main.py» no se lean como dominio.
+_TLDS: Final = frozenset(
+    "com es org net io dev ai app eu info co uk fr pt nl ch dk fi ie ru "
+    "ca mx ar cl pe uy br cat gal eus edu gov int tv xyz gg ly fm site online tech page blog".split()
+)
+_DOMAIN: Final = re.compile(
+    r"(?P<host>(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+(?P<tld>[a-z]{2,6}))(?::\d{1,5})?(?P<path>[/?#]\S*)?",
+    re.IGNORECASE,
+)
+
+
+def _site_name(host: str) -> str | None:
+    """`docs.github.com` → `github`; None si no parece un dominio.
+
+    El TLD tiene que ir en minúsculas: «listo.Es» es una frase sin espacio, no un dominio.
+    """
+    if host.rsplit(".", 1)[-1] not in _TLDS:
+        return None
+    labels = host.lower().split(".")
+    name = labels[-2]
+    if name in ("co", "com", "org", "gob", "gov", "edu") and len(labels) > 2:  # bbc.co.uk
+        name = labels[-3]
+    if name == "www" or not any(c.isalpha() for c in name):
+        return None
+    return name
 
 
 def _may_be_url(word: str) -> bool:
@@ -38,12 +71,19 @@ def _may_be_url(word: str) -> bool:
 
 
 def _speak_word(word: str) -> str:
-    """Una palabra completa: si es una URL suelta, «el enlace» con su puntuación final."""
+    """Una palabra completa: URL suelta → «el enlace»; dominio → su nombre o «el enlace de X»."""
     lead_len = len(word) - len(word.lstrip(_WORD_LEAD))
     lead, body = word[:lead_len], word[lead_len:]
+    core = body.rstrip(_URL_TAIL)
+    tail = body[len(core):]
     if body.lower().startswith(_URL_PREFIXES) and len(body) > 4:
-        core = body.rstrip(_URL_TAIL)
-        return f"{lead}{LINK_WORD}{body[len(core):]}"
+        return f"{lead}{LINK_WORD}{tail}"
+    m = _DOMAIN.fullmatch(core) if "." in core else None
+    if m is not None:
+        name = _site_name(m.group("host"))
+        if name is not None:
+            path = (m.group("path") or "").strip("/?#")
+            return f"{lead}{f'{LINK_WORD} de {name}' if path else name}{tail}"
     return word
 
 
@@ -58,7 +98,8 @@ class GuardFilter:
         self._head = ""  # inicio de línea pendiente de decidir (espacios + marcadores)
         self._mode = "text"  # text | fence | table
         self._fence = ""
-        self._word = ""  # palabra retenida por si es una URL
+        self._word = ""  # palabra retenida por si es una URL o un dominio
+        self._plain = False  # la palabra en curso ya no puede serlo: pasa tal cual
 
     def feed(self, text: str) -> str:
         out: list[str] = []
@@ -133,16 +174,22 @@ class GuardFilter:
             if self._word:
                 self._emit(out, _speak_word(self._word))
                 self._word = ""
+            self._plain = False
             self._emit(out, ch)
             if ch == "\n":
                 self._line_start = True
             return
-        if self._word or _may_be_url(ch):
+        if not self._plain and ch in _URLISH:
             self._word += ch
-            if not _may_be_url(self._word) or len(self._word) > _MAX_HELD:
+            if len(self._word) > _MAX_HELD:
                 self._emit(out, self._word)
-                self._word = ""
+                self._word, self._plain = "", True
             return
+        if self._word and _may_be_url(self._word):  # una URL acaba en el primer carácter raro
+            self._emit(out, _speak_word(self._word))
+        else:
+            self._emit(out, self._word)
+        self._word, self._plain = "", True
         self._emit(out, ch)
 
     @staticmethod

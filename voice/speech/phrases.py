@@ -351,12 +351,11 @@ def _kokoro_pcm(engine: Any, text: str) -> bytes:
 
 
 def _spoken(text: str, *, expressive: bool) -> str:
-    from drakter_contracts.speech_markup import keep_allowed, strip_tags
-
     from voice.speech.lexicon import apply_lexicon
     from voice.speech.normalize import normalize_for_speech
+    from voice.speech.tags import keep_known, strip_all
 
-    text = keep_allowed(text) if expressive else strip_tags(text)
+    text = keep_known(text) if expressive else strip_all(text)
     return normalize_for_speech(apply_lexicon(text))
 
 

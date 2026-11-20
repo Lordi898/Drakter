@@ -122,9 +122,8 @@ class VoiceProcess:
             worker = build(transport, self.session, self.shared, self.cfg)
         except Exception as exc:  # noqa: BLE001 - falta un modelo o un proveedor: se avisa y no se conecta
             log.error("pipeline_build_failed", extra={"data": {"error": type(exc).__name__, "detail": str(exc)}})
-            await self.session.emit(
-                "voice.error", {"code": "pipeline_build_failed", "stage": "transport", "recoverable": False}
-            )
+            code = "models_missing" if isinstance(exc, FileNotFoundError) else "pipeline_build_failed"
+            await self.session.report_error(code, "transport", recoverable=False)
             raise
         self.pipelines_built += 1
 
@@ -147,6 +146,7 @@ class VoiceProcess:
             await runner.run()
         except Exception as exc:  # noqa: BLE001 - un pipeline roto no acaba con el proceso
             log.error("pipeline_failed", extra={"data": {"error": type(exc).__name__}})
+            await self.session.report_error("pipeline_failed", "transport", recoverable=True)
         finally:
             self.session.unbind(worker)
             if self._worker is worker:  # terminó solo (el cliente se fue), no por sustitución

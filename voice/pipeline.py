@@ -12,7 +12,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from pipecat.frames.frames import ErrorFrame
 from pipecat.pipeline.pipeline import Pipeline
+from pipecat.pipeline.service_switcher import ServiceSwitcher
 from pipecat.pipeline.worker import PipelineParams, PipelineWorker
 from pipecat.processors.audio.vad_processor import VADProcessor
 from pipecat.turns.user_turn_processor import UserTurnProcessor
@@ -71,4 +73,29 @@ def build(transport: BaseTransport, ctl: Session, shared: Shared, cfg: VoiceConf
         enable_rtvi=False,  # cliente WebRTC propio, sin RTVI
     )
     ctl.bind(Parts(worker=worker, bridge=bridge, phrases=phrases, tts=providers))
+    stages = {wake: "wake", vad: "turn", stt: "stt", turns: "turn", bridge: "ipc", tts: "tts"}
+    stages.update({p.service: "tts" for p in providers})
+    stages.update({svc: "stt" for svc in getattr(stt, "services", ())})
+    watch_errors(worker, ctl, stages)
     return worker
+
+
+def watch_errors(worker: PipelineWorker, ctl: Session, stages: dict) -> None:
+    """`voice.error` cuando un fallo deja sin servicio (hallazgo 5 de la verificación).
+
+    Los errores pasajeros y los que el `ServiceSwitcher` resuelve conmutando no llegan aquí o no
+    cuentan. Sí cuentan: un error fatal (Pipecat cancela el pipeline), un procesador que queda
+    inservible y el fallo que el switcher reporta como propio porque no le queda respaldo.
+    """
+
+    @worker.event_handler("on_pipeline_error")
+    async def on_pipeline_error(_worker: object, frame: ErrorFrame) -> None:
+        proc = frame.processor
+        dead = isinstance(proc, ServiceSwitcher) or (proc is not None and not proc.is_usable)
+        if not (frame.fatal or dead):
+            return
+        stage = stages.get(proc, "transport")
+        code = f"{stage}_unavailable" if stage in ("stt", "tts") else "service_failed"
+        if frame.fatal and code == "service_failed":
+            code = "pipeline_failed"
+        await ctl.report_error(code, stage, recoverable=not frame.fatal and stage == "tts")
