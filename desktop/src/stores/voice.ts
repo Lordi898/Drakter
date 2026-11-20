@@ -84,6 +84,21 @@ const STAGE_LABEL: Record<string, string> = {
   wake: 'la palabra de activación'
 }
 
+const CODE_TEXT: Record<string, string> = {
+  stt_unavailable: 'No está disponible el reconocimiento de voz.',
+  tts_unavailable: 'No está disponible la síntesis de voz.',
+  models_missing: 'Faltan los modelos de voz.',
+  pipeline_build_failed: 'No se pudo preparar la voz.',
+  pipeline_failed: 'La voz se interrumpió.',
+  service_failed: 'El servicio de voz falló.',
+  stt_fallback: 'Se usa el reconocimiento de voz de respaldo.'
+}
+
+/** Texto del aviso: el `message` del backend si viene; si no, uno según el código. */
+function faultText(code: string, stage: string, message?: string): string {
+  return message?.trim() || CODE_TEXT[code] || `Fallo en ${STAGE_LABEL[stage] ?? 'la voz'}.`
+}
+
 /** Un aviso por fallo: el mismo error repetido dentro de la ventana no vuelve a mostrarse. */
 function reportFault(key: string, title: string, body?: string): void {
   voiceFault = true
@@ -96,12 +111,8 @@ function reportFault(key: string, title: string, body?: string): void {
 
 subscribeServerEvents((event) => {
   if (event.type === 'voice.error') {
-    const { code, stage, recoverable } = event.payload
-    reportFault(
-      `error|${stage}|${code}`,
-      `Fallo en ${STAGE_LABEL[stage] ?? 'la voz'}`,
-      recoverable ? `${code}. Drakter lo reintentará.` : `${code}. Revisa la configuración de voz.`
-    )
+    const { code, stage } = event.payload
+    reportFault(`error|${stage}|${code}`, 'Problema con la voz', faultText(code, stage))
     return
   }
   if (event.type !== 'voice.state') return
