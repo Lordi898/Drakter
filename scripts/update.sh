@@ -77,7 +77,11 @@ fi
 # ── 4. Copia y migraciones ─────────────────────────────────────────────────────
 db() { (cd backend && .venv/bin/python -m app.database.cli "$@"); }
 step "copia de la base de datos"
-db backup || die "la copia falló: no se migra" "revisa el espacio en disco y repite"
+if [ "$(db status | sed -n 's/^versión actual: //p')" = 0 ]; then
+  echo "Aún no hay base de datos: nada que copiar."
+else
+  db backup || die "la copia falló: no se migra" "revisa el espacio en disco y repite"
+fi
 step "migraciones"
 if ! out="$(db migrate 2>&1)"; then
   case "$out" in
