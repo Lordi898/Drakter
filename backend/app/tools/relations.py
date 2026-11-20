@@ -14,7 +14,7 @@ from app.core.errors import AppError
 from app.database.connection import connect
 from app.schemas.relations import (
     Direction, EntityType, RelatedItems, RelationshipCreate, RelationshipOut, RelationshipPage,
-    RelationshipSearch, RelationshipType,
+    RelationshipSearch, RelationshipType, RelationshipUpdate,
 )
 from app.schemas.storage import Cursor, Uuid
 from app.services import relations as svc
@@ -77,6 +77,15 @@ def _create(ctx: ToolContext, args: RelationshipCreate) -> RelationshipOut:
     return _run(ctx, lambda c, d, a: svc.create_relationship(c, d, a, args))
 
 
+class UpdateArgs(RelationshipUpdate):
+    relationship_id: Uuid
+
+
+def _update(ctx: ToolContext, args: UpdateArgs) -> RelationshipOut:
+    data = RelationshipUpdate(metadata=args.metadata)
+    return _run(ctx, lambda c, d, a: svc.update_relationship(c, d, a, args.relationship_id, data))
+
+
 class DeleteArgs(Strict):
     relationship_id: Uuid
 
@@ -136,6 +145,13 @@ TOOLS: tuple[ToolSpec, ...] = (
         permission="relationships.write", risk=RiskClass.WRITE, handler=_create,
         errors=("not_found", "conflict", "relationship_not_allowed", "hierarchy_cycle"),
         audit=_audit(RelationshipCreate),
+    ),
+    ToolSpec(
+        name="update_relationship",
+        description="Replace the metadata of an existing relationship by id. The ends and type cannot change.",
+        domain="relationships", args_model=UpdateArgs, result_model=RelationshipOut,
+        permission="relationships.write", risk=RiskClass.WRITE, handler=_update,
+        errors=("not_found", "validation_error"), audit=_audit(UpdateArgs),
     ),
     ToolSpec(
         name="delete_relationship",

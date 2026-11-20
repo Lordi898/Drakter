@@ -1154,3 +1154,72 @@ Decisiones técnicas, cambios de tecnología y motivos.
   - Barge-in de punta a punta: «Para, para» sintético corta la voz del bot a los 0,81 s.
   - `check_pipeline.py --real` 21/21 PASS y `check_conversation` OK.
   - ⚠️ Queda en 16 %, algo por encima del objetivo orientativo del 15 %, con la máquina cargada; el resto es el coste base de aiortc y Pipecat. Falta repetirlo con la máquina descargada, con la app real y con el micro del usuario. Si el ruido de su habitación supera −50 dBFS, la puerta queda abierta y el consumo sube a ~22 %, sin perder ninguna función.
+
+## [2026-11-20] Verificación de casillas pendientes y desconexiones
+- **Contexto:** quedaban sin marcar casillas con código ya hecho (Checklists 3, 11, 13, 14, 16 y 17), varias porque «requieren la UI» o porque probarlas «cortaría la sesión del integrador» (red caída, cambio de red). La app del usuario seguía en marcha y no se podía tocar.
+- **Decisión:** se verifican en un stack propio, aislado del usuario:
+  - **Fase A, solo backend:** backend lanzado con los tokens en mano, datos, config y `XDG_RUNTIME_DIR` propios bajo `~/.local/share/drakter/verify-79`, con la voz desactivada y Claude Haiku 5.5 real. Sirve para los trabajos, las confirmaciones, el esfuerzo por carril, el runner muerto y las latencias de Hermes.
+  - **Fase B, stack completo:** Electron (con su backend, Hermes y voz) dentro de `unshare -rnm`, es decir, con espacio de red y de montaje propios y solo `lo`. Un `/etc/hosts` montado encima apunta `api.anthropic.com`, `api.fish.audio` y `api.eu.deepgram.com` a 127.0.0.2-4. Allí escucha un reenviador TCP propio que, por un socket unix, sale al host real (el TLS va de extremo a extremo). «Red caída» es matar el reenviador exterior; «sin red», el propio espacio; «cambio de red», añadir y quitar interfaces `dummy` con ruta por defecto.
+  - **Audio:** dos nodos nulos de PipeWire con prioridad 0 (no cambian los dispositivos predeterminados del usuario). El micro es el monitor de `drk79_mic`, alimentado con frases de Kokoro (`em_alex`); la salida, `drk79_out`, que se graba y se transcribe con faster-whisper small local. Nada suena por los auriculares del usuario.
+  - **Control y limpieza:** CDP en el renderer (clics de confianza con `Input.dispatchMouseEvent`) e inspector de Node en `main`. Fish con `s2.1-pro-free` y sin `reference_id`, porque la plantilla de voces es propia y no lleva IDs. Al acabar se borran los nodos y `verify-79`, que tenía la copia de las claves.
+  - **Pasada de referencia:** `scripts/verify-all.sh --headless` 45/45 PASA.
+  **Hallazgos arreglados en este PR:** faltaba la herramienta `update_relationship` (ver la entrada siguiente), y los resúmenes de confirmación de `delete_relationship` y `delete_task` citaban el UUID en lugar de los títulos: `configure_summary_source` no se llamaba nunca.
+  **Hallazgos sin arreglar** (fuera de mi zona o no pequeños):
+  1. **Aviso doble de cada confirmación.** `confirmation.requested` sale una vez de `ActionService.announce_pending` (sin sesión ni `job_id`) y otra del observador del runtime o del carril. El escritorio se queda con el primero, así que pierde el `job_id`; hoy no se nota.
+  2. **Silencio con la red caída.** Hermes reintenta solo y el usuario no recibe ningún aviso de que el modelo no responde: ~58 s con el turno «en curso» y, en voz, solo el acuse.
+  3. **Kokoro y las etiquetas.** `strip_tags` (Kokoro) solo quita las etiquetas de la lista, así que una etiqueta inventada como `[risa]` se leería; `keep_allowed` (Fish) sí la borra.
+  4. **Dominios sin `http`/`www`.** Se leen en voz alta: quedan fuera del diseño del guard.
+  5. **Fallo de arranque silencioso.** Si faltan los modelos de voz, el pipeline falla al construirse y la interfaz sigue mostrando «Esperando "Jarvis"». Le pasó a esta prueba antes de enlazar `models` en sus datos.
+- **Alternativas descartadas:**
+  - Cortar la red de la máquina: cortaría la app y la sesión del usuario.
+  - Probar sobre la app del usuario: prohibido.
+  - `pasta` o `slirp4netns`: no están instalados, y el reenviador propio basta y deja cortar solo esos tres servicios.
+- **Motivo:** marcar solo lo que se ha visto funcionar, sin tocar al usuario.
+- **Impacto:** `docs/IMPLEMENTATION_STATUS.md` (checklists 3, 11, 13, 14, 16 y 17); `backend/app/tools/relations.py`, `backend/app/tools/tasks.py`, `backend/app/main.py`, `contracts/tools/catalog.json` (+ README), `agent/knowledge/TOOL_GUIDE.md`, `agent/skills/workspace-relationships/SKILL.md`. Los scripts de la prueba son material de trabajo y no se versionan.
+
+## [2026-11-20] Herramienta `update_relationship` y resúmenes legibles en las confirmaciones
+- **Contexto:** `MASTER_PLAN.md` §«Relationships» pide `update_relationship`, pero el catálogo solo tenía `create`, `delete`, `get_related_items` y `search`. El servicio (`svc.update_relationship`) y la ruta REST ya existían. Además, la confirmación de `delete_relationship` decía «Delete relationship <uuid>» y la de `delete_task`, «Vas a eliminar 1 tarea: «<uuid>»».
+- **Decisión:**
+  - `update_relationship` (`relationships.write`, `write`, sin confirmación) solo sustituye `metadata` y reutiliza `RelationshipUpdate` del backend, que la exige. Los extremos y el tipo no cambian: para eso se borra y se crea otra.
+  - `app/main.py` llama a `configure_summary_source(db_path)` de `app.tools.relations` y de `app.tools.tasks` al arrancar. `delete_task` lee el título de la tarea para su resumen, igual que ya hacía `relations`.
+- **Alternativas descartadas:** pasar el contexto al `summarize` de `ToolSpec`, que cambiaría el contrato de todas las herramientas.
+- **Motivo:** la herramienta que faltaba era trivial, y una confirmación que solo muestra un UUID no deja decidir.
+- **Impacto:** Checklist 11 («Crear herramientas Hermes»). `agent/evals/schemas/tool_inputs.json` no se regenera, porque ya iba desfasado (74 de 88).
+
+## [2026-11-20] Carriles de trabajo: N=1
+- **Contexto:** la casilla pide medir el RSS del runner trabajador y decidir si hacen falta 2.
+- **Decisión:** se mantiene un solo carril trabajador (`w1`). Su RSS es de 221-231 MB tras un trabajo, con el agente caliente de LAT-1 (188 MB en WP9). Un trabajo típico dura 8-9 s y hace 6 llamadas a herramientas.
+- **Alternativas descartadas:** N=2. Añadiría ~230 MB fijos (otro intérprete de Hermes) en una máquina de 14 GB con la voz en ~0,8 GB, y lo único que ganaría es atender dos encargos largos a la vez, algo que no se ha observado.
+- **Motivo:** el coste fijo de memoria no compensa.
+- **Impacto:** `backend/app/jobs/manager.py` sin cambios (`[Lane("w1", "hermes-w1", "medium", 900)]`). Checklist 3.
+
+## [2026-11-20] Mediciones de RAM, CPU y latencias (Checklist 17)
+- **Contexto:** faltaban las casillas de medición de la Checklist 17. Se parte de WP9, LAT-1 y PR #19 y se completa con el stack de la fase B (ver «Verificación de casillas pendientes y desconexiones»).
+- **Decisión:** cifras medidas, sin extrapolar. Había otros workers en la máquina (loadavg 4-9) y Electron iba en Xvfb con `--disable-gpu`.
+  - **RSS:** voz ~800 MB; Hermes primer plano ~215 MB; `hermes-w1` ~221 MB; backend ~111 MB; Electron ~630 MB entre main, renderer, GPU, utilidad y zygote. Total sumado ~2,0 GB, con las páginas compartidas contadas más de una vez.
+  - **CPU (% de un núcleo, 30 s):**
+    | | voz | renderer | backend | runners | total |
+    |---|---|---|---|---|---|
+    | reposo, esperando «Jarvis» | 24 | 37 | 0,6 | 0 | ~73 |
+    | conversación | 31 | 40 | 0,8 | 0,6-0,9 | ~84 |
+    El renderer está inflado porque dibuja por CPU en Xvfb. La voz en reposo baja del ~53 % de WP9, pero aquí sin el micrófono real. Todo esto se midió con el código de antes de CPU-1 (`665de20`, que ya está en `main`). Con CPU-1, la voz sola en reposo baja a ~16 % en su banco.
+  - **STT:** Deepgram, final a 27-52 ms tras el fin de voz (5 turnos); Moonshine de respaldo, 491 ms. Fin de turno de 200 ms en 7 de 12 turnos; los de 1,7-4,2 s son frases sintéticas con pausas largas.
+  - **TTS:** Fish TTFA 736-930 ms (9 turnos); frases en caché, 315-337 ms.
+  - **Hermes:** en voz, primer fragmento a 573-1594 ms (12 turnos, mediana ~760) y primer audio (`total_ms`) a 2,6-3,2 s en los turnos con fin de turno corto. En texto con herramientas y thinking `low`, 6,1-7,7 s (2-4 llamadas a la API). Runner relanzado tras SIGKILL: ~6 s.
+- **Alternativas descartadas:** medir sobre la app del usuario (prohibido) o con la ventana real en su escritorio (la abriría en su pantalla).
+- **Motivo:** cerrar las casillas de medición con cifras reales.
+- **Impacto:** Checklist 17. La optimización del CPU en reposo sigue pendiente.
+
+## [2026-11-20] Sin `.riv`, `app://drakter/__character/drakter.riv` responde 204, no 404
+- **Contexto:** la comprobación e2e `desktop.errores` fallaba en `main`: «Failed to load resource: … 404 [app://drakter/__character/drakter.riv]». Que no haya `.riv` es lo normal hasta que el usuario lo diseñe, y el renderer ya pasa al SVG, pero Chromium anota cualquier 404 como error de consola.
+- **Decisión:**
+  - El protocolo `app://` responde **204 No Content** cuando falta el `.riv` o no tiene extensión `.riv`.
+  - `AdaptiveCharacter` trata el 204 como «sin .riv» y usa el SVG sin avisar. Sigue aceptando el 404 por compatibilidad y avisando ante otros fallos o un `.riv` vacío.
+  - El arnés e2e añade la URL a los errores de consola de `Log.entryAdded` (`tests/e2e/harness/cdp.py`), para saber qué recurso falla.
+- **Alternativas descartadas:**
+  - Meter el mensaje en la lista de ruido del arnés: escondería 404 reales.
+  - Preguntar a `main` por IPC si existe el `.riv`: añade un canal nuevo para nada.
+- **Motivo:** la ausencia esperada no es un error, y la consola limpia vuelve a servir de señal.
+- **Impacto:**
+  - Código: `desktop/electron/main/rendererProtocol.ts`, `desktop/src/character/AdaptiveCharacter.tsx`, `tests/e2e/harness/cdp.py`.
+  - Comprobado: `scripts/verify-all.sh --headless` da 45/45 PASA (`desktop.errores` con 0 errores y `desktop.personaje` PASA), y typecheck y build sin errores.

@@ -54,7 +54,9 @@ class Cdp:
             parts = [str(a.get("value", a.get("description", ""))) for a in params.get("args", [])]
             self.console_errors.append(" ".join(parts))
         elif method == "Log.entryAdded" and params.get("entry", {}).get("level") == "error":
-            self.console_errors.append(params["entry"].get("text", "error"))
+            entry = params["entry"]
+            url = entry.get("url")
+            self.console_errors.append(entry.get("text", "error") + (f" [{url}]" if url else ""))
 
     def send(self, method: str, params: dict[str, Any] | None = None, timeout: float = 30) -> dict:
         self._next_id += 1

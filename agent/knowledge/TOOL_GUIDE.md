@@ -14,7 +14,7 @@ Cada herramienta llama al backend, que valida parámetros, permisos y relaciones
 | Calendario | `create_event`, `get_event`, `update_event`, `delete_event`, `create_event_exception`, `create_time_block`, `update_time_block`, `move_time_block`, `delete_time_block`, `get_schedule`, `check_availability` | Citas y reserva de tiempo. Antes de proponer un hueco, `check_availability`. |
 | Asignaturas | `create_subject`, `get_subject`, `update_subject`, `list_subjects`, `create_class_session`, `update_class_session`, `delete_class_session`, `create_schedule_exception`, `get_timetable`, `get_subject_resources` | Estudios, horario de clases y material de una asignatura. |
 | Almacén | `search_resources`, `get_resource`, `read_resource`, `list_folders`, `create_resource`, `update_resource_metadata`, `index_resource`, `refresh_resource_index` | Archivos, enlaces y apuntes. Buscar primero; leer solo lo que haga falta. |
-| Relaciones | `create_relationship`, `delete_relationship`, `get_related_items`, `search_relationships` | Conectar elementos y consultar qué se conecta con qué. |
+| Relaciones | `create_relationship`, `update_relationship`, `delete_relationship`, `get_related_items`, `search_relationships` | Conectar elementos y consultar qué se conecta con qué. |
 | Etiquetas | `list_tags`, `add_tag`, `remove_tag` | Clasificar elementos. |
 | Búsqueda | `search_workspace`, `search_all` | Localizar algo sin saber en qué módulo está. |
 | Voz | `voice_list_profiles`, `voice_set_profile` | Ver qué voces hay y cambiar la activa por nombre o alias. Sin ID configurado devuelve «perfil sin configurar». |

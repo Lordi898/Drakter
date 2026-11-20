@@ -1083,6 +1083,23 @@
   "phase": "14"
  },
  {
+  "name": "update_relationship",
+  "domain": "relationships",
+  "description": "Sustituye los metadatos de una relación existente; no cambia sus extremos ni su tipo.",
+  "permission": "relationships.write",
+  "risk": "write",
+  "idempotent": false,
+  "returns_untrusted": false,
+  "timeout_s": 15.0,
+  "errors": [
+   "not_found",
+   "validation_error"
+  ],
+  "args_model": "UpdateArgs",
+  "result_model": "RelationshipOut",
+  "phase": "14"
+ },
+ {
   "name": "delete_relationship",
   "domain": "relationships",
   "description": "Elimina una relación entre dos elementos. Requiere confirmación del usuario; no borra los elementos.",

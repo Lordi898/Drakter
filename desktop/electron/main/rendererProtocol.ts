@@ -79,6 +79,8 @@ export function registerRendererProtocol(): void {
         // Ruta fija y no controlada por la petición: solo ese archivo, y solo si es un .riv.
         file = await realpath(characterRivPath()).catch(() => null)
         if (file !== null && extname(file).toLowerCase() !== '.riv') file = null
+        // Sin .riv es lo normal (se usa el SVG): 204 en vez de 404, que Chromium anota como error de consola.
+        if (file === null) return new Response(null, { status: 204 })
       } else {
         file = await resolveInside(await rootPromise, url.pathname)
       }
