@@ -13,7 +13,7 @@ Con **Reducir movimiento** activado en Ajustes (o en el sistema operativo), la b
 - Ruta por defecto: `~/.local/share/drakter/character/drakter.riv` (respeta `XDG_DATA_HOME`).
 - Otra ruta: variable de entorno `DRAKTER_CHARACTER_RIV` con la ruta del archivo, antes de abrir la aplicación.
 - Se lee al abrir la aplicación; para cambiar de archivo, reinicia Drakter.
-- Si el archivo no existe, no es un `.riv` válido o no tiene la state machine descrita abajo, se usa el SVG sin mostrar errores.
+- Si el archivo no existe, no es un `.riv` válido o no tiene la state machine descrita abajo, se usa el SVG sin mostrar errores en pantalla; si el archivo existe pero falla, queda un aviso `[drakter:personaje]` en el log de la aplicación (si no hay archivo, no se avisa).
 - En modo desarrollo (`npm run dev`) el archivo no se sirve y se ve siempre el SVG; pruébalo con la aplicación compilada (`npm run start`).
 
 ## Cómo diseñarlo en el editor de Rive

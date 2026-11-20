@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { warnCharacter } from './log'
 import { RiveCharacter } from './RiveCharacter'
 import { SvgCharacter } from './SvgCharacter'
 import type { CharacterRendererProps } from './types'
@@ -18,11 +19,19 @@ export function AdaptiveCharacter(props: CharacterRendererProps) {
   useEffect(() => {
     let alive = true
     fetch(RIV_URL, { cache: 'no-store' })
-      .then((response) => (response.ok ? response.arrayBuffer() : null))
-      .then((buffer) => {
-        if (alive) setSource(buffer && buffer.byteLength > 0 ? { kind: 'rive', buffer } : { kind: 'svg' })
+      .then((response) => {
+        if (response.ok) return response.arrayBuffer()
+        // 404 = el usuario aún no tiene .riv: es lo normal y no se avisa.
+        if (response.status !== 404) warnCharacter(`el .riv no se pudo leer (HTTP ${response.status}); se usa el SVG`)
+        return null
       })
-      .catch(() => {
+      .then((buffer) => {
+        if (!alive) return
+        if (buffer && buffer.byteLength === 0) warnCharacter('el .riv está vacío; se usa el SVG')
+        setSource(buffer && buffer.byteLength > 0 ? { kind: 'rive', buffer } : { kind: 'svg' })
+      })
+      .catch((reason: unknown) => {
+        warnCharacter('no se pudo pedir el .riv; se usa el SVG', reason)
         if (alive) setSource({ kind: 'svg' })
       })
     return () => {
@@ -30,7 +39,10 @@ export function AdaptiveCharacter(props: CharacterRendererProps) {
     }
   }, [])
 
-  const fallback = useCallback(() => setSource({ kind: 'svg' }), [])
+  const fallback = useCallback(() => {
+    warnCharacter('el .riv no cargó o no tiene la state machine «Drakter»; se usa el SVG')
+    setSource({ kind: 'svg' })
+  }, [])
 
   if (source.kind === 'rive') return <RiveCharacter {...props} buffer={source.buffer} onFail={fallback} />
   return <SvgCharacter {...props} />

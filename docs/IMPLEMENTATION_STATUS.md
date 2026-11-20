@@ -167,7 +167,7 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 - [x] Crear transiciones.
   ⚠️ Hecho en el personaje provisional SVG; la versión `.riv` sigue pendiente (ver «Crear proyecto Rive»).
 - [x] Integrar Rive con React.
-  ⚠️ `RiveCharacter` (`@rive-app/canvas` 2.53.0) y `AdaptiveCharacter` están listos: cargan el `.riv` del usuario, mapean `state` y `mouthOpen` a la state machine `Drakter` y, si no hay archivo o falla, usan el SVG (probado el respaldo con un archivo inválido). NO probado con un `.riv` real: no existe hasta que el usuario lo diseñe (ver `docs/usage/personaje.md`).
+  ⚠️ `RiveCharacter` (`@rive-app/canvas` 2.53.0) y `AdaptiveCharacter` están listos: cargan el `.riv` del usuario, mapean `state` y `mouthOpen` a la state machine `Drakter` y, si no hay archivo o falla, usan el SVG (probado el respaldo con un archivo inválido). Probado en Electron con la CSP real y un `.riv` de prueba oficial (MIT): se renderiza Rive y `state`/`mouthOpen` mueven sus inputs; los fallos dejan aviso en el log. Falta el `.riv` de Drakter, que diseña el usuario (ver `docs/usage/personaje.md`).
 - [x] Crear sistema de eventos visuales.
   ⚠️ Provisional SVG. Cadena `agent.status_changed` → `protocol.ts` → `stores/agent.ts` → `CharacterSlot` comprobada por typecheck, lectura y render por estado. Falta el e2e `desktop.personaje` en Electron (hoy NO COMPROBADO: Electron no arranca por CDP en la pasada y la conversación da 503). `agent.expression_changed` se valida pero el SVG la ignora y el backend no la emite.
 - [x] Implementar sincronización labial.

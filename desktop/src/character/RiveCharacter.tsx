@@ -1,6 +1,7 @@
 import { Rive, RuntimeLoader, type StateMachineInput } from '@rive-app/canvas'
 import riveWasmUrl from '@rive-app/canvas/rive.wasm?url'
 import { useCallback, useEffect, useRef } from 'react'
+import { warnCharacter } from './log'
 import { CHARACTER_STATES, type CharacterRendererProps } from './types'
 import { useMouthLevel } from './useMouthLevel'
 
@@ -50,11 +51,15 @@ export function RiveCharacter({ state, buffer, onFail }: RiveCharacterProps) {
           mouthInput.current = findInput(inputs, RIVE_INPUT_MOUTH)
           if (stateInput.current) stateInput.current.value = CHARACTER_STATES.indexOf(latest.current)
         },
-        onLoadError: () => {
-          if (alive) onFail()
+        onLoadError: (event) => {
+          if (alive) {
+            warnCharacter('Rive no pudo cargar el .riv', event?.data)
+            onFail()
+          }
         }
       })
-    } catch {
+    } catch (reason) {
+      warnCharacter('Rive falló al arrancar (¿wasm bloqueado por la CSP?)', reason)
       onFail()
     }
     return () => {
