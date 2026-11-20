@@ -30,6 +30,11 @@ EXIT_BOOT_FAILED = 4
 PR_SET_PDEATHSIG = 1
 USAGE_KEYS = ("input_tokens", "output_tokens", "cache_read_tokens", "cache_write_tokens", "api_calls")
 SESSION_USAGE_KEYS = USAGE_KEYS[:4]  # AIAgent.session_<key>: cumulative per agent; api_calls is per turn
+# FailoverReason values of a model that cannot be reached (agent/error_classifier.py): the user is told.
+UNREACHABLE_REASONS = frozenset({"timeout", "server_error", "overloaded", "unknown"})
+# Voice turns (quick_retry): one Hermes retry and no auto-recovery ladder (15-60 s waits).
+QUICK_API_RETRIES = 2
+OVERRIDDEN_HOOKS = ("_repair_tool_call", "_invoke_api_request_error_hook", "_try_recover_primary_transport")
 
 
 def die_with_parent() -> None:
@@ -126,11 +131,28 @@ class Runner:
         from run_agent import AIAgent
         from tools.mcp_tool_discovery import discover_mcp_tools
 
+        runner = self
+        # Overridden below; a rename upstream would silently disable them (preflight RUNNER_HOOKS).
+        lost = [n for n in OVERRIDDEN_HOOKS if not callable(getattr(AIAgent, n, None))]
+        if lost:
+            print(f"drakter_runner: WARNING Hermes lacks overridden hooks: {', '.join(lost)}", file=sys.stderr, flush=True)
+
         class DrakterAgent(AIAgent):
             """Hermes rewrites a misspelt tool name into a real one: never here. Tied to HERMES_COMMIT."""
 
             def _repair_tool_call(self, _name: str) -> None:
                 return None
+
+            def _invoke_api_request_error_hook(self, **kwargs: Any) -> None:
+                # Called by agent/turn_api_error.py once per failed model call, before the retry.
+                super()._invoke_api_request_error_hook(**kwargs)
+                runner.on_api_error(kwargs)
+
+            def _try_recover_primary_transport(self, api_error: Any, **kwargs: Any) -> bool:
+                # A voice turn does not wait 5 s more for a rebuilt client (agent_runtime_helpers.py).
+                if getattr(self, "_drakter_quick_retry", False):
+                    return False
+                return super()._try_recover_primary_transport(api_error, **kwargs)
 
         self.agent_class = DrakterAgent
         self.config = load_config()
@@ -145,6 +167,9 @@ class Runner:
         discover_mcp_tools([SERVER])
         probe = self.build_agent("", None, persist=False)
         names = self.checked_tools(probe)
+        # The home's values (agent_init.py), restored on text turns after a voice turn shortened them.
+        self.api_retries = int(getattr(probe, "_api_max_retries", 3))
+        self.recovery_cycles = int(getattr(probe, "_auto_recovery_cycles", 0))
         probe.close()
         self.protocol.emit("ready", nonce=read_guard_proof(), commit=get_version_info().commit, tools=names)
 
@@ -195,6 +220,21 @@ class Runner:
         if text:
             self.marks.setdefault("delta", time.monotonic())
             self.protocol.emit("delta", turn_id=self.current_turn, text=text)
+
+    def on_api_error(self, info: dict[str, Any]) -> None:
+        """A model call failed and Hermes will retry: the backend tells the user once. Never raises."""
+        try:
+            reason = str(info.get("reason") or "unknown")
+            if info.get("retryable") and reason in UNREACHABLE_REASONS and self.current_turn:
+                self.protocol.emit(
+                    "retrying",
+                    turn_id=self.current_turn,
+                    reason=reason,
+                    attempt=int(info.get("retry_count") or 0) + 1,
+                    max_attempts=int(info.get("max_retries") or 0),
+                )
+        except Exception:  # noqa: BLE001 - a notice must not break the retry loop
+            traceback.print_exc(file=sys.stderr)
 
     def on_tool_start(self, call_id: str, name: str, _args: Any) -> None:
         self.protocol.emit("tool_started", turn_id=self.current_turn, tool=name, call_id=call_id)
@@ -254,6 +294,10 @@ class Runner:
         agent = self.take_agent(session_id, instructions)
         # Per turn, like Hermes' gateway does on a reused agent: voice asks for "none" (LAT-1).
         agent.reasoning_config = self.reasoning_for(message.get("reasoning_effort"))
+        quick = message.get("quick_retry") is True
+        agent._api_max_retries = min(QUICK_API_RETRIES, self.api_retries) if quick else self.api_retries
+        agent._auto_recovery_cycles = 0 if quick else self.recovery_cycles
+        agent._drakter_quick_retry = quick
         self.marks["built"] = time.monotonic()
         keep = False
         try:

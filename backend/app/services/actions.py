@@ -157,6 +157,8 @@ class ActionService:
         self._executors = dict(executors or {})
         self._announce_lock = threading.Lock()
         self._announced: set[str] = set()
+        # action_id -> (session_id, job_id) of the call that asked, kept until announced.
+        self._origins: dict[str, tuple[str | None, str | None]] = {}
         self._ttl = ttl_seconds
         self._clock = clock
         self._turn_lock = threading.Lock()
@@ -388,7 +390,15 @@ class ActionService:
                 confirmation_id=action_id,
             ),
         )
-        conn.execute("COMMIT")
+        with self._announce_lock:
+            # Before COMMIT: the 1 s sweeper must never see the row without its origin.
+            self._origins[action_id] = (ctx.session_id, ctx.job_id)
+        try:
+            conn.execute("COMMIT")
+        except BaseException:
+            with self._announce_lock:
+                self._origins.pop(action_id, None)  # the row never existed
+            raise
         self.announce_pending(conn)
         return ToolConfirmationRequired(
             action_id=UUID(action_id), summary=summary, expires_at=after(now, self._ttl)
@@ -553,7 +563,11 @@ class ActionService:
         self._publish_resolved(row["id"], "rejected", None, correlation_id)
 
     def announce_pending(self, conn: sqlite3.Connection) -> int:
-        """Emit `confirmation.requested` once per row, whichever module created it."""
+        """Emit `confirmation.requested` once per row, whichever module created it.
+
+        The only emitter: the runtime and job observers no longer publish it, so a
+        confirmation asked from a job goes out once, with its `job_id`.
+        """
         if self._events is None:
             return 0
         with self._announce_lock:
@@ -561,14 +575,17 @@ class ActionService:
             fresh = [row for row in rows if row["id"] not in self._announced]
             self._announced = {row["id"] for row in rows}
             for row in fresh:
+                session_id, job_id = self._origins.pop(row["id"], (None, None))
                 try:
                     event = ConfirmationRequested(
                         action_id=UUID(row["id"]),
+                        session_id=UUID(session_id) if session_id else None,
                         turn_id=UUID(row["turn_id"]) if row["turn_id"] else None,
                         tool=row["tool_name"],
                         summary=row["summary"],
                         affected_count=row["affected_count"],
                         expires_at=row["expires_at"],
+                        job_id=UUID(job_id) if job_id else None,
                     )
                 except ValueError:
                     logger.warning("Malformed row", extra={"event": "confirmation_not_announced"})

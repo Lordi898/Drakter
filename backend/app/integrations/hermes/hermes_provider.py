@@ -23,6 +23,7 @@ from app.integrations.hermes.events import (
     TERMINAL_EVENTS,
     AgentEvent,
     MessageDelta,
+    ModelRetrying,
     Steered,
     Thinking,
     ToolCompleted,
@@ -79,6 +80,8 @@ class _Supervisor(Protocol):
         text: str,
         instructions: str,
         reasoning_effort: str | None = None,
+        *,
+        quick_retry: bool = False,
     ) -> AsyncIterator[dict[str, Any]]: ...
 
     async def stop_turn(self, turn_id: UUID, grace_s: float = 5) -> None: ...
@@ -316,6 +319,7 @@ class HermesProvider:
                 request.text,
                 instructions,
                 VOICE_REASONING_EFFORT if request.source == "voice" else None,
+                quick_retry=request.source == "voice",
             )
             async for raw in stream:
                 await queue.put(raw)
@@ -407,6 +411,9 @@ class HermesProvider:
             )
         if name == "steered":
             return Steered(accepted=data.get("accepted") is True)
+        if name == "retrying":
+            reason = data.get("reason")
+            return ModelRetrying(reason=reason if isinstance(reason, str) and _NAME.match(reason) else "unknown")
         if name == "completed":
             output = data.get("output")
             text = output if isinstance(output, str) and output else "".join(turn.text)

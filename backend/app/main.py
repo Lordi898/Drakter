@@ -104,6 +104,8 @@ def _install_voice(app: FastAPI, settings: Settings, runtime: Any) -> None:
         db_path=settings.db_path,
     )
     runtime.add_turn_prefix(orchestrator.heard.prefix)
+    # Hermes retrying an unreachable model on a voice turn: the cached `offline` phrase, once.
+    runtime.on_model_unreachable = lambda _source: orchestrator.say_phrase("offline")
     app.state.voice = orchestrator
 
 

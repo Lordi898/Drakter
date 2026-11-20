@@ -106,7 +106,7 @@ class HermesSupervisor:
     def __init__(self, settings, data_dir, tool_names, agent_tool_token, agent_tools_url, repo_root, on_state)  # sin API HTTP
     async def start(self) -> None; async def stop(self) -> None
     state: Literal["stopped","starting","ready","restarting","failed"]
-    def run_turn(self, turn_id, session_id, text, instructions, reasoning_effort=None) -> AsyncIterator[dict]   # eventos crudos del runner; siempre acaba en terminal
+    def run_turn(self, turn_id, session_id, text, instructions, reasoning_effort=None, *, quick_retry=False) -> AsyncIterator[dict]   # eventos crudos del runner; siempre acaba en terminal
     async def stop_turn(self, turn_id, grace_s: float = 5) -> None   # `stop`; si no hay terminal en grace_s, mata y rearranca
 # preflight.py: python -m app.integrations.hermes.preflight  (salida 0 solo si todo pasa)
 ```
@@ -122,12 +122,13 @@ Arranque: duplica el fd 1 para el protocolo y redirige `sys.stdout` a stderr (na
 Protocolo JSONL, una línea por mensaje, tamaño acotado, entrada no reconocida → error y sin ejecutar nada:
 
 ```text
-entrada:  {"op":"turn","turn_id","session_id","input","instructions","reasoning_effort"?} | {"op":"stop","turn_id"}
+entrada:  {"op":"turn","turn_id","session_id","input","instructions","reasoning_effort"?,"quick_retry"?} | {"op":"stop","turn_id"}
           | {"op":"steer","turn_id","text"} | {"op":"shutdown"}
 salida:   {"ev":"ready","nonce","commit","tools":[...]}
           {"ev":"thinking","turn_id"} {"ev":"delta","turn_id","text"}
           {"ev":"tool_started","turn_id","tool","call_id"} {"ev":"tool_completed","turn_id","tool","call_id","error"}
           {"ev":"steered","turn_id","accepted":bool}
+          {"ev":"retrying","turn_id","reason","attempt","max_attempts"}   # modelo inalcanzable, Hermes reintenta
           {"ev":"completed","turn_id","output","usage","pending_steer"?} {"ev":"cancelled","turn_id"} {"ev":"failed","turn_id","code","message"}
 ```
 
@@ -169,7 +170,7 @@ Todo tras `SecurityGuardMiddleware`, prefijo `/api/v1`, errores con el sobre com
 | POST | `/chat/turns/{turn_id}/cancel` | 202 |
 | GET | `/agent/status` | `{state, provider, model, detail}`; `state` = `runtime.status_arbiter.current.state` |
 
-Eventos: **no hay WS de chat**. Todo sale por el flujo único `WS /api/v1/events?after_seq=N&boot_id=<id>` (`contracts/README.md` §7), con `EventEnvelope` y los modelos de `drakter_contracts.events`. `submit_message` publica `chat.user_message` (texto o voz, con `input_source`) al guardar el mensaje del usuario. El turno emite `agent.turn_started` (con `input_source`), `agent.message_started`, `agent.message_delta`, `agent.message_completed`, `agent.tool_started`, `agent.tool_completed`, `agent.turn_finished` y `agent.error`. `agent.status_changed` lo publica **solo** el `StatusArbiter` (§5bis); el runtime le pasa señales. Una herramienta con `confirmation_required` emite `confirmation.requested`. Si el búfer no cubre `after_seq` o cambia `boot_id`: `system.resync_required`.
+Eventos: **no hay WS de chat**. Todo sale por el flujo único `WS /api/v1/events?after_seq=N&boot_id=<id>` (`contracts/README.md` §7), con `EventEnvelope` y los modelos de `drakter_contracts.events`. `submit_message` publica `chat.user_message` (texto o voz, con `input_source`) al guardar el mensaje del usuario. El turno emite `agent.turn_started` (con `input_source`), `agent.message_started`, `agent.message_delta`, `agent.message_completed`, `agent.tool_started`, `agent.tool_completed`, `agent.turn_finished` y `agent.error`. `agent.status_changed` lo publica **solo** el `StatusArbiter` (§5bis); el runtime le pasa señales. Una herramienta con `confirmation_required` emite `confirmation.requested` una sola vez, desde `ActionService` (con `session_id` y, si viene de un trabajo, `job_id`). Si Hermes reintenta un modelo inalcanzable (`retrying`), el estado pasa a `offline` con `reason="model_unreachable"`, sale un único `notification.created` por corte (`kind="agent"`) y, en voz, la frase `offline`. Si el búfer no cubre `after_seq` o cambia `boot_id`: `system.resync_required`.
 
 ### Bus: `backend/app/events/`
 

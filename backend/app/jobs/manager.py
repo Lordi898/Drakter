@@ -28,7 +28,6 @@ from uuid import UUID, uuid4
 
 from drakter_contracts.common import format_instant
 from drakter_contracts.events import (
-    ConfirmationRequested,
     JobFinished,
     JobProgress,
     JobStarted,
@@ -272,28 +271,14 @@ class JobManager:
     # Observador de herramientas del carril
 
     def observe_tool_outcome(self, name: str, ctx: Any, outcome: Any) -> None:
-        """Confirmaciones pedidas desde un trabajo: `confirmation.requested` con `job_id`."""
-        data = outcome.model_dump()
-        if data.get("status") != "confirmation_required":
+        """Cuenta las confirmaciones pedidas desde un trabajo. El aviso
+        `confirmation.requested` (con `job_id`) lo emite una sola vez `ActionService`."""
+        if outcome.model_dump().get("status") != "confirmation_required":
             return
         job_id = getattr(ctx, "job_id", None)
         run = self._runs.get(job_id) if job_id is not None else None
         if run is not None:
             run.job.pending_actions += 1
-        self._hub.publish(
-            "confirmation.requested",
-            ConfirmationRequested(
-                action_id=data["action_id"],
-                session_id=ctx.session_id,
-                turn_id=ctx.turn_id,
-                tool=name,
-                summary=data["summary"],
-                affected_count=data.get("affected_count"),
-                expires_at=data["expires_at"],
-                job_id=job_id,
-            ),
-            correlation_id=str(ctx.turn_id),
-        )
 
     # Ejecución
 

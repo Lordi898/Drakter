@@ -12,7 +12,7 @@ import secrets
 import sqlite3
 import time
 from collections.abc import Callable
-from datetime import datetime
+from datetime import UTC, datetime
 from dataclasses import dataclass, field
 from pathlib import Path
 from types import SimpleNamespace
@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING, Any, Final, Literal, Protocol
 from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+from drakter_contracts.common import format_instant
 from drakter_contracts.errors import HTTP_STATUS, ErrorCode
 from drakter_contracts.events import (
     AgentError,
@@ -32,7 +33,7 @@ from drakter_contracts.events import (
     AgentTurnFinished,
     AgentTurnStarted,
     ChatUserMessage,
-    ConfirmationRequested,
+    NotificationCreated,
     SystemHealthChanged,
 )
 from drakter_contracts.speech_markup import IncrementalStripper, strip_tags
@@ -55,6 +56,7 @@ from app.integrations.hermes.events import (
     SAFE_MESSAGES,
     TERMINAL_EVENTS,
     MessageDelta,
+    ModelRetrying,
     Steered,
     Thinking,
     ToolCompleted,
@@ -86,6 +88,7 @@ STOP_TURN_GRACE_S: Final = 12.0
 STEER_TIMEOUT_S: Final = 5.0
 STEER_SEPARATOR: Final = "\n\n"
 SESSION_SCAN: Final = 50
+MODEL_UNREACHABLE_TITLE: Final = "Sin conexión con el modelo; reintentando…"
 
 Source = Literal["text", "voice"]
 Outcome = Literal["completed", "cancelled", "failed"]
@@ -139,6 +142,7 @@ class _ActiveTurn:
     echoed_steers: int = 0
     started: float = field(default_factory=time.monotonic)
     first_delta_ms: int | None = None
+    retrying: bool = False  # Hermes cannot reach the model and is retrying (shown as offline)
 
     @property
     def correlation_id(self) -> str:
@@ -171,6 +175,10 @@ class AgentRuntime:
         self._prefixes: list[TurnPrefix] = []
         self._session_lock = asyncio.Lock()
         self._follow_ups: set[asyncio.Task[None]] = set()
+        # The model stopped answering: told once per outage, cleared when it answers again.
+        self._model_unreachable = False
+        # Set by main.py when voice is on: says the cached `offline` phrase on a voice turn.
+        self.on_model_unreachable: Callable[[Source], None] | None = None
 
     async def start(self) -> None:
         try:
@@ -656,7 +664,10 @@ class AgentRuntime:
         if isinstance(event, Thinking):
             active.phase = "generating"
             self._publish_state(AgentState.THINKING, turn_id=active.turn_id)
+        elif isinstance(event, ModelRetrying):
+            await self._model_retrying(active, event)
         elif isinstance(event, MessageDelta):
+            self._model_answered(active)
             active.phase = "generating"
             if active.first_delta_ms is None:
                 active.first_delta_ms = round((time.monotonic() - active.started) * 1000)
@@ -675,6 +686,7 @@ class AgentRuntime:
                     await self._emit_text(active, active.stripper.flush() + STEER_SEPARATOR)
             self._call_tap("on_steered", active.turn_id, event.accepted)
         elif isinstance(event, ToolStarted):
+            self._model_answered(active)
             active.phase = "executing"
             self._call_tap("on_tool_started", active.turn_id, event.tool)
             self._publish_state(AgentState.EXECUTING, turn_id=active.turn_id)
@@ -698,10 +710,72 @@ class AgentRuntime:
             active.phase = "generating"
             self._publish_state(AgentState.THINKING, turn_id=active.turn_id)
 
+    async def _model_retrying(self, active: _ActiveTurn, event: ModelRetrying) -> None:
+        """Hermes retries on its own: the character shows offline and the user is told once."""
+        if active.retrying:
+            return
+        active.retrying = True
+        logger.warning(
+            "model unreachable, hermes retrying",
+            extra={"event": "model_retrying", "turn_id": str(active.turn_id), "reason": event.reason},
+        )
+        self._publish_state(AgentState.OFFLINE, reason="model_unreachable", turn_id=active.turn_id)
+        if active.source == "voice" and self.on_model_unreachable is not None:
+            try:
+                self.on_model_unreachable(active.source)
+            except Exception:  # noqa: BLE001 - a lost phrase must not break the turn
+                logger.exception("offline phrase failed", extra={"event": "offline_phrase_failed"})
+        if not self._model_unreachable:
+            self._model_unreachable = True
+            await self._notify_model_unreachable(active)
+
+    def _model_answered(self, active: _ActiveTurn) -> None:
+        """The model is back: the next outage is announced again."""
+        active.retrying = False
+        self._model_unreachable = False
+
+    async def _notify_model_unreachable(self, active: _ActiveTurn) -> None:
+        from app.database.connection import connect
+        from app.repositories import notifications as notifications_repo
+        from app.repositories.notifications import NewNotification
+
+        item = NewNotification(
+            dedupe_key=f"agent:model_unreachable:{active.turn_id}",
+            kind="agent",
+            title=MODEL_UNREACHABLE_TITLE,
+            severity="warning",
+        )
+
+        def insert() -> list[Any]:
+            conn = connect(self.settings.db_path)
+            try:
+                return notifications_repo.insert_new(conn, [item], format_instant(datetime.now(UTC)))
+            finally:
+                conn.close()
+
+        try:
+            rows = await asyncio.to_thread(insert)
+            for row in rows:
+                self._publish(
+                    active,
+                    "notification.created",
+                    NotificationCreated(
+                        notification_id=row.id, kind=row.kind, title=row.title, severity=row.severity
+                    ),
+                )
+        except Exception as exc:  # noqa: BLE001 - the offline state already tells the user
+            logger.warning(
+                "model unreachable notification lost",
+                extra={"event": "model_unreachable_notify_failed", "kind": type(exc).__name__},
+            )
+
     async def _close_turn(
         self, active: _ActiveTurn, terminal: TurnCompleted | TurnCancelled | TurnFailed
     ) -> None:
         """Commit, free the slot, and only then tell the GUI it may send again."""
+        if isinstance(terminal, TurnCompleted) or not active.retrying:
+            # A turn that ended without retrying says nothing of an outage: the next one is told.
+            self._model_answered(active)
         outcome, error_code, message_status, state = self._outcome_of(terminal)
         tail = active.stripper.flush()
         if tail:
@@ -807,23 +881,8 @@ class AgentRuntime:
         return status, terminal.code.value, "failed", AgentState.ERROR
 
     def observe_tool_outcome(self, name: str, ctx: Any, outcome: Any) -> None:
-        """Hook on every agent tool result: announces pending confirmations to the GUI."""
-        data = outcome.model_dump()
-        if data.get("status") != "confirmation_required":
-            return
-        self.hub.publish(
-            "confirmation.requested",
-            ConfirmationRequested(
-                action_id=data["action_id"],
-                session_id=ctx.session_id,
-                turn_id=ctx.turn_id,
-                tool=name,
-                summary=data["summary"],
-                affected_count=data.get("affected_count"),
-                expires_at=data["expires_at"],
-            ),
-            correlation_id=str(ctx.turn_id),
-        )
+        """Hook on every agent tool result. `confirmation.requested` is announced once by
+        `ActionService.announce_pending`, with session and job; nothing to publish here."""
 
     def _publish_state(
         self,
