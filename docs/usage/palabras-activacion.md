@@ -8,10 +8,10 @@ a menudo. Esta guía explica cómo entrenar en Google Colab tus propios modelos 
 principio a fin. Nadie lo ha ejecutado todavía en Colab con los valores reales, ni se han probado los modelos con
 la app.
 
-> ⚠️ **«Drakter» y «despierta» necesitan además un cambio en Drakter.** Cuando salta la palabra de activación,
-> Drakter comprueba en el texto transcrito que empiece por «jarvis» (lista `[wake]` de
-> `voice/conversation/layer0.es.toml`). Hasta que esa lista incluya también «drakter» y «despierta», esas dos
-> palabras despertarán el micrófono, pero la frase no llegará al chat. «Jarvis» funciona ya.
+Cuando salta la palabra, Drakter comprueba además que el texto transcrito empiece por ella (lista `[wake]` de
+`voice/conversation/layer0.es.toml`, que ya incluye «drakter», «despierta» y las variantes con que las escribe el
+reconocimiento de voz). Si a veces se activa pero tu frase no llega al chat, es que el reconocimiento escribió la
+palabra de otra forma: hay que añadir esa variante a la lista.
 
 ## Qué necesitas
 
