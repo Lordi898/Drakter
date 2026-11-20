@@ -55,6 +55,13 @@ class Steered(_AgentEvent):
     accepted: bool
 
 
+class ModelRetrying(_AgentEvent):
+    """Hermes could not reach the model (transport error) and is retrying on its own."""
+
+    type: Literal["model_retrying"] = "model_retrying"
+    reason: str = "unknown"
+
+
 class TurnCompleted(_AgentEvent):
     type: Literal["turn_completed"] = "turn_completed"
     text: str
@@ -75,7 +82,8 @@ class TurnFailed(_AgentEvent):
 
 
 AgentEvent = Annotated[
-    Thinking | MessageDelta | ToolStarted | ToolCompleted | Steered | TurnCompleted | TurnCancelled | TurnFailed,
+    Thinking | MessageDelta | ToolStarted | ToolCompleted | Steered | ModelRetrying | TurnCompleted
+    | TurnCancelled | TurnFailed,
     Field(discriminator="type"),
 ]
 TERMINAL_EVENTS: Final = (TurnCompleted, TurnCancelled, TurnFailed)

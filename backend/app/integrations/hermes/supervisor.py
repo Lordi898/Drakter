@@ -213,8 +213,12 @@ class HermesSupervisor:
         text: str,
         instructions: str,
         reasoning_effort: str | None = None,
+        *,
+        quick_retry: bool = False,
     ) -> AsyncIterator[dict[str, Any]]:
-        """Raw runner events; the last one is always terminal. A dead runner never repeats a turn."""
+        """Raw runner events; the last one is always terminal. A dead runner never repeats a turn.
+
+        `quick_retry` (voice): the runner gives up on an unreachable model in seconds, not minutes."""
         tid = str(turn_id)
         if self._turn is not None:
             yield {"ev": "failed", "turn_id": tid, "code": "agent_busy", "message": "Ya hay un turno en curso."}
@@ -227,6 +231,8 @@ class HermesSupervisor:
         message = {"op": "turn", "turn_id": tid, "session_id": str(session_id), "input": text}
         if reasoning_effort is not None:  # this turn only; else the home's agent.reasoning_effort
             message["reasoning_effort"] = reasoning_effort
+        if quick_retry:
+            message["quick_retry"] = True
         if not await self._send({**message, "instructions": instructions}):
             self._finish_turn(turn, self._lost_event(turn))
         terminal = False
