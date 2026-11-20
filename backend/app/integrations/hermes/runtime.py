@@ -773,7 +773,8 @@ class AgentRuntime:
         self, active: _ActiveTurn, terminal: TurnCompleted | TurnCancelled | TurnFailed
     ) -> None:
         """Commit, free the slot, and only then tell the GUI it may send again."""
-        if isinstance(terminal, TurnCompleted):
+        if isinstance(terminal, TurnCompleted) or not active.retrying:
+            # A turn that ended without retrying says nothing of an outage: the next one is told.
             self._model_answered(active)
         outcome, error_code, message_status, state = self._outcome_of(terminal)
         tail = active.stripper.flush()

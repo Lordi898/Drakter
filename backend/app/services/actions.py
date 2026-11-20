@@ -393,7 +393,12 @@ class ActionService:
         with self._announce_lock:
             # Before COMMIT: the 1 s sweeper must never see the row without its origin.
             self._origins[action_id] = (ctx.session_id, ctx.job_id)
-        conn.execute("COMMIT")
+        try:
+            conn.execute("COMMIT")
+        except BaseException:
+            with self._announce_lock:
+                self._origins.pop(action_id, None)  # the row never existed
+            raise
         self.announce_pending(conn)
         return ToolConfirmationRequired(
             action_id=UUID(action_id), summary=summary, expires_at=after(now, self._ttl)
