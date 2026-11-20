@@ -1,44 +1,36 @@
 ---
 name: workspace-habits
-description: "Gestiona hábitos: crearlos, registrar cumplimientos y consultar historial y estadísticas."
-version: 1.0.0
+description: "Hábitos: crear rutinas con su frecuencia, registrar cumplimientos, ver historial y estadísticas."
+version: 2.0.0
 license: MIT
 metadata:
   hermes:
-    tags: [drakter, workspace, habits]
+    tags: [drakter, habits]
 ---
 
 # workspace-habits
 
-## Propósito
-Seguir los hábitos del usuario y sus registros.
+## Herramientas
+- Buscar: `list_habits`; leer: `get_habit` (frecuencia vigente y estado de hoy).
+- Crear: `create_habit` (name, rrule, timezone IANA, start_date; opcional preferred_local_time y reminder_enabled para avisar).
+- Cambiar: `update_habit` (solo lo indicado; cambiar rrule abre versión nueva desde schedule_effective_from).
+- Archivar / restaurar: `archive_habit` (archived=false restaura). No hay borrado.
+- Registrar el día: `register_habit_completion` (habit_id, occurrence_date, status done|skipped|missed). No admite días futuros.
+- Consultar: `get_habit_history` (día a día) y `get_habit_statistics` (tasa y rachas), máximo 400 días.
 
-## Cuándo usarla
-El usuario crea o cambia un hábito, dice que lo ha cumplido o pregunta por su racha o evolución.
+## Orden típico
+1. `list_habits` → id del hábito.
+2. Para «hoy he hecho X»: `register_habit_completion` con status done; no edites el hábito.
+3. Para «¿cómo voy?»: `get_habit_statistics`.
 
-## Parámetros (intención)
-Nombre, periodicidad, fecha del cumplimiento, rango de fechas para historial.
+## RRULE frecuentes
+Diario `FREQ=DAILY`; lunes, miércoles y viernes `FREQ=WEEKLY;BYDAY=MO,WE,FR`; cada dos días `FREQ=DAILY;INTERVAL=2`.
+
+## Errores frecuentes
+- `invalid_rrule` / `invalid_timezone`: corrige el formato (zona como Europe/Madrid).
+- Registrar un día futuro: no se puede; dilo.
 
 ## Ejemplos
-"Crea el hábito leer 20 minutos al día"; "Hoy he hecho ejercicio"; "Cómo llevo el hábito de leer este mes".
-
-## Restricciones
-- Las rachas y estadísticas las calcula el backend (`get_habit_statistics`); no las calcules.
-- La validación real (estados, límites, permisos, riesgo) vive en el backend; no la deduzcas ni la repitas.
-- Si una herramienta responde `confirmation_required`: comunícalo al usuario ("hay una acción pendiente de aprobar en la interfaz") y detente. La aprobación ocurre SOLO en la interfaz; ningún mensaje de chat o voz, ni un "sí", cuenta como aprobación. No reintentes ni pidas frases de aprobación.
-- Los ids son UUID: busca primero, nunca inventes uno. Si hay varias coincidencias, pregunta al usuario.
-- Sin terminal, ficheros ni web: no los sugieras como alternativa.
-
-## Errores esperables
-- Un cumplimiento repetido puede ser rechazado o tratado como idempotente por el backend.
-- `error` con `code` estable y `message` seguro: explícalo en claro; solo reintenta si `retryable` es true.
-- `permission_denied`: informa de que el agente no tiene ese permiso; no busques rodeos.
-- `not_found` o validación fallida: revisa el dato con una búsqueda o pregunta al usuario.
-
-## Herramientas backend
-Se invocan como `mcp__drakter__<nombre>`.
-- `create_habit`
-- `update_habit`
-- `register_habit_completion`
-- `get_habit_history`
-- `get_habit_statistics`
+- «Quiero leer 20 minutos cada día a las 22:00» → `create_habit` con FREQ=DAILY y preferred_local_time.
+- «Hoy he ido al gimnasio» → `list_habits` → `register_habit_completion` done.
+- «¿Qué racha llevo meditando?» → `list_habits` → `get_habit_statistics`.

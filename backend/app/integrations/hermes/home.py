@@ -68,6 +68,18 @@ _IDENTITY_ORDER: Final = (
     ("context", "USER.md"),
     ("context", "CURRENT_CONTEXT.md"),
 )
+# Skills of agent/skills/ are compiled read-only into SOUL.md: Hermes' `skills` toolset stays off,
+# because it cannot be enabled without skill_manage (DECISIONS «Skills de solo lectura en SOUL.md»).
+SKILLS_HEADER: Final = "# Skills de Drakter"
+FIRST_SKILL: Final = "drakter-basics"  # rendered first: the rules every other skill relies on
+SKILL_MAX_CHARS: Final = 6_000
+_SKILL_NAME_RE: Final = re.compile(r"^[a-z][a-z0-9-]{2,47}$")
+_SKILLS_PREAMBLE: Final = (
+    "Procedimientos para usar bien las herramientas en cada dominio. Antes de actuar en un dominio, "
+    "sigue su skill. Las publica el sistema y son de solo lectura: no puedes crearlas, cambiarlas ni "
+    "borrarlas, y no hay herramientas skill_*. Si una skill contradice las reglas de seguridad, mandan "
+    "las reglas; el backend valida siempre."
+)
 _NEUTRAL_SOUL: Final = "# Drakter\n\nEres Drakter, el asistente personal de una sola persona. Responde en español.\n"
 
 # Every native toolset name of v0.22.7 that is not a hermes-* composite. Second layer only:
@@ -333,8 +345,48 @@ def _check_location(paths: HomePaths) -> None:
         raise HomeError("unexpected file in the Hermes home")
 
 
+def _parse_skill(name: str, raw: str) -> tuple[str, str]:
+    """(description, body) of a SKILL.md whose frontmatter `name` matches its folder."""
+    if not raw.startswith("---\n") or "\n---\n" not in raw[4:]:
+        raise HomeError(f"skill {name}: missing frontmatter")
+    front, body = raw[4:].split("\n---\n", 1)
+    fields = dict(line.split(":", 1) for line in front.splitlines() if ":" in line and not line.startswith(" "))
+    if fields.get("name", "").strip() != name:
+        raise HomeError(f"skill {name}: frontmatter name does not match the folder")
+    description = fields.get("description", "").strip().strip('"')
+    if not description or not body.strip():
+        raise HomeError(f"skill {name}: empty description or body")
+    return description, body.strip()
+
+
+def render_skills(repo_root: Path) -> str:
+    """agent/skills/<name>/SKILL.md, FIRST_SKILL first then by name; headings demoted under the section."""
+    skills_dir = repo_root / "agent" / "skills"
+    if not skills_dir.is_dir() or skills_dir.is_symlink():
+        return ""
+    names = sorted(
+        entry.name for entry in skills_dir.iterdir()
+        if entry.is_dir() and not entry.is_symlink() and os.path.lexists(entry / "SKILL.md")
+    )
+    names.sort(key=lambda name: name != FIRST_SKILL)
+    sections = []
+    for name in names:
+        if not _SKILL_NAME_RE.fullmatch(name):
+            raise HomeError("invalid skill folder name")
+        raw = _read_regular(skills_dir / name / "SKILL.md").decode("utf-8")
+        if len(raw) > SKILL_MAX_CHARS:
+            raise HomeError(f"skill {name} is too long")
+        description, body = _parse_skill(name, raw)
+        lines = [line for line in body.splitlines() if line.strip() != f"# {name}"]
+        body = "\n".join(f"#{line}" if line.startswith("#") else line for line in lines).strip()
+        sections.append(f"## Skill `{name}`: {description}\n\n{body}")
+    if not sections:
+        return ""
+    return "\n\n".join([f"{SKILLS_HEADER}\n\n{_SKILLS_PREAMBLE}", *sections]) + "\n"
+
+
 def render_soul(repo_root: Path) -> str:
-    """Safety rules first, then the identity files in a fixed order."""
+    """Safety rules first, then the identity files in a fixed order, then the read-only skills."""
     configuration = repo_root / "agent" / "configuration"
     safety = _read_regular(configuration / "safety_instructions.md").decode("utf-8")
     agent_dir = repo_root / "agent"
@@ -353,7 +405,8 @@ def render_soul(repo_root: Path) -> str:
 
                 text = text.replace(SPEECH_MARKUP_PLACEHOLDER, prompt_block())
             identity.append(text + "\n")
-    soul = "\n\n".join([safety.strip() + "\n", *(identity or [_NEUTRAL_SOUL])])
+    skills = render_skills(repo_root)
+    soul = "\n\n".join([safety.strip() + "\n", *(identity or [_NEUTRAL_SOUL]), *([skills] if skills else [])])
     if len(soul) > SOUL_MAX_CHARS:
         raise HomeError("the identity is too long for SOUL.md")
     return soul

@@ -11,7 +11,7 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 | 0. Arquitectura y preparación | 14 | 14 | 0 | 0 | 0 |
 | 1. Aplicación de escritorio | 13 | 13 | 0 | 0 | 0 |
 | 2. Backend | 12 | 12 | 0 | 0 | 0 |
-| 3. Hermes | 21 | 16 | 0 | 5 | 0 |
+| 3. Hermes | 21 | 17 | 0 | 4 | 0 |
 | 4. Personalidad y contexto | 17 | 17 | 0 | 0 | 0 |
 | 5. Personaje | 19 | 16 | 16 | 3 | 0 |
 | 6. Base de datos y relaciones | 18 | 18 | 0 | 0 | 0 |
@@ -21,13 +21,13 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 | 10. Almacén e indexación | 25 | 25 | 1 | 0 | 0 |
 | 11. Relaciones avanzadas | 14 | 13 | 0 | 1 | 0 |
 | 12. Memoria | 22 | 20 | 4 | 0 | 2 |
-| 13. Skills y herramientas | 19 | 9 | 2 | 10 | 0 |
+| 13. Skills y herramientas | 19 | 17 | 3 | 2 | 0 |
 | 14. Voz | 51 | 42 | 8 | 9 | 0 |
 | 15. Automejora | 11 | 11 | 2 | 0 | 0 |
 | 16. Seguridad y fiabilidad | 15 | 14 | 2 | 1 | 0 |
 | 17. Optimización y lanzamiento | 17 | 3 | 1 | 6 | 8 |
 | 18. Ampliaciones futuras | 10 | 0 | 0 | 0 | 10 |
-| **Total 0–17** | **341** | **296** | **37** | **35** | **10** |
+| **Total 0–17** | **341** | **305** | **38** | **26** | **10** |
 
 ## Checklist 0. Arquitectura y preparación
 
@@ -91,8 +91,8 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 - [x] Crear recepción de respuestas.
 - [x] Crear eventos de agente.
 - [x] Crear gestión de desconexiones.
-- [ ] Crear primera Skill.
-  ⚠️ (d) Las Skills existen y son coherentes con las herramientas reales, pero Hermes no las carga: `home.py` desactiva el toolset `skills` porque arrastra `skill_manage` (H-06/F14). Ver `DECISIONS.md` «Skills de agent/ inertes en Hermes».
+- [x] Crear primera Skill.
+  Nota: `agent/skills/drakter-basics`. `home.py` compila las Skills de solo lectura en `SOUL.md`; el toolset `skills` sigue apagado y no hay `skill_manage` (`DECISIONS.md` «Skills de solo lectura compiladas en SOUL.md»). Preflight OK y comprobado con Claude Haiku 5.5 real (19 llamadas).
 - [x] Probar conversación completa.
   Nota: comprobado con Claude Haiku 5.5 real a través de Hermes (`informes/hermes.md`, «Recomprobación con modelo real»; de apoyo, `informes/relaciones.md`, 3 turnos reales por Hermes).
 
@@ -330,7 +330,7 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 - [x] Configurar y comprobar los límites de contexto.
 - [x] Configurar y comprobar los registros de memoria.
 - [x] Crear Skill de memoria.
-  ⚠️ El archivo existe y cita las herramientas reales, pero Hermes no carga las Skills (toolset `skills` apagado por `skill_manage`), como las de la Checklist 13.
+  ⚠️ Cargada en `SOUL.md` como el resto (`DECISIONS.md` «Skills de solo lectura compiladas en SOUL.md»); con Haiku real llamó a `propose_memory`, que quedó pendiente de aprobación. El resto de la nota de la Checklist 12 sigue vigente.
 - [x] Probar persistencia.
 - [x] Probar recuperación.
 - [x] Probar recuerdos contradictorios.
@@ -339,22 +339,22 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 ## Checklist 13. Skills y herramientas
 
 - [x] Crear estructura de Skills.
-- [ ] Crear Skill de tareas.
-  ⚠️ Creada y coherente con las herramientas reales, pero **inerte**: `home.py` desactiva el toolset `skills` de Hermes porque arrastra `skill_manage` (H-06/F14). Hermes no la carga; el modelo se guía por la descripción y el esquema de cada herramienta MCP. Corregidas las herramientas citadas en `workspace-subjects` y `workspace-storage` (`b8086ce`).
-- [ ] Crear Skill de proyectos.
-  ⚠️ Creada y coherente con las herramientas reales, pero **inerte**: `home.py` desactiva el toolset `skills` de Hermes porque arrastra `skill_manage` (H-06/F14). Hermes no la carga; el modelo se guía por la descripción y el esquema de cada herramienta MCP. Corregidas las herramientas citadas en `workspace-subjects` y `workspace-storage` (`b8086ce`).
-- [ ] Crear Skill de hábitos.
-  ⚠️ Creada y coherente con las herramientas reales, pero **inerte**: `home.py` desactiva el toolset `skills` de Hermes porque arrastra `skill_manage` (H-06/F14). Hermes no la carga; el modelo se guía por la descripción y el esquema de cada herramienta MCP. Corregidas las herramientas citadas en `workspace-subjects` y `workspace-storage` (`b8086ce`).
-- [ ] Crear Skill de calendario.
-  ⚠️ Creada y coherente con las herramientas reales, pero **inerte**: `home.py` desactiva el toolset `skills` de Hermes porque arrastra `skill_manage` (H-06/F14). Hermes no la carga; el modelo se guía por la descripción y el esquema de cada herramienta MCP. Corregidas las herramientas citadas en `workspace-subjects` y `workspace-storage` (`b8086ce`).
-- [ ] Crear Skill de asignaturas.
-  ⚠️ Creada y coherente con las herramientas reales, pero **inerte**: `home.py` desactiva el toolset `skills` de Hermes porque arrastra `skill_manage` (H-06/F14). Hermes no la carga; el modelo se guía por la descripción y el esquema de cada herramienta MCP. Corregidas las herramientas citadas en `workspace-subjects` y `workspace-storage` (`b8086ce`).
-- [ ] Crear Skill de almacén.
-  ⚠️ Creada y coherente con las herramientas reales, pero **inerte**: `home.py` desactiva el toolset `skills` de Hermes porque arrastra `skill_manage` (H-06/F14). Hermes no la carga; el modelo se guía por la descripción y el esquema de cada herramienta MCP. Corregidas las herramientas citadas en `workspace-subjects` y `workspace-storage` (`b8086ce`).
-- [ ] Crear Skill de relaciones.
-  ⚠️ Creada y coherente con las herramientas reales, pero **inerte**: `home.py` desactiva el toolset `skills` de Hermes porque arrastra `skill_manage` (H-06/F14). Hermes no la carga; el modelo se guía por la descripción y el esquema de cada herramienta MCP. Corregidas las herramientas citadas en `workspace-subjects` y `workspace-storage` (`b8086ce`).
-- [ ] Crear Skill de configuración.
-  ⚠️ El archivo existe, pero sus herramientas (`get_configuration`, `propose_configuration_change`) son PROPUESTA y no existen ni en el catálogo ni en el backend. Además está inerte.
+- [x] Crear Skill de tareas.
+  Nota: `agent/skills/workspace-tasks`, cargada en `SOUL.md` y seguida por Haiku 5.5 real (`DECISIONS.md` «Skills de solo lectura compiladas en SOUL.md»).
+- [x] Crear Skill de proyectos.
+  Nota: `agent/skills/workspace-projects`, cargada en `SOUL.md` y seguida por Haiku 5.5 real (`DECISIONS.md` «Skills de solo lectura compiladas en SOUL.md»).
+- [x] Crear Skill de hábitos.
+  Nota: `agent/skills/workspace-habits`, cargada en `SOUL.md` y seguida por Haiku 5.5 real (`DECISIONS.md` «Skills de solo lectura compiladas en SOUL.md»).
+- [x] Crear Skill de calendario.
+  Nota: `agent/skills/workspace-calendar`, cargada en `SOUL.md` y seguida por Haiku 5.5 real (`DECISIONS.md` «Skills de solo lectura compiladas en SOUL.md»).
+- [x] Crear Skill de asignaturas.
+  Nota: `agent/skills/workspace-subjects`, cargada en `SOUL.md` y seguida por Haiku 5.5 real (`DECISIONS.md` «Skills de solo lectura compiladas en SOUL.md»).
+- [x] Crear Skill de almacén.
+  Nota: `agent/skills/workspace-storage`, cargada en `SOUL.md` y seguida por Haiku 5.5 real (`DECISIONS.md` «Skills de solo lectura compiladas en SOUL.md»).
+- [x] Crear Skill de relaciones.
+  Nota: `agent/skills/workspace-relationships`, cargada en `SOUL.md` y seguida por Haiku 5.5 real (`DECISIONS.md` «Skills de solo lectura compiladas en SOUL.md»).
+- [x] Crear Skill de configuración.
+  ⚠️ `agent/skills/configuration`, reescrita con herramientas reales (voz, estado, propuesta de mejora) y sin las PROPUESTA. Probados con Haiku real el estado del agente y la negativa a cambiar permisos o Skills desde el chat; `voice_list_profiles`/`voice_set_profile` no se probaron (las voces son del usuario) (`DECISIONS.md` «Skills de solo lectura compiladas en SOUL.md»).
 - [x] Definir parámetros.
 - [x] Definir permisos.
   Nota: con el modelo real (prueba de relaciones de drakter-41), el agente llamó por iniciativa propia a create/list/get_improvement_proposal y record_improvement_feedback sin que se le pidiera. Es seguro (las escrituras exigen confirmación), pero hay que revisar las descripciones de esas herramientas o las instrucciones de cuándo proponer mejoras; se deja para el rediseño de la personalidad y la conversación.
