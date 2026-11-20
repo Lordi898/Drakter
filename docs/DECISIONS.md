@@ -1125,3 +1125,32 @@ Decisiones técnicas, cambios de tecnología y motivos.
 - **Alternativas descartadas:** instalar la 0.6.0 con `--no-deps` y `inference_framework="onnx"`: rompe la idempotencia del lock y no aporta nada que la voz use. Las mejoras de la 0.5.1 (entradas que no son múltiplo de 1280) ya las cubre `WakeGate`, que puntúa en bloques de 1280. La de la 0.6.0 (debounce) la sustituye la confirmación textual.
 - **Motivo:** la 0.6.0 no se puede instalar en el runtime de voz.
 - **Impacto:** `agent/evals/requirements.txt`, `.github/dependabot.yml` y `scripts/install-voice.sh`. Comprobado en un venv aparte (`venvs/voice-cpu`): `install-voice.sh`, `python -m voice check` («Todo en orden»), `check_pipeline.py --real` 21/21 PASS y `check_conversation` OK. Con anthropic 2.10.0, `Anthropic(...)`, `messages.create` y `AnthropicError` se comportan igual. Ojo: `check_pipeline --real` necesita una frase corta sin palabra de activación. Los wavs de `research/wakeword/stt` dicen «despierta» o «Drakter», y los MLS largos siguen sonando tras cerrar el turno: se usó una frase de Kokoro de 1,9 s («¿Qué tiempo hace hoy en Madrid?»).
+
+## [2026-11-20] CPU-1: CPU de la voz en reposo (openWakeWord con puerta de energía, recuperación del prebúfer y un hilo)
+- **Contexto:** WP9 midió unos 53 % de un núcleo en reposo con `top` sobre la app. Para comparar el antes y el después hace falta una medida repetible, y se hizo con un banco propio: `python -m voice run` con los proveedores reales (Kokoro y Moonshine, sin Fish), un par WebRTC de aiortc como el de `check_pipeline` y un micro con ruido gaussiano débil. Se mide `utime+stime` de `/proc/<pid>` en tramos de 5 s, con 15 s de calentamiento y 60 s de medida, y se desglosa por hilo con `/proc/<pid>/task`. Se perfiló con py-spy 0.4 en el venv aparte `voice-cpu`, lanzado como hijo porque `ptrace_scope=1`. La máquina tenía loadavg 5-7 por otras sesiones. El proceso de voz de la app del usuario daba 22 % en ese momento.
+  - **Antes** (`origin/main`, ruido −64 dBFS): reposo 25,5 % (tramos 23-29), 760 MB RSS, 62 hilos. Lo que se lleva el CPU:
+    - openWakeWord, ~17 %: una predicción cada 80 ms en el pool de `asyncio.to_thread`, que rota entre 12 hilos a ~1,3 % cada uno. Aislado cuesta 6,3 ms por bloque, un 7,9 %; el resto es el salto entre hilos y la contención.
+    - Hilo principal, ~10 %: aiortc (RTP, DTLS, ICE), la entrada de Pipecat y los observadores.
+    - Codificador Opus de la salida, ~3-4 %.
+  - Descartado por las cifras:
+    - Silencio continuo del `DuckMixer`: con `DRAKTER_VOICE_MIXER=null` solo baja 1-2 puntos, y quitarlo haría perder el ducking instantáneo.
+    - Opus: codificar silencio cuesta ~2 % aislado, igual a 24 kHz que a 48 kHz.
+    - Silero, STT y Smart Turn no funcionan en reposo: la `WakeGate` no deja pasar audio y Moonshine abre un stream por tramo de VAD.
+    - Los hilos de ONNX ya están limitados: openWakeWord 1, Silero 1, Smart Turn 2 y Kokoro 2.
+  - **Después** (misma metodología, mismo ruido, ejecutados uno tras otro): reposo **16,1 %** (tramos 14-20), 739 MB RSS, 53 hilos. Con ruido por encima del umbral (−40 dBFS, la puerta siempre abierta): 22,3 %. Conversación callada: 26,5 % frente a 24,7 %, dentro del ruido de medida y sin cambios en ese camino.
+- **Decisión** (`voice/providers/wake/openwakeword_gate.py` y `wake_energy_dbfs` en `voice/config.py`):
+  1. **Puerta de energía:** en reposo solo se puntúa si el frame supera `wake_energy_dbfs`, −50 dBFS por defecto, y durante 1 s tras el último frame con sonido. El renderer captura con `noiseSuppression` y `autoGainControl`, así que el silencio de una habitación queda muy por debajo y la voz muy por encima. `-120` deja la puerta siempre abierta.
+  2. **Recuperación:** al volver el sonido se puntúan de una vez los 2 s del prebúfer. Esos 2 s renuevan entera la ventana del modelo (16 embeddings de 76 frames de mel), así que el arranque de «hey jarvis» no se pierde. El prebúfer que se suelta al STT es el mismo de antes.
+  3. **Bloques de 160 ms** mientras hay sonido: con varios bloques, `Model.predict` de la 0.4.0 puntúa cada ventana de 80 ms y devuelve el máximo, así que no se pierde ningún pico.
+  4. **Un único hilo** (`ThreadPoolExecutor(max_workers=1)`, compartido por las conexiones) en lugar del pool de `to_thread`. El modelo es compartido y así nunca se llama dos veces a la vez.
+- **Alternativas descartadas:**
+  - VAD de Silero delante de openWakeWord: cuesta más que una RMS y añade otro modelo en reposo.
+  - El `vad_threshold` de openWakeWord: ejecuta Silero en cada bloque.
+  - Quitar el mixer o generar silencio solo con TTS: 1-2 puntos a cambio de perder la bajada de volumen inmediata del barge-in.
+  - Parchear aiortc para no codificar silencio: toca una librería por ~2 puntos.
+- **Motivo:** quitar el mayor consumo en reposo sin perder ninguna función.
+- **Impacto:** `voice/providers/wake/openwakeword_gate.py` y `voice/config.py` (`wake_energy_dbfs`). Comprobado con el código nuevo:
+  - Activación de punta a punta por WebRTC con `research/wp2/hey_jarvis.wav` y ruido de fondo: 1,14 s frente a 1,13 s antes, y 1,08 s con ruido a −40 dBFS. `check_wp2` puntúa 0,91 en la puerta y suelta los 126 frames.
+  - Barge-in de punta a punta: «Para, para» sintético corta la voz del bot a los 0,81 s.
+  - `check_pipeline.py --real` 21/21 PASS y `check_conversation` OK.
+  - ⚠️ Queda en 16 %, algo por encima del objetivo orientativo del 15 %, con la máquina cargada; el resto es el coste base de aiortc y Pipecat. Falta repetirlo con la máquina descargada, con la app real y con el micro del usuario. Si el ruido de su habitación supera −50 dBFS, la puerta queda abierta y el consumo sube a ~22 %, sin perder ninguna función.
