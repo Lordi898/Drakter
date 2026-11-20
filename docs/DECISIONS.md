@@ -985,3 +985,36 @@ Decisiones técnicas, cambios de tecnología y motivos.
 - **Alternativas descartadas:** cliente WebSocket propio para Deepgram (Pipecat ya lo trae, con `Finalize` y reconexión).
 - **Motivo:** reutilizar el servicio de Pipecat verificado.
 - **Impacto:** `voice/pyproject.toml`, `voice/requirements.lock`, `THIRD_PARTY_NOTICES.md`.
+
+## [2026-11-20] Palabras de activación propias en es-ES («Jarvis», «Drakter», «despierta») (PR #20)
+- **Contexto:** `hey_jarvis_v0.1` (inglés) detecta mal la voz castellana. Hay que poder entrenar modelos propios compatibles con `openwakeword==0.4.0` y activarlos con `DRAKTER_VOICE_WAKE_MODELS` sin tocar el código de voz.
+- **Decisión:** kit en `tools/wakeword/`: un cuaderno de Colab (GPU) con la receta oficial de openWakeWord (`automatic_model_training.ipynb` + `train.py`: clips de 2 s, DNN con entrada `(1,16,96)`, ejemplos difíciles, rampa del peso de negativos, ONNX opset 13), y un modelo por palabra (`jarvis_es`, `drakter_es`, `despierta_es`).
+  - **Positivos:** se sintetizan con `piper-tts==1.8.0` (voces `es_ES`: carlfm, davefx, mls_9972, mls_10246 y sharvard ×2) y `kokoro-onnx==0.6.1` (`ef_dora`, `em_alex`, `em_santa` y mezclas de estilos). Piper hace el 65 % de los clips porque es ~5× más rápido en CPU.
+  - **Negativos:** voz castellana real de MLS (split `train`), AudioSet, frases normales y palabras parecidas sintetizadas.
+  - **Aumentación:** ruido de fondo con SNR aleatoria, RIR del MIT, ecualización y ganancia.
+  - **Métricas:** FP/h contando activaciones (con 2 s de refractario) sobre MLS `test` (otros hablantes) y una parte reservada de AudioSet, más el recall.
+  - **Embedding:** se usan el `melspectrogram.onnx` y el `embedding_model.onnx` **de la rueda `openwakeword==0.4.0`**, idénticos (sha256) a los de `~/.local/share/drakter/models/openwakeword/`. El `embedding_model.onnx` de la release v0.5.1, que descarga el cuaderno oficial, es otro archivo: con audio real sus salidas correlan ≈0,99 pero no coinciden, así que entrenar con él daría un desajuste respecto a lo que Drakter calcula.
+  - **ACAV100M:** las 2000 h precalculadas (`davidscripka/openwakeword_features`, CC BY-NC-SA 4.0) quedan opcionales y apagadas (`USAR_ACAV`). Están calculadas con otro embedding y la licencia es no comercial: si se activan, el modelo es solo para uso personal.
+  - **Fish:** no se usa (clave, red, modelo gratuito con caducidad).
+  - **`tools/wakeword/grabar_muestras.py`:** graba muestras reales con `pw-record`/`arecord`, porque el sistema no tiene PortAudio y `sounddevice` no carga.
+  - **Confirmación textual del puente:** `[wake].words` de `voice/conversation/layer0.es.toml` añade «drakter», «despierta» y las variantes que dio Moonshine `small-streaming-es` con 9 voces sintéticas (`dracter`, `draxter`, `dragter`, `drapter`, `tracter`…), y `lead` añade «venga». «tractor» y «carter» quedan fuera, por ser palabras reales que el STT también produce.
+- **Fuentes y licencias (uso personal, nada se redistribuye ni se versiona):**
+  - openWakeWord 0.4.0: Apache-2.0.
+  - piper-tts: GPL-3.0, solo como herramienta en Colab.
+  - Voces Piper: carlfm dominio público, davefx CC0, mls_* CC BY 4.0, sharvard CC BY 3.0.
+  - Kokoro-82M: Apache-2.0.
+  - MLS: CC BY 4.0.
+  - AudioSet (`agkphysics/AudioSet`): CC BY 4.0, con audio de YouTube.
+  - RIR del MIT: licencia no indicada en la copia de HF.
+  - ACAV100M: CC BY-NC-SA 4.0, solo uso personal.
+- **Alternativas descartadas:**
+  - `piper-sample-generator`: solo inglés.
+  - Usar el `embedding_model.onnx` v0.5.1 o ACAV100M por defecto: desajuste de embedding y licencia NC.
+  - Un único modelo multiclase: openWakeWord 0.4.0 y la puerta trabajan con un modelo por palabra.
+  - Comparación difusa nueva para «drakter»: la lista de variantes basta y no toca `bridge.py`.
+- **Motivo:** que los modelos entrenados funcionen tal cual en el runtime de Drakter, con datos castellanos y licencias libres por defecto.
+- **Impacto:** `tools/wakeword/**`, `docs/usage/palabras-activacion.md`, `docs/usage/README.md` y `voice/conversation/layer0.es.toml` (`[wake]`). Comprobado:
+  - el cuaderno pasa nbformat y `ast`, y se ejecutó entero en CPU con pocas muestras (con 120 positivos el recall llega al 50-92 %);
+  - `strip_wake_word` acierta los 24 casos (positivos y negativos);
+  - `voice/conversation/check_conversation.py` da OK y `voice/tests/check_pipeline.py` da 21 PASS.
+  - ⚠️ Sin ejecutar todavía en Colab con los valores reales, ni probado con la app.
