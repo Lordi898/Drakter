@@ -14,6 +14,7 @@ metadata:
 - Ver lo conectado a un elemento: `get_related_items` (entity_id; direction y relationship_type opcionales).
 - Buscar relaciones: `search_relationships` (source_id, target_id, entity_type, relationship_type).
 - Relacionar: `create_relationship` (source_id, target_id, relationship_type).
+- Cambiar la nota de una relación: `update_relationship` (relationship_id, metadata). Solo sustituye `metadata`; para cambiar extremos o tipo, borra y crea.
 - Quitar: `delete_relationship` (relationship_id). Pide confirmación en pantalla.
 - Localizar los dos extremos: `search_workspace` o `search_all` (incluye almacén), o la búsqueda del dominio.
 

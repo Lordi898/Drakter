@@ -27,7 +27,7 @@
 
 ## Sin construir (4)
 
-`get_voice_status`, `get_workspace_summary`, `get_activity_log`, `get_pending_confirmations`. Etiquetas (`list_tags`, `add_tag`, `remove_tag`) y relaciones (`create_relationship`, `delete_relationship`, `get_related_items`, `search_relationships`) ya están construidas.
+`get_voice_status`, `get_workspace_summary`, `get_activity_log`, `get_pending_confirmations`. Etiquetas (`list_tags`, `add_tag`, `remove_tag`) y relaciones (`create_relationship`, `update_relationship`, `delete_relationship`, `get_related_items`, `search_relationships`) ya están construidas. `update_relationship` (`write`) solo sustituye `metadata` (2026-11-20).
 
 `get_activity_log` solo lee una vista filtrada (sin secretos ni argumentos), nunca la tabla de auditoría cruda. `get_pending_confirmations` solo lista.
 
