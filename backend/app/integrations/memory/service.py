@@ -258,14 +258,21 @@ class MemoryService:
     def memories_for_context(self, text: str, level: DetailLevel = DetailLevel.L1, budget_hits: int = 8) -> list[Any]:
         from app.integrations.memory.context.builder import MemoryForContext  # noqa: PLC0415
 
-        hits = self.search(MemoryQuery(text=text[:2000] or " ", limit=budget_hits), AGENT) if text.strip() else []
-        out: list[Any] = []
-        for hit in hits:
-            body = self._adapter.read(hit.id, level)
-            if body is None:
-                continue
-            out.append(MemoryForContext(id=hit.id, text=body, provenance=hit.provenance, trust=hit.trust, updated_at=hit.updated_at))
-        return out
+        if not text.strip():
+            return []
+        query = MemoryQuery(text=text[:2000] or " ", limit=budget_hits)
+        with_text = getattr(self._adapter, "search_with_text", None)
+        if with_text is not None:
+            # One query and one connection per turn instead of 1 + one per hit (~2 ms each).
+            pairs: list[tuple[MemoryHit, str]] = with_text(query, level)
+            self._log_retrieval(query.text, [h.id for h, _ in pairs], AGENT, "search")
+        else:
+            hits = self.search(query, AGENT)
+            pairs = [(hit, body) for hit in hits if (body := self._adapter.read(hit.id, level)) is not None]
+        return [
+            MemoryForContext(id=hit.id, text=body, provenance=hit.provenance, trust=hit.trust, updated_at=hit.updated_at)
+            for hit, body in pairs
+        ]
 
     def status(self) -> BackendStatus:
         return self._adapter.status()

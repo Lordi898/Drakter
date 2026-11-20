@@ -42,6 +42,7 @@ _SPACES = re.compile(r"\s+")
 _TERM = re.compile(r"\w+")
 _MAX_QUERY_TERMS = 16
 _DATE_FORMAT = "%Y-%m-%dT%H:%M:%S.%fZ"  # fixed width: text order is time order
+_LEVEL_COLUMNS = {DetailLevel.L0: "abstract", DetailLevel.L1: "overview", DetailLevel.L2: "content"}
 
 
 def _collapse(text: str) -> str:
@@ -230,7 +231,7 @@ class SqliteMemoryAdapter:
             ).fetchall()
             return [self._record(conn, row) for row in rows], int(total)
 
-    def search(self, query: MemoryQuery) -> list[MemoryHit]:
+    def _search_rows(self, query: MemoryQuery, extra: str = "") -> list[sqlite3.Row]:
         match = _fts_query(query.text)
         if match is None:
             return []
@@ -241,32 +242,46 @@ class SqliteMemoryAdapter:
                 clauses.append(f"r.{column} IN ({_marks(len(values))})")
                 params.extend(v.value for v in values)
         sql = (
-            "SELECT r.*, bm25(memory_fts) AS rank FROM memory_fts JOIN memory_records r ON r.seq = memory_fts.rowid"
+            "SELECT r.id, r.kind, r.category, r.abstract, r.trust, r.source_type, r.source_ref, r.session_id,"
+            f" r.captured_at, r.updated_at{extra}, bm25(memory_fts) AS rank"
+            " FROM memory_fts JOIN memory_records r ON r.seq = memory_fts.rowid"
             f" WHERE {' AND '.join(clauses)} ORDER BY rank LIMIT ?"
         )
         with self._open() as conn:
-            rows = conn.execute(sql, [*params, query.limit]).fetchall()
-        return [
-            MemoryHit(
-                id=UUID(r["id"]),
-                kind=MemoryKind(r["kind"]),
-                category=MemoryCategory(r["category"]),
-                abstract=r["abstract"],
-                score=-float(r["rank"]),  # bm25 is lower-is-better
-                trust=TrustLevel(r["trust"]),
-                provenance=Provenance(
-                    source_type=SourceType(r["source_type"]),
-                    source_ref=r["source_ref"],
-                    session_id=r["session_id"],
-                    captured_at=_from_text(r["captured_at"]),
-                ),
-                updated_at=_from_text(r["updated_at"]),
-            )
-            for r in rows
-        ]
+            return conn.execute(sql, [*params, query.limit]).fetchall()
+
+    @staticmethod
+    def _hit(r: sqlite3.Row) -> MemoryHit:
+        return MemoryHit(
+            id=UUID(r["id"]),
+            kind=MemoryKind(r["kind"]),
+            category=MemoryCategory(r["category"]),
+            abstract=r["abstract"],
+            score=-float(r["rank"]),  # bm25 is lower-is-better
+            trust=TrustLevel(r["trust"]),
+            provenance=Provenance(
+                source_type=SourceType(r["source_type"]),
+                source_ref=r["source_ref"],
+                session_id=r["session_id"],
+                captured_at=_from_text(r["captured_at"]),
+            ),
+            updated_at=_from_text(r["updated_at"]),
+        )
+
+    def search(self, query: MemoryQuery) -> list[MemoryHit]:
+        return [self._hit(r) for r in self._search_rows(query)]
+
+    def search_with_text(self, query: MemoryQuery, level: DetailLevel) -> list[tuple[MemoryHit, str]]:
+        """`search` plus the text at `level`, in one query: the same rows `read` would accept.
+
+        Not part of the MemoryAdapter port; the service uses it when the adapter has it,
+        to avoid one connection per hit in the per-turn retrieval.
+        """
+        column = _LEVEL_COLUMNS[level]
+        return [(self._hit(r), str(r["body"])) for r in self._search_rows(query, f", r.{column} AS body")]
 
     def read(self, memory_id: UUID, level: DetailLevel) -> str | None:
-        column = {DetailLevel.L0: "abstract", DetailLevel.L1: "overview", DetailLevel.L2: "content"}[level]
+        column = _LEVEL_COLUMNS[level]
         with self._open() as conn:
             row = conn.execute(
                 f"SELECT {column} FROM memory_records WHERE id = ? AND status = 'approved'"
