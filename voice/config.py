@@ -71,6 +71,9 @@ class VoiceConfig:
     vad_min_volume: float = 0.6
     wake_models: tuple[str, ...] = ("hey_jarvis_v0.1.onnx",)  # en models/openwakeword/ (con o sin .onnx)
     wake_threshold: float = 0.3
+    # En reposo, openWakeWord solo puntúa si el micro supera este nivel (DECISIONS «CPU-1»).
+    # El renderer captura con supresión de ruido: el silencio queda muy por debajo. -120 = siempre.
+    wake_energy_dbfs: float = -50.0
     # Fin de turno (DECISIONS «Fin de turno»): silencio del VAD 0,2 s → Smart Turn → texto final.
     turn_complete_threshold: float = 0.7  # probabilidad de Smart Turn para «completo» (Pipecat: 0,5)
     turn_grace_s: float = 0.5  # silencio extra tras «completo» antes de cerrar (cierra a 0,7 s)

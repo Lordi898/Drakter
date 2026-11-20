@@ -25,9 +25,9 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 | 14. Voz | 51 | 42 | 8 | 9 | 0 |
 | 15. Automejora | 11 | 11 | 2 | 0 | 0 |
 | 16. Seguridad y fiabilidad | 15 | 14 | 2 | 1 | 0 |
-| 17. Optimización y lanzamiento | 17 | 3 | 1 | 6 | 8 |
+| 17. Optimización y lanzamiento | 17 | 3 | 1 | 7 | 7 |
 | 18. Ampliaciones futuras | 10 | 0 | 0 | 0 | 10 |
-| **Total 0–17** | **341** | **305** | **38** | **26** | **10** |
+| **Total 0–17** | **341** | **305** | **38** | **27** | **9** |
 
 ## Checklist 0. Arquitectura y preparación
 
@@ -498,6 +498,7 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 - [ ] Medir consumo de RAM.
 - [ ] Medir CPU.
 - [ ] Medir uso de CPU y RAM (no hay VRAM dedicada).
+  ⚠️ Solo está medida la voz, en un banco propio (proceso real con un par WebRTC y micro con ruido débil; `DECISIONS.md` «CPU-1»). En reposo baja de 25,5 % a 16,1 % de un núcleo con loadavg 5-7, y la RAM queda en ~740 MB RSS. Falta medir el resto de la app, y la voz con la máquina descargada.
 - [ ] Medir latencia de STT.
   ⚠️ Método listo (`voice/metrics.py`, `voice/tests/bench_engines.py --wav`). La única medición (informe de voz: Whisper small, RTF 0,82–1,02) se tomó con la máquina muy cargada; hay que repetirla en reposo. Voz congelada a la espera de Pipecat.
 - [ ] Medir latencia de TTS.

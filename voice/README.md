@@ -76,7 +76,7 @@ Para añadir un proveedor hay dos caminos, sin tocar el núcleo:
 
 Además: `DRAKTER_RUNTIME_DIR` (directorio del socket), `DRAKTER_DATA_DIR` (raíz de datos), `DRAKTER_VOICE_NULL=1` (todos los proveedores vacíos) y `DRAKTER_VOICE_PIPECAT_LOG` (nivel de log de Pipecat, `WARNING` por defecto). La clave `FISH_API_KEY` la lee el proveedor Fish del entorno; el backend se la pasa al hijo. Los ajustes de usuario (`voice_tts_enabled`, `voice_wake_enabled`, `voice_profile`, `voice_expression`) no se configuran aquí: llegan por el comando IPC `voice.config`.
 
-Los umbrales (`bargein_min_words`, `bargein_decide_ms`, `duck_gain`, `idle_nudge_s`, `followup_s`, `wake_threshold`…) son provisionales y sin calibrar. Las variantes de «jarvis» que acepta el puente viven en `conversation/layer0.es.toml`, sección `[wake]`. Añadir una variante es editar ese archivo.
+Los umbrales (`bargein_min_words`, `bargein_decide_ms`, `duck_gain`, `idle_nudge_s`, `followup_s`, `wake_threshold`…) son provisionales y sin calibrar. En reposo, openWakeWord solo puntúa cuando el micro supera `wake_energy_dbfs`, −50 dBFS por defecto (DECISIONS «CPU-1»). Si hay mucho ruido de fondo, la puerta queda abierta y el reposo gasta algo más de CPU. Con −120 no se filtra nada. Las variantes de «jarvis» que acepta el puente viven en `conversation/layer0.es.toml`, sección `[wake]`. Añadir una variante es editar ese archivo.
 
 ## Comandos
 
