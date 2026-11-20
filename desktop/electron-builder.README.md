@@ -1,9 +1,9 @@
 # Empaquetado de Drakter Desktop
 
 Configuración de electron-builder 26.18.0 (Electron 45, electron-vite 6). Linux primero; Windows preparado pero sin comprobar.
-Estado: **ejecutada en Linux el 2026-11-13** sobre `drakter/integracion` `7fd30e1` (ver "Comprobaciones de la pasada integrada"). Genera `.deb` y AppImage; falta instalar el `.deb` (requiere sudo) y abrir la ventana empaquetada. Windows sin probar.
+Estado: **regenerada el 2026-11-20** sobre `main` (`f82dda9` + rama de lanzamiento): AppImage y `.deb` construidos; el AppImage instalado con `scripts/install-appimage.sh` arranca con sandbox y conecta con su backend (ver "Comprobaciones del lanzamiento"). Falta instalar el `.deb` (requiere sudo). Windows sin probar.
 
-Archivos: `electron-builder.yml` (config), `electron-builder.backend.spec` (PyInstaller), `electron-builder.build-backend.mjs` (lanzador del backend).
+Archivos: `electron-builder.yml` (config), `electron-builder.backend.spec` (PyInstaller), `electron-builder.build-backend.mjs` (lanzador del backend), `electron-builder.rthook-module.py` (runtime hook: `drakter-backend -m <módulo>`). Atajo de los tres pasos: `scripts/package.sh [appimage|deb|all]`.
 
 ## Pasos reproducibles
 
@@ -30,7 +30,8 @@ El backend queda en `resources/backend/drakter-backend[.exe]` (+ `_internal/`) d
 
 - Incluye: `out/**` y `package.json` en `app.asar`; el backend PyInstaller en `resources/backend` (filtrados `.env*`, `*.pem`, `*.key`, `*.map`, `__pycache__`).
 - No incluye: `node_modules` (el renderer lo empaqueta Vite; si `main` importa un paquete externo, quitar `!node_modules/**` de `files`), mapas, fuentes `.ts/.tsx`, `.env*`.
-- No incluye **Hermes**, **OpenViking** (AGPL: servicio aparte, no se redistribuye dentro del instalador) ni **modelos** (embeddings, voz, LLM local): se instalan o descargan aparte.
+- Incluye también, en `resources/backend/`: `agent/` (sin `evals/`), `voice/` (sin `tests/`) y `tools/catalog.json`; dentro del bundle, el runner de Hermes como archivo y `pyproject.toml`. Motivo: el backend congelado resuelve su `REPO_ROOT` como el padre de `_internal`, es decir `resources/backend/`, y ahí busca la identidad, los permisos del agente, el runner y el código de voz (que ejecuta el venv de voz con `-m voice`).
+- No incluye **Hermes**, **OpenViking** (AGPL: servicio aparte, no se redistribuye dentro del instalador), los **venvs** (voz, Hermes) ni **modelos**: los comprueba e instala `scripts/install-appimage.sh [--runtimes]` con `install-hermes.sh` e `install-voice.sh`.
 - Sin datos de usuario, sin base de datos, sin claves.
 
 ## Rutas de datos por SO (las resuelve `platformdirs`, nunca van dentro del paquete)
@@ -66,11 +67,11 @@ La actualización es manual. Antes de instalar una versión nueva:
 cd backend && python -m app.database.cli backup     # copia verificada en <datos>/backups
 ```
 
-Esos comandos son para una instalación desde el repositorio: el backend congelado no incluye esa CLI. El bundle `pre-update` no se pide por la API, que solo crea copias `manual`: lo crea el flujo de actualización llamando a `create_bundle(settings, "pre-update")`, y ese flujo aún no existe. En una instalación empaquetada, haz una copia `manual` desde la API de copias antes de actualizar y restáurala desde ahí, con confirmación en la interfaz. Las migraciones del backend nuevo se aplican al arrancar y hacen su propia copia previa.
+En una instalación empaquetada, la misma CLI va dentro del backend congelado gracias al runtime hook: `resources/backend/drakter-backend -m app.database.cli backup|restore|status|migrate`. `scripts/update.sh` hace la copia antes de migrar. Las migraciones del backend nuevo se aplican además al arrancar, con su propia copia `pre-migrate`.
 
-## Actualización: manual por ahora
+## Actualización: `scripts/update.sh`
 
-`publish: null`: no hay auto-actualización. Motivos: no hay servidor de actualizaciones ni versiones publicadas; el instalador no está firmado (en Windows `electron-updater` exige verificar la firma, y en Linux solo actualiza AppImage, no `.deb`); y una actualización automática puede migrar la base de datos sin que el usuario haya hecho copia. Se reevalúa tras firmar y definir dónde se publica.
+`publish: null`: no hay auto-actualización dentro de la app. La actualización es `scripts/update.sh [--package]` (git pull --ff-only, dependencias que cambien, copia, migraciones, reinicio; con `--package` reconstruye y reinstala el AppImage). `electron-updater` se descarta: con un repositorio privado, el proveedor `github` necesita un token con acceso al repo guardado en la app (`GH_TOKEN`/`private: true`), solo actualiza el AppImage (no el `.deb`, ni el backend fuera del paquete, ni los venvs de voz y Hermes, ni los modelos) y puede migrar la base sin copia previa. Ver `docs/DECISIONS.md`.
 
 ## Qué falta para Windows
 
@@ -83,8 +84,8 @@ Esos comandos son para una instalación desde el repositorio: el backend congela
 
 - `desktop/package.json`: no tiene `electron-builder` ni scripts. Hoy se usa `npx --yes electron-builder@26.18.0 ... -c.npmRebuild=false` (sin `npmRebuild=false` intentaría recompilar `node_modules`). Sin `homepage` en `package.json`, el `.deb` falla: el `.yml` la añade con `extraMetadata`.
 - Hecho: `electron/main/backendProcess.ts` lanza `resources/backend/drakter-backend[.exe]` cuando `app.isPackaged`.
-- Icono: `desktop/build/icon.png` (>= 512x512) y `icon.ico` para Windows; sin icono se usa el de Electron. Tampoco hay `desktopName` (aviso de WM_CLASS).
-- `.gitignore`: `desktop/release/`, `backend/dist/`, `backend/build/` (hoy no están ignorados).
+- Hecho: `desktopName: drakter.desktop` va por `extraMetadata` (WM_CLASS) y `scripts/package.sh` llama a `electron-builder@26.18.0` con `npx`, sin tocar el lock.
+- Icono: `desktop/build/icon.png` (>= 512x512) y `icon.ico` para Windows; sin icono se usa el de Electron.
 - Construir con `TMPDIR` en disco si `/tmp` es un tmpfs justo: fpm copia ~330 MB y comprime con xz allí.
 
 ## Comprobaciones de la pasada integrada (2026-11-13, Linux, sin sudo)
@@ -105,3 +106,13 @@ Resultados: backend onedir 45 MB; AppImage ~150 MB; `.deb` 119 MB (instalado 320
 4. Arranque de la ventana empaquetada sin `--no-sandbox`: **no comprobado** (necesita el `.deb` instalado para el perfil AppArmor). Sigue abierto el riesgo de ventana en blanco por `file://`.
 5. Backend suelto (`backend/dist/linux/drakter-backend/drakter-backend` con handshake por stdin y `DRAKTER_DATA_DIR` temporal): anuncia el puerto en 0,7-6 s, `/health` 200, `/api/v1/tasks` 401 sin token y 200 con él, `/api/v1/today` 200, aplica las 11 migraciones, RSS ~105 MB y sale con 0 al cerrar stdin. **OK** tras corregir el `.spec`.
 6. `electron-builder` con el `.yml` real: `extraResources`, filtros y `electronFuses` se aplican. **OK.**
+
+## Comprobaciones del lanzamiento (2026-11-20, Linux, sin sudo)
+
+`scripts/package.sh` en esta máquina: backend 33 s (RSS 139 MB), `npm ci` + build 10 s, electron-builder 88 s (RSS 540 MB). AppImage 155 MB, `.deb` 127 MB.
+
+1. Backend congelado: `drakter-backend -m app.database.cli status|migrate|backup|restore` sobre una carpeta de datos vacía: aplica las 14 migraciones, la copia lleva `.sha256`, restaurar devuelve el valor anterior y guarda `pre-restore`, y una copia alterada se rechaza («no coincide con su hash»). **OK.**
+2. `scripts/install-appimage.sh` en carpetas limpias (`DRAKTER_INSTALL_DIR`, `DRAKTER_BIN_DIR`, `XDG_DATA_HOME` aparte): extrae, crea lanzador y `.desktop`, y detecta Hermes, venv de voz, modelos, `.env` y el sandbox. **OK.**
+3. App instalada con config, datos y `XDG_RUNTIME_DIR` limpios, sin `--no-sandbox`: arranca, el backend congelado aplica las migraciones, el renderer abre el WebSocket (`connection open`) y el proceso de voz arranca desde `resources/backend/voice` (`service_ready`; sin modelos en esa carpeta de datos limpia, `pipeline_build_failed` esperado). Renderer con `Seccomp: 2`, `NoNewPrivs: 1` y user namespace propio. **OK**, con una reserva: la sesión de prueba heredaba el perfil AppArmor `snap.code.code (complain)` del terminal, que permite user namespaces. Desde el menú de GNOME hace falta el perfil que imprime el instalador (sudo): **no comprobado**.
+4. El AppImage sin extraer no arranca: Ubuntu 24 no trae `libfuse2` (`dlopen(): error loading libfuse.so.2`). Por eso el instalador extrae; `APPIMAGE_EXTRACT_AND_RUN=1` sirve para una prueba suelta.
+5. `.deb`: construido; instalarlo requiere sudo, **no comprobado**.

@@ -20,7 +20,7 @@ En medio, un backend FastAPI (REST + WebSocket) que es el único dueño de los d
 
 Voz v2 (Pipecat 1.16.0 + WebRTC por loopback) integrada en la app: activación con Super+J o «Hey Jarvis», conversación, barge-in, trabajos en segundo plano; primer audio 2,36-2,88 s tras callar el usuario y RSS del proceso de voz ~990 MB (máquina de desarrollo, sin GPU). Guía: [`docs/usage/voz.md`](docs/usage/voz.md).
 
-Pendiente sobre todo: personaje Rive (hoy hay un provisional en SVG con los mismos estados), OpenViking, pantalla de automejora, `.deb` instalado y mediciones de rendimiento.
+Pendiente sobre todo: personaje Rive (hoy hay un provisional en SVG con los mismos estados), OpenViking, pantalla de automejora, `.deb` instalado y parte de las mediciones de rendimiento.
 
 <details>
 <summary>Estado por bloque</summary>
@@ -44,7 +44,7 @@ Pendiente sobre todo: personaje Rive (hoy hay un provisional en SVG con los mism
 | Voz (CL14) | `voice/`, `backend/app/integrations/voice/`, `desktop/src/voice/` | ver `IMPLEMENTATION_STATUS.md` | Voz v2: Pipecat 1.16.0, WebRTC por loopback, Moonshine, openWakeWord («Hey Jarvis»), Smart Turn, Fish con Kokoro de respaldo. Detalle en [`voice/README.md`](voice/README.md) |
 | Automejora (CL15) | `improvement/`, `backend/app/services/improvement_*.py` | 11/11 | Verificado el ciclo (feedback, propuestas, evaluación aislada, rama Git, revertir) y que no puede cambiar nada sin aprobación. ⚠️ Sin pantalla de automejora |
 | Seguridad (CL16) | `backend/app/permissions/`, `tests/security/` | 14/15 | Revisión adversarial hecha (banco final 169 BLOCKED / 12 BREACH / 0 ERROR). ⚠️ Brechas de diseño conocidas: ver [SECURITY.md](SECURITY.md) |
-| Optimización y lanzamiento (CL17) | `desktop/electron-builder.*`, `docs/installation/` | 3/17 | Guías de instalación al día; AppImage generado con el backend congelado. ⚠️ `.deb` sin regenerar ni instalar, sin mediciones de rendimiento |
+| Optimización y lanzamiento (CL17) | `desktop/electron-builder.*`, `scripts/`, `docs/usage/` | ver `IMPLEMENTATION_STATUS.md` | AppImage y `.deb` regenerados con backend, identidad y voz empaquetados; instalador sin sudo (`install-appimage.sh`), actualización por git (`update.sh`), copia inicial y guías de uso. ⚠️ `.deb` sin instalar (sudo) y sandbox desde el menú sin probar |
 
 Detalle por casilla en [`docs/IMPLEMENTATION_STATUS.md`](docs/IMPLEMENTATION_STATUS.md) y estado operativo en [`docs/RUN_STATE.md`](docs/RUN_STATE.md).
 
@@ -64,7 +64,18 @@ Se ha desarrollado en un portátil con 14 GB de RAM y gráfica integrada; la voz
 
 ## Instalación
 
-Detalle paso a paso en [`docs/installation/instalar.md`](docs/installation/instalar.md).
+Guía corta: [`docs/usage/primeros-pasos.md`](docs/usage/primeros-pasos.md). Detalle paso a paso en [`docs/installation/instalar.md`](docs/installation/instalar.md).
+
+**App instalada (AppImage, sin sudo).** Tras preparar el repositorio (abajo):
+
+```sh
+scripts/package.sh appimage        # backend congelado + escritorio -> desktop/release/Drakter-<versión>.AppImage
+scripts/install-appimage.sh        # ~/.local/opt/drakter, lanzador drakter-app, menú y comprobación de runtimes
+```
+
+La voz (venv y modelos) y Hermes no van en el paquete: el instalador comprueba que existan y, con `--runtimes`, los instala con `scripts/install-hermes.sh` y `scripts/install-voice.sh`. En Ubuntu 24+ imprime además un comando con sudo, de una sola vez, para el perfil AppArmor del sandbox. `scripts/package.sh deb` genera el `.deb`.
+
+**Desde el repositorio (desarrollo):**
 
 ```sh
 git clone https://github.com/Lordi898/Drakter.git
@@ -78,6 +89,16 @@ Hermes va aparte, en su propio venv con Python >= 3.14: `scripts/install-hermes.
 
 - Electron 45 ya no trae `postinstall` y descarga su binario al primer arranque; por eso `desktop/package.json` tiene un `postinstall` propio (`desktop/scripts/ensure-electron.cjs`, idempotente) que lo baja durante `npm ci`. Si lo instalaste sin él: `node desktop/scripts/ensure-electron.cjs`.
 - `scripts/check-env.sh` imprime líneas `OK`, `AVISO` o `FALTA` y sale con 1 si falta algo. Comprueba Python 3.12, que haya un Python >= 3.14 para Hermes (no comprueba que Hermes esté instalado), que `python3.12`, `python3.14`, `hermes-python`, `backend/.venv` y los venvs de `~/.local/share/drakter/venvs/` no resuelvan a `/tmp` o `/var/tmp` ni sean enlaces rotos (y da el comando para arreglarlo), Node, npm, `uv`, `~/.config/drakter/.env` (sin leerlo), el sandbox de Electron y la sesión gráfica.
+
+## Actualizar y copias de seguridad
+
+```sh
+scripts/update.sh             # git pull --ff-only, dependencias que cambien, copia, migraciones y reinicio
+scripts/update.sh --package   # además reconstruye y reinstala el AppImage
+cd backend && .venv/bin/python -m app.database.cli backup    # copia (también: restore <archivo>, status)
+```
+
+La app empaquetada trae la misma CLI: `~/.local/opt/drakter/app/resources/backend/drakter-backend -m app.database.cli backup`. Guía: [`docs/usage/copias-y-actualizacion.md`](docs/usage/copias-y-actualizacion.md). Problemas frecuentes: [`docs/usage/problemas.md`](docs/usage/problemas.md).
 
 ## Configuración
 
@@ -161,7 +182,7 @@ Más en [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 ├── docs/           plan, estado, decisiones, arquitectura, instalación y uso
 ├── improvement/    automejora y evaluaciones
 ├── memory/         memoria del agente
-├── scripts/        arranque, comprobación del entorno, pasada integrada e instalación de skills
+├── scripts/        arranque, empaquetado e instalación, actualización, comprobación del entorno y pasada integrada
 ├── tests/          pasada e2e y banco de seguridad
 ├── tools/          dev-llm-stub
 └── voice/          proceso de voz (Pipecat)
@@ -169,7 +190,7 @@ Más en [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
 ## Documentación
 
-- [Instalación](docs/installation/README.md) · [Uso por módulo](docs/usage/README.md) · [Perfiles de voz](docs/usage/voces.md)
+- [Primeros pasos](docs/usage/primeros-pasos.md) · [Instalación](docs/installation/README.md) · [Uso por módulo](docs/usage/README.md) · [Solución de problemas](docs/usage/problemas.md)
 - [Arquitectura](docs/ARCHITECTURE.md) · [Convenciones](docs/CONVENTIONS.md)
 - [Estado de implementación](docs/IMPLEMENTATION_STATUS.md) · [Decisiones](docs/DECISIONS.md) · [Plan maestro](docs/MASTER_PLAN.md)
 - [Registro de cambios](CHANGELOG.md)

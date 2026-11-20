@@ -14,6 +14,8 @@ publish: null # sin auto-actualizacion por red por ahora (ver README)
 # El target deb (fpm) exige homepage; package.json no la tiene.
 extraMetadata:
   homepage: https://github.com/Lordi898/Drakter
+  # WM_CLASS / app_id: enlaza la ventana con drakter.desktop (lo crea scripts/install-appimage.sh).
+  desktopName: drakter.desktop
 
 # Solo el resultado de `electron-vite build` y package.json. Los dependencies del renderer
 # ya van empaquetados por Vite; si main llega a importar un paquete externo, quitar la
@@ -51,6 +53,9 @@ linux:
   maintainer: Drakter <drakter@localhost>
   synopsis: Agente personal de IA
   description: Drakter Desktop, agente personal de IA local.
+  desktop:
+    entry:
+      StartupWMClass: Drakter
   extraResources:
     - from: ../backend/dist/linux/drakter-backend
       to: backend
@@ -61,6 +66,26 @@ linux:
         - "!**/*.key"
         - "!**/*.map"
         - "!**/__pycache__/**"
+    # REPO_ROOT del backend congelado = resources/backend (padre de _internal): ahi busca
+    # agent/ (identidad, permisos del agente) y voice/ (lo ejecuta el venv de voz con -m voice).
+    # Runtimes (venvs de voz y Hermes) y modelos NO se empaquetan: scripts/install-appimage.sh.
+    - from: ../agent
+      to: backend/agent
+      filter:
+        - "**/*"
+        - "!evals/**"
+        - "!**/__pycache__/**"
+        - "!**/.env*"
+    # registry.py compara las herramientas con contracts/tools/catalog.json (solo avisa).
+    - from: ../contracts/tools/catalog.json
+      to: backend/tools/catalog.json
+    - from: ../voice
+      to: backend/voice
+      filter:
+        - "**/*"
+        - "!tests/**"
+        - "!**/__pycache__/**"
+        - "!**/.env*"
 
 deb:
   packageCategory: utils

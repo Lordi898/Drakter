@@ -1,12 +1,14 @@
-# Uso diario de Drakter
+# Uso de Drakter
 
-Una guía por módulo. Cada una abre con su estado respecto a `drakter/integracion` (`2e05ba6`), que reúne todas las ramas. El backend monta solo cada `backend/app/api/<módulo>.py`; voz tiene código, pero su router aún no se monta, y automejora no tiene pantalla.
+Guías cortas, una por tema. Para instalar desde cero, empieza por **[Primeros pasos](primeros-pasos.md)**; el detalle técnico de la instalación está en [installation](../installation/README.md).
 
-## Estado de la integración
+Algunas guías de módulo abren con una cabecera de estado escrita en el cierre de la v1 (2026-11-13); lo verificado después está en `docs/IMPLEMENTATION_STATUS.md`.
 
-Que algo esté en el código no significa que funcione ya en la app. En la pasada integrada del cierre (`scripts/verify-all.sh`, con LLM de pruebas, 2026-11-13) los módulos de datos respondieron bien por API, pero fallaron la sesión de chat (`agent_unavailable`), el borrado sin confirmar (503 en vez de 409) y la apertura de la ventana por CDP. Estas guías salen de leer el código; nadie las ha seguido paso a paso en la app.
+## Empezar
 
-Para instalar, ve a [installation](../installation/README.md).
+- [Primeros pasos](primeros-pasos.md): instalar el AppImage, claves, primer arranque
+- [Copias y actualización](copias-y-actualizacion.md): copia inicial, restaurar y `scripts/update.sh`
+- [Solución de problemas](problemas.md): sandbox, `ELECTRON_RUN_AS_NODE`, micrófono silenciado, sin red
 
 ## Día a día
 
@@ -14,7 +16,9 @@ Para instalar, ve a [installation](../installation/README.md).
 - [Recordatorios](recordatorios.md)
 - [Búsqueda](busqueda.md)
 - [Chat y personaje](chat-y-personaje.md)
-- [Voz](voz.md)
+- [Personaje: boca sincronizada y archivo Rive](personaje.md)
+- [Trabajos en segundo plano](trabajos.md)
+- [Voz](voz.md): Super+J, «Hey Jarvis», micrófono y salida, auriculares, Deepgram, Fish y Kokoro, caché de frases
 - [Perfiles de voz](voces.md): los IDs de Fish Audio, cómo cambiarlos y cambiar de voz
 - [Palabras de activación propias](palabras-activacion.md): entrenar «Jarvis», «Drakter» y «despierta» en castellano
 
@@ -33,5 +37,5 @@ Para instalar, ve a [installation](../installation/README.md).
 
 ## Sistema
 
-- [Seguridad y copias](seguridad-y-copias.md)
+- [Confirmaciones y seguridad](seguridad-y-copias.md)
 - [Automejora](automejora.md)

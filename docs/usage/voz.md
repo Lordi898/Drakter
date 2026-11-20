@@ -36,6 +36,21 @@ Dentro de la conversación no hace falta repetir «Jarvis». Vuelve a reposo cua
 - **Bandeja → «Silenciar micrófono» / «Activar micrófono»:** cierra o reabre la captura de verdad, sin reiniciar nada. Con el micrófono cerrado ni el atajo ni «Hey Jarvis» funcionan hasta que lo actives.
 - Con la ventana oculta, el micrófono sigue escuchando la palabra de activación.
 
+## Elegir micrófono y salida
+
+En **Ajustes → Voz**:
+
+- **Micrófono:** la entrada que usa Drakter. «Predeterminado del sistema» sigue al de GNOME.
+- **Salida de audio:** por dónde habla Drakter, aunque el sistema tenga otra salida predeterminada. **Probar** reproduce un tono por ella.
+- Si eliges micrófono y salida de dispositivos distintos, Ajustes te avisa: puede que te hable por unos auriculares y te escuche por otro micrófono.
+
+Se guardan en las preferencias del escritorio y no cambian nada del sistema.
+
+## Auriculares o altavoces
+
+- **Auriculares o headset (recomendado):** no hay eco, así que hablar encima funciona siempre y Drakter no se corta solo. Elige el headset tanto en Micrófono como en Salida.
+- **Altavoces:** funciona, con cancelación de eco, pero a volumen alto Drakter puede oírse a sí mismo y cortarse. Baja el volumen o aleja el micrófono.
+
 ## Voces
 
 La voz la elige el perfil activo de `~/.config/drakter/voces.toml` (por defecto `natural`). Puedes pedírselo en el chat o por voz: «cambia tu voz a la neutral». Cómo crear perfiles y poner los IDs de Fish: [Perfiles de voz](voces.md).
@@ -81,6 +96,8 @@ El audio y las transcripciones **no se guardan** en ningún sitio, salvo que act
 4. Latencia percibida de la primera palabra: primer audio (normalmente un acuse) 2,36-2,88 s tras callar; primer audio de la respuesta en sí, depende de Haiku (primer delta típico 1,8-4,2 s); TTFA de Fish 0,71-0,96 s y de Kokoro 0,72 s (medido en la máquina de desarrollo).
 
 ## Problemas frecuentes
+
+Tabla completa (micrófono silenciado, sin red, eco…): [Solución de problemas](problemas.md#la-voz-no-funciona).
 
 - **No pasa nada con Super+J:** ejecuta `scripts/drakter activate` a mano; si funciona, repite `scripts/install-shortcut.sh install`.
 - **No conecta sin red:** la app debe arrancarse con `scripts/drakter` o `scripts/drakter-local.sh`, que añaden el switch de WebRTC por loopback.
