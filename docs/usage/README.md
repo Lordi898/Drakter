@@ -16,6 +16,7 @@ Para instalar, ve a [installation](../installation/README.md).
 - [Chat y personaje](chat-y-personaje.md)
 - [Voz](voz.md)
 - [Perfiles de voz](voces.md): los IDs de Fish Audio, cómo cambiarlos y cambiar de voz
+- [Palabras de activación propias](palabras-activacion.md): entrenar «Jarvis», «Drakter» y «despierta» en castellano
 
 ## Organización
 
