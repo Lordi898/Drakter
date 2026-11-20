@@ -2,6 +2,9 @@
 # Arranca Drakter en desarrollo: dev.sh [all|desktop]. No instala nada.
 set -euo pipefail
 
+# Un padre Electron deja ELECTRON_RUN_AS_NODE=1 en el entorno: Electron arrancaría como Node.
+unset ELECTRON_RUN_AS_NODE ELECTRON_NO_ATTACH_CONSOLE
+
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 backend_dir="$root/backend"
 desktop_dir="$root/desktop"

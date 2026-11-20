@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Un padre Electron deja ELECTRON_RUN_AS_NODE=1 en el entorno: Electron arrancaría como Node.
+unset ELECTRON_RUN_AS_NODE ELECTRON_NO_ATTACH_CONSOLE
+
 SELF="$(readlink -f "${BASH_SOURCE[0]}")"
 DESKTOP_DIR="$(cd "$(dirname "$SELF")/../.." && pwd)"
 ELECTRON_BIN="$DESKTOP_DIR/node_modules/.bin/electron"
