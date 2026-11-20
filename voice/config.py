@@ -73,7 +73,7 @@ class VoiceConfig:
     wake_threshold: float = 0.3
     # Fin de turno (DECISIONS «Fin de turno»): silencio del VAD 0,2 s → Smart Turn → texto final.
     turn_complete_threshold: float = 0.7  # probabilidad de Smart Turn para «completo» (Pipecat: 0,5)
-    turn_grace_s: float = 0.3  # silencio extra tras «completo» antes de cerrar
+    turn_grace_s: float = 0.5  # silencio extra tras «completo» antes de cerrar (cierra a 0,7 s)
     turn_hanging_secs: float = 2.0  # silencio total si el texto acaba colgando («… de la»)
     turn_stop_secs: float = 3.0  # tope de silencio cuando Smart Turn dice «incompleto»
     turn_final_timeout_s: float = 1.0  # espera a la transcripción final tras el fin de turno

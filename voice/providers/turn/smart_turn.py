@@ -153,6 +153,6 @@ def create(cfg: VoiceConfig, shared: Shared) -> DrakterTurnStop:
     return DrakterTurnStop(
         turn_analyzer=analyzer,
         wait_for_transcript=True,
-        grace_s=float(getattr(cfg, "turn_grace_s", 0.3)),
+        grace_s=float(getattr(cfg, "turn_grace_s", 0.5)),
         hanging_s=float(getattr(cfg, "turn_hanging_secs", 2.0)),
     )

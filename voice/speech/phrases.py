@@ -18,6 +18,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import hashlib
+import logging
 import os
 import random
 import sys
@@ -138,6 +139,7 @@ class PhrasePlayer(FrameProcessor):  # type: ignore[misc,valid-type]
         self._filler_task: asyncio.Task | None = None  # temporizador del acuse
         self._filler_play: asyncio.Task | None = None  # relleno sonando (cortable)
         self._filler_ctx: str | None = None
+        self._keep_filler = False
         self._pending: set[asyncio.Task] = set()
         self._tool_turn: str | None = None
         self._tool_at = 0.0
@@ -160,9 +162,10 @@ class PhrasePlayer(FrameProcessor):  # type: ignore[misc,valid-type]
         else:
             await self._say(text, filler=key in FILLER_KEYS)
 
-    def filler_pending(self) -> bool:
-        """Hay un acuse armado que aún no ha sonado."""
-        return self._filler_task is not None and not self._filler_task.done()
+    def keep_filler(self) -> None:
+        """La próxima `InterruptionFrame` (turno nuevo que corta la respuesta anterior) deja el
+        acuse armado: es para el turno que empieza."""
+        self._keep_filler = self._filler_task is not None and not self._filler_task.done()
 
     def arm_filler(self) -> None:
         """Fin de turno de usuario: si en `filler_after_ms` no hay primer audio, suena un `ack_*`."""
@@ -183,8 +186,9 @@ class PhrasePlayer(FrameProcessor):  # type: ignore[misc,valid-type]
         self._tool_turn, self._tool_at = turn_id, now
         await self.play("tool_generic", "now")
 
-    def cancel(self) -> None:
-        self._cancel_filler()
+    def cancel(self, *, keep_timer: bool = False) -> None:
+        if not keep_timer:
+            self._cancel_filler()
         if self._filler_play is not None:
             self._filler_play.cancel()
         self._filler_play, self._filler_ctx = None, None
@@ -265,6 +269,7 @@ class PhrasePlayer(FrameProcessor):  # type: ignore[misc,valid-type]
         if task is None or task.done():
             return
         task.cancel()
+        logging.getLogger("voice.phrases").info("filler_cut", extra={"data": {}})
         await self.push_frame(TTSStoppedFrame(context_id=ctx))
 
     async def process_frame(self, frame: Frame, direction: FrameDirection) -> None:
@@ -275,7 +280,8 @@ class PhrasePlayer(FrameProcessor):  # type: ignore[misc,valid-type]
         elif isinstance(frame, UserStoppedSpeakingFrame):
             self._user_speaking = False
         elif isinstance(frame, InterruptionFrame):
-            self.cancel()
+            keep, self._keep_filler = self._keep_filler, False
+            self.cancel(keep_timer=keep)
         elif isinstance(frame, (TTSStartedFrame, TTSAudioRawFrame)):
             self._cancel_filler()  # ya hay primer audio de la respuesta
             await self._cut_filler()

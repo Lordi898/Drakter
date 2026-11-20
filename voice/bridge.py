@@ -341,11 +341,10 @@ class BackendBridgeProcessor(FrameProcessor):
     async def interrupt(self, reason: str) -> None:
         log.info("interrupt", extra={"data": {"reason": reason}})
         # Un turno nuevo corta la respuesta anterior, no el acuse que acaba de armarse para él.
-        rearm = reason == "new_turn" and self._session.filler_pending()
+        if reason == "new_turn":
+            self._session.keep_filler()
         self._mark_cut()
         await self.broadcast_interruption()
-        if rearm:
-            self._session.arm_filler()
 
     def _mark_cut(self) -> None:
         """Regla de corte: cualquier interrupción corta el speech abierto."""

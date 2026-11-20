@@ -142,9 +142,11 @@ class Session:
         if arm is not None and self.state.tts_enabled:
             arm()
 
-    def filler_pending(self) -> bool:
-        pending = getattr(getattr(self._parts, "phrases", None), "filler_pending", None)
-        return bool(pending()) if pending is not None else False
+    def keep_filler(self) -> None:
+        """La próxima interrupción (turno nuevo) no cancela el acuse ya armado."""
+        keep = getattr(getattr(self._parts, "phrases", None), "keep_filler", None)
+        if keep is not None:
+            keep()
 
     async def on_tool(self, turn_id: str | None) -> None:
         hook = getattr(getattr(self._parts, "phrases", None), "on_tool", None)
