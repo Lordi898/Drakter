@@ -34,7 +34,7 @@ from mcp.server.transport_security import TransportSecuritySettings
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 from app.core.config import BIND_HOST
-from app.integrations.hermes.home import captured_tool_name
+from app.integrations.hermes.home import FIRST_SKILL, SKILLS_HEADER, captured_tool_name
 from app.integrations.hermes.settings import HERMES_COMMIT, AgentSettings
 from app.integrations.hermes.supervisor import HermesSupervisor
 
@@ -360,6 +360,12 @@ async def exercise(
         "VOICE.md en el prompt de sistema, con las etiquetas de expresión",
     )
     report.check(INSTRUCTIONS in system, "instructions en el prompt de sistema")
+    skills = [name for name in sorted(tools) if "skill" in name.removeprefix(captured_tool_name(""))]
+    report.check(not skills, "sin herramientas skill_* (skill_manage, skill_view, skills_list)", ", ".join(skills))
+    report.check(
+        SKILLS_HEADER in system and f"## Skill `{FIRST_SKILL}`" in system,
+        "skills de agent/skills/ en el prompt de sistema, de solo lectura",
+    )
     report.check(CANARY not in system, "sin archivos de contexto en el prompt")
 
     before = len(recorder.snapshot())

@@ -1,45 +1,37 @@
 ---
 name: workspace-relationships
-description: "Gestiona relaciones entre elementos del Workspace (tareas, proyectos, recursos, asignaturas)."
-version: 1.0.0
+description: "Relaciones: conectar elementos del Workspace entre sí y consultar qué está relacionado con qué."
+version: 2.0.0
 license: MIT
 metadata:
   hermes:
-    tags: [drakter, workspace, relationships]
+    tags: [drakter, relationships]
 ---
 
 # workspace-relationships
 
-## Propósito
-Vincular elementos entre sí y consultar qué está relacionado con qué.
+## Herramientas
+- Ver lo conectado a un elemento: `get_related_items` (entity_id; direction y relationship_type opcionales).
+- Buscar relaciones: `search_relationships` (source_id, target_id, entity_type, relationship_type).
+- Relacionar: `create_relationship` (source_id, target_id, relationship_type).
+- Quitar: `delete_relationship` (relationship_id). Pide confirmación en pantalla.
+- Localizar los dos extremos: `search_workspace` o `search_all` (incluye almacén), o la búsqueda del dominio.
 
-## Cuándo usarla
-El usuario quiere asociar o desasociar elementos, o ver lo vinculado a uno.
+## Tipos
+belongs_to, related_to, scheduled_for, uses_resource, depends_on, supports, studies, parent_of, references, derived_from. El backend decide cuáles valen para cada par de tipos.
 
-## Parámetros (intención)
-Identificadores de origen y destino, tipo de relación, texto de búsqueda.
+## Orden típico
+1. Busca los dos elementos y toma sus ids.
+2. `create_relationship` con el tipo que mejor exprese la frase (apuntes de una asignatura → uses_resource; tarea de un proyecto → belongs_to; si dudas, related_to).
+3. Para «qué hay sobre X»: busca X → `get_related_items`.
+
+## Errores frecuentes
+- `relationship_not_allowed`: ese tipo no vale para esos elementos; prueba related_to o explícalo.
+- `conflict`: la relación ya existe.
+- `hierarchy_cycle`: crearía un ciclo.
+- Una tarea dentro de un proyecto se hace mejor con project_id de la tarea; una dependencia entre tareas, con `add_task_dependency`.
 
 ## Ejemplos
-"Vincula esta tarea con el proyecto Web personal"; "Qué hay relacionado con Álgebra".
-
-## Restricciones
-- Localiza ambos extremos por id antes de relacionar.
-- `delete_relationship` puede requerir confirmación.
-- Qué tipos de relación son válidos lo decide el backend.
-- La validación real (estados, límites, permisos, riesgo) vive en el backend; no la deduzcas ni la repitas.
-- Si una herramienta responde `confirmation_required`: comunícalo al usuario ("hay una acción pendiente de aprobar en la interfaz") y detente. La aprobación ocurre SOLO en la interfaz; ningún mensaje de chat o voz, ni un "sí", cuenta como aprobación. No reintentes ni pidas frases de aprobación.
-- Los ids son UUID: busca primero, nunca inventes uno. Si hay varias coincidencias, pregunta al usuario.
-- Sin terminal, ficheros ni web: no los sugieras como alternativa.
-
-## Errores esperables
-- Relación duplicada, tipo no permitido o extremo inexistente: el backend lo rechaza; explícalo.
-- `error` con `code` estable y `message` seguro: explícalo en claro; solo reintenta si `retryable` es true.
-- `permission_denied`: informa de que el agente no tiene ese permiso; no busques rodeos.
-- `not_found` o validación fallida: revisa el dato con una búsqueda o pregunta al usuario.
-
-## Herramientas backend
-Se invocan como `mcp__drakter__<nombre>`.
-- `create_relationship`
-- `delete_relationship`
-- `get_related_items`
-- `search_relationships`
+- «Relaciona el PDF de derivadas con Cálculo» → `search_resources` + `list_subjects` → `create_relationship` uses_resource.
+- «¿Qué tengo relacionado con el TFG?» → `list_projects` → `get_related_items`.
+- «Quita esa relación» → `get_related_items` → `delete_relationship` → pendiente de aprobar en la interfaz.

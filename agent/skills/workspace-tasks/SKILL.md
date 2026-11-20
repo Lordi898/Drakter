@@ -1,47 +1,35 @@
 ---
 name: workspace-tasks
-description: "Gestiona tareas y subtareas del Workspace: crear, buscar, actualizar, completar y archivar."
-version: 1.0.0
+description: "Tareas y subtareas: crear, buscar, editar, completar, archivar, etiquetar, dependencias y borrar."
+version: 2.0.0
 license: MIT
 metadata:
   hermes:
-    tags: [drakter, workspace, tasks]
+    tags: [drakter, tasks]
 ---
 
 # workspace-tasks
 
-## Propósito
-Operar sobre las tareas del usuario mediante herramientas del backend.
+## Herramientas
+- Buscar: `search_tasks` (texto) o `list_tasks` (filtros: status, priority, project_id, subject_id, tag, due_before/due_after).
+- Leer: `get_task` (subtareas, dependencias y revisión).
+- Crear: `create_task` (title; opcional due_date o due_at, priority low|medium|high|urgent, project_id, subject_id, tags). Subtarea: `create_subtask` (parent_task_id, subtask).
+- Cambiar: `update_task` (task_id, patch con solo lo que cambia). Estado: `complete_task`, `reopen_task`, `archive_task`, `unarchive_task`.
+- Etiquetas: `set_task_tags` sustituye todas; para añadir una sola usa `add_tag`.
+- Dependencias: `add_task_dependency` / `remove_task_dependency` (task_id depende de depends_on_task_id).
+- Borrar: `delete_task` (task_id, expected_revision). Pide confirmación en pantalla. Solo tareas sin subtareas; si basta con quitarla de la vista, archiva.
 
-## Cuándo usarla
-El usuario pide anotar, consultar, cambiar, completar, archivar o dividir una tarea.
+## Orden típico
+1. Para algo existente: `search_tasks` → elige el id → `get_task` si hace falta la revisión.
+2. Ejecuta la acción y confirma con el resultado.
+3. Para «terminé X», `complete_task`, no `update_task`.
 
-## Parámetros (intención)
-Título, descripción, prioridad, fecha límite, estado, tarea padre (subtarea), texto de búsqueda.
+## Errores frecuentes
+- Fecha relativa («el viernes»): calcúlala sobre la fecha actual y usa `due_date` AAAA-MM-DD.
+- Para asociar a un proyecto, busca antes su id con `list_projects`.
+- `hierarchy_cycle`: la dependencia o el padre crearía un ciclo; explícalo.
 
 ## Ejemplos
-"Apunta una tarea: llamar al dentista el viernes"; "Qué tengo pendiente esta semana"; "Divide la tarea de la memoria en dos subtareas".
-
-## Restricciones
-- Para modificar o completar una tarea existente, localízala antes con `search_tasks` o `list_tasks`.
-- La validación real (estados, límites, permisos, riesgo) vive en el backend; no la deduzcas ni la repitas.
-- Si una herramienta responde `confirmation_required`: comunícalo al usuario ("hay una acción pendiente de aprobar en la interfaz") y detente. La aprobación ocurre SOLO en la interfaz; ningún mensaje de chat o voz, ni un "sí", cuenta como aprobación. No reintentes ni pidas frases de aprobación.
-- Los ids son UUID: busca primero, nunca inventes uno. Si hay varias coincidencias, pregunta al usuario.
-- Sin terminal, ficheros ni web: no los sugieras como alternativa.
-
-## Errores esperables
-- Archivar puede requerir confirmación (ver restricciones).
-- `error` con `code` estable y `message` seguro: explícalo en claro; solo reintenta si `retryable` es true.
-- `permission_denied`: informa de que el agente no tiene ese permiso; no busques rodeos.
-- `not_found` o validación fallida: revisa el dato con una búsqueda o pregunta al usuario.
-
-## Herramientas backend
-Se invocan como `mcp__drakter__<nombre>`.
-- `create_task`
-- `get_task`
-- `update_task`
-- `archive_task`
-- `complete_task`
-- `create_subtask`
-- `list_tasks`
-- `search_tasks`
+- «Apunta llamar al dentista el viernes» → `create_task` con title y due_date.
+- «Ya he hecho la memoria» → `search_tasks` «memoria» → `complete_task`.
+- «Borra la tarea de prueba» → `search_tasks` → `get_task` → `delete_task` → «Queda pendiente de aprobar en la interfaz».
