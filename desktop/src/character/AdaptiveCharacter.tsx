@@ -20,8 +20,9 @@ export function AdaptiveCharacter(props: CharacterRendererProps) {
     let alive = true
     fetch(RIV_URL, { cache: 'no-store' })
       .then((response) => {
+        // 204 (o 404) = el usuario aún no tiene .riv: es lo normal y no se avisa.
+        if (response.status === 204) return null
         if (response.ok) return response.arrayBuffer()
-        // 404 = el usuario aún no tiene .riv: es lo normal y no se avisa.
         if (response.status !== 404) warnCharacter(`el .riv no se pudo leer (HTTP ${response.status}); se usa el SVG`)
         return null
       })

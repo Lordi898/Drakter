@@ -1209,3 +1209,17 @@ Decisiones técnicas, cambios de tecnología y motivos.
 - **Alternativas descartadas:** medir sobre la app del usuario (prohibido) o con la ventana real en su escritorio (la abriría en su pantalla).
 - **Motivo:** cerrar las casillas de medición con cifras reales.
 - **Impacto:** Checklist 17. La optimización del CPU en reposo sigue pendiente.
+
+## [2026-11-20] Sin `.riv`, `app://drakter/__character/drakter.riv` responde 204, no 404
+- **Contexto:** la comprobación e2e `desktop.errores` fallaba en `main`: «Failed to load resource: … 404 [app://drakter/__character/drakter.riv]». Que no haya `.riv` es lo normal hasta que el usuario lo diseñe, y el renderer ya pasa al SVG, pero Chromium anota cualquier 404 como error de consola.
+- **Decisión:**
+  - El protocolo `app://` responde **204 No Content** cuando falta el `.riv` o no tiene extensión `.riv`.
+  - `AdaptiveCharacter` trata el 204 como «sin .riv» y usa el SVG sin avisar. Sigue aceptando el 404 por compatibilidad y avisando ante otros fallos o un `.riv` vacío.
+  - El arnés e2e añade la URL a los errores de consola de `Log.entryAdded` (`tests/e2e/harness/cdp.py`), para saber qué recurso falla.
+- **Alternativas descartadas:**
+  - Meter el mensaje en la lista de ruido del arnés: escondería 404 reales.
+  - Preguntar a `main` por IPC si existe el `.riv`: añade un canal nuevo para nada.
+- **Motivo:** la ausencia esperada no es un error, y la consola limpia vuelve a servir de señal.
+- **Impacto:**
+  - Código: `desktop/electron/main/rendererProtocol.ts`, `desktop/src/character/AdaptiveCharacter.tsx`, `tests/e2e/harness/cdp.py`.
+  - Comprobado: `scripts/verify-all.sh --headless` da 45/45 PASA (`desktop.errores` con 0 errores y `desktop.personaje` PASA), y typecheck y build sin errores.
