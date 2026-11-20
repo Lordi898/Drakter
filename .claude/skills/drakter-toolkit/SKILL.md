@@ -61,6 +61,8 @@ Algunos agentes declaran herramientas que aquí no existen (`mcp__context7*`, `s
 
 **Interfaz**: `frontend-design` (identidad visual, una vez y para toda la app), `shadcn`, `radix-ui`, `tailwind-css`, `lucide-react`, `motion`, `react-arborist`.
 
+**Avatar animado**: concepto y continuidad con `character-design-continuity`; rig 2D/2.5D, poses, expresiones y visemas con `2d-character-rig-animation`; timing y easing con `animation-principles`; máquina de estados del `.riv` con `rive-interactive`; SVG con `svg-animation`; 3D con `three-best-practices`, `r3f-best-practices`, `threejs-shaders` y `threejs-animation` (morph targets y huesos); GSAP con `gsap-core`, `gsap-timeline`, `gsap-plugins` (MorphSVG, DrawSVG), `gsap-react` y `gsap-performance`; dirección de arte con `frontend-design`, `canvas-design` y `algorithmic-art`.
+
 **Backend**: `fastapi`, `pydantic-dev`, `python-best-practices`, `fastmcp-sdk`.
 
 **Agente y memoria**: `hermes-agent`. La memoria es la nativa de Hermes + OpenViking con capas L0/L1/L2 (`MASTER_PLAN.md` §10); Hindsight y Mem0 están descartados.
