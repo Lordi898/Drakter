@@ -6,6 +6,13 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y l
 
 ## [Sin publicar]
 
+### Lanzamiento (2026-11-20)
+- **Instalador sin sudo:** `scripts/package.sh [appimage|deb|all]` construye backend congelado, escritorio y paquetes; `scripts/install-appimage.sh [--runtimes]` extrae el AppImage en `~/.local/opt/drakter`, crea `drakter-app` y la entrada de menú, y comprueba o instala Hermes, el venv de voz, los modelos, el `.env` y el perfil AppArmor del sandbox.
+- **Backend empaquetado autosuficiente:** el paquete lleva `agent/`, `voice/`, `tools/catalog.json`, el runner de Hermes y `pyproject.toml`; un runtime hook de PyInstaller atiende `drakter-backend -m <módulo>`, así que el lector aislado del almacén y la CLI de copias funcionan en la app instalada. Antes, Hermes, la identidad y la voz no tenían sus archivos dentro del paquete.
+- **Actualización:** `scripts/update.sh [--package]`: `git pull --ff-only`, dependencias que hayan cambiado, `npm run build`, copia de la base antes de migrar y reinicio de `drakter-local.sh`.
+- **Documentación de uso:** primeros pasos, copias y actualización, trabajos en segundo plano, solución de problemas, confirmaciones y seguridad; voz ampliada con micrófono, salida y auriculares.
+- `desktopName: drakter.desktop` (WM_CLASS) en el paquete.
+
 ## [0.1.0] - 2026-11-13 (pre-release)
 
 Primera versión publicada en GitHub (repositorio privado).

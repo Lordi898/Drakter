@@ -1049,3 +1049,29 @@ Decisiones técnicas, cambios de tecnología y motivos.
 - **Alternativas descartadas:** añadir `'unsafe-eval'` (no hace falta); canal IPC dedicado para el log (la consola del renderer basta).
 - **Motivo:** que Rive no falle en silencio y sin ampliar la superficie de la CSP.
 - **Impacto:** `desktop/src/character/{log,AdaptiveCharacter,RiveCharacter}.ts(x)`, `desktop/electron/main/window.ts`.
+
+## [2026-11-20] Lanzamiento: backend empaquetado autosuficiente e instalador del AppImage sin sudo
+- **Contexto:** el backend congelado resuelve su `REPO_ROOT` como el padre de `_internal` (`resources/backend/`). Ahí busca `agent/` (identidad, `permissions.json`), `voice/` (lo ejecuta el venv de voz con `-m voice`, cwd = `REPO_ROOT`) y `tools/catalog.json`, y necesita el runner de Hermes como archivo. Nada de eso iba en el paquete. Además, el lector aislado del almacén se relanza como `sys.executable -B -m app.services.readers.worker`, y en un binario PyInstaller eso arrancaba otro servidor. En esta máquina, Ubuntu 24 no trae `libfuse2` (el AppImage no se monta) y AppArmor restringe los user namespaces.
+- **Decisión:**
+  1. Arreglarlo solo desde el empaquetado, sin tocar `backend/app`. `electron-builder.yml` copia `agent/` (sin `evals/`), `voice/` (sin `tests/`) y `contracts/tools/catalog.json` a `resources/backend/`. El `.spec` mete el runner y `pyproject.toml` en el bundle y carga `electron-builder.rthook-module.py`, que ejecuta `drakter-backend [-B|-I…] -m <módulo>` con `runpy`. Gracias a eso, la CLI de copias también va en la app instalada.
+  2. `scripts/install-appimage.sh` **extrae** el AppImage en `~/.local/opt/drakter/app` en lugar de ejecutarlo. Así no hace falta FUSE y la ruta es estable para un perfil AppArmor. Crea `~/.local/bin/drakter-app`: quita `ELECTRON_RUN_AS_NODE` y pasa `--allow-loopback-in-peer-connection`, que necesita la voz. Crea también `drakter.desktop` (con `desktopName` en `extraMetadata`). Comprueba Hermes, el venv y los modelos de voz, el `.env` (solo si existe, sus permisos y si cada clave tiene valor; nunca imprime nada) y el sandbox. Con `--runtimes` llama a `install-hermes.sh` e `install-voice.sh`.
+  3. Si los user namespaces están restringidos, el instalador escribe un perfil AppArmor (`userns,` solo para `~/.local/opt/drakter/app/drakter`) y da el único comando con sudo para instalarlo. Nunca `--no-sandbox`.
+  4. `scripts/package.sh` encadena los tres pasos con `TMPDIR` en disco (`~/.cache/drakter-build/tmp`), porque fpm llenaba el `/tmp` tmpfs. `electron-builder@26.18.0` se sigue llamando por `npx`, para no añadir ~300 paquetes al lock.
+- **Alternativas descartadas:** cambiar las rutas en `backend/app` (fuera de la zona; la raíz empaquetada ya es coherente); ejecutar el AppImage montado (sin `libfuse2`, y el punto de montaje `/tmp/.mount_*` cambia en cada arranque); `APPIMAGE_EXTRACT_AND_RUN=1` como camino normal (extrae en cada arranque); empaquetar los venvs y los modelos (~2 GB, ligados al Python del sistema y a `uv`).
+- **Motivo:** que el AppImage funcione de verdad (agente, voz y almacén) y se instale sin sudo.
+- **Impacto:** `desktop/electron-builder.{yml,backend.spec,rthook-module.py,README.md}`, `scripts/{package,install-appimage}.sh`. Checklist 17 «Crear instalador».
+
+## [2026-11-20] Actualización: `scripts/update.sh` por git; `electron-updater` descartado
+- **Contexto:** el repositorio es privado y hay un solo usuario. La app depende de runtimes fuera del paquete (venvs de voz y Hermes, modelos) y de migraciones de SQLite.
+- **Decisión:** `scripts/update.sh [--package] [--no-restart]` hace, por orden:
+  1. Se niega si el árbol tiene cambios.
+  2. `git pull --ff-only`, con las credenciales de git del usuario.
+  3. Solo lo que cambió entre el HEAD viejo y el nuevo (o lo que falte): `uv sync --locked`, `npm ci`, `install-voice.sh` (si cambian `voice/requirements.lock`, `voice/pyproject.toml` o `contracts/python`) e `install-hermes.sh`. Después, `npm run build`.
+  4. Para la app de `drakter-local.sh`.
+  5. Copia con la CLI. Si la copia falla, no migra; si no hay base, no copia.
+  6. `migrate`. Si la base está en uso por otra instancia, avisa de que se migrará, con copia `pre-migrate`, al reabrir.
+  7. Vuelve a arrancar lo que paró (`DRAKTER_PROVIDER`, por defecto `anthropic`).
+  `--package` reconstruye y reinstala el AppImage.
+- **Alternativas descartadas:** `electron-updater` con releases privadas de GitHub. Obliga a guardar en la app un token con acceso al repositorio (`private: true` + `GH_TOKEN`), lo que choca con «secretos fuera de la app». Además solo actualiza el AppImage (no el `.deb`, los venvs, los modelos ni Hermes) y aplicaría migraciones sin copia previa explícita. Un servidor de actualizaciones propio sería excesivo para un solo usuario.
+- **Motivo:** el mecanismo más simple que funciona con un repositorio privado.
+- **Impacto:** `scripts/update.sh`, `docs/usage/copias-y-actualizacion.md`, `desktop/electron-builder.README.md`. Checklist 17 «Crear actualización de aplicación». ⚠️ El reinicio con `drakter-local.sh` no se ha probado, para no tocar la app del usuario.
