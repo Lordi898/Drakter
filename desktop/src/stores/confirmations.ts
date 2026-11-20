@@ -72,7 +72,17 @@ function add(item: PendingConfirmation): void {
     addedDuringRefresh.set(item.action_id, item)
     removedDuringRefresh.delete(item.action_id)
   }
-  if (items.some((existing) => existing.action_id === item.action_id)) return
+  // Misma `action_id` ya conocida (el backend puede avisar dos veces): no se duplica; solo se completan
+  // los campos que el primer aviso no traía (sesión, turno, herramienta).
+  const known = items.find((existing) => existing.action_id === item.action_id)
+  if (known) {
+    const merged = { ...item, ...known }
+    if (Object.keys(merged).length > Object.keys(known).length) {
+      items = items.map((existing) => (existing === known ? merged : existing))
+      emit()
+    }
+    return
+  }
   items = [...items, item]
   scheduleExpiry(item)
   emit()

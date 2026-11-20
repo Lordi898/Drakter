@@ -7,12 +7,14 @@ import { setTtsEnabled, useVoice, type VoiceSnapshot } from '@/stores/voice'
 const MIC_LABEL: Record<VoiceSnapshot['mic'], string> = {
   off: 'Micrófono apagado',
   standby: 'Esperando la palabra de activación',
-  live: 'Escuchando'
+  live: 'Escuchando',
+  error: 'Voz con error'
 }
 const MIC_DOT: Record<VoiceSnapshot['mic'], string> = {
   off: 'border border-muted-foreground',
   standby: 'bg-muted-foreground',
-  live: 'bg-ambar'
+  live: 'bg-ambar',
+  error: 'bg-destructive'
 }
 
 /** Altavoz (leer respuestas en voz alta) y punto con el estado del micrófono. */

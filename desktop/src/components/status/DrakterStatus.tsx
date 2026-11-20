@@ -38,15 +38,17 @@ export function DrakterStatus() {
   const state = useDrakterState()
   const link = useLinkStatus()
   const { mic, voiceState } = useVoice()
-  const MicIcon = mic === 'off' ? MicOff : Mic
+  const MicIcon = mic === 'off' || mic === 'error' ? MicOff : Mic
   const micText =
-    mic === 'off'
-      ? 'Micrófono apagado'
-      : mic === 'live'
-        ? 'Escuchando'
-        : voiceState?.wake_enabled === false
-          ? 'Micrófono en espera'
-          : 'Esperando "Jarvis"'
+    mic === 'error'
+      ? 'Voz con error'
+      : mic === 'off'
+        ? 'Micrófono apagado'
+        : mic === 'live'
+          ? 'Escuchando'
+          : voiceState?.wake_enabled === false
+            ? 'Micrófono en espera'
+            : 'Esperando "Jarvis"'
   const tone = TONES[state]
   const linkText = state === 'offline' && link in LINK_TEXT ? LINK_TEXT[link as keyof typeof LINK_TEXT] : null
 
