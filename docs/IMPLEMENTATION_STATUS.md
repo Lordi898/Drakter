@@ -4,6 +4,8 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 
 > **Cierre 2026-11-13** (`drakter/integracion`): cada casilla se marcó a partir del informe de su finalizador o de la pasada integrada final (`scripts/verify-all.sh`, 44/44 sobre `183cc25`), con Claude Haiku 5.5 real donde dependía del modelo. `[x]` con ⚠️ = funciona, con una reserva anotada; `[ ]` con ⚠️ = bloqueado o a medias, con el motivo; `[ ]` sin nota = sin código (no se tocó). La Checklist 18 no entra en el cierre. Detalle operativo en `RUN_STATE.md`.
 
+> **Verificación 2026-11-20 (`verify-checklists`):** casillas de las checklists 3, 11, 13, 14, 16 y 17 marcadas al verlas funcionar en un stack propio (Haiku 5.5 real, voz con frases sintéticas de Kokoro por una fuente virtual de PipeWire, Electron en Xvfb y red aislada). Los recuentos de la tabla salen del propio documento. Detalle en `DECISIONS.md` «Verificación de casillas pendientes y desconexiones».
+
 > **Voz v2 (2026-11-14, WP9):** las filas 3, 13 y 14 incluyen ya las casillas de «Jobs y streaming de voz», «Voz v2: trabajos y herramientas» y «Voz v2: Pipecat», marcadas con las cifras y comprobaciones de la integración (`DECISIONS.md` 2026-11-14).
 
 | Checklist | Casillas | `[x]` | de ellas con ⚠️ | `[ ]` con ⚠️ | `[ ]` sin código |
@@ -11,23 +13,23 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 | 0. Arquitectura y preparación | 14 | 14 | 0 | 0 | 0 |
 | 1. Aplicación de escritorio | 13 | 13 | 0 | 0 | 0 |
 | 2. Backend | 12 | 12 | 0 | 0 | 0 |
-| 3. Hermes | 21 | 17 | 0 | 4 | 0 |
+| 3. Hermes | 21 | 21 | 1 | 0 | 0 |
 | 4. Personalidad y contexto | 17 | 17 | 0 | 0 | 0 |
-| 5. Personaje | 19 | 16 | 16 | 3 | 0 |
+| 5. Personaje | 19 | 18 | 18 | 1 | 0 |
 | 6. Base de datos y relaciones | 18 | 18 | 0 | 0 | 0 |
 | 7. Tareas y proyectos | 23 | 23 | 0 | 0 | 0 |
 | 8. Hábitos | 12 | 12 | 1 | 0 | 0 |
 | 9. Calendario y asignaturas | 18 | 18 | 0 | 0 | 0 |
 | 10. Almacén e indexación | 25 | 25 | 1 | 0 | 0 |
-| 11. Relaciones avanzadas | 14 | 13 | 0 | 1 | 0 |
+| 11. Relaciones avanzadas | 14 | 14 | 0 | 0 | 0 |
 | 12. Memoria | 22 | 20 | 4 | 0 | 2 |
-| 13. Skills y herramientas | 19 | 17 | 3 | 2 | 0 |
-| 14. Voz | 51 | 42 | 8 | 9 | 0 |
+| 13. Skills y herramientas | 19 | 19 | 5 | 0 | 0 |
+| 14. Voz | 52 | 50 | 13 | 2 | 0 |
 | 15. Automejora | 11 | 11 | 2 | 0 | 0 |
-| 16. Seguridad y fiabilidad | 15 | 14 | 2 | 1 | 0 |
-| 17. Optimización y lanzamiento | 17 | 3 | 1 | 7 | 7 |
+| 16. Seguridad y fiabilidad | 15 | 15 | 3 | 0 | 0 |
+| 17. Optimización y lanzamiento | 17 | 16 | 5 | 0 | 1 |
 | 18. Ampliaciones futuras | 10 | 0 | 0 | 0 | 10 |
-| **Total 0–17** | **341** | **305** | **38** | **27** | **9** |
+| **Total 0–17** | **342** | **336** | **53** | **3** | **3** |
 
 ## Checklist 0. Arquitectura y preparación
 
@@ -100,17 +102,18 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 
 - [x] `TurnTap` no bloqueante (con `on_steered`) y prefijos de turno no persistidos en `AgentRuntime`
 - [x] Op `steer` en el runner (`redirect`, `pending_steer`) y filtro previo en la política de voz
-- [ ] `reasoning_effort` por carril (low en primer plano, medium en trabajadores) y hash de instructions estable
-  ⚠️ No consta verificado en la integración (WP9); falta comprobarlo.
+- [x] `reasoning_effort` por carril (low en primer plano, medium en trabajadores) y hash de instructions estable
+  Comprobado (2026-11-20, `verify-checklists`): `config.yaml` del home de primer plano con `reasoning_effort: "low"` y el de `hermes-w1` con `"medium"`; los turnos de voz piden `none` por turno (LAT-1). `SOUL.md` idéntico (mismo sha256) en los dos homes, y el agente caliente solo se reutiliza si `session_id` e `instructions` coinciden.
 - [x] `Lane` y home `hermes-w1` con token y guard proof propios
 - [x] `JobManager`, tabla `jobs` y migración 0014 probada sobre una copia
-- [ ] Eventos `job.*`, REST `/jobs` y JobsList en el panel
-  ⚠️ Solo se comprobó la notificación de fin; JobsList en el panel requiere la UI y no se observó.
+- [x] Eventos `job.*`, REST `/jobs` y JobsList en el panel
+  Comprobado (2026-11-20, `verify-checklists`) con Claude Haiku 5.5: `job.started` → `job.progress` cada 2 s → `job.finished`; `GET /api/v1/jobs` devuelve el trabajo con `pending_actions`; en Electron el panel «Trabajos» muestra título, «Terminado», «8 s · 6 herramientas» y «1 acción pendiente de su confirmación».
 - [x] Aviso de fin de trabajo (notificación, frase en silencio y resumen no confiable en el prefijo)
-- [ ] Confirmación de trabajo en pantalla; el trabajo termina con `pending_actions`
-  ⚠️ No probado: trabajo con confirmación pendiente → `pending_actions>0`.
-- [ ] RSS del runner trabajador medido; decisión sobre N=2
-  ⚠️ RSS de Hermes w1 medido (~188 MB); falta la decisión sobre N=2.
+- [x] Confirmación de trabajo en pantalla; el trabajo termina con `pending_actions`
+  Comprobado (2026-11-20, `verify-checklists`): un trabajo que borra una relación (y otro que borra una tarea) termina `completed` con `pending_actions: 1`; la confirmación sale en pantalla y, con un clic real en «Revisar» → Aprobar, se ejecuta (`executed`) y la relación desaparece.
+  ⚠️ Cada confirmación de un trabajo se anuncia dos veces: `ActionService.announce_pending` (sin `job_id` ni sesión) y el observador del carril (con `job_id`). El escritorio se queda con el primer aviso; hoy no usa `job_id` y la voz deduplica por `action_id`, así que no se nota.
+- [x] RSS del runner trabajador medido; decisión sobre N=2
+  (2026-11-20, `verify-checklists`): RSS de `hermes-w1` 221-231 MB tras un trabajo (188 MB en WP9). Se queda N=1 (`DECISIONS.md` «Carriles de trabajo: N=1»).
 
 ## Checklist 4. Personalidad y contexto
 
@@ -303,8 +306,8 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 - [x] Crear consulta de elementos relacionados.
 - [x] Crear visualización de relaciones.
   Nota: vista en Electron real con backend (drakter-48): lista con filtros, panel con grafo SVG y relaciones salientes, sin errores de consola. Detalles menores: la lista muestra tipo + ID corto en vez del título, y el panel contextual del shell sigue en «Nada seleccionado».
-- [ ] Crear herramientas Hermes.
-  ⚠️ Con Claude Haiku 5.5 real por Hermes, leer, buscar y crear relaciones funcionan (`create_relationship`, `get_related_items`). `delete_relationship` se denegaba porque el runtime no usaba la puerta real; desde `b722aca` debería crear la confirmación pendiente, pero no se ha recomprobado con el modelo.
+- [x] Crear herramientas Hermes.
+  Comprobado (2026-11-20, `verify-checklists`): el plan pide `create_relationship`, `update_relationship`, `delete_relationship`, `get_related_items` y `search_relationships`. Faltaba `update_relationship`; se añade (solo sustituye `metadata`, `write`) al catálogo y a `app/tools/relations.py`, y responde por `ToolRegistry.dispatch` (`not_found` y `validation_error` incluidos). Con Claude Haiku 5.5, `delete_relationship` crea la confirmación pendiente y, al aprobarla, borra la relación. El resumen de la confirmación ya cita el tipo y los títulos («… 'relacionado con' between project "Examen de física" and task "Revisar apuntes de física"»), no el UUID.
 - [x] Probar integridad y eliminación.
 
 ## Checklist 12. Memoria
@@ -368,11 +371,12 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 
 - [x] `jobs_start`, `jobs_status`, `jobs_amend`, `jobs_cancel` con esquema, permisos (`jobs.read`, `jobs.write`), catálogo, auditoría y errores
   ⚠️ `jobs_amend` no probado con un trabajo en marcha (el de prueba acabó en ~7 s).
-- [ ] `ToolContext.job_id` y `confirmation.requested.job_id`
-  ⚠️ No probado: trabajo con confirmación pendiente.
+- [x] `ToolContext.job_id` y `confirmation.requested.job_id`
+  Comprobado (2026-11-20, `verify-checklists`): la confirmación pedida desde `w1` llega con `job_id`, `session_id` y `turn_id` del trabajo (ver el ⚠️ del aviso doble en la Checklist 3).
 - [x] Eval `agent/evals/jobs_routing.jsonl` (20-30 frases) superada
-- [ ] `voice_list_profiles` y `voice_set_profile` siguen funcionando con el pipeline nuevo
-  ⚠️ Cambio de voz en caliente entre turnos: no probado.
+- [x] `voice_list_profiles` y `voice_set_profile` siguen funcionando con el pipeline nuevo
+  Comprobado (2026-11-20, `verify-checklists`) por voz (Deepgram + Fish, frases sintéticas): «¿Qué voces tengo disponibles?» llama a `voice_list_profiles` y lee las dos; «Cambia a la voz neutral» llama a `voice_set_profile`, que falla con `profile_unconfigured` y el agente lo explica. `backend/tests/check_voice_profiles.py`: TODO OK.
+  ⚠️ El cambio de voz que se oye necesita un `reference_id` de Fish, que esta comprobación no puede usar (ver «Perfiles de voz en caliente»).
 
 ## Checklist 14. Voz
 
@@ -410,8 +414,9 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 - [x] Venv de voz py3.12 con `pipecat-ai[webrtc,fish,kokoro]==1.16.0`, `drakter_contracts`, lock fijado e `install-voice.sh`
 - [x] Modelos locales en `~/.local/share/drakter/models/`, sin descargas en ejecución (Kokoro incluido)
 - [x] Transporte WebRTC renderer ↔ `SmallWebRTCTransport`, sin STUN, con señalización por main y data channel con ping
-- [ ] ICE por loopback (127.0.0.1) probado sin red y con cambio de red
-  ⚠️ Sin red y cambio wifi→ethernet no probados en WP9 (cortaría la sesión del integrador); WP8a midió 347 ms sin red.
+- [x] ICE por loopback (127.0.0.1) probado sin red y con cambio de red
+  Comprobado (2026-11-20, `verify-checklists`): Electron, backend y voz dentro de un espacio de red propio con solo `lo` (`unshare -rn`, sin red): WebRTC conecta y la conversación funciona. Con la sesión abierta se quita una interfaz con ruta por defecto (`dummy0`, 10.99.0.2) y se pone otra (`dummy1`, 192.168.77.2): no hay reconexión y el turno siguiente se oye.
+  ⚠️ El cambio de red es simulado con interfaces virtuales; no se ha cambiado de wifi a ethernet en la máquina real.
 - [x] Un pipeline por conexión, con modelos cargados una vez por proceso
 - [x] STT Moonshine streaming en castellano (small, con tiny de respaldo) con `finalized`
 - [x] VAD Silero y fin de turno Smart Turn v3.2, con un único `UserTurnProcessor`
@@ -425,8 +430,9 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 - [x] Caché de frases (`voice_phrases.es.toml`, `TTSAudioRawFrame`) y CLI `voice phrases`
   ⚠️ El usuario debe ejecutar `python -m voice phrases` con su perfil antes del 30-11-2026.
 - [x] Etiquetas de lista cerrada: se hablan y nunca llegan al chat, la BD ni la auditoría (deltas y texto terminal)
-- [ ] Texto por proveedor (`text_transforms`) y guard de bloques de código, tablas y URL
-  ⚠️ No consta verificado en WP9.
+- [x] Texto por proveedor (`text_transforms`) y guard de bloques de código, tablas y URL
+  Comprobado (2026-11-20, `verify-checklists`): en una respuesta real con un bloque de Python, se oye «Aquí tiene» y el código no se lee (transcrito de la salida). Con `GuardFilter` en trozos de 7 caracteres: código y tabla omitidos, `https://…` y `www.…` → «el enlace» aunque lleguen partidos. Fish deja las etiquetas de la lista y borra otros `[..]` cortos; Kokoro quita las etiquetas y el Markdown.
+  ⚠️ Un dominio sin `http`/`www` (p. ej. `hermes-agent.nousresearch.com`) se lee: queda fuera del diseño del guard. Kokoro solo quita las etiquetas de la lista, así que un `[risa]` inventado se leería con Kokoro (con Fish se borra).
 - [x] Barge-in con ducking y decisión por transcripción; cero falsas interrupciones en 60 s de TTS
   ⚠️ Con el bucle acústico débil de este portátil; falta con la voz del usuario y altavoces a volumen alto.
 - [x] Asentimientos y eco ignorados; falso ducking restaurado y contado
@@ -439,14 +445,15 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 - [x] Acuses y frases de herramienta condicionales
 - [x] `StatusArbiter` como productor único; `/agent/status` lo lee
 - [x] Voz y chat comparten sesión (`current_session`, `chat.user_message`, `input_source`)
-- [ ] Icono de altavoz (`voice_tts_enabled`, punto único de silencio) e indicador de micrófono calculado en el renderer
-  ⚠️ Requiere la UI; no verificado en WP9.
-- [ ] Tope de lectura en turnos escritos (`rest_on_screen`)
-  ⚠️ Requiere la UI; no verificado en WP9.
-- [ ] Propagación de ajustes (`add_setting_listener`)
-  ⚠️ No consta verificado en WP9.
-- [ ] Bandeja y escucha con la ventana oculta
-  ⚠️ No verificado en WP9 (escucha con la ventana oculta).
+- [x] Icono de altavoz (`voice_tts_enabled`, punto único de silencio) e indicador de micrófono calculado en el renderer
+  Comprobado (2026-11-20, `verify-checklists`) en Electron: con el altavoz apagado (`aria-pressed=false`) el turno de voz se procesa y se ve en el chat, pero la salida de audio queda en silencio total (ni acuse ni respuesta); al encenderlo vuelve a sonar. Indicador: «Escuchando» en conversación, «Esperando la palabra de activación» en reposo y «Micrófono apagado» al silenciarlo.
+- [x] Tope de lectura en turnos escritos (`rest_on_screen`)
+  Comprobado (2026-11-20, `verify-checklists`): una historia pedida por escrito se lee hasta un fin de frase (~400 caracteres) y termina con «El resto se lo dejo en pantalla, señor.».
+- [x] Propagación de ajustes (`add_setting_listener`)
+  Comprobado (2026-11-20, `verify-checklists`): cambiar `voice_tts_enabled` en la interfaz llega al proceso de voz sin reiniciarlo, en los dos sentidos (ver el icono de altavoz).
+- [x] Bandeja y escucha con la ventana oculta
+  Comprobado (2026-11-20, `verify-checklists`): al cerrar la ventana se oculta (`isVisible() = false`); con ella oculta, `drakter activate` (Super+J) abre la conversación sin mostrarla y el turno de voz se oye.
+  ⚠️ En Xvfb no hay bandeja que pinte el icono: las acciones del menú se probaron por sus mismos canales (`voice.activate`, `voice:mic-toggle`, que cambia el indicador, y mostrar la ventana), no pulsando el menú.
 - [x] Confirmaciones nunca por voz (comprobación puntual)
 - [x] Métricas por turno en `metrics.jsonl`; umbrales calibrados con cifras medidas
   ⚠️ Umbrales sin cambios (los datos no justifican moverlos); calibración fina pendiente con la voz real del usuario.
@@ -485,8 +492,14 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 - [x] Crear auditoría.
 - [x] Crear copias de seguridad.
 - [x] Probar restauración.
-- [ ] Probar desconexiones.
-  ⚠️ Backend↔Hermes comprobado (el runner muere y se reconecta solo). La reconexión del WebSocket del escritorio (`eventsBridge.ts`) no se ha observado aislada.
+- [x] Probar desconexiones.
+  Comprobado (2026-11-20, `verify-checklists`) con el stack completo (Electron, backend, Hermes, voz) en un espacio de red propio:
+  - **Runner de Hermes muerto** (SIGKILL): en reposo, `degraded`/`offline` y vuelve a `idle` en ~6 s; en mitad de un turno, `agent.error{agent_disconnected}` («Se perdió la conexión con el agente…») y turno `interrupted`, y el siguiente responde.
+  - **Backend muerto** (SIGKILL): la interfaz muestra al momento «Desconectado · Reconectando con Drakter…»; Electron lo relanza en ~3 s, la voz vuelve a estar lista a los 12 s y no quedan procesos huérfanos.
+  - **Proceso de voz muerto**: el supervisor lo relanza en ~1 s y el escritorio reconecta WebRTC solo (pipeline listo a los 9 s), con Fish y Deepgram de nuevo.
+  - **WebSocket cortado** (`ss -K`): el puente de eventos reconecta al momento con `after_seq` y `boot_id`.
+  - **Red caída** (Anthropic, Fish y Deepgram a la vez): Deepgram pasa a Moonshine y Fish a Kokoro con su aviso («Señor, paso a mi voz local»); Hermes reintenta solo y, al volver la red, el turno termina y se oye.
+  ⚠️ Durante el corte nadie avisa de que el agente no llega al modelo: el turno queda «en curso» (botón «Detener») y en voz solo se oye el acuse. Esta vez fueron ~58 s de silencio. Además, tras la caída STT y TTS siguen en local hasta reiniciar el proceso de voz (por diseño).
 - [x] Probar recuperación del backend.
 - [x] Probar recuperación de Hermes.
 - [x] Probar errores de memoria.
@@ -495,16 +508,19 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 
 ## Checklist 17. Optimización y lanzamiento
 
-- [ ] Medir consumo de RAM.
-- [ ] Medir CPU.
-- [ ] Medir uso de CPU y RAM (no hay VRAM dedicada).
-  ⚠️ Solo está medida la voz, en un banco propio (proceso real con un par WebRTC y micro con ruido débil; `DECISIONS.md` «CPU-1»). En reposo baja de 25,5 % a 16,1 % de un núcleo con loadavg 5-7, y la RAM queda en ~740 MB RSS. Falta medir el resto de la app, y la voz con la máquina descargada.
-- [ ] Medir latencia de STT.
-  ⚠️ Método listo (`voice/metrics.py`, `voice/tests/bench_engines.py --wav`). La única medición (informe de voz: Whisper small, RTF 0,82–1,02) se tomó con la máquina muy cargada; hay que repetirla en reposo. Voz congelada a la espera de Pipecat.
-- [ ] Medir latencia de TTS.
-  ⚠️ Método listo (`voice/tests/bench_engines.py --tts kokoro`). La única medición (informe de voz: Kokoro, primer audio 398–1 282 ms) se tomó con la máquina muy cargada; hay que repetirla en reposo. Voz congelada a la espera de Pipecat.
-- [ ] Medir latencia de Hermes.
-  ⚠️ No hay instrumentación de latencia de Hermes (las marcas de `voice/metrics.py` solo cubren la voz); no se crea en este cierre.
+- [x] Medir consumo de RAM.
+  (2026-11-20, `verify-checklists`), RSS con el stack completo: voz ~800 MB, Hermes primer plano ~215 MB, `hermes-w1` ~221 MB, backend ~111 MB, Electron ~630 MB entre sus 5 procesos. En total ~2,0 GB sumando RSS (las páginas compartidas de Electron cuentan dos veces). Detalle en `DECISIONS.md` «Mediciones de RAM, CPU y latencias».
+- [x] Medir CPU.
+  (2026-11-20, `verify-checklists`), en % de un núcleo: en reposo, voz 24 %, renderer 37 %, backend 0,6 % y runners 0 %; en conversación, voz 31 %, renderer 40 % y Hermes 0,6-0,9 %. Medido antes de CPU-1 (`665de20`), que deja la voz en reposo en ~16 % en su banco.
+  ⚠️ El renderer va en Xvfb con `--disable-gpu`, así que dibuja por CPU y su cifra está inflada respecto al escritorio real. Había otros workers con carga (loadavg 4-9).
+- [x] Medir uso de CPU y RAM (no hay VRAM dedicada).
+  Total del stack (2026-11-20, `verify-checklists`): ~73 % de un núcleo en reposo y ~84 % en conversación, con ~2,0 GB de RSS sumado (antes de CPU-1); WP9 tiene las cifras con ventana real. La voz sola tras CPU-1: 16,1 % en reposo y ~740 MB (`DECISIONS.md` «CPU-1»).
+- [x] Medir latencia de STT.
+  (2026-11-20, `verify-checklists`): Deepgram da la transcripción final 27-52 ms tras el fin de voz (5 turnos); el respaldo Moonshine, 491 ms (1 turno, con la red caída). Moonshine en WP9: 98-302 ms. Fin de turno (`endpointing_ms`): 200 ms en 7 de 12 turnos.
+- [x] Medir latencia de TTS.
+  (2026-11-20, `verify-checklists`): Fish TTFA 736-930 ms (9 turnos); las frases en caché, 315-337 ms. Kokoro en WP9: TTFA ~0,72 s.
+- [x] Medir latencia de Hermes.
+  Instrumentado en LAT-1 (`drakter_runner: timing …` y `first_delta_ms` en `turn_finished`). (2026-11-20, `verify-checklists`): en voz, primer fragmento 573-1594 ms (12 turnos, mediana ~760); en texto con herramientas y thinking `low`, 6,1-7,7 s (2-4 llamadas a la API); en texto sin herramientas, ~1,8 s; arranque del agente, 5-10 s.
 - [x] Optimizar consultas SQLite.
   Nota (2026-11-20): `EXPLAIN QUERY PLAN` de todo el SQL de 29 rutas (hoy, tareas, búsqueda, calendario, relaciones, memoria, hábitos, actividad) con una base sembrada de 5.000 tareas, 3.000 eventos, 3.000 relaciones, 3.000 recuerdos y 14.600 registros de hábitos. Migración `0015_query_indexes.sql` (índices de `habit_records` por fecha, `tasks (status, due_date)` y `memory_records` por fecha), etiquetas de relaciones por clave (15,7 → 0,3 ms) y «Hoy» sin recorrer tzdata en cada petición (−34 %, salida idéntica). PRAGMA sin cambios: WAL y `synchronous=NORMAL` ya estaban, y `cache_size`/`mmap_size` no ayudan con una conexión por petición (medido). Migración probada sobre una copia de la base real con restauración. Cifras en `DECISIONS.md`.
 - [x] Optimizar FTS5.

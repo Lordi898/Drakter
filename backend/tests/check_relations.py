@@ -176,8 +176,8 @@ def main() -> int:
     # Herramientas (con sustituto de spec) y REST
     from app.tools import relations as tools  # noqa: PLC0415
     names = {t.name for t in tools.TOOLS}
-    check("el registro real acepta las 4 herramientas", registers(tools.TOOLS))
-    check("4 herramientas, delete CONFIRM", len(names) == 4 and next(
+    check("el registro real acepta las 5 herramientas", registers(tools.TOOLS))
+    check("5 herramientas, delete CONFIRM", len(names) == 5 and next(
         t for t in tools.TOOLS if t.name == "delete_relationship").risk.value == "confirm")
     tools.configure_summary_source(tmp / "drakter.db")
     keep = rel(task, project2, "scheduled_for") if False else rel(task, res_alt(conn, entity), "uses_resource")
