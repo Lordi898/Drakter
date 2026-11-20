@@ -36,11 +36,12 @@ _WORD_LEAD: Final = "(«\"'<*_`"
 _MAX_HELD: Final = 4096  # una «palabra» más larga se suelta tal cual
 # Caracteres que puede tener una URL o un dominio: mientras la palabra solo tenga estos, se retiene.
 _URLISH: Final = frozenset("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.-/_:?=&%#~+@!,;)»\"'*`(«<")
-# TLD habituales. Fuera a propósito los que casi siempre son extensiones de archivo (py, md, sh,
-# rs, js, ts, pl, so…) para no tocar nombres de archivo.
+# TLD habituales, siempre en minúsculas en el texto. Fuera a propósito los que casi siempre son
+# extensiones de archivo (py, md, sh, rs, js, ts, pl, so…) y los que son palabras corrientes
+# (no, me, se, de, it, at, be, us), para que «listo.no» o «main.py» no se lean como dominio.
 _TLDS: Final = frozenset(
-    "com es org net io dev ai app eu info co me uk de fr it pt nl be ch at se no dk fi ie pl ru "
-    "us ca mx ar cl pe uy br cat gal eus edu gov int tv xyz gg ly fm site online tech page blog".split()
+    "com es org net io dev ai app eu info co uk fr pt nl ch dk fi ie ru "
+    "ca mx ar cl pe uy br cat gal eus edu gov int tv xyz gg ly fm site online tech page blog".split()
 )
 _DOMAIN: Final = re.compile(
     r"(?P<host>(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+(?P<tld>[a-z]{2,6}))(?::\d{1,5})?(?P<path>[/?#]\S*)?",
@@ -49,10 +50,13 @@ _DOMAIN: Final = re.compile(
 
 
 def _site_name(host: str) -> str | None:
-    """`docs.github.com` → `github`; None si no parece un dominio (TLD desconocido o sin letras)."""
-    labels = host.lower().split(".")
-    if labels[-1] not in _TLDS:
+    """`docs.github.com` → `github`; None si no parece un dominio.
+
+    El TLD tiene que ir en minúsculas: «listo.Es» es una frase sin espacio, no un dominio.
+    """
+    if host.rsplit(".", 1)[-1] not in _TLDS:
         return None
+    labels = host.lower().split(".")
     name = labels[-2]
     if name in ("co", "com", "org", "gob", "gov", "edu") and len(labels) > 2:  # bbc.co.uk
         name = labels[-3]
