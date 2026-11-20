@@ -106,7 +106,7 @@ class HermesSupervisor:
     def __init__(self, settings, data_dir, tool_names, agent_tool_token, agent_tools_url, repo_root, on_state)  # sin API HTTP
     async def start(self) -> None; async def stop(self) -> None
     state: Literal["stopped","starting","ready","restarting","failed"]
-    def run_turn(self, turn_id, session_id, text, instructions) -> AsyncIterator[dict]   # eventos crudos del runner; siempre acaba en terminal
+    def run_turn(self, turn_id, session_id, text, instructions, reasoning_effort=None) -> AsyncIterator[dict]   # eventos crudos del runner; siempre acaba en terminal
     async def stop_turn(self, turn_id, grace_s: float = 5) -> None   # `stop`; si no hay terminal en grace_s, mata y rearranca
 # preflight.py: python -m app.integrations.hermes.preflight  (salida 0 solo si todo pasa)
 ```
@@ -122,7 +122,7 @@ Arranque: duplica el fd 1 para el protocolo y redirige `sys.stdout` a stderr (na
 Protocolo JSONL, una línea por mensaje, tamaño acotado, entrada no reconocida → error y sin ejecutar nada:
 
 ```text
-entrada:  {"op":"turn","turn_id","session_id","input","instructions"} | {"op":"stop","turn_id"}
+entrada:  {"op":"turn","turn_id","session_id","input","instructions","reasoning_effort"?} | {"op":"stop","turn_id"}
           | {"op":"steer","turn_id","text"} | {"op":"shutdown"}
 salida:   {"ev":"ready","nonce","commit","tools":[...]}
           {"ev":"thinking","turn_id"} {"ev":"delta","turn_id","text"}
@@ -131,9 +131,9 @@ salida:   {"ev":"ready","nonce","commit","tools":[...]}
           {"ev":"completed","turn_id","output","usage","pending_steer"?} {"ev":"cancelled","turn_id"} {"ev":"failed","turn_id","code","message"}
 ```
 
-`steer` (voz v2, V-22): el lector de stdin llama a `agent.redirect(text)` sobre el turno activo y responde `steered{accepted}`. El `turn_id` no cambia. Si el agente ya no admite redirección, el texto queda en `pending_steer` y sale en `completed`; el backend decide si abre otro turno con él. Un `steer` para un turno que no es el activo responde `accepted:false`. `reasoning_effort` va en la config del home (`agent.reasoning_effort`): `low` en primer plano (`hermes`), `medium` en los carriles de trabajo (`hermes-w1`).
+`steer` (voz v2, V-22): el lector de stdin llama a `agent.redirect(text)` sobre el turno activo y responde `steered{accepted}`. El `turn_id` no cambia. Si el agente ya no admite redirección, el texto queda en `pending_steer` y sale en `completed`; el backend decide si abre otro turno con él. Un `steer` para un turno que no es el activo responde `accepted:false`. `reasoning_effort` va en la config del home (`agent.reasoning_effort`): `low` en primer plano (`hermes`), `medium` en los carriles de trabajo (`hermes-w1`). Un `turn` puede traer `reasoning_effort` solo para ese turno (LAT-1): `HermesProvider` manda `none` (sin thinking) en los turnos de voz; un valor que Hermes no reconozca cae al del home.
 
-Un lector de stdin en su hilo atiende `stop` con `agent.hard_interrupt()` mientras `run_conversation` corre en otro hilo. Si no llega terminal en `grace_s`, el supervisor mata el grupo de procesos y rearranca: el turno acaba en `TurnCancelled` o `agent_disconnected`, nunca se repite. Un solo turno a la vez. `ready` debe traer el nonce del guardián y `commit == b200f5bc…`; `tools` se compara con el catálogo. Sin `ready` válido no hay turnos. Historial: `SessionDB` del home con `session_id` del backend, o lista en memoria reanudada desde ahí; un `AIAgent` por sesión para mantener `system` y `tools` estables (H-21).
+Un lector de stdin en su hilo atiende `stop` con `agent.hard_interrupt()` mientras `run_conversation` corre en otro hilo. Si no llega terminal en `grace_s`, el supervisor mata el grupo de procesos y rearranca: el turno acaba en `TurnCancelled` o `agent_disconnected`, nunca se repite. Un solo turno a la vez. `ready` debe traer el nonce del guardián y `commit == b200f5bc…`; `tools` se compara con el catálogo. Sin `ready` válido no hay turnos. Historial: `SessionDB` del home con `session_id` del backend, o lista en memoria reanudada desde ahí; un `AIAgent` por sesión para mantener `system` y `tools` estables (H-21). Agente caliente (LAT-1): tras un turno `completed` sin interrupción el runner conserva ese `AIAgent` y lo reutiliza en el siguiente turno si coinciden `session_id` e `instructions`, como la caché de agentes del gateway de Hermes; tras `cancelled`, `failed` o una excepción lo cierra y el siguiente turno crea otro. Como `session_*` de Hermes acumula, el `usage` de `completed` es la diferencia del turno. Por turno, una línea `drakter_runner: timing …` en `hermes.log` (cola, construcción, primer delta, total, uso).
 
 ## 3. Proveedor: `app/integrations/hermes/provider.py`
 
