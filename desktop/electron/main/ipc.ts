@@ -7,6 +7,7 @@ import {
   type DesktopNotificationRequest,
   type RendererErrorReport
 } from '../shared/bridge'
+import { defaultAudioDevices } from './audioDefaults'
 import { callOperation } from './apiProxy'
 import { requestApproval } from './approvals'
 import type { BackendHost, EventsBridge } from './host-types'
@@ -110,6 +111,7 @@ export function registerIpcHandlers(backend: BackendHost, events: EventsBridge):
   handle(IPC_CHANNELS.deleteStorageLocation, (payload) => deleteStorageLocation(backend, payload))
   handle(IPC_CHANNELS.openEvents, (_payload, sender) => events.attach(sender))
   handle(IPC_CHANNELS.voiceMicState, (payload) => setTrayMicOpen(payload === true))
+  handle(IPC_CHANNELS.voiceDefaultDevices, () => defaultAudioDevices())
   backend.onConnection((connection) => {
     getMainWindow()?.webContents.send(IPC_CHANNELS.connectionChanged, connection)
   })

@@ -3,6 +3,7 @@
  * AGC) y habla con `voice/` por loopback, sin STUN ni TURN. La señalización va por
  * `window.api.voice.offer`; el renderer no tiene red propia.
  */
+import { getPreferences, subscribePreferences } from '@/stores/preferences'
 import { registerVoiceClient, type VoiceClient } from './contract'
 
 const AUDIO_CONSTRAINTS: MediaTrackConstraints = {
@@ -47,6 +48,17 @@ function waitForGathering(pc: RTCPeerConnection): Promise<void> {
   })
 }
 
+function listen(target: EventTarget, type: string, handler: () => void): () => void {
+  target.addEventListener(type, handler)
+  return () => target.removeEventListener(type, handler)
+}
+
+function sameDevice(a: MediaStreamTrack, b: MediaStreamTrack): boolean {
+  const sa = a.getSettings()
+  const sb = b.getSettings()
+  return sa.deviceId === sb.deviceId && sa.groupId === sb.groupId
+}
+
 class WebRtcVoiceClient implements VoiceClient {
   private pc: RTCPeerConnection | null = null
   private sender: RTCRtpSender | null = null
@@ -72,7 +84,9 @@ class WebRtcVoiceClient implements VoiceClient {
     this.running = true
     this.unsubscribers = [
       window.api.subscribe('events', (event) => this.onServerEvent(event)),
-      window.api.voice.onMicToggle(() => void this.setMicOpen(!this.micOpen()))
+      window.api.voice.onMicToggle(() => void this.setMicOpen(!this.micOpen())),
+      subscribePreferences(() => this.onMicPreference()),
+      listen(navigator.mediaDevices, 'devicechange', () => void this.refreshMic())
     ]
     await this.connect()
   }
@@ -128,6 +142,39 @@ class WebRtcVoiceClient implements VoiceClient {
     this.notify()
   }
 
+  private lastMicDeviceId = getPreferences().micDeviceId
+
+  private onMicPreference(): void {
+    const id = getPreferences().micDeviceId
+    if (id === this.lastMicDeviceId) return
+    this.lastMicDeviceId = id
+    void this.refreshMic()
+  }
+
+  /**
+   * Cambió la lista de dispositivos o la elección: se captura de nuevo (la elegida, o la
+   * predeterminada si no hay elegida o desapareció) y, si es otro dispositivo, `replaceTrack`
+   * sin renegociar. Si es el mismo, se descarta la pista nueva.
+   */
+  private async refreshMic(): Promise<void> {
+    if (!this.running || !this.wantMic || !this.micOpen()) return
+    const generation = ++this.micGeneration
+    const track = await this.captureMic()
+    if (track === null) return
+    const stale = generation !== this.micGeneration || !this.wantMic || !this.running
+    const old = this.track
+    if (stale || (old !== null && sameDevice(old, track))) {
+      track.stop()
+      return
+    }
+    this.track = track
+    await this.sender?.replaceTrack(track).catch(() => undefined)
+    old?.stop()
+    this.notify()
+  }
+
+  private micGeneration = 0
+
   private notify(): void {
     const open = this.micOpen()
     if (open !== this.reportedMic) {
@@ -145,7 +192,7 @@ class WebRtcVoiceClient implements VoiceClient {
 
   private async captureMic(): Promise<MediaStreamTrack | null> {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: AUDIO_CONSTRAINTS })
+      const stream = await this.openStream()
       const track = stream.getAudioTracks()[0] ?? null
       track?.addEventListener('ended', () => {
         if (this.track === track) {
@@ -158,6 +205,21 @@ class WebRtcVoiceClient implements VoiceClient {
       console.warn('No se pudo abrir el micrófono.', error)
       return null
     }
+  }
+
+  /** El micrófono elegido; si ya no está (`OverconstrainedError`), el predeterminado. */
+  private async openStream(): Promise<MediaStream> {
+    const deviceId = getPreferences().micDeviceId
+    if (deviceId !== '') {
+      try {
+        return await navigator.mediaDevices.getUserMedia({
+          audio: { ...AUDIO_CONSTRAINTS, deviceId: { exact: deviceId } }
+        })
+      } catch (error) {
+        if (!(error instanceof DOMException) || error.name !== 'OverconstrainedError') throw error
+      }
+    }
+    return navigator.mediaDevices.getUserMedia({ audio: AUDIO_CONSTRAINTS })
   }
 
   private releaseTrack(): void {
