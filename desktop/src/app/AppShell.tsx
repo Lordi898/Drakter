@@ -11,7 +11,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { cn } from '@/lib/utils'
 import { startNotificationFeed } from '@/modules/notifications'
 import { SearchPalette } from '@/modules/search'
-import { PAGES } from '@/navigation/pages'
+import { PAGES, preloadPages } from '@/navigation/pages'
 import { useCurrentSection } from '@/navigation/route'
 import { Sidebar } from '@/navigation/Sidebar'
 import { usePreferences } from '@/stores/preferences'
@@ -74,6 +74,8 @@ export function AppShell() {
 
   useEffect(() => startNotificationFeed(), [])
 
+  useEffect(() => preloadPages(), [])
+
   useLayoutEffect(() => {
     scrollerRef.current?.scrollTo({ top: 0 })
   }, [section])
@@ -100,7 +102,10 @@ export function AppShell() {
 
         <main ref={scrollerRef} className="min-h-0 flex-1 overflow-y-auto px-10 py-8">
           <ErrorBoundary scope={section} resetKey={section}>
-            <Page />
+            {/* Las secciones distintas de «Hoy» llegan en su propio chunk (ya precargado casi siempre). */}
+            <Suspense fallback={null}>
+              <Page />
+            </Suspense>
           </ErrorBoundary>
         </main>
 

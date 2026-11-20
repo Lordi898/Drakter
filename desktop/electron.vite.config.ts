@@ -26,7 +26,9 @@ export default defineConfig({
   },
   renderer: {
     root: '.',
-    build: { rollupOptions: { input: resolve(__dirname, 'index.html') } },
+    // electron-vite deja el renderer sin minificar por defecto (1,66 MB en un solo chunk).
+    // Las pantallas se parten con React.lazy en src/navigation/pages.ts.
+    build: { minify: true, rollupOptions: { input: resolve(__dirname, 'index.html') } },
     resolve: { alias: { '@': resolve(__dirname, 'src') } },
     plugins: [contentSecurityPolicy(), react(), tailwindcss()]
   }
