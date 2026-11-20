@@ -255,7 +255,8 @@ const PAYLOAD_CHECKS: { readonly [T in EventType]: (payload: Json) => boolean } 
       code: isString,
       stage: (v) => VOICE_STAGES.has(v as string),
       recoverable: isBoolean,
-      turn_id: isOptionalString
+      turn_id: isOptionalString,
+      message: isOptionalString
     }),
   'job.started': (p) => has(p, { job_id: isString, title: isString, lane: isString, created_at: isDate }),
   'job.progress': (p) =>

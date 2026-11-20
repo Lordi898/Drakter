@@ -111,8 +111,8 @@ function reportFault(key: string, title: string, body?: string): void {
 
 subscribeServerEvents((event) => {
   if (event.type === 'voice.error') {
-    const { code, stage } = event.payload
-    reportFault(`error|${stage}|${code}`, 'Problema con la voz', faultText(code, stage))
+    const { code, stage, message } = event.payload
+    reportFault(`error|${stage}|${code}`, 'Problema con la voz', faultText(code, stage, message ?? undefined))
     return
   }
   if (event.type !== 'voice.state') return
