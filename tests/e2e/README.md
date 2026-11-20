@@ -22,6 +22,18 @@ El stub se arranca con los guiones de `tests/e2e/stub-scenarios/`, no con los su
 
 Si `desktop/out` es anterior a las fuentes, ejecuta `npm run build`, que es una compilación pesada. Con Electron se abre una ventana real en el escritorio mientras dura la pasada, salvo con `--headless`.
 
+### Sin ventana (`--headless`)
+
+Electron 45 inicia GTK aunque se pase `--ozone-platform=headless` y aborta con «Can't create a GtkStyleContext without a display connection» si no hay pantalla. Por eso `--headless` levanta un **Xvfb propio** (número libre con `-displayfd`, sin TCP), ejecuta Electron con `--ozone-platform=x11` sobre él y lo apaga al terminar. No toca ni abre nada en el escritorio del usuario.
+
+Xvfb se busca en `DRAKTER_E2E_XVFB`, en el `PATH` y en `~/.local/share/drakter/xvfb/root/usr/bin/Xvfb`. Si falta y no hay sudo: `tests/e2e/install-xvfb.sh` (descarga el .deb con `apt-get download` y lo extrae en esa carpeta; no instala nada en el sistema). Sin Xvfb, las comprobaciones `desktop.*` salen NO COMPROBADO con ese aviso.
+
+```bash
+scripts/verify-all.sh --headless --hermes-venv ~/.local/share/drakter/venvs/hermes
+```
+
+En CI sin pantalla, `sudo apt-get install -y xvfb` y el mismo comando.
+
 | Salida | Significado |
 |---|---|
 | 0 | Sin ningún FALLA. Puede haber NO COMPROBADO: lee el informe |

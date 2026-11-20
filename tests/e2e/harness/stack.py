@@ -19,6 +19,7 @@ from .http import Api, _OPENER
 
 # Lista blanca: ni claves del entorno ni ELECTRON_RENDERER_URL llegan a los procesos.
 INHERITED = ("PATH", "LANG", "LC_ALL", "TZ", "DISPLAY", "WAYLAND_DISPLAY", "XAUTHORITY", "TMPDIR")
+XVFB_LOCAL = Path.home() / ".local/share/drakter/xvfb/root/usr/bin/Xvfb"
 BACKEND_TIMEOUT = 40
 STUB_TIMEOUT = 15
 STOP_TIMEOUT = 8
@@ -242,8 +243,18 @@ class Stack:
             return self._absent("desktop", "falta node_modules: cd desktop && npm ci")
         if not (desktop / "out" / "main" / "index.js").is_file():
             return self._absent("desktop", "falta desktop/out: npm run build o quita --no-build")
-        if not (self.headless or os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY")):
-            return self._absent("desktop", "no hay sesión gráfica")
+        env = self.base_env()
+        if self.headless:
+            # Electron 45 inicia GTK incluso con --ozone-platform=headless y aborta sin pantalla:
+            # la pasada sin ventana usa un X virtual propio (Xvfb), nunca el escritorio del usuario.
+            display = self.start_xvfb()
+            if display is None:
+                return False
+            for key in ("WAYLAND_DISPLAY", "XAUTHORITY"):
+                env.pop(key, None)
+            env["DISPLAY"] = display
+        elif not (os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY")):
+            return self._absent("desktop", "no hay sesión gráfica (usa --headless)")
         self.cdp_port = free_port()
         # --no-sandbox SOLO en este arnés: chrome-sandbox no es SUID aquí y no hay sudo.
         # Nunca va en artefactos: el sandbox real queda sin probar y el informe lo avisa.
@@ -251,16 +262,47 @@ class Stack:
                 "--remote-debugging-address=127.0.0.1",
                 f"--user-data-dir={self.layout.work / 'electron-profile'}", "--disable-gpu"]
         if self.headless:
-            argv += ["--ozone-platform=headless", "--ozone-override-screen-size=1280,820"]
+            argv.append("--ozone-platform=x11")
         argv.append(str(desktop))
         # Electron rechaza --no-sandbox salvo en desarrollo con DRAKTER_DEV_NO_SANDBOX=1.
-        proc = self._spawn("desktop", argv, desktop, self.base_env() | {
+        proc = self._spawn("desktop", argv, desktop, env | {
             "DRAKTER_DATA_DIR": str(self.data_dir), "DRAKTER_DEV_NO_SANDBOX": "1"})
         time.sleep(1)
         if proc.poll() is not None:
             return self._failed("desktop", f"salió con código {proc.returncode}; ver desktop.log")
         self.state["desktop"] = "ok"
         return True
+
+    @staticmethod
+    def find_xvfb() -> str | None:
+        for candidate in (os.environ.get("DRAKTER_E2E_XVFB"), shutil.which("Xvfb"), str(XVFB_LOCAL)):
+            if candidate and os.access(candidate, os.X_OK):
+                return candidate
+        return None
+
+    def start_xvfb(self) -> str | None:
+        """Xvfb propio con número de pantalla libre (-displayfd). Devuelve `:N` o None."""
+        binary = self.find_xvfb()
+        if binary is None:
+            self._absent("desktop", "falta Xvfb: tests/e2e/install-xvfb.sh (sin sudo) o --no-desktop")
+            return None
+        read_fd, write_fd = os.pipe()
+        log_path = self.logs_dir / "xvfb.log"
+        self.logs["xvfb"] = log_path
+        with log_path.open("ab") as log:
+            proc = subprocess.Popen([binary, "-displayfd", str(write_fd), "-screen", "0", "1280x820x24",
+                                     "-nolisten", "tcp"], env={"PATH": os.environ.get("PATH", "")},
+                                    pass_fds=(write_fd,), start_new_session=True,
+                                    stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT)
+        os.close(write_fd)
+        self.procs["xvfb"] = proc
+        with os.fdopen(read_fd) as pipe:
+            ready, _, _ = select.select([pipe], [], [], 10)
+            number = pipe.readline().strip() if ready else ""
+        if not number.isdigit():
+            self._failed("desktop", "Xvfb no arrancó; ver xvfb.log")
+            return None
+        return f":{number}"
 
     def stop(self, name: str) -> int | None:
         proc = self.procs.get(name)
@@ -285,7 +327,7 @@ class Stack:
 
     def stop_all(self) -> dict[str, int | None]:
         # Electron primero: el backend debe sobrevivir a su cliente, no al revés.
-        codes = {name: self.stop(name) for name in ("desktop", "backend", "stub")}
+        codes = {name: self.stop(name) for name in ("desktop", "xvfb", "backend", "stub")}
         if self.recorder is not None:
             self.recorder.shutdown()
             self.recorder.server_close()
