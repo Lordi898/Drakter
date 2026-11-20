@@ -56,7 +56,7 @@ def voice_config_vars(config_py: Path = _VOICE_CONFIG_PY) -> tuple[str, ...]:
 
 VOICE_CONFIG_VARS: Final = voice_config_vars()
 # Secrets the voice process needs. Taken only by exact name; never logged.
-VOICE_SECRETS: Final = ("FISH_API_KEY",)
+VOICE_SECRETS: Final = ("FISH_API_KEY", "DEEPGRAM_API_KEY", "GROQ_API_KEY")
 # Where voice.toml / voces.toml and the models live; the child resolves them itself.
 _XDG: Final = ("XDG_CONFIG_HOME", "XDG_DATA_HOME")
 

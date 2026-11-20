@@ -58,14 +58,20 @@ Los avisos cortos («Entendido», «Un momento», «Sigo con ello»…) suenan d
 
 Opciones: `--profile <nombre>`, `--only fish|kokoro`, `--force` (regenera aunque exista). Necesita `FISH_API_KEY` y red para la parte de Fish; la de Kokoro es local. Pasada la fecha, Fish ya no se usa y solo se necesita la de Kokoro.
 
+## Reconocimiento de voz: nube o local
+
+- Con `DEEPGRAM_API_KEY` en `~/.config/drakter/.env`, Drakter usa Deepgram Nova-3 (región UE, sin programa de mejora del modelo); si no, con `GROQ_API_KEY`, Groq Whisper large-v3-turbo; si no, Moonshine local. Las dos nubes conocen «Drakter», «Jarvis», «Imanol» y «Magaña» (`stt_keyterms` en `voice.toml` para cambiarlos). Fuerza uno con `DRAKTER_VOICE_STT=deepgram|groq|moonshine`.
+- Si la nube falla (sin red, clave mala o cuota), pasa a Moonshine con un único aviso y sigue así hasta reiniciar la voz.
+- Si te entiende mal, activa el volcado con `DRAKTER_VOICE_DUMP_AUDIO=1` (en `~/.config/drakter/.env`) y reinicia: guarda el audio de cada turno tal como lo oye el reconocedor en `~/.local/share/drakter/voice/dumps/`, con sus niveles al lado, y lo borra solo a las 24 h.
+
 ## Sin red y después del 30-11-2026
 
-- **Sin red:** el WebRTC va por `127.0.0.1`, así que la conexión entre la app y el proceso de voz sigue funcionando. Lo que cae es Fish: Drakter avisa **una sola vez** («paso a mi voz local») y sigue con Kokoro. El reconocimiento de voz y «Hey Jarvis» no necesitan red. El agente (Claude) sí la necesita para responder.
+- **Sin red:** el WebRTC va por `127.0.0.1`, así que la conexión entre la app y el proceso de voz sigue funcionando. Lo que cae es Fish: Drakter avisa **una sola vez** («paso a mi voz local») y sigue con Kokoro. Con STT en la nube, el reconocimiento pasa a Moonshine local; «Hey Jarvis» no necesita red. El agente (Claude) sí la necesita para responder.
 - **Después del 30-11-2026:** el modelo gratuito `s2.1-pro-free` de Fish deja de usarse, salvo que pongas `allow_paid = true` en el `voces.toml` (con cobro). Desde esa fecha todo habla con Kokoro, sin aviso de cambio.
 
 ## Privacidad
 
-El audio y las transcripciones **no se guardan** en ningún sitio. Solo se guarda `~/.local/share/drakter/voice/metrics.jsonl`, con tiempos y contadores, sin texto. Lo que dices llega al agente como un mensaje del chat y queda en el historial del chat igual que si lo hubieras escrito. Lo que se envía a Fish para sintetizar es el texto de la respuesta, no tu voz.
+El audio y las transcripciones **no se guardan** en ningún sitio, salvo que actives el volcado de diagnóstico (`DRAKTER_VOICE_DUMP_AUDIO=1`, se borra a las 24 h). Con STT en la nube, el audio de cada turno se envía a Deepgram o a Groq para transcribirlo. Solo se guarda `~/.local/share/drakter/voice/metrics.jsonl`, con tiempos y contadores, sin texto. Lo que dices llega al agente como un mensaje del chat y queda en el historial del chat igual que si lo hubieras escrito. Lo que se envía a Fish para sintetizar es el texto de la respuesta, no tu voz.
 
 ## Qué tienes que probar tú
 

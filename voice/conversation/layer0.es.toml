@@ -32,8 +32,11 @@ words = ["aja", "aha", "ajam", "mm", "mmm", "mhm", "hm", "hmm", "ya", "vale", "s
 
 [wake]
 # Confirmación textual de la palabra de activación (la usa voice/bridge.py). El STT transcribe
-# «Jarvis» de muchas formas ("jarbes" con voz sintética): añadir una variante es editar esta lista.
+# «Jarvis» de muchas formas ("jarbes" con voz sintética, "y ya revish" con la del usuario): añadir
+# una variante es editar esta lista. Además, bridge.is_wake acepta lo que quede a distancia 1 de
+# «jarvis» tras normalizar la fonética y unir hasta tres palabras.
 # Cuentan también como muletillas en la capa 0.
 words = ["jarvis", "jarbes", "jarbis", "jarves", "jarvi", "jarbi", "yarvis", "yarbis", "harvis",
-         "charvis", "chervis", "harvish", "jarvish", "yarvish", "jervis", "yervis", "jarviz", "jarbiz", "travis", "darvis"]
+         "charvis", "chervis", "harvish", "jarvish", "yarvish", "jervis", "yervis", "jarviz", "jarbiz", "travis", "darvis",
+         "llarvis", "yarevis", "yarevish", "jarevis", "harbis"]
 lead = ["hey", "ey", "hei", "ei", "jey", "oye", "eh", "a"]

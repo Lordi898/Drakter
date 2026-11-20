@@ -930,3 +930,58 @@ Decisiones técnicas, cambios de tecnología y motivos.
 - **Alternativas descartadas:** ninguna.
 - **Motivo:** no hacía falta.
 - **Impacto:** ninguno en `THIRD_PARTY_NOTICES.md`.
+
+## [2026-11-20] Voz: diagnóstico del STT y STT en la nube con respaldo Moonshine
+- **Contexto:** el usuario probó la voz con su micrófono (Trust Headset USB mono): «Jarvis» → «y ya revish», «Drakter» → «dractead», STT «pésimo». Había que saber si el fallo era del audio o del modelo.
+- **Decisión:** diagnóstico con voz sintética (Kokoro, frases con Drakter, Jarvis, Imanol, Magaña) pasada por una fuente virtual de PipeWire y capturada por Chromium (Electron) con y sin NS/AGC/AEC, y luego por WebRTC/Opus y el remuestreo 48k→16k de Pipecat (volcado del proceso real). Resultado, con WER y aciertos de nombres propios:
+  | audio | Moonshine small | Moonshine tiny | faster-whisper small + léxico |
+  |---|---|---|---|
+  | limpio (24 frases) | 10,3 % · 16/40 | 11,5 % · 15/40 | 1,6 % · 36/40 |
+  | Chromium sin procesar | 9,7 % · 12/34 | 10,2 % · 13/34 | 1,8 % · 30/34 |
+  | Chromium NS+AGC+AEC | sin cambio medible (la diferencia era un corte vacío) | | |
+  La cadena no degrada: AGC sube −40 dBFS a ~−23 dBFS (un pico a 0 dBFS en la primera frase, 0,003 % de muestras recortadas), NS baja el ruido de −55,6 a −73,7 dBFS, y lo que entra al STT tras WebRTC está a 16 kHz, ~−28 dBFS, sin recorte. **El problema es el modelo**: Moonshine falla sobre todo en nombres y no admite léxico. Se añade:
+  1. `voice/providers/stt/cloud.py`: `stt = "auto"` (por defecto) elige Deepgram si hay `DEEPGRAM_API_KEY`, si no Groq si hay `GROQ_API_KEY`, si no Moonshine; `DRAKTER_VOICE_STT=deepgram|groq|moonshine` lo fuerza. Deepgram: `DeepgramSTTService` Nova-3, `language=es`, `keyterm` = `stt_keyterms`, `mip_opt_out=True` (fuera del programa de mejora del modelo), `base_url="api.eu.deepgram.com"` (región UE). Groq: `GroqSTTService` (`whisper-large-v3-turbo`, por tramos de VAD, `language=es`, prompt con el léxico, `finalized=True` en cada tramo, comprobación de la clave al arrancar). Nombres verificados en Pipecat 1.16.0.
+  2. Respaldo: `ServiceSwitcher[nube, Moonshine]` con `SttFailover`: cualquier error del servicio en la nube (red, 401, cuota) pasa a Moonshine para el resto del proceso, con un único aviso `voice.error{code:"stt_fallback", stage:"stt"}`. Comprobado con claves falsas de Deepgram (401 al conectar) y Groq (`AuthenticationError` al arrancar): conmuta antes de hablar y transcribe con Moonshine. La clave sale `[REDACTED]` en el log.
+  3. Volcado opcional `DRAKTER_VOICE_DUMP_AUDIO=1` (`voice/diagnostics.py`): wav por turno tal como entra al STT y `.json` con niveles (RMS, pico, % recorte, DC), en `~/.local/share/drakter/voice/dumps/` (0700/0600), borrado a las 24 h. Única excepción a «ni audio ni transcripciones se guardan», desactivada por defecto.
+  4. Palabra de activación: `strip_wake_word` une hasta tres palabras y compara con clave fonética (j/ll/y→y, v→b, sh/z→s, sin h ni letras dobles) y distancia de edición ≤ 1 a «jarvis» (5+ letras). Acepta «y ya revish», «ya revish», «llarvis», «harvis»; 0 falsos positivos en 18 frases normales («y ya está», «ya veremos», «y a ver si…»).
+  Con la clave real de Deepgram del usuario, 5/5 frases perfectas (nombres incluidos) y STT final 5-50 ms tras el fin de voz (Moonshine: 300-600 ms).
+- **Alternativas descartadas:** quitar NS/AGC de Chromium (no degradan y el AGC ayuda con un micro bajo); whisper local (RTF ~1 en esta CPU: 3,5-4 s por frase); Moonshine con otro tamaño (tiny es peor).
+- **Motivo:** el usuario necesita que entienda nombres propios; la nube con léxico lo resuelve y Moonshine queda como red de seguridad sin red.
+- **Impacto:** `voice/providers/stt/cloud.py`, `voice/diagnostics.py`, `voice/config.py` (`stt`, `stt_keyterms`, `stt_deepgram_*`, `stt_groq_model`, `dump_audio`), `voice/registry.py` (`auto`, `deepgram`, `groq`), `voice/pipeline.py`, `voice/bridge.py`, `layer0.es.toml`, supervisor (`VOICE_SECRETS` + `DEEPGRAM_API_KEY`, `GROQ_API_KEY`), `.env.example`, lock de voz. Checklist 14.
+
+## [2026-11-20] Voz: fin de turno con umbral de Smart Turn, regla de texto y margen
+- **Contexto:** «en el mundo de la…» se envió cortado. Cadena: VAD Silero `stop_secs` 0,2 → Smart Turn v3.2 (umbral fijo 0,5 en Pipecat) → `wait_for_transcript` → `turn_final_timeout_s`.
+- **Decisión:** medido sobre 80 cortes a mitad de frase (límites de palabra de whisper) y 10 frases completas: Smart Turn da «completo» al 81 % de los cortes con 0,5 (59 % aún con 0,9) y a todas las completas (p ≥ 0,92). Se añade `DrakterTurnStop` (`providers/turn/smart_turn.py`): umbral `turn_complete_threshold` 0,7, y antes de cerrar exige un silencio total que depende del caso: 0,2 + `turn_grace_s` 0,5 = 0,7 s si el texto no cuelga; `turn_hanging_secs` 2,0 s si acaba en preposición, artículo, conjunción o coma («… de la», «… y»); `turn_stop_secs` 3,0 s si Smart Turn dice incompleto. Con umbral 0,7 + texto colgante los cortes que cierran turno bajan de 81 % a 29 %, sin retener ninguna completa (los que quedan son frases con sentido completo, p. ej. «Drakter apunta una tarea»).
+  De punta a punta (proceso real, WebRTC, Moonshine), `eot_ms` (fin de VAD → cierre) pasa de ~224 ms a ~504 ms; `endpointing_ms` de `metrics.jsonl` sigue en 200 (es el VAD). Frase con pausa de 1,2 s tras «… en el mundo de la»: un turno antes y después (con voz sintética Smart Turn ya la veía incompleta; con la del usuario no, y ahí entra la regla de texto). Frase completa + pausa de 0,6 s + continuación: antes 2 turnos; ahora en el límite (1 turno en 1 de 3 ejecuciones: con el silencio que añade Kokoro la pausa real ronda los 0,7 s). Pausa de 0,9 s tras oración completa: sigue partiendo (el backend lo trata como `steer` del turno en curso); se sube con `turn_grace_s` en `voice.toml` a costa de latencia.
+  Fallo del puente encontrado al probar con Deepgram: si su respuesta a `Finalize` llega vacía (ya mandó el texto como `is_final`), no hay `TranscriptionFrame(finalized)`; el puente esperaba 1 s y, si el usuario volvía a hablar antes, `_on_user_started` **tiraba el turno pendiente con su texto** (se perdía «Quiero contarte que en el mundo de la… novedades»). Ahora el texto pendiente pasa al turno nuevo (la pausa queda en un solo turno) y, con texto pero sin `finalized`, el puente espera solo `turn_final_grace_s` 0,3 s.
+- **Alternativas descartadas:** solo subir el umbral (no basta: 59 % con 0,9); `stop_secs` del VAD más alto (Smart Turn asume 0,2); un margen de 1 s en todos los turnos (+0,8 s de latencia siempre).
+- **Motivo:** una pausa para pensar no debe cerrar el turno, con el menor coste de latencia posible (+0,28 s).
+- **Impacto:** `voice/providers/turn/smart_turn.py`, `voice/bridge.py`, `voice/config.py` (`turn_complete_threshold`, `turn_grace_s`, `turn_hanging_secs`, `turn_final_grace_s`). Calibración fina con la voz real del usuario pendiente.
+
+## [2026-11-20] Voz: nunca dos respuestas a la vez; el acuse se corta con el audio real
+- **Contexto:** «a veces responde dos cosas a la vez o termina mal». En `backend.log` del 20-11 (18:15:23 y 18:15:24, 18:15:39 y 18:15:43) hay dos turnos de voz seguidos sin ninguna interrupción entre ellos: un turno partido en dos. El backend solo manda `speak.stop{new_turn}` si le consta que el bot habla (`voice.playback started`), y eso llega tarde (TTFA de Fish ~0,8 s); la respuesta nueva se abría con la anterior aún sonando. Fish asigna el audio que recibe al contexto activo (`get_active_audio_context_id`), así que dos respuestas seguidas comparten WebSocket y se mezclan. Reproducido con el proceso real: antes `101 started → 101 finished → 102 started` (la 1 entera y la 2 detrás).
+- **Decisión:** el puente de voz corta en `speak_open` el tramo anterior si sigue abierto, pendiente o sonando (`Session.speech_playing`, que mantiene el `PlaybackTracker`) con `interrupt("new_turn")`; ahora `101 started → 101 interrupted → 102 started → 102 finished`. El acuse (`ack_*`, `tool_generic`) se emite a ritmo real en trozos de 100 ms con 0,3 s de adelanto y se corta en cuanto llega `TTSStartedFrame`/`TTSAudioRawFrame` de la respuesta (log `filler_cut`); antes se encolaba entero y retrasaba la respuesta. Una interrupción por turno nuevo no cancela el acuse ya armado para ese turno.
+- **Alternativas descartadas:** `speak.stop` incondicional en el backend (cancelaría el acuse del turno nuevo y no cubre los turnos escritos ni los encolados); cola de respuestas (el usuario ya ha pasado a lo siguiente).
+- **Motivo:** el proceso de voz es el único que sabe qué está sonando de verdad.
+- **Impacto:** `voice/bridge.py`, `voice/session.py`, `voice/speech/playback.py`, `voice/speech/phrases.py`.
+
+## [2026-11-20] Identidad en voz según la conversación real (PR #17)
+- **Contexto:** en voz el agente se negó a decir «una frase muy larga», insistía en ofrecer agenda y tareas, usaba «la guarida» y corregía «Jarvis».
+- **Decisión:** en voz, la petición explícita del usuario sobre longitud o contenido gana a la brevedad, sin comentarlo; no se ofrece la agenda, las tareas ni las asignaturas sin motivo; nada de dragón ni «guarida» en voz (`VOICE.md`, `SOUL.md`, `PERSONALITY.md`); «Jarvis» es la palabra de activación y no se corrige; lo que no puede hacer se dice en una frase, sin listas de capacidades. Eval nueva `agent/evals/voice_behavior.py` (5 casos, Haiku): 3/5 antes, 5/5 después.
+- **Alternativas descartadas:** cambiar la personalidad de fondo (la personalidad Jarvis sigue pendiente de que la elija el usuario).
+- **Motivo:** lo que pide el usuario manda sobre el estilo por defecto.
+- **Impacto:** `agent/identity/VOICE.md`, `SOUL.md`, `PERSONALITY.md`, `agent/evals/voice_behavior.{py,jsonl}`. El PR #19 no toca `agent/identity/` (sus cambios propios se retiraron: con `voice_behavior.py` el caso «Hey Jarvis, ¿qué hora es?» empeoraba).
+
+## [2026-11-20] Selector de salida de audio en el escritorio (PR #16)
+- **Contexto:** el usuario usa un headset USB y la voz debe sonar por el dispositivo que elija, no siempre por el predeterminado.
+- **Decisión:** selector de salida en Ajustes → Voz con `HTMLMediaElement.setSinkId` sobre el `<audio>` remoto de WebRTC, persistido en las preferencias del escritorio, con tono de prueba y aviso con los dispositivos elegidos (`desktop/src/voice/audioOutput.ts`, `VoiceSection.tsx`, `stores/preferences.ts`, `webrtcClient.ts`).
+- **Alternativas descartadas:** cambiar el dispositivo predeterminado del sistema desde la app (afecta a otras aplicaciones).
+- **Motivo:** elegir micrófono y salida desde Drakter sin tocar el sistema.
+- **Impacto:** `desktop/src/voice/`, `desktop/src/settings/VoiceSection.tsx`, `desktop/src/stores/preferences.ts`.
+
+## [2026-11-20] Voz: dependencia nueva `deepgram-sdk` 7.19.0
+- **Contexto:** el STT de Deepgram de Pipecat 1.16.0 necesita el extra `deepgram` (`deepgram-sdk<8,>=6.1.1`). Groq usa el cliente `openai`, ya instalado (no hace falta el extra `groq`).
+- **Decisión:** `pipecat-ai[webrtc,fish,kokoro,deepgram]==1.16.0`; el lock añade `deepgram-sdk==7.19.0`, `httpx==0.28.1` y `httpcore==1.0.9` sin mover ninguna otra versión. Se instala con `scripts/install-voice.sh`. Para el diagnóstico se usaron venvs aparte (`venvs/voice-vq`, `venvs/stt-bench` con `faster-whisper==1.2.1`), fuera del runtime.
+- **Alternativas descartadas:** cliente WebSocket propio para Deepgram (Pipecat ya lo trae, con `Finalize` y reconexión).
+- **Motivo:** reutilizar el servicio de Pipecat verificado.
+- **Impacto:** `voice/pyproject.toml`, `voice/requirements.lock`, `THIRD_PARTY_NOTICES.md`.

@@ -19,6 +19,7 @@ from pipecat.turns.user_turn_processor import UserTurnProcessor
 from pipecat.turns.user_turn_strategies import UserTurnStrategies
 
 from voice.bridge import BackendBridgeProcessor
+from voice.diagnostics import create as create_dump
 from voice.metrics import MetricsSink, create_observer
 from voice.ports import ResolvedProfile
 from voice.registry import create
@@ -40,6 +41,10 @@ def build(transport: BaseTransport, ctl: Session, shared: Shared, cfg: VoiceConf
     wake = create("wake", cfg.wake, cfg, shared, ctl)
     vad = VADProcessor(vad_analyzer=create("vad", cfg.vad, cfg))
     stt = create("stt", cfg.stt, cfg, shared)
+    strategy = getattr(stt, "strategy", None)  # STT en la nube con respaldo: avisa por la sesión
+    if hasattr(strategy, "ctl"):
+        strategy.ctl = ctl
+    dump = create_dump(cfg)  # solo con DRAKTER_VOICE_DUMP_AUDIO=1
     turns = UserTurnProcessor(
         user_turn_strategies=UserTurnStrategies(
             start=create("turn_start", cfg.turn_start, cfg, ctl),
@@ -56,7 +61,7 @@ def build(transport: BaseTransport, ctl: Session, shared: Shared, cfg: VoiceConf
     playback = create("playback", cfg.playback, cfg, ctl)  # DESPUÉS de la salida: cuenta lo oído
 
     pipeline = Pipeline(
-        [transport.input(), wake, vad, stt, turns, bridge, guard, tts, phrases, transport.output(), playback]
+        [transport.input(), wake, vad, *([dump] if dump else []), stt, turns, bridge, guard, tts, phrases, transport.output(), playback]
     )
     worker = PipelineWorker(
         pipeline,
