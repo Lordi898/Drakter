@@ -53,6 +53,9 @@ def _install_services(app: FastAPI, settings: Settings) -> None:
     hermes = _optional_module("app.integrations.hermes.runtime")
     memory = _optional_module("app.integrations.memory.router")
     reminders = _optional_module("app.services.reminders")
+    relation_tools = _optional_module("app.tools.relations")
+    if relation_tools:  # readable titles in the delete_relationship confirmation summary
+        relation_tools.configure_summary_source(settings.db_path)
 
     runtime = hermes.AgentRuntime(settings) if hermes else None
     hub = runtime.hub if runtime else EventHub()
