@@ -393,6 +393,50 @@ async def exercise(
     check_no_secret_on_disk(data_dir, [token], report)
 
 
+# Private Hermes names the runner relies on (drakter_runner.DrakterAgent), each with the module
+# that calls or reads it. A rename upstream would make the override dead code without any error.
+RUNNER_HOOKS: Final[tuple[tuple[str, str, bool], ...]] = (
+    # (name, module that uses it, must be a method of AIAgent)
+    ("_repair_tool_call", "agent.turn_tool_validation", True),
+    ("_invoke_api_request_error_hook", "agent.turn_api_error", True),
+    ("_try_recover_primary_transport", "agent.turn_api_error", True),
+    ("_api_max_retries", "agent.conversation_loop", False),
+    ("_auto_recovery_cycles", "agent.turn_recovery_autorecover", False),
+)
+
+
+async def venv_missing_hooks(python: str, work: Path) -> list[str]:
+    """Names of RUNNER_HOOKS that this Hermes no longer defines or no longer uses."""
+    code = (
+        "import importlib, inspect, json, sys\n"
+        "from run_agent import AIAgent\n"
+        "missing = []\n"
+        "for name, module, method in json.loads(sys.argv[1]):\n"
+        "    used = name in inspect.getsource(importlib.import_module(module))\n"
+        "    defined = callable(getattr(AIAgent, name, None)) if method else True\n"
+        "    if not (used and defined): missing.append(name)\n"
+        "print(json.dumps(missing))\n"
+    )
+    home = work / "hooks-home"
+    home.mkdir(mode=0o700)
+    process = await asyncio.create_subprocess_exec(
+        python, "-I", "-c", code, json.dumps(RUNNER_HOOKS), cwd=work,
+        env={"PATH": "/usr/bin:/bin", "HOME": str(home), "HERMES_HOME": str(home)},
+        stdin=asyncio.subprocess.DEVNULL, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL,
+    )
+    try:
+        stdout, _ = await asyncio.wait_for(process.communicate(), HERMES_CHECK_TIMEOUT_S)
+    except TimeoutError:
+        process.kill()
+        await process.wait()
+        return ["(timeout)"]
+    lines = stdout.decode("utf-8", "replace").strip().splitlines()
+    try:
+        return list(json.loads(lines[-1])) if lines else ["(sin salida)"]
+    except ValueError:
+        return ["(salida inválida)"]
+
+
 async def preflight(args: argparse.Namespace, work: Path, report: Report) -> None:
     python = shutil.which(args.hermes_python)
     if not report.check(python is not None, "python del venv de Hermes", args.hermes_python):
@@ -400,6 +444,9 @@ async def preflight(args: argparse.Namespace, work: Path, report: Report) -> Non
     assert python is not None
     commit = await venv_commit(python, work)
     if not report.check(commit == HERMES_COMMIT, "commit fijado, por hash", commit):
+        return
+    missing = await venv_missing_hooks(python, work)
+    if not report.check(not missing, "ganchos privados del runner presentes en Hermes", ", ".join(missing)):
         return
     stub_script = Path(args.stub).resolve()
     if not report.check(stub_script.is_file(), "stub de desarrollo", str(stub_script)):

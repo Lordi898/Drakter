@@ -1271,8 +1271,20 @@ Decisiones técnicas, cambios de tecnología y motivos.
 - **Impacto:**
   - Código: `backend/app/permissions/{models,tool_gate}.py`, `backend/app/services/actions.py`, `backend/app/jobs/manager.py`, `backend/app/integrations/hermes/{events,hermes_provider,supervisor,runtime}.py`, `runner/drakter_runner.py`, `backend/app/main.py` y `CONTRACT.md`. Sin cambios en `contracts/`.
   - El gancho y los atributos `_api_max_retries`, `_auto_recovery_cycles` y `_try_recover_primary_transport` están atados a Hermes v0.22.7, como `_repair_tool_call`.
+  - **Para que una actualización de Hermes no los anule en silencio:**
+    - `preflight.py` comprueba, en el venv de Hermes, `RUNNER_HOOKS`: que `AIAgent` siga teniendo `_repair_tool_call`, `_invoke_api_request_error_hook` y `_try_recover_primary_transport`, y que los módulos que los usan (`agent.turn_tool_validation`, `agent.turn_api_error`, `agent.conversation_loop`, `agent.turn_recovery_autorecover`) sigan nombrándolos, igual que `_api_max_retries` y `_auto_recovery_cycles`. Si falta alguno, el preflight FALLA, nombrando cuáles faltan, justo después de la comprobación del commit.
+    - Además, el runner escribe al arrancar `WARNING Hermes lacks overridden hooks: …` en stderr, que el supervisor lleva al log, si algún método sobrescrito no existe. No tumba el agente.
+    - Comprobado contra el venv real: 0 faltan; con dos nombres renombrados, los detecta.
   - Comprobado:
     - Dos peticiones reales por `BackendToolGate`, una desde un trabajo y otra desde el chat, dan un aviso cada una, con su `job_id` y su `session_id`, y el barrido no repite. `check_confirmations` da 0 fallos y pasan también las demás comprobaciones de la CI del backend.
     - Hermes real contra un puerto local cerrado salta el gancho con `reason=timeout` y `retryable=True`. En modo voz, primer aviso a los ~3,3 s y fallo a los ~8,9 s (antes 23 s con la reconstrucción del cliente, y ~58 s medidos).
     - Runtime con eventos simulados: 3 reintentos dan 1 notificación, 1 frase y `offline`/`model_unreachable`; el mismo corte en otro turno no repite; cuando vuelve el modelo el estado sale de `offline`, y un corte nuevo vuelve a avisar.
   - Red de seguridad en el escritorio: `stores/confirmations.ts` ya deduplica por `action_id` (PR #32, entrada «Escritorio: .riv ausente y avisos de fallo de voz»). No hace falta tocar `desktop/`.
+
+## [2026-11-20] e2e `desktop.conexion_backend`: 403 `forbidden_origin` no reproducible en main
+- **Contexto:** el worker de escritorio veía fallar `desktop.conexion_backend` con un 403 `forbidden_origin` en `/health` (backend.log) y se sospechaba de una regresión de los PR #28 o #29.
+- **Decisión:** no se toca el backend ni la comprobación de origen. En un checkout limpio de `main` (c6b956a: `uv sync`, `npm ci` y build), `scripts/verify-all.sh --headless --only desktop` da PASA en `desktop.conexion_backend` y en otras 9 comprobaciones del bloque; `desktop.confirmacion` sale NO COMPROBADO, como siempre. No hay ningún `forbidden_origin` en el log.
+- **Causa:** `SecurityGuardMiddleware` (`core/security.py`, sin cambios desde `dd3a8e1`) rechaza por diseño cualquier petición con cabecera `Origin`: al backend solo le habla el proceso main de Electron, con `http` de Node, que no la envía (`backendProcess.ts`). El 403 significa que en ese entorno alguien llamó a `/health` con `Origin`: el renderer (`fetch` desde `app://` o desde `localhost:5173` con `npm run dev`), `net.fetch`/`session.fetch` de Electron, o una herramienta o pestaña apuntando a ese puerto. Hay que buscarlo en la rama o el entorno de ese worker, no en el backend ni en el arnés de `main`.
+- **Alternativas descartadas:** aceptar el origen `app://` o el del servidor de desarrollo, porque relajaría una medida de seguridad.
+- **Motivo:** lo verificado en `main` contradice la hipótesis de la regresión.
+- **Impacto:** ninguno en el código. Avisado a drakter-1.

@@ -34,6 +34,7 @@ SESSION_USAGE_KEYS = USAGE_KEYS[:4]  # AIAgent.session_<key>: cumulative per age
 UNREACHABLE_REASONS = frozenset({"timeout", "server_error", "overloaded", "unknown"})
 # Voice turns (quick_retry): one Hermes retry and no auto-recovery ladder (15-60 s waits).
 QUICK_API_RETRIES = 2
+OVERRIDDEN_HOOKS = ("_repair_tool_call", "_invoke_api_request_error_hook", "_try_recover_primary_transport")
 
 
 def die_with_parent() -> None:
@@ -131,6 +132,10 @@ class Runner:
         from tools.mcp_tool_discovery import discover_mcp_tools
 
         runner = self
+        # Overridden below; a rename upstream would silently disable them (preflight RUNNER_HOOKS).
+        lost = [n for n in OVERRIDDEN_HOOKS if not callable(getattr(AIAgent, n, None))]
+        if lost:
+            print(f"drakter_runner: WARNING Hermes lacks overridden hooks: {', '.join(lost)}", file=sys.stderr, flush=True)
 
         class DrakterAgent(AIAgent):
             """Hermes rewrites a misspelt tool name into a real one: never here. Tied to HERMES_COMMIT."""
