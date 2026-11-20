@@ -21,12 +21,17 @@ const WAKE_KEY = 'voice_wake_enabled'
 let ttsEnabled = true
 let wakeEnabled = true
 let voiceState: VoiceStateEvent | null = null
+let voiceFault = false
+let wasConnected = false
+let lastFault: { key: string; at: number } | null = null
+const FAULT_DEDUP_MS = 30_000
 let unsubscribeClient: (() => void) | null = null
 let boundClient: ReturnType<typeof getVoiceClient> = null
 let snapshot: VoiceSnapshot = compute()
 const listeners = new Set<() => void>()
 
 function computeMic(): MicState {
+  if (voiceFault) return 'error'
   const client = getVoiceClient()
   if (!client?.micOpen()) return 'off'
   return voiceState?.mode === 'conversation' ? 'live' : 'standby'
@@ -70,9 +75,45 @@ async function loadSettings(): Promise<void> {
   }
 }
 
+const STAGE_LABEL: Record<string, string> = {
+  transport: 'la conexión de audio',
+  stt: 'el reconocimiento de voz',
+  turn: 'el turno de voz',
+  tts: 'la síntesis de voz',
+  ipc: 'el servicio de voz',
+  wake: 'la palabra de activación'
+}
+
+/** Un aviso por fallo: el mismo error repetido dentro de la ventana no vuelve a mostrarse. */
+function reportFault(key: string, title: string, body?: string): void {
+  voiceFault = true
+  const now = Date.now()
+  const repeated = lastFault?.key === key && now - lastFault.at < FAULT_DEDUP_MS
+  lastFault = { key, at: now }
+  refreshSnapshot()
+  if (!repeated) notify({ tone: 'error', title, ...(body === undefined ? {} : { body }) })
+}
+
 subscribeServerEvents((event) => {
+  if (event.type === 'voice.error') {
+    const { code, stage, recoverable } = event.payload
+    reportFault(
+      `error|${stage}|${code}`,
+      `Fallo en ${STAGE_LABEL[stage] ?? 'la voz'}`,
+      recoverable ? `${code}. Drakter lo reintentará.` : `${code}. Revisa la configuración de voz.`
+    )
+    return
+  }
   if (event.type !== 'voice.state') return
   voiceState = event.payload
+  const connected = event.payload.connected
+  if (connected) {
+    voiceFault = false
+    lastFault = null
+  } else if (wasConnected) {
+    reportFault('disconnected', 'La voz se desconectó', 'Drakter intentará reconectar.')
+  }
+  wasConnected = connected
   refreshSnapshot()
 })
 subscribeResync(() => void loadSettings())
