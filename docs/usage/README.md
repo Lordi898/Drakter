@@ -16,6 +16,7 @@ Algunas guías de módulo abren con una cabecera de estado escrita en el cierre 
 - [Recordatorios](recordatorios.md)
 - [Búsqueda](busqueda.md)
 - [Chat y personaje](chat-y-personaje.md)
+- [Personaje: boca sincronizada y archivo Rive](personaje.md)
 - [Trabajos en segundo plano](trabajos.md)
 - [Voz](voz.md): Super+J, «Hey Jarvis», micrófono y salida, auriculares, Deepgram, Fish y Kokoro, caché de frases
 - [Perfiles de voz](voces.md): los IDs de Fish Audio, cómo cambiarlos y cambiar de voz
