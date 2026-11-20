@@ -20,6 +20,8 @@ class TurnRequest:
     # Ephemeral turn prefixes (channel, heard note, jobs): only for the model's turn prompt,
     # never stored by Drakter nor used for memory retrieval.
     prefix: str = ""
+    # Where the user spoke: a voice turn runs without thinking (first delta sooner, LAT-1).
+    source: Literal["text", "voice"] = "text"
 
 
 @dataclass(frozen=True, slots=True)

@@ -46,8 +46,11 @@ fi
   || { echo "ERROR: el clon no está en $HERMES_COMMIT" >&2; exit 1; }
 
 # 3. Venv con el lock del propio Hermes y los extras del contrato (anthropic, mcp).
+# --compile-bytecode: el runner corre con -B y, sin .pyc, recompilaba openai/anthropic en cada
+# primer turno (~1 s, LAT-1).
 (cd "$src" && UV_PROJECT_ENVIRONMENT="$venv" uv sync --frozen --python "$py" \
-  --extra anthropic --extra mcp)
+  --extra anthropic --extra mcp --compile-bytecode)
+"$venv/bin/python" -m compileall -q -x '/(tests|evals)/' "$src" >/dev/null || true
 
 # 4. Enlace estable que usa el backend (DRAKTER_HERMES_PYTHON por defecto: hermes-python).
 cat > "$bin_dir/hermes-python" <<WRAP

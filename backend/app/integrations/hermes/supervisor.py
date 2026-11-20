@@ -207,7 +207,12 @@ class HermesSupervisor:
         self._set_state("stopped", "")
 
     async def run_turn(
-        self, turn_id: UUID | str, session_id: UUID | str, text: str, instructions: str
+        self,
+        turn_id: UUID | str,
+        session_id: UUID | str,
+        text: str,
+        instructions: str,
+        reasoning_effort: str | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
         """Raw runner events; the last one is always terminal. A dead runner never repeats a turn."""
         tid = str(turn_id)
@@ -220,6 +225,8 @@ class HermesSupervisor:
         turn = _Turn(tid)
         self._turn = turn
         message = {"op": "turn", "turn_id": tid, "session_id": str(session_id), "input": text}
+        if reasoning_effort is not None:  # this turn only; else the home's agent.reasoning_effort
+            message["reasoning_effort"] = reasoning_effort
         if not await self._send({**message, "instructions": instructions}):
             self._finish_turn(turn, self._lost_event(turn))
         terminal = False

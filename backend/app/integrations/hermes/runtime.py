@@ -9,12 +9,16 @@ from __future__ import annotations
 import asyncio
 import logging
 import secrets
+import sqlite3
+import time
 from collections.abc import Callable
+from datetime import datetime
 from dataclasses import dataclass, field
 from pathlib import Path
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any, Final, Literal, Protocol
 from uuid import UUID, uuid4
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from drakter_contracts.errors import HTTP_STATUS, ErrorCode
 from drakter_contracts.events import (
@@ -63,6 +67,7 @@ from app.integrations.hermes.events import (
 from app.integrations.hermes.fake import FakeProvider
 from app.integrations.hermes.hermes_provider import HermesProvider
 from app.integrations.hermes.provider import AgentProvider, ProviderStatus, TurnRequest
+from app.repositories.notifications_due import default_timezone
 
 if TYPE_CHECKING:
     from app.integrations.hermes.settings import AgentSettings
@@ -70,6 +75,12 @@ if TYPE_CHECKING:
 logger = logging.getLogger("drakter.agent.runtime")
 
 REPO_ROOT: Final = Path(__file__).resolve().parents[4]
+FALLBACK_TIMEZONE: Final = "Europe/Madrid"  # contracts/README.md §4
+_WEEKDAYS: Final = ("lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo")
+_MONTHS: Final = (
+    "enero", "febrero", "marzo", "abril", "mayo", "junio",
+    "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
+)
 STOP_TURN_GRACE_S: Final = 12.0
 # The runner answers a steer at once; past this the correction is treated as not accepted.
 STEER_TIMEOUT_S: Final = 5.0
@@ -126,6 +137,8 @@ class _ActiveTurn:
     steer_waiters: list[asyncio.Future[bool]] = field(default_factory=list)
     # corrections accepted while `steer()` waited: that caller stores and shows them
     echoed_steers: int = 0
+    started: float = field(default_factory=time.monotonic)
+    first_delta_ms: int | None = None
 
     @property
     def correlation_id(self) -> str:
@@ -442,6 +455,24 @@ class AgentRuntime:
         except Exception as exc:  # noqa: BLE001 - the voice never breaks a turn
             logger.warning("turn tap failed", extra={"event": "turn_tap_failed", "kind": type(exc).__name__})
 
+    def _user_zone(self) -> ZoneInfo:
+        try:
+            with sqlite3.connect(f"file:{self.settings.db_path}?mode=ro", uri=True, timeout=1) as conn:
+                name = default_timezone(conn) or FALLBACK_TIMEZONE
+            return ZoneInfo(name)
+        except (sqlite3.Error, ValueError, ZoneInfoNotFoundError):
+            return ZoneInfo(FALLBACK_TIMEZONE)
+
+    def _clock_line(self) -> str:
+        """Local date and time for this turn: without it the model asks `get_system_status` (UTC)
+        or, without thinking, guesses the hour (LAT-1). Turn prompt only: the prefix cache holds."""
+        zone = self._user_zone()
+        now = datetime.now(zone)
+        return (
+            f"[ahora: {_WEEKDAYS[now.weekday()]} {now.day} de {_MONTHS[now.month - 1]} de {now.year}, "
+            f"{now:%H:%M} ({zone.key})]"
+        )
+
     def _turn_prefix(self, session_id: UUID, source: Source) -> str:
         parts: list[str] = []
         for fn in self._prefixes:
@@ -452,6 +483,7 @@ class AgentRuntime:
                 continue
             if part:
                 parts.append(part)
+        parts.append(self._clock_line())
         return "\n".join(parts)
 
     # Turns
@@ -518,6 +550,7 @@ class AgentRuntime:
             turn_id=turn_id,
             text=text,
             prefix=self._turn_prefix(session_id, source),
+            source=source,
         )
         active.task = asyncio.create_task(self._run_turn(provider, request, active))
         return turn_id, message.id
@@ -625,6 +658,8 @@ class AgentRuntime:
             self._publish_state(AgentState.THINKING, turn_id=active.turn_id)
         elif isinstance(event, MessageDelta):
             active.phase = "generating"
+            if active.first_delta_ms is None:
+                active.first_delta_ms = round((time.monotonic() - active.started) * 1000)
             self._call_tap("on_raw_delta", active.turn_id, event.text)  # before the stripper
             self._publish_state(AgentState.SPEAKING, turn_id=active.turn_id)
             await self._emit_text(active, active.stripper.feed(event.text))
@@ -695,7 +730,20 @@ class AgentRuntime:
             self._end_turn(active)
         logger.info(
             "turn finished",
-            extra={"event": "turn_finished", "turn_id": str(active.turn_id), "outcome": outcome},
+            extra={
+                "event": "turn_finished",
+                "turn_id": str(active.turn_id),
+                "outcome": outcome,
+                "source": active.source,
+                # Accepted → first text delta in the backend, and the whole turn (latency).
+                "first_delta_ms": active.first_delta_ms,
+                "total_ms": round((time.monotonic() - active.started) * 1000),
+                # "token" is a redacted key word: input_tokens → usage_input.
+                **{
+                    f"usage_{key.removesuffix('_tokens')}": value
+                    for key, value in (terminal.usage if isinstance(terminal, TurnCompleted) else {}).items()
+                },
+            },
         )
         ids = {"session_id": active.session_id, "turn_id": active.turn_id}
         if isinstance(terminal, TurnCompleted) and active.message_id is not None:

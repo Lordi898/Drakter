@@ -60,6 +60,9 @@ _RUNNER_CODES: Final = frozenset(
     }
 )
 _END_OF_STREAM: Final = object()
+# Voice turns skip thinking: measured, the first delta of a tool turn drops from ~1.7-2.8 s to
+# ~0.45-0.7 s and the evals hold (LAT-1). Text keeps the home's effort ("low"); job lanes "medium".
+VOICE_REASONING_EFFORT: Final = "none"
 # Trusted levels that go with the safety instructions; identity already reaches Hermes in SOUL.md.
 _INSTRUCTION_LEVELS: Final = frozenset(
     {PriorityLevel.SECURITY, PriorityLevel.SYSTEM_RULES, PriorityLevel.USER_CONTEXT}
@@ -70,7 +73,12 @@ class _Supervisor(Protocol):
     state: str
 
     def run_turn(
-        self, turn_id: UUID, session_id: UUID, text: str, instructions: str
+        self,
+        turn_id: UUID,
+        session_id: UUID,
+        text: str,
+        instructions: str,
+        reasoning_effort: str | None = None,
     ) -> AsyncIterator[dict[str, Any]]: ...
 
     async def stop_turn(self, turn_id: UUID, grace_s: float = 5) -> None: ...
@@ -303,7 +311,11 @@ class HermesProvider:
         assert self._supervisor is not None
         try:
             stream = self._supervisor.run_turn(
-                request.turn_id, request.session_id, request.text, instructions
+                request.turn_id,
+                request.session_id,
+                request.text,
+                instructions,
+                VOICE_REASONING_EFFORT if request.source == "voice" else None,
             )
             async for raw in stream:
                 await queue.put(raw)

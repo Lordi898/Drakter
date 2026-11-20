@@ -200,6 +200,9 @@ def _render_auxiliary(s: AgentSettings) -> dict[str, Any]:
     block = {"provider": "auto" if s.model_provider == "dev_stub" else "anthropic", "model": s.model_name}
     tasks: dict[str, Any] = {task: dict(block) for task in _AUX_TASKS}
     tasks["background_review"] = {**block, "enabled": False}
+    # Drakter titles its own sessions: Hermes' title would be one more Haiku call per session,
+    # racing the first turn (LAT-1).
+    tasks["title_generation"] = {**block, "enabled": False}
     return tasks
 
 
@@ -251,6 +254,9 @@ def render_config(
         "model": _render_model(s),
         "model_catalog": {"enabled": False},
         "plugins": {"auto_update_check_hours": 0, "enabled": [GUARD_NAME], "load_timeout_seconds": 0},
+        # A person paces the conversation: pauses over 5 min would rewrite the ~62K-token prefix
+        # (instructions + tools), ~0.4 s more to the first token. 1h writes cost 2x, not 1.25x (LAT-1).
+        "prompt_caching": {"cache_ttl": "1h"},
         "security": {"allow_lazy_installs": False},
         "terminal": {"cwd": str(cwd)},
         "tools": {"tool_search": {"enabled": "off"}},

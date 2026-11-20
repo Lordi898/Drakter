@@ -29,6 +29,7 @@ EXIT_FOREIGN_TOOLS = 3
 EXIT_BOOT_FAILED = 4
 PR_SET_PDEATHSIG = 1
 USAGE_KEYS = ("input_tokens", "output_tokens", "cache_read_tokens", "cache_write_tokens", "api_calls")
+SESSION_USAGE_KEYS = USAGE_KEYS[:4]  # AIAgent.session_<key>: cumulative per agent; api_calls is per turn
 
 
 def die_with_parent() -> None:
@@ -111,8 +112,10 @@ class Runner:
         self.active_turn: str | None = None
         self.stop_requested = False
         self.agent: Any = None
+        self.warm: tuple[Any, tuple[str, str | None]] | None = None
         self.histories: dict[str, list[dict[str, Any]]] = {}
         self.current_turn = ""
+        self.marks: dict[str, float] = {}
 
     def boot(self) -> None:
         from hermes_cli.config import load_config
@@ -190,6 +193,7 @@ class Runner:
 
     def on_delta(self, text: str | None) -> None:
         if text:
+            self.marks.setdefault("delta", time.monotonic())
             self.protocol.emit("delta", turn_id=self.current_turn, text=text)
 
     def on_tool_start(self, call_id: str, name: str, _args: Any) -> None:
@@ -214,17 +218,44 @@ class Runner:
             history = self.session_db.get_messages_as_conversation(session_id) or []
         return history
 
+    def reasoning_for(self, effort: Any) -> Any:
+        """The turn's effort if it is a valid Hermes level, else the home's agent.reasoning_effort."""
+        from hermes_constants import parse_reasoning_effort
+
+        parsed = parse_reasoning_effort(effort) if isinstance(effort, str) else None
+        return parsed if parsed is not None else self.reasoning
+
+    def take_agent(self, session_id: str, instructions: str | None) -> Any:
+        """The warm agent of the previous turn when session and instructions match, else a new one.
+
+        Hermes keeps an agent across turns the same way (gateway agent cache): its cached system
+        prompt, tool schemas and HTTP client survive, so the turn skips their rebuild (LAT-1).
+        """
+        warm, self.warm = self.warm, None
+        if warm is not None:
+            agent, key = warm
+            if key == (session_id, instructions or None):
+                return agent
+            agent.close()
+        return self.build_agent(session_id, instructions)
+
     def run_turn(self, message: dict[str, Any]) -> dict[str, Any]:
-        """Returns the terminal event. One AIAgent per turn; SOUL.md, instructions and tools are the same each time (H-21)."""
+        """Returns the terminal event. SOUL.md, instructions and tools are the same each time (H-21)."""
         from tools.terminal_tool import set_approval_callback
 
         # Per-thread slot. No human can answer here: real confirmations live in the backend.
         set_approval_callback(lambda *_args, **_kwargs: "deny")
         turn_id = str(message["turn_id"])
         session_id = str(message["session_id"])
+        instructions = message.get("instructions")
         self.current_turn = turn_id
+        self.marks = {"recv": float(message.get("_recv", time.monotonic())), "start": time.monotonic()}
         self.protocol.emit("thinking", turn_id=turn_id)
-        agent = self.build_agent(session_id, message.get("instructions"))
+        agent = self.take_agent(session_id, instructions)
+        # Per turn, like Hermes' gateway does on a reused agent: voice asks for "none" (LAT-1).
+        agent.reasoning_config = self.reasoning_for(message.get("reasoning_effort"))
+        self.marks["built"] = time.monotonic()
+        keep = False
         try:
             self.checked_tools(agent)
             with self.lock:
@@ -232,18 +263,49 @@ class Runner:
                 stopped = self.stop_requested
             if stopped:
                 return {"ev": "cancelled"}
+            before = {key: getattr(agent, f"session_{key}", 0) for key in SESSION_USAGE_KEYS}
             result = agent.run_conversation(
                 str(message["input"]), conversation_history=self.history_for(session_id), task_id=session_id
             )
+            # A warm agent's session_* counters span every turn it ran: report this turn's share.
+            for key in SESSION_USAGE_KEYS:
+                if isinstance(result.get(key), int) and isinstance(before[key], int):
+                    result[key] -= before[key]
             if isinstance(result.get("messages"), list):
                 self.histories[session_id] = result["messages"]
+            self.log_timing(turn_id, result)
             with self.lock:
                 stopped = self.stop_requested
-            return self.outcome(result, stopped)
+            terminal = self.outcome(result, stopped)
+            # Only a clean turn leaves its agent warm: interrupt or failure state never carries over.
+            keep = terminal["ev"] == "completed" and not result.get("interrupted")
+            return terminal
         finally:
             with self.lock:
                 self.agent = None
-            agent.close()
+            if keep:
+                self.warm = (agent, (session_id, instructions or None))
+            else:
+                agent.close()
+
+    def log_timing(self, turn_id: str, result: dict[str, Any]) -> None:
+        """One stderr line per turn (the supervisor logs it): where the first delta's time goes."""
+        marks, end = self.marks, time.monotonic()
+
+        def ms(a: str, b: str | None = None) -> int | None:
+            stop = marks.get(b) if b else end
+            return round((stop - marks[a]) * 1000) if a in marks and stop is not None else None
+
+        # The log redacts any key with "token" in it: input_tokens → input.
+        usage = " ".join(
+            f"{k.removesuffix('_tokens')}={result[k]}" for k in USAGE_KEYS if isinstance(result.get(k), int)
+        )
+        print(
+            f"drakter_runner: timing turn={turn_id[:8]} queue_ms={ms('recv', 'start')} build_ms={ms('start', 'built')} "
+            f"first_delta_ms={ms('start', 'delta')} total_ms={ms('start')} {usage}",
+            file=sys.stderr,
+            flush=True,
+        )
 
     def outcome(self, result: dict[str, Any], stopped: bool) -> dict[str, Any]:
         final = result.get("final_response")
@@ -325,6 +387,7 @@ class Runner:
                         "failed", turn_id=message["turn_id"], code="agent_busy", message="Ya hay un turno en curso."
                     )
                 else:
+                    message["_recv"] = time.monotonic()
                     self.turns.put(message)
             elif op == "stop" and isinstance(message.get("turn_id"), str):
                 self.interrupt(message["turn_id"])
