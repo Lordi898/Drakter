@@ -965,12 +965,19 @@ Decisiones técnicas, cambios de tecnología y motivos.
 - **Motivo:** el proceso de voz es el único que sabe qué está sonando de verdad.
 - **Impacto:** `voice/bridge.py`, `voice/session.py`, `voice/speech/playback.py`, `voice/speech/phrases.py`.
 
-## [2026-11-20] Identidad en voz: la petición explícita de longitud gana (complemento al PR #17)
-- **Contexto:** en voz el agente se negó a decir «una frase muy larga», insistía en ofrecer agenda y tareas y usaba «la guarida». Mientras se hacía esta tarea, el PR #17 (drakter-72, «comportamiento en voz según conversación real», eval `agent/evals/voice_behavior.py`) lo resolvió en `VOICE.md`, `SOUL.md` y `PERSONALITY.md` y se fusionó en `main`.
-- **Decisión:** se adopta la redacción del PR #17 y no se duplica. De lo hecho aquí solo queda `COMMUNICATION.md`: la petición explícita de más longitud gana a cualquier límite, también en voz. Se descartan los cambios propios en `VOICE.md` y `BEHAVIOR.md`: con `voice_behavior.py` (Haiku, muy ruidosa) el caso «Hey Jarvis, ¿qué hora es?» pasaba en `main` 5/7 y con ellos 0/7 (el modelo llamaba a `get_system_status`); sin ellos, la eval completa queda como `main` (rama 3/5 y 5/5, `main` 5/5 y 4/5). Antes de la fusión se había comprobado con `claude-haiku-5-5` una conversación en la que el asistente ya se había negado: 3/3 frases largas sin «guarida» ni ofertas de agenda.
-- **Alternativas descartadas:** fusionar las dos redacciones (reglas repetidas y peor en la eval).
-- **Motivo:** un solo dueño de la identidad en voz y no empeorar la eval existente.
-- **Impacto:** `agent/identity/COMMUNICATION.md`.
+## [2026-11-20] Identidad en voz según la conversación real (PR #17)
+- **Contexto:** en voz el agente se negó a decir «una frase muy larga», insistía en ofrecer agenda y tareas, usaba «la guarida» y corregía «Jarvis».
+- **Decisión:** en voz, la petición explícita del usuario sobre longitud o contenido gana a la brevedad, sin comentarlo; no se ofrece la agenda, las tareas ni las asignaturas sin motivo; nada de dragón ni «guarida» en voz (`VOICE.md`, `SOUL.md`, `PERSONALITY.md`); «Jarvis» es la palabra de activación y no se corrige; lo que no puede hacer se dice en una frase, sin listas de capacidades. Eval nueva `agent/evals/voice_behavior.py` (5 casos, Haiku): 3/5 antes, 5/5 después.
+- **Alternativas descartadas:** cambiar la personalidad de fondo (la personalidad Jarvis sigue pendiente de que la elija el usuario).
+- **Motivo:** lo que pide el usuario manda sobre el estilo por defecto.
+- **Impacto:** `agent/identity/VOICE.md`, `SOUL.md`, `PERSONALITY.md`, `agent/evals/voice_behavior.{py,jsonl}`. El PR #19 no toca `agent/identity/` (sus cambios propios se retiraron: con `voice_behavior.py` el caso «Hey Jarvis, ¿qué hora es?» empeoraba).
+
+## [2026-11-20] Selector de salida de audio en el escritorio (PR #16)
+- **Contexto:** el usuario usa un headset USB y la voz debe sonar por el dispositivo que elija, no siempre por el predeterminado.
+- **Decisión:** selector de salida en Ajustes → Voz con `HTMLMediaElement.setSinkId` sobre el `<audio>` remoto de WebRTC, persistido en las preferencias del escritorio, con tono de prueba y aviso con los dispositivos elegidos (`desktop/src/voice/audioOutput.ts`, `VoiceSection.tsx`, `stores/preferences.ts`, `webrtcClient.ts`).
+- **Alternativas descartadas:** cambiar el dispositivo predeterminado del sistema desde la app (afecta a otras aplicaciones).
+- **Motivo:** elegir micrófono y salida desde Drakter sin tocar el sistema.
+- **Impacto:** `desktop/src/voice/`, `desktop/src/settings/VoiceSection.tsx`, `desktop/src/stores/preferences.ts`.
 
 ## [2026-11-20] Voz: dependencia nueva `deepgram-sdk` 7.19.0
 - **Contexto:** el STT de Deepgram de Pipecat 1.16.0 necesita el extra `deepgram` (`deepgram-sdk<8,>=6.1.1`). Groq usa el cliente `openai`, ya instalado (no hace falta el extra `groq`).
