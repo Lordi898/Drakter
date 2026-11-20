@@ -965,12 +965,12 @@ Decisiones técnicas, cambios de tecnología y motivos.
 - **Motivo:** el proceso de voz es el único que sabe qué está sonando de verdad.
 - **Impacto:** `voice/bridge.py`, `voice/session.py`, `voice/speech/playback.py`, `voice/speech/phrases.py`.
 
-## [2026-11-20] Identidad en voz: la petición explícita de longitud gana, sin dragón y sin ofrecer el Workspace
-- **Contexto:** en voz el agente se negó a decir «una frase muy larga», insistía en ofrecer agenda y tareas («lo que le sirve de verdad») y usaba «la guarida». Causas: el límite duro «una o dos frases» de `VOICE.md`, «La brújula» de `SOUL.md` y «ofreces seguir» de `BEHAVIOR.md`, y la pincelada de dragón de `PERSONALITY.md`.
-- **Decisión:** solo el canal de voz: en `VOICE.md`, la brevedad es lo predeterminado y una petición explícita («dime una frase larga», «cuéntame más», «explícalo», «sigue») gana; sección «A lo que te preguntan» (no sacar ni ofrecer agenda/tareas si no viene a cuento; ofrecer seguir una vez, sin insistir) y sin dragón en voz. `BEHAVIOR.md` («ofreces seguir» → una vez, sin insistir; si piden decirlo entero, se dice) y `COMMUNICATION.md` (la petición explícita gana a cualquier límite). La personalidad de fondo (`SOUL`, `PERSONALITY`) no cambia: la personalidad Jarvis sigue pendiente de que la elija el usuario. Prueba con `claude-haiku-5-5` (prompt de sistema montado como `home.py`, conversación en la que el asistente ya se había negado y ofrecido la agenda): 3/3 frases largas (78-134 palabras), sin «guarida» ni ofertas de agenda; el ejemplo de `VOICE.md` se dejó sin contenido porque Haiku lo copiaba.
-- **Alternativas descartadas:** tocar `SOUL.md`/`PERSONALITY.md` (cambiaría la personalidad de fondo, que no toca).
-- **Motivo:** lo que pide el usuario manda sobre el estilo por defecto.
-- **Impacto:** `agent/identity/VOICE.md`, `BEHAVIOR.md`, `COMMUNICATION.md`.
+## [2026-11-20] Identidad en voz: la petición explícita de longitud gana (complemento al PR #17)
+- **Contexto:** en voz el agente se negó a decir «una frase muy larga», insistía en ofrecer agenda y tareas y usaba «la guarida». Mientras se hacía esta tarea, el PR #17 (drakter-72, «comportamiento en voz según conversación real», eval `agent/evals/voice_behavior.py`) lo resolvió en `VOICE.md`, `SOUL.md` y `PERSONALITY.md` y se fusionó en `main`.
+- **Decisión:** se adopta la redacción del PR #17 y no se duplica. De lo hecho aquí solo queda `COMMUNICATION.md`: la petición explícita de más longitud gana a cualquier límite, también en voz. Se descartan los cambios propios en `VOICE.md` y `BEHAVIOR.md`: con `voice_behavior.py` (Haiku, muy ruidosa) el caso «Hey Jarvis, ¿qué hora es?» pasaba en `main` 5/7 y con ellos 0/7 (el modelo llamaba a `get_system_status`); sin ellos, la eval completa queda como `main` (rama 3/5 y 5/5, `main` 5/5 y 4/5). Antes de la fusión se había comprobado con `claude-haiku-5-5` una conversación en la que el asistente ya se había negado: 3/3 frases largas sin «guarida» ni ofertas de agenda.
+- **Alternativas descartadas:** fusionar las dos redacciones (reglas repetidas y peor en la eval).
+- **Motivo:** un solo dueño de la identidad en voz y no empeorar la eval existente.
+- **Impacto:** `agent/identity/COMMUNICATION.md`.
 
 ## [2026-11-20] Voz: dependencia nueva `deepgram-sdk` 7.19.0
 - **Contexto:** el STT de Deepgram de Pipecat 1.16.0 necesita el extra `deepgram` (`deepgram-sdk<8,>=6.1.1`). Groq usa el cliente `openai`, ya instalado (no hace falta el extra `groq`).
