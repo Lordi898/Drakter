@@ -1,3 +1,4 @@
+import { homedir } from 'node:os'
 import { realpath } from 'node:fs/promises'
 import { extname, join, resolve, sep } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -54,6 +55,15 @@ async function resolveInside(root: string, pathname: string): Promise<string | n
   }
 }
 
+/** Personaje de Rive del usuario: `DRAKTER_CHARACTER_RIV` o el .riv por defecto (docs/usage/personaje.md). */
+const CHARACTER_PATH = '/__character/drakter.riv'
+function characterRivPath(): string {
+  const configured = process.env['DRAKTER_CHARACTER_RIV']
+  if (configured) return resolve(configured)
+  const data = process.env['XDG_DATA_HOME'] || join(homedir(), '.local', 'share')
+  return join(data, 'drakter', 'character', 'drakter.riv')
+}
+
 /** Tras `ready`. */
 export function registerRendererProtocol(): void {
   const rootPromise = realpath(join(__dirname, '../renderer'))
@@ -64,8 +74,14 @@ export function registerRendererProtocol(): void {
       if (url.host !== HOST) return plain(403, 'Forbidden')
       if (request.method !== 'GET' && request.method !== 'HEAD') return plain(403, 'Forbidden')
 
-      const root = await rootPromise
-      const file = await resolveInside(root, url.pathname)
+      let file: string | null
+      if (url.pathname === CHARACTER_PATH) {
+        // Ruta fija y no controlada por la petición: solo ese archivo, y solo si es un .riv.
+        file = await realpath(characterRivPath()).catch(() => null)
+        if (file !== null && extname(file).toLowerCase() !== '.riv') file = null
+      } else {
+        file = await resolveInside(await rootPromise, url.pathname)
+      }
       if (file === null) return plain(404, 'Not found')
 
       const upstream = await net.fetch(pathToFileURL(file).href, { method: request.method })

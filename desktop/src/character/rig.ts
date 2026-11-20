@@ -12,6 +12,8 @@ import { CHARACTER_STATES, type CharacterState } from './types'
 export interface Rig {
   setState(name: CharacterState): boolean
   getState(): CharacterState
+  /** Apertura de boca 0..1 desde el audio real; `null` devuelve la articulación interna. */
+  setMouthLevel(level: number | null): void
   destroy(): void
 }
 
@@ -433,6 +435,7 @@ export function createCharacter(
   let crackleLeft = 0;
   let toneKey = '';
   let alive = true;
+  let mouthLevel: number | null = null;
   const talk: Talk = {
     o: 0, w: 1, c: 0,       // valores suavizados
     to: 0, tw: 1, tc: 0,    // destino actual
@@ -704,7 +707,12 @@ export function createCharacter(
 
     let blink = live ? stepBlink() : 1;
     let flicker = live ? stepCrackle(dt) : 1;
-    if (live && cur.talk > 0.01) stepTalk(dt);
+    const driven = live && mouthLevel !== null;
+    if (driven) {
+      talk.o += ((mouthLevel ?? 0) * 0.95 - talk.o) * 0.5;
+      talk.w = 0.95;
+      talk.c = 0.08;
+    } else if (live && cur.talk > 0.01) stepTalk(dt);
 
     let talkO = live ? talk.o : 0.45;
     let talkW = live ? talk.w : 0.95;
@@ -795,6 +803,12 @@ export function createCharacter(
     return true;
   }
 
+  function setMouthLevel(level: number | null) {
+    if (!alive) return;
+    mouthLevel = level === null ? null : clamp(level, 0, 1);
+    if (mouthLevel !== null) startTicker();
+  }
+
   function destroy() {
     if (!alive) return;
     alive = false;
@@ -818,6 +832,7 @@ export function createCharacter(
   return {
     setState,
     getState: () => state,
+    setMouthLevel,
     destroy
   };
 }

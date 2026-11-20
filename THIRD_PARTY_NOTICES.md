@@ -47,6 +47,7 @@ Paquetes que acaban en la aplicación (dependencias de producción, 86 en total)
 | Licencia | Paquetes |
 |---|---|
 | MIT | 82 (entre ellos `react`, `react-dom`, `radix-ui`, `sonner`, `clsx`, `tailwind-merge`) |
+| MIT (añadido 2026-11-20) | `@rive-app/canvas` 2.53.0 (runtime de Rive para el personaje; ya cuenta dentro de los MIT) |
 | ISC | `lucide-react` |
 | Apache-2.0 | `class-variance-authority` |
 | 0BSD | `tslib` |
