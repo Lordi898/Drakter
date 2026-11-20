@@ -4,6 +4,7 @@
  * `window.api.voice.offer`; el renderer no tiene red propia.
  */
 import { getPreferences, subscribePreferences } from '@/stores/preferences'
+import { applySink } from './audioOutput'
 import { registerVoiceClient, type VoiceClient } from './contract'
 
 const AUDIO_CONSTRAINTS: MediaTrackConstraints = {
@@ -85,8 +86,11 @@ class WebRtcVoiceClient implements VoiceClient {
     this.unsubscribers = [
       window.api.subscribe('events', (event) => this.onServerEvent(event)),
       window.api.voice.onMicToggle(() => void this.setMicOpen(!this.micOpen())),
-      subscribePreferences(() => this.onMicPreference()),
-      listen(navigator.mediaDevices, 'devicechange', () => void this.refreshMic())
+      subscribePreferences(() => this.onPreferences()),
+      listen(navigator.mediaDevices, 'devicechange', () => {
+        void this.refreshMic()
+        this.refreshSink()
+      })
     ]
     await this.connect()
   }
@@ -144,11 +148,22 @@ class WebRtcVoiceClient implements VoiceClient {
 
   private lastMicDeviceId = getPreferences().micDeviceId
 
-  private onMicPreference(): void {
-    const id = getPreferences().micDeviceId
-    if (id === this.lastMicDeviceId) return
-    this.lastMicDeviceId = id
+  private lastOutputDeviceId = getPreferences().outputDeviceId
+
+  private onPreferences(): void {
+    const { micDeviceId, outputDeviceId } = getPreferences()
+    if (outputDeviceId !== this.lastOutputDeviceId) {
+      this.lastOutputDeviceId = outputDeviceId
+      this.refreshSink()
+    }
+    if (micDeviceId === this.lastMicDeviceId) return
+    this.lastMicDeviceId = micDeviceId
     void this.refreshMic()
+  }
+
+  /** Dirige la voz al dispositivo elegido (o al predeterminado si desapareció). */
+  private refreshSink(): void {
+    if (this.audio !== null) void applySink(this.audio, getPreferences().outputDeviceId)
   }
 
   /**
@@ -235,6 +250,7 @@ class WebRtcVoiceClient implements VoiceClient {
       audio.hidden = true
       document.body.appendChild(audio)
       this.audio = audio
+      this.refreshSink()
     }
     return this.audio
   }

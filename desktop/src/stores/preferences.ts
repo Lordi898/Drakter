@@ -9,6 +9,8 @@ export interface Preferences {
   readonly desktopNotifications: boolean
   /** `deviceId` del micrófono elegido; vacío = predeterminado del sistema. */
   readonly micDeviceId: string
+  /** `deviceId` de la salida elegida; vacío = predeterminada del sistema. */
+  readonly outputDeviceId: string
 }
 
 const STORAGE_KEY = 'drakter.preferences.v1'
@@ -17,7 +19,8 @@ const DEFAULTS: Preferences = {
   reduceMotion: false,
   contextPanelOpen: true,
   desktopNotifications: true,
-  micDeviceId: ''
+  micDeviceId: '',
+  outputDeviceId: ''
 }
 
 function load(): Preferences {
@@ -30,7 +33,8 @@ function load(): Preferences {
       reduceMotion: parsed.reduceMotion === true,
       contextPanelOpen: parsed.contextPanelOpen !== false,
       desktopNotifications: parsed.desktopNotifications !== false,
-      micDeviceId: typeof parsed.micDeviceId === 'string' ? parsed.micDeviceId : ''
+      micDeviceId: typeof parsed.micDeviceId === 'string' ? parsed.micDeviceId : '',
+      outputDeviceId: typeof parsed.outputDeviceId === 'string' ? parsed.outputDeviceId : ''
     }
   } catch {
     return DEFAULTS

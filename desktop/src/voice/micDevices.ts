@@ -2,11 +2,12 @@ import { useEffect, useState } from 'react'
 
 export interface MicDevices {
   readonly inputs: readonly { readonly id: string; readonly label: string }[]
-  /** La entrada (`''` = predeterminada) y la salida predeterminada son de dispositivos distintos. */
-  readonly split: (id: string) => boolean
+  readonly outputs: readonly { readonly id: string; readonly label: string }[]
+  /** La entrada y la salida (`''` = predeterminada del sistema) son de dispositivos distintos. */
+  readonly split: (inputId: string, outputId: string) => boolean
 }
 
-const EMPTY: MicDevices = { inputs: [], split: () => false }
+const EMPTY: MicDevices = { inputs: [], outputs: [], split: () => false }
 
 async function read(): Promise<MicDevices> {
   const [devices, defaults] = await Promise.all([
@@ -16,20 +17,22 @@ async function read(): Promise<MicDevices> {
   const real = (kind: MediaDeviceKind) =>
     devices.filter((d) => d.kind === kind && d.deviceId !== 'default' && d.deviceId !== 'communications')
   const inputs = real('audioinput').map((d, i) => ({ id: d.deviceId, label: d.label || `Micrófono ${i + 1}` }))
+  const outputs = real('audiooutput').map((d, i) => ({ id: d.deviceId, label: d.label || `Salida ${i + 1}` }))
   // Chromium solo da «Default» como etiqueta del predeterminado: el nombre real lo da PipeWire.
-  const outGroup = real('audiooutput').find((d) => d.label === defaults.output)?.groupId
-  const inGroup = (id: string): string | undefined =>
-    real('audioinput').find((d) => (id === '' ? d.label === defaults.input : d.deviceId === id))?.groupId
+  const group = (kind: MediaDeviceKind, id: string, defaultLabel: string | null): string | undefined =>
+    real(kind).find((d) => (id === '' ? d.label === defaultLabel : d.deviceId === id))?.groupId
   return {
     inputs,
-    split: (id) => {
-      const group = inGroup(id)
-      return outGroup !== undefined && group !== undefined && group !== outGroup
+    outputs,
+    split: (inputId, outputId) => {
+      const inGroup = group('audioinput', inputId, defaults.input)
+      const outGroup = group('audiooutput', outputId, defaults.output)
+      return inGroup !== undefined && outGroup !== undefined && inGroup !== outGroup
     }
   }
 }
 
-/** Entradas de audio disponibles, al día con `devicechange`. */
+/** Entradas y salidas de audio disponibles, al día con `devicechange`. */
 export function useMicDevices(): MicDevices {
   const [state, setState] = useState<MicDevices>(EMPTY)
   useEffect(() => {
