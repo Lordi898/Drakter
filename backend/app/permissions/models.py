@@ -65,6 +65,8 @@ class ActorContext:
     session_id: str | None = None
     tainted: bool = False
     agent_provider: str | None = None
+    # Set when a background job asks; travels to `confirmation.requested.job_id`.
+    job_id: str | None = None
 
 
 Handler = Callable[[sqlite3.Connection, BaseModel], Mapping[str, Any]]

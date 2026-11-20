@@ -83,6 +83,7 @@ def _actor(ctx: Any, tainted: bool) -> ActorContext:
         correlation_id=str(ctx.turn_id),
         turn_id=str(ctx.turn_id) if ctx.turn_id else None,
         session_id=str(ctx.session_id) if ctx.session_id else None,
+        job_id=str(job_id) if (job_id := getattr(ctx, "job_id", None)) else None,
         tainted=tainted,
     )
 

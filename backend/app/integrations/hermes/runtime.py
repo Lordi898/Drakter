@@ -32,7 +32,6 @@ from drakter_contracts.events import (
     AgentTurnFinished,
     AgentTurnStarted,
     ChatUserMessage,
-    ConfirmationRequested,
     SystemHealthChanged,
 )
 from drakter_contracts.speech_markup import IncrementalStripper, strip_tags
@@ -807,23 +806,8 @@ class AgentRuntime:
         return status, terminal.code.value, "failed", AgentState.ERROR
 
     def observe_tool_outcome(self, name: str, ctx: Any, outcome: Any) -> None:
-        """Hook on every agent tool result: announces pending confirmations to the GUI."""
-        data = outcome.model_dump()
-        if data.get("status") != "confirmation_required":
-            return
-        self.hub.publish(
-            "confirmation.requested",
-            ConfirmationRequested(
-                action_id=data["action_id"],
-                session_id=ctx.session_id,
-                turn_id=ctx.turn_id,
-                tool=name,
-                summary=data["summary"],
-                affected_count=data.get("affected_count"),
-                expires_at=data["expires_at"],
-            ),
-            correlation_id=str(ctx.turn_id),
-        )
+        """Hook on every agent tool result. `confirmation.requested` is announced once by
+        `ActionService.announce_pending`, with session and job; nothing to publish here."""
 
     def _publish_state(
         self,
