@@ -4,6 +4,9 @@ import { describeError, logError } from './log'
 import { RENDERER_URL } from './renderer-url'
 import { isSandboxDisabled } from './sandbox'
 
+/** Prefijo con el que `character/` deja sus avisos en la consola del renderer. */
+const CHARACTER_LOG_PREFIX = '[drakter:personaje] '
+
 const CHASSIS_COLOR = '#0c2747'
 const CRASH_LOOP_WINDOW_MS = 30_000
 const ERR_ABORTED = -3
@@ -105,6 +108,12 @@ export function createMainWindow(): BrowserWindow {
     if (mainWindow === window) mainWindow = null
   })
   watchRendererFailures(window)
+  // Avisos del personaje (p. ej. un .riv que no carga): el renderer no tiene log propio.
+  window.webContents.on('console-message', (event) => {
+    if (event.message.startsWith(CHARACTER_LOG_PREFIX)) {
+      logError('personaje', event.message.slice(CHARACTER_LOG_PREFIX.length))
+    }
+  })
 
   window.loadURL(RENDERER_URL).catch((reason: unknown) => {
     logError('main', 'No se ha podido iniciar la carga de la ventana', describeError(reason))

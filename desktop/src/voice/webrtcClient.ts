@@ -6,6 +6,7 @@
 import { getPreferences, subscribePreferences } from '@/stores/preferences'
 import { applySink } from './audioOutput'
 import { registerVoiceClient, type VoiceClient } from './contract'
+import { setOutputStream } from './outputLevel'
 
 const AUDIO_CONSTRAINTS: MediaTrackConstraints = {
   echoCancellation: true,
@@ -264,6 +265,7 @@ class WebRtcVoiceClient implements VoiceClient {
     if (pc !== null) {
       pc.onconnectionstatechange = null
       pc.ontrack = null
+      setOutputStream(null)
       pc.close()
     }
     if (this.linkUp) {
@@ -314,7 +316,9 @@ class WebRtcVoiceClient implements VoiceClient {
         }, PING_MS)
       }
       pc.ontrack = (event) => {
-        this.ensureAudioElement().srcObject = event.streams[0] ?? new MediaStream([event.track])
+        const stream = event.streams[0] ?? new MediaStream([event.track])
+        this.ensureAudioElement().srcObject = stream
+        setOutputStream(stream)
       }
       pc.onconnectionstatechange = () => {
         if (this.pc !== pc) return
