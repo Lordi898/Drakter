@@ -106,7 +106,7 @@ export function createAvatar(canvas: HTMLCanvasElement, opts: AvatarOptions = {}
     setViseme: (v) => { brain.viseme = v && 'AEIOUM'.includes(v[0]!.toUpperCase()) ? (v[0]!.toUpperCase() as Viseme) : v && 'BP'.includes(v[0]!.toUpperCase()) ? 'M' : null; },
     lookAt: (x, y) => { external = true; brain.cursor.x = Math.max(-1, Math.min(1, x)); brain.cursor.y = Math.max(-1, Math.min(1, y)); brain.cursor.active = true; },
     notify: (e) => brain.notify(e),
-    setReducedMotion: (on) => { brain.reduced = on; if (on) brain.microGestures = false; },
+    setReducedMotion: (on) => { brain.reduced = on; brain.microGestures = opts.microGestures ?? !on; },
     resize: (w, h) => { size = { w, h }; sc?.resize(w, h, dpr); },
     dispose: () => {
       disposed = true; stop();
