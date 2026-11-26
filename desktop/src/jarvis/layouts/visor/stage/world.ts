@@ -97,6 +97,8 @@ export interface VisorWorld extends StageLayer {
   toScreen(v: THREE.Vector3): { x: number; y: number; visible: boolean }
   /** Rayo desde la cámara por el punto de pantalla (px CSS). */
   ray(x: number, y: number): THREE.Raycaster
+  /** Reposo: 8 s sin mover el puntero ni girar. El 3D de los sectores se queda quieto (cero DOM por fotograma). */
+  readonly idle: boolean
   /** Escala de tamaño de los puntos (renderScale × alto / 1080). */
   readonly pointScale: number
   readonly onFirstFrame: Promise<void>
@@ -197,7 +199,7 @@ export function createVisorWorld(): VisorWorld {
 
   // ── Cámara y despliegue
   const rig = { yaw: 0, from: 0, to: 0, t: 1, dur: 1.1, mx: 0, my: 0, dolly: 0, fovKick: 0, boot: 0, bootT: 0 }
-  let sector = 0, revealed = false, reduced = false, time = 0, cssDirty = true, lastSig = '', firstFrame: (() => void) | null = null
+  let sector = 0, revealed = false, reduced = false, time = 0, cssDirty = true,  firstFrame: (() => void) | null = null
   const onFirstFrame = new Promise<void>((r) => { firstFrame = r })
 
   /** Despliega los laterales del sector enfocado y los principales de todos; pliega el resto. */
@@ -227,8 +229,10 @@ export function createVisorWorld(): VisorWorld {
   const ticks = new Set<{ fn: (f: StageFrame) => void; iv: number; last: number }>()
   const frames = new Set<(f: StageFrame) => void>()
   const screen = { x: 0, y: 0, visible: false }, caster = new THREE.Raycaster(), ndc = new THREE.Vector2()
-  let pointScale = 1
+  let pointScale = 1, lastMove = 0, lastPx = NaN, lastPy = NaN
+  const IDLE_AFTER = 8
 
+  const sig = new Float64Array(8).fill(NaN)
   const tv = new THREE.Vector3(), corners = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()]
   let W = 1, H = 1
 
@@ -272,6 +276,7 @@ export function createVisorWorld(): VisorWorld {
       return screen
     },
     ray(x, y) { ndc.set((x / W) * 2 - 1, -(y / H) * 2 + 1); caster.setFromCamera(ndc, cam); return caster },
+    get idle() { return time - lastMove > IDLE_AFTER },
     get pointScale() { return pointScale },
     onFirstFrame,
 
@@ -298,6 +303,7 @@ export function createVisorWorld(): VisorWorld {
       const boot = 1 - Math.pow(1 - rig.boot, 3)
       fMat.uniforms.uBoot!.value = boot; vaultMat.uniforms.uBoot!.value = boot
       haloU.uBoot.value = Math.min(1, Math.max(0, (rig.boot - 0.45) / 0.55)); glowU.uBoot.value = haloU.uBoot.value
+      if (frame.pointer.x !== lastPx || frame.pointer.y !== lastPy || rig.t < 1 || !revealed) { lastPx = frame.pointer.x; lastPy = frame.pointer.y; lastMove = time }
       // viraje entre sectores con empuje de profundidad
       if (rig.t < 1) { rig.t = Math.min(1, rig.t + dt / rig.dur); const e = ease(rig.t); rig.yaw = rig.from + (rig.to - rig.from) * e; rig.dolly = Math.sin(rig.t * Math.PI) * 220; rig.fovKick = Math.sin(rig.t * Math.PI) * 7 }
       else { rig.dolly *= 0.85; rig.fovKick *= 0.85; if (Math.abs(rig.dolly) < 0.05) rig.dolly = 0; if (Math.abs(rig.fovKick) < 0.005) rig.fovKick = 0 }
@@ -338,7 +344,8 @@ export function createVisorWorld(): VisorWorld {
         u.uSheen!.value = 0.62 + angDist(p.angle, rig.yaw) * 1.6 + rig.mx * 0.45 - rig.my * 0.2
         u.uTime!.value = time; u.uHover!.value = p.hover; u.uFlash!.value = p.flash; u.uReveal!.value = p.reveal
       }
-      for (const { g, sector: s } of groups) g.visible = Math.abs(angDist(rig.yaw, s * SECTOR_STEP)) < 1.2
+      // 3D de un sector solo si cae en el encuadre (o es el destino de un giro): los vecinos quedan fuera
+      for (const { g, sector: s } of groups) g.visible = layer.near(s, 0.85)
       haloG.visible = nearCore
       cam.updateMatrixWorld()
       for (const f of frames) f(frame)
@@ -347,8 +354,11 @@ export function createVisorWorld(): VisorWorld {
     render(frame) {
       frame.renderer.render(scene, cam)
       // CSS3D solo si cambian la cámara, la visibilidad o el tamaño: en reposo no se toca el DOM
-      const sig = `${cam.position.x.toFixed(2)},${cam.position.y.toFixed(2)},${cam.position.z.toFixed(2)},${cam.rotation.x.toFixed(4)},${cam.rotation.y.toFixed(4)},${cam.fov.toFixed(2)},${W},${H}`
-      if (sig !== lastSig || cssDirty) { css.render(cssScene, cam); lastSig = sig; cssDirty = false }
+      // sin cadenas por fotograma: se comparan los números con los del último render del CSS3D
+      const p = cam.position, r = cam.rotation
+      if (cssDirty || Math.abs(p.x - sig[0]!) > 0.005 || Math.abs(p.y - sig[1]!) > 0.005 || Math.abs(p.z - sig[2]!) > 0.005 || Math.abs(r.x - sig[3]!) > 0.00005 || Math.abs(r.y - sig[4]!) > 0.00005 || Math.abs(cam.fov - sig[5]!) > 0.005 || W !== sig[6] || H !== sig[7]) {
+        css.render(cssScene, cam); sig[0] = p.x; sig[1] = p.y; sig[2] = p.z; sig[3] = r.x; sig[4] = r.y; sig[5] = cam.fov; sig[6] = W; sig[7] = H; cssDirty = false
+      }
       if (firstFrame) { firstFrame(); firstFrame = null }
     },
     anchors(): Readonly<Record<string, StageAnchor>> {

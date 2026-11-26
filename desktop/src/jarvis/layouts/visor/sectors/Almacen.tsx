@@ -138,7 +138,7 @@ export function Almacen() {
         <Kpis items={[
           [folders.data ? folders.data.length : '–', 'carpetas raíz'],
           [folders.data ? inFolders : '–', 'en carpetas'],
-          [idx ? idx.counts.indexed : '–', 'indexados (recientes)'],
+          [idx ? idx.counts.indexed : '–', 'indexados'],
           [idx ? idx.counts.pending : '–', 'en cola'],
           [idx ? idx.counts.failed : '–', 'con error', (idx?.counts.failed ?? 0) > 0]
         ]} />

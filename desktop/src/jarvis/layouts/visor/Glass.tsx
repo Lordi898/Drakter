@@ -65,14 +65,18 @@ export function Glass({ world, sector, names, go, exit }: GlassProps) {
     }, 30)
   }, [world, names])
 
+  // Al girar, el objetivo fijado se va de su sitio: se suelta hasta el siguiente movimiento del puntero.
+  const targetRef = useRef<HTMLElement | null>(null)
+  useEffect(() => { targetRef.current = null; if (lockRef.current) lockRef.current.dataset.on = 'false' }, [sector])
+
   // Retícula y fijación de objetivos: solo con eventos del puntero (nada por fotograma).
   useEffect(() => {
-    let target: HTMLElement | null = null
+    const T = targetRef
     const place = (): void => {
       const lock = lockRef.current
       if (!lock) return
-      if (!target || !target.isConnected) { lock.dataset.on = 'false'; return }
-      const r = target.getBoundingClientRect()
+      if (!T.current || !T.current.isConnected) { lock.dataset.on = 'false'; return }
+      const r = T.current.getBoundingClientRect()
       lock.style.transform = `translate3d(${r.left - 6}px,${r.top - 6}px,0)`; lock.style.width = `${r.width + 12}px`; lock.style.height = `${r.height + 12}px`
       lock.dataset.on = 'true'
     }
@@ -80,8 +84,8 @@ export function Glass({ world, sector, names, go, exit }: GlassProps) {
       const ret = retRef.current
       if (ret) ret.style.transform = `translate3d(${e.clientX}px,${e.clientY}px,0)`
       const t = (e.target as HTMLElement | null)?.closest?.('.jv-visor [data-lock]') as HTMLElement | null
-      if (t !== target) {
-        target = t
+      if (t !== T.current) {
+        T.current = t
         if (labelRef.current) labelRef.current.textContent = t ? `${t.closest('[data-code]')?.getAttribute('data-code') ?? ''}  ${t.dataset.lock ?? ''}` : ''
         lockRef.current?.classList.remove('fix'); void lockRef.current?.offsetWidth; if (t) lockRef.current?.classList.add('fix')
       }

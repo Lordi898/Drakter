@@ -81,7 +81,7 @@
 .jv-visor-ladder { position: absolute; left: 18px; top: 22%; height: 56%; width: 64px; }
 .jv-visor-brand { position: absolute; left: 34px; top: 92px; }
 .jv-visor-brand b { font-weight: 300; font-size: 22px; letter-spacing: .12em; color: var(--v-core); } .jv-visor-brand span { font-weight: 200; color: var(--v-ice); letter-spacing: .04em; }
-.jv-visor-hz { position: absolute; left: 50%; bottom: 24px; transform: translateX(-50%); text-align: center; }
+.jv-visor-hz { position: absolute; left: 34px; bottom: 24px; }
 .jv-visor-hz span { display: block; font-size: 16px; color: var(--v-core); letter-spacing: .02em; }
 .jv-visor-hz small { font-size: 9px; color: var(--v-dim); }
 .jv-visor-dock { position: absolute; right: 34px; bottom: 22px; display: flex; gap: 4px; pointer-events: auto; }
@@ -243,3 +243,8 @@
 @keyframes jv-visor-al-in { from { opacity: 0; transform: translateX(-30px); } }
 @keyframes jv-visor-al-sw { from { transform: translateX(0); opacity: 1; } to { transform: translateX(340px); opacity: 0; } }
 .jv-visor.flat .jv-visor-alerts { position: fixed; }
+.jv-visor-alerts-list, .jv-visor-confirms { display: flex; flex-direction: column; gap: 8px; list-style: none; margin: 0; padding: 0; }
+.jv-visor-confirms .jv-visor-alert { pointer-events: auto; }
+.jv-visor-confirms small { display: block; font-size: 10px; color: var(--v-dim); margin-top: 4px; font-variation-settings: "MONO" 1; }
+.jv-visor-confirms button { margin-top: 8px; font-size: 12px; padding: 5px 12px; border-color: var(--v-amber); }
+.jv-visor-confirms .jv-visor-alert { background: rgba(4, 18, 34, .97); }

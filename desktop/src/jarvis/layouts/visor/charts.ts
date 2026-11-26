@@ -107,7 +107,7 @@ export function drawHabits(x: CanvasRenderingContext2D, w: number, h: number, d:
 export interface WeekData {
   readonly days: readonly string[]
   /** `day` 0-6 desde hoy; horas locales decimales. */
-  readonly blocks: readonly { readonly day: number; readonly start: number; readonly end: number; readonly title: string; readonly tone: 'class' | 'event' | 'block' | 'exam' }[]
+  readonly blocks: readonly { readonly day: number; readonly start: number; readonly end: number; readonly title: string; readonly tone: 'class' | 'event' | 'block' | 'exam'; readonly lane: number; readonly lanes: number }[]
   readonly from: number
   readonly to: number
 }
@@ -130,7 +130,7 @@ export function drawWeek(x: CanvasRenderingContext2D, w: number, h: number, d: W
   d.blocks.forEach((e, i) => {
     const ap = easeOut(b * 2 - i * 0.03)
     if (ap <= 0) return
-    const px = ox + dayW * e.day + 4, py = Y(e.start) + bow(e.day), ph = Math.max(3, (Y(e.end) - Y(e.start)) * ap), pw = dayW - 8, col = TONE[e.tone]
+    const lw = (dayW - 8) / Math.max(1, e.lanes), px = ox + dayW * e.day + 4 + lw * e.lane, py = Y(e.start) + bow(e.day), ph = Math.max(3, (Y(e.end) - Y(e.start)) * ap), pw = lw - (e.lanes > 1 ? 2 : 0), col = TONE[e.tone]
     x.fillStyle = `rgba(${col},${e.tone === 'exam' ? 0.32 : 0.14})`; x.fillRect(px, py, pw, ph); x.fillStyle = `rgba(${col},0.95)`; x.fillRect(px, py, 2, ph)
     if (ph > 16) {
       x.globalCompositeOperation = 'source-over'; x.fillStyle = `rgba(${CORE},${0.9 * ap})`; x.font = sans(10.5, 500); x.textAlign = 'left'

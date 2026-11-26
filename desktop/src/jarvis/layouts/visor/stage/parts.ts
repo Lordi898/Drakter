@@ -79,10 +79,10 @@ export function createGraph(world: VisorWorld): GraphPart {
   const wp = new THREE.Vector3()
   let hover = -1, sel = -1, hiDirty = false
   const off = world.onFrame((f: StageFrame) => {
-    if (!world.near(SECTOR, 1.2)) return
+    if (!world.near(SECTOR, 0.85)) return
     nodeU.uPR.value = world.pointScale; nodeU.uTime.value = f.time; edgeU.uTime.value = f.time
     // Giro lento solo con movimiento permitido; quieto, las etiquetas no se reescriben.
-    if (!f.reducedMotion) { spin.rotation.y += f.dt * 0.06; spin.rotation.x = Math.sin(f.time * 0.13) * 0.14 }
+    if (!f.reducedMotion && !world.idle) { spin.rotation.y += f.dt * 0.06; spin.rotation.x = Math.sin(f.time * 0.13) * 0.14 }
     if (hiDirty && nodes) { for (let i = 0; i < hi.length; i++) hi[i] = i === hover || i === sel ? 1 : 0; (nodes.geometry.attributes.aHi as THREE.BufferAttribute).needsUpdate = true; hiDirty = false }
   })
   return {
@@ -145,12 +145,13 @@ export function createSkyline(world: VisorWorld): SkylinePart {
   const gm = grid.material as THREE.Material; gm.transparent = true; gm.blending = THREE.AdditiveBlending; gm.depthTest = false; grid.renderOrder = 4; spin.add(grid)
   const barU = { uGrow: { value: 0 }, uTime: { value: 0 } }
   const mat = new THREE.ShaderMaterial({ vertexShader: BAR_VS, fragmentShader: BAR_FS, uniforms: barU, ...ADD })
+  let skyT = 0
   let bars: THREE.InstancedMesh | null = null, heights = new Float32Array(0), rows = 0
   const off = world.onFrame((f) => {
-    if (!world.near(SECTOR, 1.2)) return
+    if (!world.near(SECTOR, 0.85)) return
     const want = world.near(SECTOR, 0.4) ? 1 : 0.05
     barU.uGrow.value += (want - barU.uGrow.value) * (1 - Math.exp(-f.dt * 4)); if (Math.abs(want - barU.uGrow.value) < 0.002) barU.uGrow.value = want
-    if (!f.reducedMotion) { spin.rotation.y = Math.sin(f.time * 0.15) * 0.35 + 0.35; barU.uTime.value = f.time }
+    if (!f.reducedMotion && !world.idle) { skyT += f.dt; spin.rotation.y = Math.sin(skyT * 0.15) * 0.35 + 0.35; barU.uTime.value = skyT }
   })
   const m = new THREE.Matrix4(), inv = new THREE.Matrix4(), box = new THREE.Box3(), r2 = new THREE.Ray(), hit = new THREE.Vector3()
   return {
@@ -206,9 +207,9 @@ export function createDocCore(world: VisorWorld): DocCorePart {
   ring.rotation.x = -Math.PI / 2 + 0.25; ring.renderOrder = 7; root.add(ring)
   let pts: THREE.Points | null = null
   const off = world.onFrame((f) => {
-    if (!world.near(SECTOR, 1.2)) return
+    if (!world.near(SECTOR, 0.85)) return
     u.uPR.value = world.pointScale
-    if (f.reducedMotion) return
+    if (f.reducedMotion || world.idle) return
     u.uTime.value = f.time; spin.rotation.y += f.dt * 0.18
     const sy = ((f.time * 0.12) % 1) * 640 - 320
     ring.position.y = sy; (ring.material as THREE.MeshBasicMaterial).opacity = 0.5 * Math.sin(((sy + 320) / 640) * Math.PI)
@@ -227,7 +228,7 @@ export function createDocCore(world: VisorWorld): DocCorePart {
         for (let j = 0; j < m && k < n; j++, k++) {
           const t = k / n, a = t * Math.PI * 2 * 26 + gi * 0.6, r = 120 + gi * 26 + Math.sin(k) * 10
           p.set([Math.cos(a) * r, (t - 0.5) * 620, Math.sin(a) * r], k * 3)
-          col.set(hex).multiplyScalar(j < on ? 1 : 0.22).toArray(c, k * 3); sz[k] = j < on ? 6 : 4
+          col.set(hex).multiplyScalar(j < on ? 1 : 0.5).toArray(c, k * 3); sz[k] = (j < on ? 6 : 4.5) * (n < 60 ? 2 : 1)
         }
       })
       const g = new THREE.BufferGeometry()

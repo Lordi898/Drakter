@@ -53,7 +53,7 @@ export function Calendario() {
     let from = 8, to = 22
     const blocks = days.flatMap((d, i) => placeTimed(items, d).map((p) => {
       from = Math.min(from, Math.floor(p.startMin / 60)); to = Math.max(to, Math.ceil(p.endMin / 60))
-      return { day: i, start: p.startMin / 60, end: p.endMin / 60, title: p.item.title, tone: tone(p.item) }
+      return { day: i, start: p.startMin / 60, end: p.endMin / 60, title: p.item.title, tone: tone(p.item), lane: p.lane, lanes: p.lanes }
     }))
     return { days: days.map((d) => `${weekdayShort(d).toLowerCase()} ${Number(d.slice(8))}`), blocks, from, to: Math.min(24, to) }
   }, [items, today])
@@ -111,7 +111,7 @@ export function Calendario() {
           [agenda.data ? items.filter((a) => a.source_type !== 'class_session').length : '–', 'eventos en 7 días'],
           [timetable.data ? classes.length : '–', 'clases hoy'],
           [timetable.data ? `${(classMin / 60).toFixed(1).replace('.', ',')} h` : '–', 'de clase hoy'],
-          [nextExam ? dayDiff(today, startKey(nextExam).slice(0, 10)) : '–', 'días al próximo examen', nextExam !== undefined],
+          [nextExam ? dayDiff(today, startKey(nextExam).slice(0, 10)) : '–', 'días a un examen', nextExam !== undefined],
           [agenda.data ? allDayToday : '–', 'de día completo hoy']
         ]} />
       </Panel>
