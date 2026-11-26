@@ -1419,3 +1419,38 @@ Decisiones técnicas, cambios de tecnología y motivos.
     - Ascuario se dibuja en su recuadro, cambia de estado, abre la boca con nivel 1 y sigue al puntero. Arranque de la capa en 843 ms, con la malla y la compilación incluidas.
     - Después de la capa, `toneMapping` = 0, `scissorTest` = false y el viewport a lienzo completo.
     - El modo Drakter se ve igual: con `ACTIVE_AVATAR = null`, SVG y sin Three; con `'ascuario'`, la misma imagen que antes del cambio, sin avisos.
+
+## [2026-11-26] W3: motor del Stage de Jarvis (`createStage`)
+- **Contexto:** jarvis-arquitectura.md §2.4-§2.7 y el contrato congelado `desktop/src/jarvis/stage/types.ts` (J0), que no cambia.
+- **Decisión:**
+  - `jarvis/stage/createStage.ts` crea un único `WebGLRenderer` (WebGL2, `low-power`, sin stencil ni alfa, `antialias` solo si el nivel de partida es Cine, porque se fija al crear el contexto). Usa `autoClear = false` y `info.autoReset = false`. Limpia una vez por fotograma, hace `update` de todas las capas y después `render` en orden ascendente, y restablece render target, scissor y viewport entre capas. El lienzo queda fijo a pantalla completa, con `aria-hidden` y `pointer-events: none`.
+  - `loop.ts`: un solo `rAF` con límite de fps. Espera con un temporizador hasta 12 ms antes del fotograma que toca, para no despertar 60 veces por segundo a 20-30 fps. Con intervalo 0 dibuja a demanda. Se para con `document.hidden`, va a la mitad de fps sin foco y pasa a `idleFps` tras 8 s sin puntero, foco ni cambios. `requestFrame()` pide un fotograma, pero no saca del reposo: el anfitrión lo llama cuando cambian los datos o el estado del agente.
+  - `quality.ts`: los perfiles de §2.6 y la escala `dpr · min(1, √(presupuesto / (w·h·dpr²)))`. En Ahorro el avatar va a 30 fps, no a 24, porque el contrato solo admite `maxFps` 30 o 60. `gpu.ts` detecta la GPU en un lienzo desechable: software → Ahorro sin partículas; Intel, Mali o Adreno → Equilibrado; dedicada → Cine, salvo con 4 núcleos o menos.
+  - `governor.ts`: p90 del intervalo real entre fotogramas seguidos (recoge también la contrapresión de la GPU) en ventanas de 3 s, frente al intervalo objetivo, con un umbral de ×1,25. Los huecos de más de 4 intervalos no cuentan, porque son paradas (ventana tapada) y no tirones. Con 2 ventanas malas baja un peldaño (con 4 si el nivel está fijado a mano, y entonces avisa). Los peldaños son escala ×0,85, después ×0,7, después partículas ×0,5 y después el nivel inferior. Tras 10 s buenos sube un peldaño, sin pasar nunca del nivel de partida, y la espera se duplica tras cada recaída.
+  - `bloom.ts` (solo Cine): copia el fotograma con `copyFramebufferToTexture`, hace un prefiltro con umbral a media resolución, un gauss separable de dos pasadas y suma aditiva. No usa render targets para las capas, así que el `setViewport` del avatar sigue valiendo.
+  - `anchors.ts`: `createAnchorLayer(stage)` es una capa sin GL que se dibuja la última y escribe `--jv-x`/`--jv-y` y `data-anchor-visible` en los nodos enlazados, solo cuando cambian.
+  - **Pérdida de contexto:** el Stage se para y, al restaurarse, Three vuelve a subir los recursos; el Stage reajusta el tamaño y sigue. El anfitrión escucha `webglcontextlost`/`webglcontextrestored` en su lienzo para pasar a «HUD sin lienzo» y volver, sin cambiar el contrato. `dispose()` libera capas, bloom y renderer. No llama a `forceContextLoss`, porque React en desarrollo monta dos veces sobre el mismo lienzo.
+  - Capas de prueba neutras: `layers/grid.ts` (rejilla con `fwidth`, fundido y barrido, en una draw call) y `layers/particles.ts` (`Points` con el movimiento en el vertex shader, quietas en Ahorro y con «reducir movimiento»), con la misma cámara de parallax (`layers/holoCamera.ts`).
+- **Alternativas descartadas:**
+  - Medir solo el tiempo de JS del fotograma: no ve la GPU.
+  - Saltarse fotogramas dentro de cada `rAF` a 60 Hz: despierta el hilo el doble.
+  - Bloom con `EffectComposer` o pintando las capas en un render target: es más caro y rompe el viewport del avatar.
+- **Motivo:** cumplir los presupuestos de §2.6 en la UHD 620 con un único contexto.
+- **Impacto:**
+  - Código: `desktop/src/jarvis/stage/{createStage,loop,governor,quality,gpu,bloom,anchors}.ts` y `stage/layers/{grid,particles,holoCamera}.ts`. Sin cambios en `types.ts` ni en `layers/avatar.ts` (W4). El Stage aún no se monta: lo cablean `JarvisShell` (W1) y el integrador.
+  - Medido en la UHD 620 real (Chrome 45 con ANGLE y Mesa, ventana de 1470×746 px CSS con DPR 1,25), dentro del lock de medición. La escena tenía rejilla, partículas y Ascuario como capa (`createAvatarStageLayer` + `createLayer` de `ascuario/entry`, como `loadLayer` del registro). Hubo dos pasadas; la máquina estaba cargada por otros workers (carga media 2-7).
+
+    | Nivel | Lienzo | fps activo | CPU renderer activo | fps reposo | CPU renderer reposo | oculto |
+    |---|---|---|---|---|---|---|
+    | auto → Equilibrado | 1600×812 | 30 / 30 | 14 / 12 % | 20 / 20 | 8,7 / 7,5 % | 0 fps, 0 % |
+    | Cine (bloom) | 1837×932 | 59,6 / 59,6 | 24 / 20 % | 30 / 30 | 5,5 / 14,9 % | 0 fps, 0 % |
+    | Equilibrado | 1600×812 | 30 / 30 | 10 / 10 % | 20 / 20 | 4,1 / 7,7 % | 0 fps, 0 % |
+    | Ahorro | 1255×637 | 30 / 30 | 7 / 13 % | 0 (a demanda) | 0,2 / 0,5 % | 0 fps, 0 % |
+
+    - En reposo se cumplen los tres objetivos (≲ 20, 15 y 10 %).
+    - `ready` tarda entre 120 y 600 ms con el avatar incluido.
+    - Con carga alta (carga media de 6 a 12), el regulador bajó Cine de escala 1,25 a 1,06 y después a 0,875, y se mantuvo en unos 52 fps.
+    - Pérdida de contexto: 0 fotogramas mientras dura y 45 en 1,5 s tras restaurarlo.
+    - Al quitar las capas quedan 0 geometrías, 0 texturas y 0 programas, y no hay fotogramas tras `dispose()`. Después de una restauración, Three avisa de que «object does not belong to this context» al liberar, y es inocuo.
+    - En SwiftShader detecta software, pasa a Ahorro sin partículas y «reducir movimiento» deja la escena quieta.
+  - ⚠️ Se midió en Chrome y no en Electron, para no tocar la app de desarrollo del usuario; es el mismo Chromium y la misma ruta ANGLE. Playwright emula páginas siempre visibles, así que `hidden` se probó forzando `document.hidden` y `visibilitychange`, que es la misma ruta que sigue Electron al minimizar. Arnés y datos: `~/.local/share/drakter/research/jarvis-hud/w3-stage/`.
