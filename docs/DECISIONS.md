@@ -1801,3 +1801,18 @@ Decisiones técnicas, cambios de tecnología y motivos.
     - A/B del HUD (Equilibrado, holo-contorno): antes de quitar el marco a pantalla completa y la inclinación 3D del panel en reposo, 10,2 % con HUD frente a 7,5 % sin él; después, 9,6 % frente a 9,7 %: el HUD DOM ya no añade coste. El JavaScript de la escena es < 1 % del tiempo perfilado.
     - Funcional: datos sembrados visibles en las 7 estaciones y en los paneles; «Completar» cerró una tarea en el backend (16 → 15 abiertas) y la lista se recargó; el clic en un holograma abre su estación; teclas del anfitrión, Esc y ←/→ correctos; sin errores en consola (solo avisos de voz, que no hay en el entorno aislado).
   - ⚠️ No probado: la voz real (espectro y ondas con audio), una confirmación real lanzada desde la Holomesa (sus acciones no son destructivas; el aviso común ya se comprobó en Jarvis) y «reducir movimiento» en la app. Arnés y datos: `~/.local/share/drakter/research/jarvis-hud/holomesa-app/`.
+
+## [2026-11-26] Stage: fps de reposo por interfaz (`setIdleFps`)
+- **Contexto:** en reposo, la interfaz Visor gasta un 10,6-15,5 % de CPU, y casi todo es composición a 20 fps (lo midió drakter-108). Cada interfaz sabe cuánta animación de ambiente necesita.
+- **Decisión:** se añade al contrato `Stage.setIdleFps(fps | null)`, de forma aditiva.
+  - Solo puede **bajar** el `idleFps` del perfil y nunca subirlo, así que Ahorro sigue a demanda. Con 0 se dibuja a demanda y con `null` vuelve el valor del perfil.
+  - La interfaz lo fija al montarse y lo devuelve a `null` al desmontarse.
+  - No afecta al fps activo, a `hidden` ni al regulador.
+- **Alternativas descartadas:** bajar el `idleFps` de Equilibrado para todas las interfaces, porque no todas lo necesitan; y un campo nuevo en `QualityProfile`, porque el perfil es del nivel y no de la interfaz.
+- **Motivo:** menos CPU y GPU en reposo sin tocar a quien no lo use.
+- **Impacto:** `desktop/src/jarvis/stage/{types,createStage}.ts`. Se midió en la UHD 620, en dos pasadas bajo el lock, con rejilla, partículas y Ascuario; las cifras son el uso de CPU del renderer y del proceso GPU:
+
+  | Nivel | Perfil | Con `setIdleFps(10)` |
+  |---|---|---|
+  | Equilibrado | 20 fps: 7,5-8,6 % y 7,1-7,8 % | 10 fps: 5,0-6,6 % y 2,9-3,9 % |
+  | Cine | 30 fps: 10,3-16,1 % y 8,6-13,3 % | 10 fps: 2,1-5,2 % y 2,3-4,5 % |
