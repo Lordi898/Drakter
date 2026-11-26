@@ -67,7 +67,9 @@ export default function VisorLayout({ stage, avatar, reducedMotion, section, nav
   // Teclas del visor (no con el foco en un campo: el chat y la búsqueda las necesitan).
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
-      if (e.ctrlKey || e.metaKey || e.altKey || isField(e.target)) return
+      if (e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey || isField(e.target)) return
+      // Con un diálogo abierto (confirmación, Ajustes, paleta…) las teclas son suyas: Escape lo cierra, no gira el visor.
+      if ((e.target as Element | null)?.closest?.('[role=dialog],[role=alertdialog]') || document.querySelector('[aria-modal=true]')) return
       if (e.key >= '0' && e.key <= '6') go(Number(e.key))
       else if (e.key === 'ArrowRight') go(cur + 1)
       else if (e.key === 'ArrowLeft') go(cur - 1)
