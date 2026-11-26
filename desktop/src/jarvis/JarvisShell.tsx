@@ -1,17 +1,18 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type LazyExoticComponent } from 'react'
 import { Check, ChevronDown } from 'lucide-react'
-import { jarvisLayoutInfo, JARVIS_LAYOUTS } from '@/app/jarvisLayouts'
+import { JARVIS_LAYOUTS } from '@/app/jarvisLayouts'
 import { UI_MODE_SHORTCUT, UI_MODE_SHORTCUT_LABEL } from '@/app/useGlobalShortcuts'
 import { useReducedMotion } from '@/app/useReducedMotion'
-import { activeAvatar } from '@/character/avatars/registry'
+import { listAvatars, NO_AVATAR, useActiveAvatar, type AvatarEntry } from '@/character/avatars/registry'
 import type { AvatarViewport } from '@/character/avatars/types'
 import { useAvatarWiring } from '@/character/avatars/wiring'
 import { CHARACTER_STATE_LABELS } from '@/character/labels'
 import { navigateTo, useCurrentSection } from '@/navigation/route'
+import { SECTIONS } from '@/navigation/sections'
 import { useDrakterState } from '@/stores/agent'
 import { requestAppearance } from '@/stores/appearance'
 import { usePreferences } from '@/stores/preferences'
-import { requestUiMode, settleUiMode } from '@/stores/uiMode'
+import { requestUiMode, setLeaveTransition, settleUiMode } from '@/stores/uiMode'
 import { availableLayouts, layoutLoader, resolveLayout } from './layouts/registry'
 import type { JarvisAvatarSlot, JarvisLayout, JarvisLayoutId } from './layouts/types'
 import { createStage } from './stage/createStage'
@@ -21,6 +22,8 @@ import type { QualityTier, Stage, StageFrame } from './stage/types'
 /** Si la interfaz no avisa de que ya se ve, la transición se cierra igualmente (Drakter no queda debajo). */
 const READY_TIMEOUT_MS = 4000
 const AVATAR_ANCHOR = 'avatar'
+/** Selector rápido de interfaz y avatar. */
+const PICKER_SHORTCUT = 'Control+Shift+A'
 
 // Fondo de respaldo en CSS (sin lienzo): retícula fina y halo central. Coste de GPU ~0.
 const BACKDROP = [
@@ -29,7 +32,7 @@ const BACKDROP = [
   'linear-gradient(90deg, rgba(125, 211, 252, 0.06) 1px, transparent 1px)'
 ].join(', ')
 
-/** Recuadro por defecto del avatar: centrado, 60 % del alto. */
+/** Recuadro por defecto del avatar: centrado, 60 % del lado menor. */
 function centeredViewport(frame: StageFrame): AvatarViewport {
   const side = Math.round(Math.min(frame.width, frame.height) * 0.6)
   return { x: Math.round((frame.width - side) / 2), y: Math.round((frame.height - side) / 2), width: side, height: side }
@@ -48,14 +51,12 @@ function layoutComponent(id: JarvisLayoutId): LazyExoticComponent<JarvisLayout> 
   return component
 }
 
-/** El Stage único (o `null` sin WebGL2) y la capa del avatar activo. */
+/** El Stage único (o `null` sin WebGL2 o con el contexto perdido). */
 function useStage(canvas: HTMLCanvasElement | null) {
   const { jarvisQuality } = usePreferences()
   const reducedMotion = useReducedMotion()
   const [stage, setStage] = useState<Stage | null>(null)
-  const [avatarLayer, setAvatarLayer] = useState<AvatarStageLayer | null>(null)
   const [tier, setTier] = useState<QualityTier>('equilibrado')
-  const viewportRef = useRef<((frame: StageFrame) => AvatarViewport) | null>(null)
   const initial = useRef({ jarvisQuality, reducedMotion })
 
   useEffect(() => {
@@ -67,27 +68,15 @@ function useStage(canvas: HTMLCanvasElement | null) {
       console.warn('[drakter:jarvis] sin WebGL2: interfaz sin lienzo', reason)
       return
     }
-    // TODO(A1): `avatarEntry(avatarId)` cuando el registro de avatares lea la preferencia.
-    const entry = activeAvatar
-    const layer = entry?.loadLayer
-      ? createAvatarStageLayer({
-          load: entry.loadLayer,
-          viewport: (frame) => viewportRef.current?.(frame) ?? centeredViewport(frame),
-          transparent: true
-        })
-      : null
-    if (layer) created.add(layer)
     const onLost = (): void => setStage(null)
     canvas.addEventListener('webglcontextlost', onLost)
     const timer = setInterval(() => setTier(created.stats().tier), 2000)
     setTier(created.stats().tier)
     setStage(created)
-    setAvatarLayer(layer)
     return () => {
       clearInterval(timer)
       canvas.removeEventListener('webglcontextlost', onLost)
       setStage(null)
-      setAvatarLayer(null)
       created.dispose()
     }
   }, [canvas])
@@ -95,44 +84,120 @@ function useStage(canvas: HTMLCanvasElement | null) {
   useEffect(() => stage?.setQuality(jarvisQuality), [stage, jarvisQuality])
   useEffect(() => stage?.setReducedMotion(reducedMotion), [stage, reducedMotion])
 
-  return { stage, avatarLayer, tier, reducedMotion, viewportRef }
+  return { stage, tier, reducedMotion }
 }
 
-function LayoutPicker({ current }: { readonly current: JarvisLayoutId }) {
+/** Capa del avatar elegido (`avatarId`) en el Stage; cambiar de avatar sustituye la capa. */
+function useAvatarLayer(stage: Stage | null, entry: AvatarEntry | null) {
+  const [layer, setLayer] = useState<AvatarStageLayer | null>(null)
+  const viewportRef = useRef<((frame: StageFrame) => AvatarViewport) | null>(null)
+
+  useEffect(() => {
+    const load = entry?.loadLayer
+    if (!stage || !load) return
+    const created = createAvatarStageLayer({
+      load,
+      viewport: (frame) => viewportRef.current?.(frame) ?? centeredViewport(frame),
+      transparent: true
+    })
+    stage.add(created)
+    setLayer(created)
+    return () => {
+      setLayer(null)
+      stage.remove(created.id) // la libera
+    }
+  }, [stage, entry])
+
+  return { layer, viewportRef }
+}
+
+/** 0…9 sin modificadores cambian de sección en Jarvis (mismo mapa que la barra de Drakter). */
+function useSectionKeys(): void {
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent): void {
+      if (event.ctrlKey || event.altKey || event.metaKey || event.shiftKey || event.repeat) return
+      const target = event.target as HTMLElement | null
+      if (target?.closest('input, textarea, select, [contenteditable=""], [contenteditable="true"], [role="dialog"]')) return
+      const section = SECTIONS.find((candidate) => candidate.shortcut === event.key)
+      if (!section) return
+      event.preventDefault()
+      navigateTo(section.id)
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [])
+}
+
+const pickerItem =
+  'flex w-full items-center justify-between rounded px-2 py-1.5 text-left text-xs text-sky-100 outline-none hover:bg-sky-400/15 focus-visible:bg-sky-400/15'
+
+/** Selector rápido común: interfaz Jarvis y avatar. Ctrl+Shift+A lo abre y lo cierra; Escape lo cierra. */
+function AppearancePicker({ layoutId }: { readonly layoutId: JarvisLayoutId | null }) {
   const [open, setOpen] = useState(false)
-  const available = availableLayouts()
-  if (available.length < 2) return null
-  const choose = (id: JarvisLayoutId): void => {
+  const { avatarId } = usePreferences()
+  const layouts = availableLayouts()
+  const avatars = listAvatars()
+
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent): void {
+      if (event.key === 'Escape') setOpen(false)
+      if (!event.ctrlKey || !event.shiftKey || event.altKey || event.metaKey || event.code !== 'KeyA') return
+      event.preventDefault()
+      setOpen((value) => !value)
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [])
+
+  const pick = (request: Parameters<typeof requestAppearance>[0]): void => {
     setOpen(false)
-    requestAppearance({ layout: id }, 'button')
+    requestAppearance(request, 'button')
   }
+
   return (
     <div className="relative">
       <button
         type="button"
         aria-haspopup="true"
         aria-expanded={open}
-        onClick={() => setOpen((v) => !v)}
+        aria-keyshortcuts={PICKER_SHORTCUT}
+        onClick={() => setOpen((value) => !value)}
         className="flex items-center gap-1.5 rounded-md border border-sky-400/40 bg-sky-950/60 px-3 py-1.5 text-xs tracking-wide text-sky-100 outline-none hover:bg-sky-900/60 focus-visible:ring-2 focus-visible:ring-sky-300"
       >
-        Interfaz: {jarvisLayoutInfo(current).name}
+        Apariencia
         <ChevronDown className="size-3.5" aria-hidden="true" />
       </button>
       {open ? (
-        <ul className="absolute right-0 mt-1 w-56 rounded-md border border-sky-400/40 bg-[#03101c] p-1 shadow-[0_0_24px_rgba(56,189,248,0.2)]">
-          {JARVIS_LAYOUTS.filter((info) => available.includes(info.id)).map((info) => (
-            <li key={info.id}>
-              <button
-                type="button"
-                onClick={() => choose(info.id)}
-                className="flex w-full items-center justify-between rounded px-2 py-1.5 text-left text-xs text-sky-100 outline-none hover:bg-sky-400/15 focus-visible:bg-sky-400/15"
-              >
-                {info.name}
-                {info.id === current ? <Check className="size-3.5" aria-label="actual" /> : null}
+        <div className="absolute right-0 mt-1 w-60 rounded-md border border-sky-400/40 bg-[#03101c] p-1 shadow-[0_0_24px_rgba(56,189,248,0.2)]">
+          <p className="px-2 pt-1 pb-0.5 font-mono text-[10px] tracking-[0.2em] text-sky-300/70 uppercase">Interfaz</p>
+          <ul>
+            {JARVIS_LAYOUTS.filter((info) => layouts.includes(info.id)).map((info) => (
+              <li key={info.id}>
+                <button type="button" className={pickerItem} onClick={() => pick({ layout: info.id })}>
+                  {info.name}
+                  {info.id === layoutId ? <Check className="size-3.5" aria-label="actual" /> : null}
+                </button>
+              </li>
+            ))}
+          </ul>
+          <p className="px-2 pt-2 pb-0.5 font-mono text-[10px] tracking-[0.2em] text-sky-300/70 uppercase">Avatar</p>
+          <ul>
+            {avatars.map((entry) => (
+              <li key={entry.meta.id}>
+                <button type="button" className={pickerItem} onClick={() => pick({ avatar: entry.meta.id })}>
+                  {entry.meta.name}
+                  {entry.meta.id === avatarId ? <Check className="size-3.5" aria-label="actual" /> : null}
+                </button>
+              </li>
+            ))}
+            <li>
+              <button type="button" className={pickerItem} onClick={() => pick({ avatar: NO_AVATAR })}>
+                Ninguno (personaje clásico)
+                {avatarId === NO_AVATAR ? <Check className="size-3.5" aria-label="actual" /> : null}
               </button>
             </li>
-          ))}
-        </ul>
+          </ul>
+        </div>
       ) : null}
     </div>
   )
@@ -160,17 +225,21 @@ function FallbackLayout({ onReady }: { readonly onReady: () => void }) {
 }
 
 /**
- * Shell del modo Jarvis: anfitrión de las interfaces (`jarvis/layouts/types.ts`). Crea el ÚNICO lienzo y
- * el Stage, la capa del avatar elegido y elige la interfaz (`jarvisLayout`); pone la vuelta a Drakter y
- * el selector rápido. Todo lo de sesión (voz, avisos, confirmaciones) sigue vivo en `SessionHosts`.
+ * Shell del modo Jarvis: anfitrión de las interfaces (contrato y decisiones en `jarvis/layouts/types.ts`).
+ * Crea el ÚNICO lienzo y el Stage, la capa del avatar elegido y elige la interfaz (`jarvisLayout`);
+ * captura las teclas de sección y pone la vuelta a Drakter y el selector rápido. Todo lo de sesión
+ * (voz, avisos, confirmaciones) sigue vivo en `SessionHosts`.
  */
 export default function JarvisShell() {
   const [canvas, setCanvas] = useState<HTMLCanvasElement | null>(null)
-  const { stage, avatarLayer, tier, reducedMotion, viewportRef } = useStage(canvas)
+  const { stage, tier, reducedMotion } = useStage(canvas)
+  const avatarEntry = useActiveAvatar()
+  const { layer: avatarLayer, viewportRef } = useAvatarLayer(stage, avatarEntry)
   const { jarvisLayout } = usePreferences()
   const section = useCurrentSection()
   const agentState = useDrakterState()
   useAvatarWiring(avatarLayer?.controls ?? null, agentState)
+  useSectionKeys()
 
   const layoutId = resolveLayout(jarvisLayout)
   const Layout = layoutId ? layoutComponent(layoutId) : null
@@ -185,6 +254,9 @@ export default function JarvisShell() {
     const timer = setTimeout(onReady, READY_TIMEOUT_MS)
     return () => clearTimeout(timer)
   }, [onReady])
+
+  // La secuencia de salida es de la interfaz que está montada; al cambiar de interfaz o desmontar, se borra.
+  useEffect(() => () => setLeaveTransition(null), [layoutId])
 
   const exit = useCallback(() => requestUiMode('drakter', 'button'), [])
 
@@ -220,6 +292,7 @@ export default function JarvisShell() {
               navigate={navigateTo}
               onReady={onReady}
               exit={exit}
+              setExitTransition={setLeaveTransition}
             />
           ) : (
             <FallbackLayout onReady={onReady} />
@@ -229,7 +302,7 @@ export default function JarvisShell() {
 
       {/* Común a todas las interfaces: esquina superior derecha reservada. */}
       <div className="absolute top-4 right-4 z-10 flex items-center gap-2">
-        {layoutId ? <LayoutPicker current={layoutId} /> : null}
+        <AppearancePicker layoutId={layoutId} />
         <button
           type="button"
           autoFocus

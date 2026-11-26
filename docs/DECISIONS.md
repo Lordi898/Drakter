@@ -1551,19 +1551,27 @@ Decisiones técnicas, cambios de tecnología y motivos.
     - guarda la preferencia;
     - límite de 1 por segundo para voz y agente;
     - pedir una interfaz estando en Drakter también abre Jarvis; cambiar de avatar no cambia de modo.
-  - **Preferencias** (`stores/preferences.ts`, declaradas aquí y consumidas por A1): `avatarId: AvatarChoice` (defecto `holo-contorno`) y `jarvisLayout: JarvisLayoutChoice` (defecto `nucleo`). `AVATAR_CHOICES` y `JARVIS_LAYOUT_CHOICES` se validan al leer, y una comprobación de tipos falla al compilar si el contrato gana un valor que no está en ellas.
+  - **Preferencias** (`stores/preferences.ts`):
+    - `avatarId` es el de A1 (#43): `string` validado por forma, que resuelve `character/avatars/registry.resolveAvatar`. Un id desconocido o sin portar da el personaje clásico.
+    - J1 añade `jarvisLayout: JarvisLayoutChoice` (defecto `nucleo`).
+    - `AVATAR_CHOICES` (la lista cerrada del contrato) solo valida el evento y la herramienta. Una comprobación de tipos falla al compilar si el contrato gana un valor que no está en `AVATAR_CHOICES` o `JARVIS_LAYOUT_CHOICES`.
   - **Contrato de interfaz** (`jarvis/layouts/types.ts`): `JarvisLayoutProps` con:
     - `stage` (`null` = sin lienzo);
     - `avatar` (`JarvisAvatarSlot`: la interfaz solo decide el recuadro, que se lee por fotograma);
     - `quality`, `reducedMotion`, `section`/`navigate`;
-    - `onReady` (una vez, cuando ya se ve) y `exit`.
+    - `onReady` (una vez, cuando ya se ve), `exit` y `setExitTransition`.
 
     Cada interfaz vive en `jarvis/layouts/<id>/index.tsx` (export default). La registra sola el `import.meta.glob` de `jarvis/layouts/registry.ts`, con carga diferida por interfaz; si falta, se usa la de defecto o el respaldo.
   - **Datos** (`jarvis/data/types.ts`): `Snapshot<T>` y `useJarvisData(topics)` con los temas `today`, `tasks`, `projects`, `habits`, `agenda`, `timetable`, `relationships`, `resources`, `activity` y `memory`, todos sobre los tipos de `modules/*`. J1 deja un stub, siempre en `loading`, que implementa D1. El estado vivo se lee de `stores/*` y `voice/levels.ts`.
+  - **Las cuatro preguntas de las interfaces** (`visor-port.md` §6), documentadas en `jarvis/layouts/types.ts`:
+    1. Firma: la interfaz recibe el `Stage` creado y un `JarvisAvatarSlot`, sin factory. El avatar es una preferencia global; la interfaz solo da el recuadro.
+    2. Arranque y salida: los trae cada interfaz. La entrada empieza al montarse y llama a `onReady` en cuanto se ve. La salida se registra con `setExitTransition`; `ModeRoot` la espera (`uiMode.runLeaveTransition`, tope 1,5 s) antes de desmontar. Con `reducedMotion`, fundido de 150 ms como mucho.
+    3. Selector rápido de interfaz y avatar: componente común del shell en la esquina superior derecha (reservada), con `Ctrl+Shift+A`.
+    4. Teclas de sección: las captura el shell. `Ctrl+0…9` (global) y, en Jarvis, `0…9` sin modificadores fuera de campos de texto, con el mapa de `navigation/sections.ts`. La interfaz recibe `section`.
   - **`JarvisShell` como anfitrión:**
-    - crea el único lienzo y el Stage, y añade la capa del avatar con `useAvatarWiring`;
+    - crea el único lienzo y el Stage, y añade la capa del avatar activo (`useActiveAvatar`; cambiarlo sustituye la capa) con `useAvatarWiring`;
     - elige la interfaz con su `Suspense`;
-    - reserva la esquina superior derecha para «Volver a Drakter» y el selector rápido de interfaz (visible con dos o más instaladas);
+    - reserva la esquina superior derecha para «Volver a Drakter» y el selector «Apariencia» (interfaces instaladas y avatares portados, más «Ninguno»);
     - si la interfaz no avisa de que ya se ve, cierra la transición a los 4 s.
 
     El HUD va en una capa `absolute inset-0` sobre el lienzo, que es `position: fixed`.
@@ -1577,6 +1585,5 @@ Decisiones técnicas, cambios de tecnología y motivos.
 - **Impacto:**
   - Código: `contracts/python/drakter_contracts/events.py`, `contracts/ts/index.ts`, `desktop/src/services/protocol.ts`, `desktop/src/stores/{preferences,appearance}.ts`, `desktop/src/app/{SessionHosts.tsx,jarvisLayouts.ts,useReducedMotion.ts}` y `desktop/src/jarvis/{JarvisShell.tsx,layouts/{types,registry}.ts,data/{types,index}.ts}`.
   - Pendiente:
-    - `JarvisShell` usa `activeAvatar` hasta que A1 exponga `avatarEntry(avatarId)` (lo propuse a drakter-95).
-    - Ajustes y `Ctrl+K` para la apariencia, y la voz (V1).
+    - Ajustes y `Ctrl+K` para la interfaz Jarvis, y la voz y la herramienta (V1). Ajustes → Avatar ya lo trajo A1.
   - Comprobado en Electron real aislado: los 13 pasos de W1 con el Stage real, sin excepciones.

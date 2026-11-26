@@ -1,7 +1,6 @@
 import {
   getPreferences,
   updatePreferences,
-  type AvatarChoice,
   type JarvisLayoutChoice
 } from '@/stores/preferences'
 import { getUiMode, requestUiMode, type UiModeSource } from '@/stores/uiMode'
@@ -12,7 +11,8 @@ import { getUiMode, requestUiMode, type UiModeSource } from '@/stores/uiMode'
  * Se guarda en las preferencias locales; nadie más guarda estado (el backend tampoco).
  */
 export interface AppearanceRequest {
-  readonly avatar?: AvatarChoice | null
+  /** Id del registro de avatares (`none` = clásico). Uno desconocido o sin portar se resuelve a clásico. */
+  readonly avatar?: string | null
   readonly layout?: JarvisLayoutChoice | null
 }
 
