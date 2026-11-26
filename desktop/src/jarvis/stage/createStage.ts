@@ -106,6 +106,7 @@ export const createStage: CreateStage = (canvas, options) => {
   let lastActivity = performance.now()
   let prevNow = -1
   let intervalMs = 0
+  let idleCap: number | null = null
 
   // Estadísticas
   const governor = createGovernor()
@@ -124,7 +125,8 @@ export const createStage: CreateStage = (canvas, options) => {
   const updateInterval = (): void => {
     const q = frame.quality
     const active = performance.now() - lastActivity < IDLE_AFTER_MS
-    const fpsNow = active ? q.maxFps : q.idleFps
+    const idle = idleCap === null || q.idleFps === 0 ? q.idleFps : Math.min(q.idleFps, idleCap)
+    const fpsNow = active ? q.maxFps : idle
     intervalMs = fpsNow > 0 ? (1000 / fpsNow) * (focused ? 1 : 2) : 0
     loop.setInterval(intervalMs)
   }
@@ -324,6 +326,10 @@ export const createStage: CreateStage = (canvas, options) => {
       ladder = ladderFrom(startTier())
       applyRung(0, 'manual')
       markActivity()
+    },
+    setIdleFps(fps) {
+      idleCap = fps === null || !Number.isFinite(fps) ? null : Math.max(0, fps)
+      updateInterval()
     },
     setReducedMotion(on) {
       frame.reducedMotion = on
