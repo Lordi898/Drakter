@@ -1,8 +1,9 @@
 /**
  * Nivel real del audio que suena (pista remota de WebRTC), para mover la boca del personaje.
- * Sin suscriptores no hay AudioContext ni temporizador: el coste fuera del habla es cero.
- * El analizador no se conecta al destino: el sonido sigue saliendo solo por el <audio> del cliente.
+ * Usa la toma de salida de `levels.ts` (el mismo AudioContext y el mismo analizador que los
+ * visualizadores de Jarvis). Sin suscriptores no pide la toma ni hay temporizador.
  */
+import { acquireOutputTap, readTimeDomain, setOutputTapStream, TIME_DOMAIN_SAMPLES } from './levels'
 
 const FRAME_MS = 33 // ~30 fps
 const GATE = 0.012 // RMS por debajo del cual se considera silencio
@@ -13,11 +14,8 @@ const RELEASE = 0.3
 type Listener = (level: number) => void
 
 const listeners = new Set<Listener>()
-let stream: MediaStream | null = null
-let ctx: AudioContext | null = null
-let source: MediaStreamAudioSourceNode | null = null
-let analyser: AnalyserNode | null = null
-let buffer: Float32Array<ArrayBuffer> | null = null
+const buffer = new Float32Array(TIME_DOMAIN_SAMPLES)
+let release: (() => void) | null = null
 let timer: ReturnType<typeof setInterval> | null = null
 let smoothed = 0
 
@@ -31,8 +29,7 @@ export function levelFromSamples(samples: Float32Array): number {
 }
 
 function sample(): void {
-  if (!analyser || !buffer || document.hidden) return
-  analyser.getFloatTimeDomainData(buffer)
+  if (document.hidden || !readTimeDomain('output', buffer)) return
   const raw = levelFromSamples(buffer)
   smoothed += (raw - smoothed) * (raw > smoothed ? ATTACK : RELEASE)
   if (smoothed < 0.01) smoothed = 0
@@ -42,38 +39,21 @@ function sample(): void {
 function stop(): void {
   if (timer !== null) clearInterval(timer)
   timer = null
-  source?.disconnect()
-  source = null
-  analyser = null
-  buffer = null
-  const old = ctx
-  ctx = null
-  if (old) void old.close().catch(() => undefined)
+  release?.()
+  release = null
   smoothed = 0
 }
 
 function start(): void {
   stop()
-  if (!stream || stream.getAudioTracks().length === 0 || listeners.size === 0) return
-  try {
-    ctx = new AudioContext()
-    source = ctx.createMediaStreamSource(stream)
-    analyser = ctx.createAnalyser()
-    analyser.fftSize = 1024
-    buffer = new Float32Array(analyser.fftSize)
-    source.connect(analyser)
-    void ctx.resume().catch(() => undefined)
-    timer = setInterval(sample, FRAME_MS)
-  } catch {
-    stop() // sin WebAudio la boca simplemente no sigue al audio
-  }
+  release = acquireOutputTap()
+  timer = setInterval(sample, FRAME_MS)
 }
 
 /** El cliente de voz avisa de la pista remota actual (o `null` al cerrar la conexión). */
 export function setOutputStream(next: MediaStream | null): void {
-  if (next === stream) return
-  stream = next
-  if (listeners.size > 0) start()
+  setOutputTapStream(next)
+  smoothed = 0
 }
 
 /** Recibe el nivel (0..1, ~30 fps) mientras haya al menos un suscriptor. Devuelve la baja. */
