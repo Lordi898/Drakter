@@ -84,10 +84,10 @@ export function createAvatar(canvas: HTMLCanvasElement, opts: AvatarOptions = {}
   };
   const onLeave = (): void => { if (!external) brain.cursor.active = false; brain.hover = null; };
   const onDown = (e: PointerEvent): void => { if (!sc) return; const b = canvas.getBoundingClientRect(), z = sc.hit(e.clientX - b.left, e.clientY - b.top); if (z) brain.click(z); else brain.touch(); };
-  const onFocus = (): void => brain.notify('focus'), onBlur = (): void => brain.notify('blur');
+  // Foco y blur de la ventana los avisa el anfitrión con notify(); aquí no se escuchan para no duplicarlos.
   const onMq = (): void => { if (opts.reducedMotion === undefined && mq) brain.reduced = mq.matches; };
   addEventListener('pointermove', onMove); document.documentElement.addEventListener('pointerleave', onLeave); canvas.addEventListener('pointerdown', onDown);
-  addEventListener('focus', onFocus); addEventListener('blur', onBlur); document.addEventListener('visibilitychange', onVis); mq?.addEventListener('change', onMq);
+  document.addEventListener('visibilitychange', onVis); mq?.addEventListener('change', onMq);
 
   const ready = (async () => {
     performance.mark('av:start'); const geos = await loadGeos(opts.geometryUrl); performance.mark('av:geos');
@@ -113,7 +113,7 @@ export function createAvatar(canvas: HTMLCanvasElement, opts: AvatarOptions = {}
     dispose: () => {
       disposed = true; stop();
       removeEventListener('pointermove', onMove); document.documentElement.removeEventListener('pointerleave', onLeave); canvas.removeEventListener('pointerdown', onDown);
-      removeEventListener('focus', onFocus); removeEventListener('blur', onBlur); document.removeEventListener('visibilitychange', onVis); mq?.removeEventListener('change', onMq);
+      document.removeEventListener('visibilitychange', onVis); mq?.removeEventListener('change', onMq);
       canvas.removeEventListener('webglcontextlost', onLost);
       sc?.dispose(); gl.dispose(); sc = null;
     },

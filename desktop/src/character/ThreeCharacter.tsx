@@ -76,10 +76,18 @@ export function ThreeCharacter({ state, onReady, onFail }: ThreeCharacterProps) 
         window.addEventListener('focus', onFocus)
         window.addEventListener('blur', onBlur)
         const stopTyping = subscribeUserTyping(() => created.notify('userTyping'))
+        // Si la GPU pierde el contexto el lienzo se congela: se vuelve al SVG en vez de dejar el hueco.
+        const onContextLost = (): void => {
+          if (!alive) return
+          warnCharacter('se perdió el contexto WebGL del avatar 3D; se usa el SVG')
+          onFail()
+        }
+        canvas.addEventListener('webglcontextlost', onContextLost)
         cleanups.push(() => {
           observer.disconnect()
           window.removeEventListener('focus', onFocus)
           window.removeEventListener('blur', onBlur)
+          canvas.removeEventListener('webglcontextlost', onContextLost)
           stopTyping()
         })
         return created.ready
