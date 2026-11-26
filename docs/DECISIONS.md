@@ -1438,7 +1438,7 @@ Decisiones técnicas, cambios de tecnología y motivos.
 - **Motivo:** cumplir los presupuestos de §2.6 en la UHD 620 con un único contexto.
 - **Impacto:**
   - Código: `desktop/src/jarvis/stage/{createStage,loop,governor,quality,gpu,bloom,anchors}.ts` y `stage/layers/{grid,particles,holoCamera}.ts`. Sin cambios en `types.ts` ni en `layers/avatar.ts` (W4). El Stage aún no se monta: lo cablean `JarvisShell` (W1) y el integrador.
-  - Medido en la UHD 620 real (Chrome 45 con ANGLE y Mesa, ventana de 1470×746 px CSS con DPR 1,25), dentro del lock de medición. La escena tenía rejilla, partículas y Ascuario como capa (`createAvatarStageLayer` + `createLayer` de `ascuario/entry`, como `loadLayer` del registro). Hubo dos pasadas; la máquina estaba cargada por otros workers (carga media 2-7).
+  - Medido en la UHD 620 real (Google Chrome 156 con ANGLE y Mesa, ventana de 1470×746 px CSS con DPR 1,25), dentro del lock de medición. La escena tenía rejilla, partículas y Ascuario como capa (`createAvatarStageLayer` + `createLayer` de `ascuario/entry`, como `loadLayer` del registro). Hubo dos pasadas; la máquina estaba cargada por otros workers (carga media 2-7).
 
     | Nivel | Lienzo | fps activo | CPU renderer activo | fps reposo | CPU renderer reposo | oculto |
     |---|---|---|---|---|---|---|
