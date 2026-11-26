@@ -1,15 +1,14 @@
-import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useSyncExternalStore, type ComponentType } from 'react'
+import { Suspense, useEffect, useLayoutEffect, useRef, useSyncExternalStore } from 'react'
 import { PanelRightClose, PanelRightOpen } from 'lucide-react'
+import { JarvisModeButton } from '@/app/JarvisModeButton'
 import { toggleContextPanel, useAppShortcuts } from '@/app/useAppShortcuts'
 import { ChatDock } from '@/chat/ChatDock'
-import { ConfirmationHost } from '@/chat/ConfirmationDialog'
 import { ContextPanel } from '@/components/context/ContextPanel'
 import { ErrorBoundary } from '@/components/errors/ErrorBoundary'
 import { NotificationCenter } from '@/components/notifications/NotificationCenter'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
-import { startNotificationFeed } from '@/modules/notifications'
 import { SearchPalette } from '@/modules/search'
 import { PAGES, preloadPages } from '@/navigation/pages'
 import { useCurrentSection } from '@/navigation/route'
@@ -17,13 +16,6 @@ import { Sidebar } from '@/navigation/Sidebar'
 import { usePreferences } from '@/stores/preferences'
 
 const CONTEXT_PANEL_ID = 'context-panel'
-
-// VoiceHost lo aporta WP8a (src/voice/VoiceHost.tsx). Hasta la fusión el glob queda vacío y no se monta nada.
-const voiceHostModules = import.meta.glob<{ VoiceHost: ComponentType }>('../voice/VoiceHost.tsx')
-const voiceHostLoader = Object.values(voiceHostModules)[0]
-const VoiceHost = voiceHostLoader
-  ? lazy(async () => ({ default: (await voiceHostLoader()).VoiceHost }))
-  : null
 
 const wideWindow = window.matchMedia('(min-width: 1100px)')
 
@@ -72,8 +64,6 @@ export function AppShell() {
 
   useAppShortcuts(wide)
 
-  useEffect(() => startNotificationFeed(), [])
-
   useEffect(() => preloadPages(), [])
 
   useLayoutEffect(() => {
@@ -96,6 +86,7 @@ export function AppShell() {
         )}
       >
         <header className="flex shrink-0 items-center justify-end gap-1 px-3 pt-2.5">
+          <JarvisModeButton />
           <NotificationCenter />
           {wide && <ContextPanelToggle expanded={contextPanelOpen} />}
         </header>
@@ -129,12 +120,6 @@ export function AppShell() {
       </div>
 
       <SearchPalette />
-      <ConfirmationHost />
-      {VoiceHost ? (
-        <Suspense fallback={null}>
-          <VoiceHost />
-        </Suspense>
-      ) : null}
     </div>
   )
 }

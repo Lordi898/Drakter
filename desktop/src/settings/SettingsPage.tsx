@@ -11,6 +11,7 @@ import { notify } from '@/services/notify'
 import { updatePreferences, usePreferences, type ThemePreference } from '@/stores/preferences'
 import { AgentStatusSection, DevModeBanner, isDevActive } from './AgentStatusSection'
 import { BackupsSection } from './BackupsSection'
+import { JarvisSection } from './JarvisSection'
 import { Rows, Section, SettingRow, useLoad } from './settingsUi'
 import { TimezoneSection } from './TimezoneSection'
 import { VoiceSection } from './VoiceSection'
@@ -149,6 +150,8 @@ export function SettingsPage() {
           </SettingRow>
         </Rows>
       </Section>
+
+      <JarvisSection />
 
       <Section title="Notificaciones">
         <RemindersNotice />
