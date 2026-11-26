@@ -37,7 +37,9 @@ export const IPC_CHANNELS = {
   /** Renderer → main: el micrófono quedó abierto o cerrado (etiqueta de la bandeja). */
   voiceMicState: 'voice:mic-state',
   /** Renderer → main: nombres de la entrada y la salida predeterminadas del sistema. */
-  voiceDefaultDevices: 'voice:default-devices'
+  voiceDefaultDevices: 'voice:default-devices',
+  /** Main → renderer: alternar el modo de interfaz Drakter/Jarvis (bandeja). Sin carga. */
+  uiModeToggle: 'ui:mode-toggle'
 } as const
 
 export interface AppInfo {
@@ -140,6 +142,12 @@ export interface JobsApi {
   cancel(jobId: string): Promise<ApiResult<JobOut>>
 }
 
+/** `window.api.ui`: órdenes de la interfaz que llegan desde main. */
+export interface UiApi {
+  /** Canal main→renderer `ui:mode-toggle` (bandeja). Devuelve la baja. */
+  onModeToggle(callback: () => void): () => void
+}
+
 /**
  * `window.api`: ÚNICA interfaz del renderer con el backend (D-14). El renderer no
  * tiene token, puerto ni red. Main valida método y ruta contra `ALLOWED_ROUTES` y
@@ -159,6 +167,7 @@ export interface DrakterApi {
   deleteStorageLocation(id: string): Promise<ApiCallResult>
   readonly voice: VoiceApi
   readonly jobs: JobsApi
+  readonly ui: UiApi
 }
 
 /** `window.drakter`: solo servicios de escritorio, sin relación con el backend. */

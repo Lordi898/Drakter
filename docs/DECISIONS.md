@@ -1337,3 +1337,66 @@ Decisiones técnicas, cambios de tecnología y motivos.
   - Código: `desktop/src/character/{AdaptiveCharacter,ThreeCharacter}.tsx`, `avatars/registry.ts` y `plug.ts`.
   - Con `null`, el build no genera el chunk de Three ni la malla (el import diferido queda como código muerto y se elimina).
   - Comprobado en Electron: con `null` se ve el SVG, sin lienzo y sin pedir nada de Three; con `'ascuario'`, el avatar 3D, sin avisos. Esto matiza la entrada «Avatar 3D Three.js sustituye al placeholder»: el anfitrión está listo, pero hoy no hay avatar activo.
+## [2026-11-26] Modo Jarvis: segundo shell de interfaz sobre una sola capa de datos
+- **Contexto:** el usuario pide un modo Jarvis (HUD holográfico, 3D, maximalista), con Drakter como interfaz por defecto. El MASTER_PLAN no lo contempla. El diseño completo está en el artefacto `jarvis-arquitectura.md` (sesión drakter-100).
+- **Decisión:** el modo Jarvis es un segundo shell completo en `desktop/src/jarvis/`, con carga diferida (`import()`) y fuera de `preloadPages()`, que comparte con Drakter los stores, `services/{api,ws,protocol}.ts`, la API y los hooks de `modules/*`, la voz y los avatares. En `jarvis/` solo hay presentación y adaptadores para los gráficos, nunca peticiones, caché ni reglas propias. Solo se monta un shell a la vez. La voz, el feed de notificaciones y los atajos suben a un `SessionHosts` común, porque desmontar `AppShell` cortaría WebRTC. La sección actual (hash) se comparte entre modos. El modo vive en `stores/uiMode.ts` (chunk principal, sin importar nada de `jarvis/`). Nada fuera de `jarvis/` importa de `jarvis/`, salvo el `import()` de `ModeRoot`. La personalidad (`agent/identity/`) no cambia con el modo.
+- **Alternativas descartadas:** un tema CSS sobre el shell actual (no da para el HUD pedido); un segundo `BrowserWindow` (duplica la sesión de voz, el enlace y la memoria); repetir la lógica de datos dentro de `jarvis/` (dos fuentes de verdad).
+- **Motivo:** dar el modo pedido sin duplicar datos ni lógica, y sin que Drakter cargue con su peso.
+- **Impacto:** amplía MASTER_PLAN §5 a petición del usuario. Contratos J0: `desktop/src/stores/uiMode.ts`, `stores/preferences.ts` (`jarvisStartup`, `lastUiMode`, `jarvisQuality`). Implementación en los paquetes W1-W10 del diseño.
+
+## [2026-11-26] Activación del modo Jarvis: cinco vías, voz doble y evento `ui.mode`
+- **Contexto:** el modo debe activarse desde la interfaz y por voz («modo Jarvis», «activa el modo Jarvis», «vuelve a Drakter»), y Drakter debe ser siempre el modo de arranque.
+- **Decisión:**
+  - Todas las vías llaman a `requestUiMode(mode | 'toggle', source)`: botón, `Ctrl+Shift+J`, bandeja (canal main→renderer `ui:mode-toggle`, `window.api.ui.onModeToggle`), capa 0 de la voz y herramienta de Hermes.
+  - El store ignora repeticiones del mismo modo, cambios a menos de 1 s del anterior y peticiones durante una transición.
+  - Voz por las dos vías. (1) Capa 0 local: frases cerradas → `voice.local_command` con los comandos nuevos `ui_jarvis` y `ui_drakter` (`EvtLocalCommand`). No hay LLM ni turno, y el backend audita como ya hace. (2) Herramienta `ui_set_mode` para el chat de texto, las paráfrasis y las órdenes compuestas.
+  - Las dos publican el evento WS `ui.mode` (`UiModeRequested{mode, source, utt_id?}`, versión 1), que es una petición: el renderer decide si la aplica.
+  - El backend no guarda el modo y el evento no se reenvía tras un resync.
+  - La herramienta se registra con permiso `ui.write`, riesgo `WRITE` y sin confirmación, porque solo cambia el aspecto, es reversible y no toca datos. La audita el registry.
+  - Arranque: siempre Drakter. Recordar el último modo es opcional (`jarvisStartup: 'last'`, desactivado por defecto).
+- **Alternativas descartadas:** solo la herramienta (unos 3 s de latencia, y depende de Hermes y de la clave); solo la capa 0 (el chat de texto y las frases libres no funcionarían); guardar el modo en el backend (es una preferencia de la interfaz y daría estado que sincronizar).
+- **Motivo:** que la orden habitual sea instantánea y que cualquier otra forma de pedirlo también funcione, con las reglas de herramientas de CLAUDE.md §8.
+- **Impacto:** `contracts/python/drakter_contracts/{events,voice_ipc}.py`, `contracts/ts/index.ts` y `desktop/src/services/protocol.ts` (J0). Pendiente: W5 (`voice/conversation/layer0*`, `voice/bridge.py`, `backend/app/integrations/voice/policy.py`, `backend/app/tools/ui.py`, `agent/configuration/permissions.json`, `contracts/tools/catalog.json`), W6 (bandeja) y W1 (botón, atajo y `ModeRoot`). Trampa conocida: en reposo, «activa el modo Jarvis» acaba en la palabra de activación y `bridge._finish` lo descartaría como falso positivo; W5 acepta la frase `ui_*` completa antes de esa rama.
+- **Riesgo aceptado:** un documento o un recuerdo podría inducir al agente a llamar a `ui_set_mode`. El efecto es solo visual, queda auditado y está limitado a un cambio por segundo.
+
+## [2026-11-26] Modo Jarvis: un único lienzo WebGL y avatar como capa (`createAvatarLayer`)
+- **Contexto:** Jarvis dibuja mucho 3D (retículas, partículas, grafo, avatar) en una UHD 620. Cada lienzo WebGL añade contexto, compositor y bucle, y `createAvatar` (PR #35) crea su propio `WebGLRenderer` y su propio `rAF`.
+- **Decisión:**
+  - Jarvis tiene un solo lienzo WebGL2 a pantalla completa bajo el HUD en DOM. Todas las capas comparten renderer y bucle (contrato `desktop/src/jarvis/stage/types.ts`: `Stage`, `StageLayer`, `StageFrame`, `QualityProfile`).
+  - React no corre por fotograma: las capas reciben instantáneas de datos.
+  - El contrato del avatar gana, de forma aditiva, `AvatarLayer` y `CreateAvatarLayer(renderer, opts)`. La capa dibuja en el renderer compartido dentro de un `AvatarViewport`, sin limpiar y restaurando el estado global que cambie. `AvatarEntry.loadLayer?` es opcional.
+  - Si un avatar no tiene capa, Jarvis lo monta con `createAvatar` en un segundo lienzo.
+  - `createAvatar` puede pasar a ser un envoltorio de la capa, de modo que el autor escribe una sola implementación.
+  - El audio para el osciloscopio llega por `desktop/src/voice/levels.ts` (`readSpectrum`, `readWaveform`, `acquireAudioTaps`, `setInputStream`). Se lee en cada fotograma y `VoiceClient`, que está congelado, no cambia. J0 deja un stub que siempre devuelve «sin señal»; la implementación es de W7.
+- **Alternativas descartadas:** un lienzo por efecto (más contextos y sin composición en profundidad); React Three Fiber (ya descartado para el avatar 3D); cambiar `createAvatar` en lugar de añadir (rompería Ascuario y la ronda holográfica en curso).
+- **Motivo:** el menor coste posible en la iGPU y que el avatar holográfico se integre sin tocar Drakter.
+- **Impacto:** `desktop/src/character/avatars/{types,registry}.ts`, `desktop/src/jarvis/stage/types.ts` y `desktop/src/voice/levels.ts` (J0). Implementación en W3 (Stage), W4 (capa de Ascuario y del avatar holográfico) y W7 (audio). Los avatares de la ronda `holo-*` deben ofrecer `createAvatar` y `createAvatarLayer`.
+
+## [2026-11-26] Modo Jarvis: niveles de calidad Cine / Equilibrado / Ahorro y regulador
+- **Contexto:** objetivo de 30-60 fps, con CPU del renderer en reposo ≲ 20 % en Cine y ≲ 10 % en Ahorro, en un i7-8665U con UHD 620. Además, un monitor 4K o un DPR de 2 multiplican el coste de pintar.
+- **Decisión:**
+  - Tres niveles, más `auto` (preferencia `jarvisQuality`, por defecto `auto`):
+    | | fps máx. / en reposo | píxeles | bloom | partículas | parallax |
+    |---|---|---|---|---|---|
+    | Cine | 60 / 30 | 2,1 MP | media resolución | unas 20 k | sí |
+    | Equilibrado (UHD 620 por defecto) | 30 / 20 | 1,3 MP | no | unas 6 k | suave |
+    | Ahorro | 30 / a demanda | 0,8 MP | no | ≤ 1 k | no |
+  - Detección al montar con `gl.getParameter(RENDERER)` de ANGLE: SwiftShader o llvmpipe → Ahorro; Intel HD, UHD o Iris → Equilibrado; GPU dedicada → Cine. Sin WebGL2 → «HUD sin lienzo» (solo DOM).
+  - Regulador por p90 del tiempo de fotograma en ventanas de 3 s. Baja primero la escala, luego las partículas y por último el nivel. En `auto` no sube por encima del nivel inicial.
+  - El bucle se para con `document.hidden` y va a la mitad de fps con la ventana sin foco.
+  - «Reducir movimiento» (la preferencia de la app o `prefers-reduced-motion`): sin secuencia de arranque, parallax ni cámara viva, y con fundidos de 150 ms.
+  - Nunca hay destellos de más de 3 Hz. `backdrop-filter` está prohibido en Jarvis.
+- **Alternativas descartadas:** fps y resolución fijos (fallan en 4K o en una iGPU cargada); `EffectComposer` con `UnrealBloomPass` (5 mips, demasiado caro).
+- **Motivo:** cumplir los presupuestos medibles en el hardware real.
+- **Impacto:** `QualityTier` y `QualityProfile` en `jarvis/stage/types.ts` y `jarvisQuality` en las preferencias (J0). Las cifras son objetivos: las mide W3 en la UHD 620 dentro del lock de medición.
+
+## [2026-11-26] Modo Jarvis: la CSP no cambia
+- **Contexto:** el 3D, los shaders, las fuentes y los recursos de Jarvis deben convivir con la CSP única del renderer (`desktop/electron/shared/csp.ts`).
+- **Decisión:**
+  - No se toca la CSP. Three.js, los shaders y las texturas procedurales no necesitan nada más (comprobado con el avatar 3D).
+  - Prohibido en Jarvis: workers `blob:` (troika-three-text, `DRACOLoader`), que bloquea `default-src 'none'`; fuentes y recursos remotos; y librerías con `eval` o `new Function`.
+  - El texto 3D, si hace falta, va con fuentes MSDF precalculadas servidas desde `'self'`. Un worker propio desde un archivo de `'self'` sí está permitido.
+  - Los títulos de documentos y los recuerdos se pintan siempre como texto plano, también en texturas.
+- **Alternativas descartadas:** abrir `worker-src blob:` o recursos remotos «por si acaso».
+- **Motivo:** mantener la superficie de seguridad del renderer.
+- **Impacto:** todos los paquetes W de Jarvis. La comprobación se hace en la build `app://`, no solo en desarrollo.

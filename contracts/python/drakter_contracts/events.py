@@ -2,7 +2,8 @@
 
 `version` es la versión del payload de ese `type`; la del protocolo va en el subprotocolo `drakter.v1`.
 `voice.*` es experimental hasta que el frente de voz mida latencia. Voz v2 (Pipecat) usa `voice.state`,
-`voice.playback`, `voice.error` y `voice.profile_changed`.
+`voice.playback`, `voice.error` y `voice.profile_changed`. `ui.mode` pide al escritorio cambiar de modo
+de interfaz (Drakter o Jarvis): es solo estética y el backend no guarda el modo.
 """
 
 from __future__ import annotations
@@ -231,6 +232,19 @@ class VoiceError(BaseModel):
     """Texto corto en español para la interfaz (opcional; nunca lleva datos del usuario ni del error)."""
 
 
+# ui.* (aspecto del escritorio; sin datos del usuario)
+class UiModeRequested(BaseModel):
+    """Petición de cambiar el modo de la interfaz. El renderer decide si la aplica; no hay estado en el backend.
+
+    `source`: `voice` (capa 0 de la voz, frase cerrada) o `agent` (herramienta `ui_set_mode`).
+    `utt_id`: el del enunciado, solo si viene de la voz.
+    """
+
+    mode: Literal["jarvis", "drakter"]
+    source: Literal["voice", "agent"]
+    utt_id: Annotated[str, Field(max_length=64)] | None = None
+
+
 EVENTS: Final[dict[str, type[BaseModel]]] = {
     "agent.status_changed": AgentStatusChanged,
     "agent.expression_changed": AgentExpressionChanged,
@@ -263,5 +277,6 @@ EVENTS: Final[dict[str, type[BaseModel]]] = {
     "voice.playback": VoicePlayback,
     "voice.error": VoiceError,
     "voice.profile_changed": VoiceProfileChanged,
+    "ui.mode": UiModeRequested,
 }
 EXPERIMENTAL_PREFIXES: Final = ("voice.",)
