@@ -66,10 +66,10 @@ export function Chart2D({ sector, w, h, sig, clock, draw, lock }: Chart2DProps) 
       const iv = clock ? window.setInterval(paint, 60000) : 0
       return () => window.clearInterval(iv)
     }
-    let drawn = '', boot = reducedMotion ? 1 : 0, wasFocused = false, last = 0
+    let drawn = '', boot = reducedMotion ? 1 : 0, wasFocused = false, last = 0, panel: Element | null = null
     return world.onTick((f) => {
       if (!world.near(sector)) { wasFocused = false; return }
-      const panel = cv.closest('.jv-visor-pnl')
+      panel ??= cv.closest('.jv-visor-pnl')
       if (panel && !panel.classList.contains('on')) return // plegado: no se pinta bajo opacidad 0
       const focused = world.sector === sector
       if (focused && !wasFocused && !f.reducedMotion) boot = 0

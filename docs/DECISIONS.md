@@ -1723,6 +1723,9 @@ Decisiones técnicas, cambios de tecnología y motivos.
   - Gráficos 2D como funciones puras (`charts.ts`); 3D de datos en `stage/parts.ts`: grafo de relaciones (60 elementos más conectados), skyline de tareas abiertas por proyecto y semana de vencimiento (8 semanas; el backend no da actividad semanal) y núcleo de documentos según `index_status` de la muestra.
   - «Examen» = evento cuyo título lo dice: la agenda no tiene un tipo propio.
   - Rendimiento: lienzos 2D solo se redibujan si cambian sus datos o su minuto (relojes por minuto, no por segundo); el 3D de los sectores vecinos no se dibuja fuera del encuadre; tras 8 s sin puntero ni giro, el grafo, el skyline y el núcleo se quedan quietos y las etiquetas del grafo no se reescriben; firma de cámara del CSS3D sin cadenas por fotograma; sin `backdrop-filter`, sin animaciones infinitas ni `clip-path` en reposo.
+- **Medición** (UHD 620, app aislada con datos ficticios, Equilibrado, CPU del renderer, ventanas de 10 s tras 10 s quieto, bajo `flock`, carga de la máquina 2-4 por otros workers):
+  - Reposo en Hoy: 5,7-9,0 %. Reposo en Relaciones: 7,1-10,0 %. **Reposo en el Núcleo: 10,6-15,5 %** con Holo-Contorno y 8,3-10,9 % sin avatar. Con el puntero en movimiento: 23-32 %. Prototipo de referencia en Equilibrado: ~23 % en reposo.
+  - Perfil de 8 s en reposo en el Núcleo: el JS del Visor suma ~10 ms y el del avatar ~60 ms; el resto es nativo (composición del WebGL + CSS3D a 20 fps). ⚠️ El Núcleo no queda de forma fiable ≤ 10 %: la palanca que falta es bajar los fps de ambiente en reposo (visor-port.md §4, palanca 1), que es del Stage (W3) y no de la interfaz; propuesta enviada al coordinador.
 - **Alternativas descartadas:**
   - Desmontar los sectores lejanos: cada giro volvería a pedir sus datos.
   - Botón «Crear relación» en el HUD: el formulario completo vive en Drakter; aquí solo se ve, se selecciona y se quita.

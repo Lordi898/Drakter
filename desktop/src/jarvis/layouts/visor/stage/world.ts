@@ -337,6 +337,7 @@ export function createVisorWorld(): VisorWorld {
         const vis = (Math.abs(angDist(p.angle, rig.yaw)) < 1.05 || (rig.t < 1 && Math.abs(angDist(p.angle, rig.to)) < 1.05)) && (p.reveal > 0.001 || p.revealT > 0)
         p.mesh.visible = vis && p.reveal > 0.001
         if (p.obj.visible !== vis) { p.obj.visible = vis; cssDirty = true }
+        if (!vis && p.reveal === p.revealT) continue // fuera de vista y asentado: nada que animar
         p.hover += (p.hoverT - p.hover) * (1 - Math.exp(-dt * 12)); p.flash *= Math.exp(-dt * 4.5)
         p.reveal += (p.revealT - p.reveal) * (1 - Math.exp(-dt * (p.revealT > p.reveal ? 3.2 : 9))); if (Math.abs(p.revealT - p.reveal) < 0.002) p.reveal = p.revealT
         const u = p.mesh.material.uniforms

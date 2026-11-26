@@ -27,15 +27,14 @@ export function Glass({ world, sector, names, go, exit }: GlassProps) {
   // Cinta y escala: solo se redibujan si cambian rumbo, parallax, sector o tamaño.
   useEffect(() => {
     if (!world) return
-    let sig = ''
+    const sig = new Float64Array(6).fill(NaN)
     return world.onTick(() => {
       const tape = tapeRef.current, ladder = ladderRef.current
       if (!tape || !ladder) return
       const W = tape.clientWidth, LH = ladder.clientHeight
       const yawDeg = (((world.yaw * 180) / Math.PI) % 360 + 360) % 360, px = world.parallax
-      const s = `${yawDeg.toFixed(2)}|${px.x.toFixed(3)}|${px.y.toFixed(3)}|${W}|${LH}|${sectorRef.current}`
-      if (s === sig) return
-      sig = s
+      if (Math.abs(yawDeg - sig[0]!) < 0.005 && Math.abs(px.x - sig[1]!) < 0.0005 && Math.abs(px.y - sig[2]!) < 0.0005 && W === sig[3] && LH === sig[4] && sectorRef.current === sig[5]) return
+      sig[0] = yawDeg; sig[1] = px.x; sig[2] = px.y; sig[3] = W; sig[4] = LH; sig[5] = sectorRef.current
       if (tape.width !== W) { tape.width = W; tape.height = 58 }
       const x = tape.getContext('2d')!, perDeg = W / 110, cx = W / 2, cur = yawDeg + px.x * 2.6
       x.clearRect(0, 0, W, 58); x.globalCompositeOperation = 'lighter'
