@@ -58,7 +58,7 @@ function restyle(m: { hover: number; sel: number; s: RelState }): void {
 }
 
 export const relaciones: ModuleDef<RelState> = {
-  id: 'relaciones', name: 'Relaciones', key: '5', cloud: true, rIn: 0, rOut: 0,
+  id: 'relaciones', name: 'Relaciones', key: '8', cloud: true, rIn: 0, rOut: 0,
   home: { pos: [0, 5.4, -7.5], rx: 0, rz: 0, scale: 2.0, spin: 0 },
   kpi: ({ model }) => (model.graph ? `${model.graph.nodes.length} entidades · ${model.graph.edges.length} vínculos` : 'cargando relaciones…'),
   buildDetail(b, { model }) {

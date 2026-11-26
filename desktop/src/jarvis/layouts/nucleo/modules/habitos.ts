@@ -12,7 +12,7 @@ const doneToday = (hs: readonly VHabit[]) => hs.filter((h) => h.todayScheduled &
 const avgRate = (hs: readonly VHabit[]): number | null => { const r = hs.map((h) => h.rate).filter((x): x is number => x !== null); return r.length ? r.reduce((a, b) => a + b, 0) / r.length : null }
 
 export const habitos: ModuleDef = {
-  id: 'habitos', name: 'Hábitos', key: '3', rIn: 3.5, rOut: 4.45,
+  id: 'habitos', name: 'Hábitos', key: '2', rIn: 3.5, rOut: 4.45,
   home: { pos: [0, 0, 0], rx: -1.17, rz: -0.1, scale: 1, spin: 0.045 },
   kpi: ({ model }) => {
     if (!model.habits) return 'cargando hábitos…'

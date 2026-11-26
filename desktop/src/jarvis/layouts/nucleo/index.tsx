@@ -38,6 +38,10 @@ const SECTION_TO_MODULE: Partial<Record<SectionId, ModuleId>> = {
   today: 'hoy', tasks: 'tareas', projects: 'tareas', habits: 'habitos', calendar: 'calendario', subjects: 'calendario', relationships: 'relaciones', storage: 'almacen'
 }
 const MODULE_TO_SECTION: Record<ModuleId, SectionId> = { hoy: 'today', tareas: 'tasks', habitos: 'habits', calendario: 'calendar', relaciones: 'relationships', almacen: 'storage' }
+/**
+ * Los dígitos 0…9 los captura `JarvisShell` (contrato J1) con el mapa de `navigation/sections.ts`; aquí solo se
+ * muestran. `key` debe coincidir con ese mapa (y con `key` de cada módulo, que sale en la descripción del anillo).
+ */
 const NAV: readonly { id: ModuleId | null; section: SectionId; name: string; icon: IconKey; key: string }[] = [
   { id: null, section: 'home', name: 'Núcleo', icon: 'nucleo', key: '1' },
   { id: 'hoy', section: 'today', name: 'Hoy', icon: 'hoy', key: '0' },
