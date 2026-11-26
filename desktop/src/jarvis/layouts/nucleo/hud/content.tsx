@@ -195,20 +195,21 @@ function almPanels(model: NucleoModel, m: Mod<AlmState>, acts: Acts): PanelDef[]
   const st = model.store
   if (!st) return [{ slot: 'lt', title: 'Índice', body: <Loading /> }]
   const g = st.groups.find((x) => x.num === m.s.group) ?? st.groups[0]
-  const mb = st.bytes / 1_048_576
+  const inG = g && st.byFolder ? st.recent.filter((r) => r.folderId === g.key) : []
   return [
-    { slot: 'lt', title: 'Índice', meta: 'búsqueda de texto completo', hero: { big: st.total ? `${Math.round((st.indexed / st.total) * 100)} %` : '—', small: `indexado${st.pending ? ` · ${st.pending} pendientes` : ''}` }, body: (
-      <><div className="kpis"><Kpi n={st.total} l="recursos recientes" /><Kpi n={mb >= 1024 ? `${(mb / 1024).toFixed(1).replace('.', ',')} GB` : `${Math.round(mb)} MB`} l="en disco" /></div>
-        <p className="sub">Indexado</p><Bar p={st.total ? st.indexed / st.total : 0} n={`${st.indexed}`} />
-        {st.failed ? <p className="err">{st.failed} con error de indexación.</p> : null}</>
+    { slot: 'lt', title: 'Índice', meta: `muestra de ${st.sample} recientes`, hero: { big: st.sample ? `${Math.round((st.indexed / st.sample) * 100)} %` : '—', small: `indexado${st.pending ? ` · ${st.pending} pendientes` : ''}` }, body: (
+      <><div className="kpis"><Kpi n={st.total} l={st.byFolder ? 'en carpetas' : 'recursos recientes'} /><Kpi n={st.groups.length} l={st.byFolder ? 'carpetas' : 'tipos'} /></div>
+        <ul className="rows">{st.index.map((x) => <Row key={x.key} cls={x.key === 'failed' ? 'late' : x.key === 'pending' ? 'soon' : ''} a={x.name} b={<Bar p={x.count / Math.max(1, st.sample)} c={x.key === 'failed' ? 'red' : x.key === 'pending' ? 'amber' : 'cyan'} n={x.count} />} />)}</ul></>
     ) },
     { slot: 'lb', title: 'Recientes', meta: 'últimos cambios', body: st.recent.length ? (
-      <ul className="rows">{st.recent.map((r) => <Row key={r.id} cls={r.status === 'failed' ? 'late' : r.status === 'pending' ? 'soon' : ''} a={<><i className="tag">{r.type.slice(0, 3)}</i>{r.title}</>} b={r.status === 'indexed' ? r.when : indexLabel(r.status)} lock={r.title} />)}</ul>
+      <ul className="rows">{st.recent.slice(0, 6).map((r) => <Row key={r.id} cls={r.status === 'failed' ? 'late' : r.status === 'pending' ? 'soon' : ''} a={<><i className="tag">{r.type.slice(0, 3)}</i>{r.title}</>} b={r.status === 'indexed' ? r.when : indexLabel(r.status)} lock={r.title} />)}</ul>
     ) : <p className="sayp dim">Sin recursos.</p> },
-    { slot: 'rt', title: g?.name ?? 'Tipo', meta: g ? `${g.count} recursos` : undefined, body: g ? (
+    { slot: 'rt', title: g?.name ?? 'Carpeta', meta: g ? `${g.count} recursos` : undefined, body: g ? (g.kids.length ? (
       <ul className="rows">{g.kids.map((k) => <Row key={k.key} a={k.name} b={<Bar p={k.count / Math.max(1, g.count)} c={k.key === 'failed' ? 'red' : k.key === 'pending' ? 'amber' : g.col} n={k.count} />} />)}</ul>
-    ) : <p className="sayp dim">Toca un sector del disco.</p> },
-    { slot: 'rb', title: 'Por tipo', meta: `${st.groups.length} tipos`, body: (
+    ) : inG.length ? (
+      <ul className="rows">{inG.slice(0, 5).map((r) => <Row key={r.id} a={<><i className="tag">{r.type.slice(0, 3)}</i>{r.title}</>} b={r.when} lock={r.title} />)}</ul>
+    ) : <p className="sayp dim">Ninguno de los recursos recientes está en esta carpeta.</p>) : <p className="sayp dim">Toca un sector del disco.</p> },
+    { slot: 'rb', title: st.byFolder ? 'Carpetas' : 'Por tipo', meta: `${st.groups.length}`, body: (
       <ul className="rows">{st.groups.map((x) => <Row key={x.key} on={x.num === g?.num} a={<><Dot c={x.col} />{x.name}</>} b={<Bar p={x.count / Math.max(1, st.groups[0]?.count ?? 1)} c={x.col} n={x.count} />} onClick={() => acts.select('almacen', x.num)} lock={x.name} />)}</ul>
     ) }
   ]

@@ -8,7 +8,7 @@ import type { AgendaItem } from '@/modules/calendar/types'
 import type { Habit, HabitHistoryDay } from '@/modules/habits/types'
 import type { Project } from '@/modules/projects/types'
 import type { EntityType, RelationshipKind, RelationshipOut } from '@/modules/relationships/types'
-import type { IndexStatus, ResourceSummary, ResourceType } from '@/modules/storage/types'
+import type { Folder, IndexStatus, ResourceSummary, ResourceType } from '@/modules/storage/types'
 import type { Subject, TimetableEntry } from '@/modules/subjects/types'
 import type { Priority, Task } from '@/modules/tasks/types'
 import type { TodayResponse, TodayTask } from '@/pages/today/contract'
@@ -89,6 +89,11 @@ export interface VNode { readonly num: number; readonly id: string; readonly nam
 export interface VEdge { readonly a: number; readonly b: number; readonly rel: RelationshipKind }
 export interface VStoreGroup { readonly num: number; readonly key: string; readonly name: string; readonly count: number; readonly col: ColorName; readonly kids: readonly { readonly num: number; readonly key: string; readonly name: string; readonly count: number }[] }
 export interface VStore {
+  /** true: los grupos son carpetas raíz reales; false: tipos de los recursos recientes. */
+  readonly byFolder: boolean
+  /** Estado de indexación de la muestra de recursos recientes. */
+  readonly index: readonly { readonly num: number; readonly key: IndexStatus; readonly name: string; readonly count: number }[]
+  readonly sample: number
   readonly total: number
   readonly indexed: number
   readonly pending: number
@@ -97,7 +102,7 @@ export interface VStore {
   readonly groups: readonly VStoreGroup[]
   /** Recursos tocados por día, de hace 59 días a hoy. */
   readonly perDay: readonly number[]
-  readonly recent: readonly { readonly id: string; readonly title: string; readonly type: string; readonly when: string; readonly status: IndexStatus }[]
+  readonly recent: readonly { readonly id: string; readonly folderId: string | null; readonly title: string; readonly type: string; readonly when: string; readonly status: IndexStatus }[]
 }
 export interface VSubject { readonly id: string; readonly name: string; readonly short: string; readonly col: ColorName; readonly weekHours: number }
 
@@ -130,8 +135,9 @@ export interface ModelInput {
   readonly timetable: readonly TimetableEntry[] | null
   readonly subjects?: readonly Subject[] | null
   readonly relationships: readonly RelationshipOut[] | null
-  readonly entityNames?: Readonly<Record<string, string>> | null
+  readonly entityNames?: ReadonlyMap<string, { readonly name: string }> | null
   readonly resources: readonly ResourceSummary[] | null
+  readonly folders?: readonly Folder[] | null
   /** Tareas marcadas en esta sesión (hasta que la recarga las saque de la lista de abiertas). */
   readonly doneLocal: ReadonlySet<string>
   readonly ids: IdMap
@@ -269,7 +275,7 @@ export function buildModel(m: ModelInput, at = new Date()): NucleoModel {
   // Relaciones: nodos de ambos extremos, con el nombre que conozcamos.
   let graph: NucleoModel['graph'] = null
   if (m.relationships) {
-    const names = new Map<string, string>(Object.entries(m.entityNames ?? {}))
+    const names = new Map<string, string>([...(m.entityNames ?? new Map<string, { name: string }>())].map(([k, v]) => [k, v.name]))
     for (const t of m.tasks ?? []) names.set(t.id, t.title)
     for (const p of m.projects ?? []) names.set(p.id, p.name)
     for (const h of m.habits ?? []) names.set(h.id, h.name)
@@ -296,7 +302,12 @@ export function buildModel(m: ModelInput, at = new Date()): NucleoModel {
     const res = m.resources.filter((r) => !r.archived_at)
     const byType = new Map<ResourceType, ResourceSummary[]>()
     for (const r of res) { const l = byType.get(r.resource_type) ?? []; l.push(r); byType.set(r.resource_type, l) }
-    const groups = [...byType.entries()].sort((a, b) => b[1].length - a[1].length).slice(0, 6).map(([type, list], i): VStoreGroup => {
+    const folders = (m.folders ?? []).filter((f) => !f.archived_at && f.resource_count > 0).sort((a, b) => b.resource_count - a.resource_count)
+    const st = new Map<IndexStatus, number>()
+    for (const r of res) st.set(r.index_status, (st.get(r.index_status) ?? 0) + 1)
+    const index = [...st.entries()].sort((a, b) => b[1] - a[1]).map(([s, n]) => ({ num: m.ids.num(`index:${s}`), key: s, name: INDEX_ES[s], count: n }))
+    const byFolder = folders.length > 0
+    const groups = byFolder ? folders.slice(0, 8).map((f, i): VStoreGroup => ({ num: m.ids.num(f.id), key: f.id, name: f.name, count: f.resource_count, col: SERIES[i % SERIES.length]!, kids: [] })) : [...byType.entries()].sort((a, b) => b[1].length - a[1].length).slice(0, 6).map(([type, list], i): VStoreGroup => {
       const st = new Map<IndexStatus, number>()
       for (const r of list) st.set(r.index_status, (st.get(r.index_status) ?? 0) + 1)
       return {
@@ -307,9 +318,10 @@ export function buildModel(m: ModelInput, at = new Date()): NucleoModel {
     const perDay = Array.from({ length: 60 }, () => 0)
     for (const r of res) { const d = daysBetween(zonedNow(tz, new Date(r.updated_at)).key, todayKey); if (d >= 0 && d < 60) perDay[59 - d]!++ }
     store = {
-      total: res.length, indexed: res.filter((r) => r.index_status === 'indexed').length, pending: res.filter((r) => r.index_status === 'pending').length,
+      byFolder, index, sample: res.length,
+      total: byFolder ? groups.reduce((a, g) => a + g.count, 0) : res.length, indexed: res.filter((r) => r.index_status === 'indexed').length, pending: res.filter((r) => r.index_status === 'pending').length,
       failed: res.filter((r) => r.index_status === 'failed').length, bytes: res.reduce((a, r) => a + (r.size_bytes ?? 0), 0), groups, perDay,
-      recent: [...res].sort((a, b) => b.updated_at.localeCompare(a.updated_at)).slice(0, 6).map((r) => ({ id: r.id, title: r.title, type: TYPE_ES[r.resource_type], when: whenText(daysBetween(zonedNow(tz, new Date(r.updated_at)).key, todayKey)), status: r.index_status }))
+      recent: [...res].sort((a, b) => b.updated_at.localeCompare(a.updated_at)).slice(0, 12).map((r) => ({ id: r.id, folderId: r.folder_id, title: r.title, type: TYPE_ES[r.resource_type], when: whenText(daysBetween(zonedNow(tz, new Date(r.updated_at)).key, todayKey)), status: r.index_status }))
     }
   }
 

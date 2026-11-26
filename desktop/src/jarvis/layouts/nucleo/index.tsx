@@ -32,7 +32,7 @@ import type { ModuleId, Tip } from './modules/base'
 import type { RelState } from './modules/relaciones'
 import './nucleo.css'
 
-const TOPICS = ['today', 'tasks', 'projects', 'habits', 'agenda', 'timetable', 'relationships', 'resources'] as const
+const TOPICS = ['today', 'tasks', 'projects', 'habits', 'habitHistory', 'agenda', 'timetable', 'subjects', 'relationships', 'entityNames', 'resources', 'folders'] as const
 
 const SECTION_TO_MODULE: Partial<Record<SectionId, ModuleId>> = {
   today: 'hoy', tasks: 'tareas', projects: 'tareas', habits: 'habitos', calendar: 'calendario', subjects: 'calendario', relationships: 'relaciones', storage: 'almacen'
@@ -73,8 +73,10 @@ export default function NucleoLayout({ stage, avatar, quality, reducedMotion, se
   useEffect(() => { const id = setInterval(() => setMinute((m) => m + 1), 60_000); return () => clearInterval(id) }, [])
   const model = useMemo(() => buildModel({
     today: data.today.data, tasks: data.tasks.data, projects: data.projects.data, habits: data.habits.data, agenda: data.agenda.data,
-    timetable: data.timetable.data, relationships: data.relationships.data, resources: data.resources.data, doneLocal: new Set(), ids
-  }), [data.today.data, data.tasks.data, data.projects.data, data.habits.data, data.agenda.data, data.timetable.data, data.relationships.data, data.resources.data, ids, minute])
+    timetable: data.timetable.data, relationships: data.relationships.data, resources: data.resources.data, doneLocal: new Set(), ids,
+    habitHistory: data.habitHistory.data, subjects: data.subjects.data, entityNames: data.entityNames.data, folders: data.folders.data
+  }), [data.today.data, data.tasks.data, data.projects.data, data.habits.data, data.agenda.data, data.timetable.data, data.relationships.data, data.resources.data,
+    data.habitHistory.data, data.subjects.data, data.entityNames.data, data.folders.data, ids, minute])
   const modelRef = useRef(model)
   modelRef.current = model
 
@@ -180,6 +182,7 @@ export default function NucleoLayout({ stage, avatar, quality, reducedMotion, se
         push('ok', vh.todayDone ? `${h.name}: desmarcado` : `${h.name}: hecho`, vh.todayDone ? 'Queda como omitido hoy.' : vh.streak !== null ? `Racha: ${vh.streak + 1} días.` : 'Anotado en el registro de hoy.')
         if (!vh.todayDone) scene?.shock('success')
         data.habits.reload()
+        data.habitHistory.reload()
         data.today.reload()
       } catch (e) {
         push('error', 'No se pudo marcar el hábito', describeError(e, 'Inténtalo de nuevo.'))

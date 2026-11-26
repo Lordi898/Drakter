@@ -14,13 +14,25 @@ export const almacen: ModuleDef<AlmState> = {
   kpi: ({ model }) => {
     const s = model.store
     if (!s) return 'cargando el almacén…'
-    return s.total ? `${s.total} recursos recientes · ${Math.round((s.indexed / s.total) * 100)} % indexado${s.pending ? ` · ${s.pending} pendientes` : ''}` : 'el almacén está vacío'
+    if (!s.total) return 'el almacén está vacío'
+    return `${s.total} recursos${s.byFolder ? ` en ${s.groups.length} carpeta${s.groups.length === 1 ? '' : 's'}` : ''} · ${s.sample ? Math.round((s.indexed / s.sample) * 100) : 0} % indexado en los recientes`
   },
   buildDetail(b, { model }) {
     const s = model.store
     b.line(2.8, 0, 1, 0.05, { a: 0.7 }).line(4.24, 0, 1, 0.03, { a: 0.45, col: C.blue })
     if (s && s.total) {
       let c = 0
+      // Sin desglose por grupo (carpetas reales): la banda interior es la indexación de la muestra reciente.
+      if (!s.groups.some((g) => g.kids.length)) {
+        let k = 0
+        for (const x of s.index) {
+          const kw = x.count / Math.max(1, s.sample)
+          b.arc(3.6, 4.12, k + 0.0015, k + kw - 0.0015, { st: 6, col: x.key === 'failed' ? C.red : x.key === 'pending' ? C.amber : x.key === 'indexed' ? C.cyan : C.blue, a: 0.9, id: x.num })
+          const kt = fit(b, x.name.toUpperCase(), 0.125, kw * 6.28 * 3.86 - 0.08)
+          if (kt) b.text(kt, 3.86, k + kw / 2, 0.125, { col: C.ice, a: 0.95, inward: inwardAt(k + kw / 2) })
+          k += kw
+        }
+      }
       for (const g of s.groups) {
         const w = g.count / s.total, col = C[g.col]
         b.arc(2.9, 3.52, c + 0.004, c + w - 0.004, { col, a: 0.78, id: g.num })
@@ -58,8 +70,10 @@ export const almacen: ModuleDef<AlmState> = {
     sw.material.uniforms.uMask.value = 1 - f
   },
   tip(num, { model }) {
+    const ix = model.store?.index.find((x) => x.num === num)
+    if (ix) return { title: `Indexación · ${ix.name}`, sub: `${ix.count} de los ${model.store?.sample ?? 0} recursos recientes`, tone: ix.key === 'failed' ? 'error' : ix.key === 'pending' ? 'soon' : undefined }
     for (const g of model.store?.groups ?? []) {
-      if (g.num === num) return { title: g.name, sub: `${g.count} recurso${g.count === 1 ? '' : 's'}` }
+      if (g.num === num) return { title: g.name, sub: `${model.store?.byFolder ? 'carpeta · ' : ''}${g.count} recurso${g.count === 1 ? '' : 's'}` }
       const k = g.kids.find((x) => x.num === num)
       if (k) return { title: `${g.name} · ${k.name}`, sub: `${k.count} recurso${k.count === 1 ? '' : 's'}`, tone: k.key === 'failed' ? 'error' : k.key === 'pending' ? 'soon' : undefined }
     }
