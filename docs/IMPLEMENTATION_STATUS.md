@@ -149,6 +149,8 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 - [ ] Crear proyecto Rive.
   ⚠️ Se ve el personaje sustituto (SVG) en la pantalla Drakter; el `.riv` real sigue pendiente.
   ⚠️ El `.riv` se diseña a mano en el editor de Rive. Por código solo se cubre el personaje provisional; las casillas de estados, transiciones e integración dependen de ese archivo hasta que el usuario lo entregue.
+  ⚠️ (2026-11-26) Rive deja de ser el camino principal: el personaje es un avatar 3D en Three.js 0.180 con la API común `createAvatar` (`desktop/src/character/avatars/`, entrada «Avatar 3D Three.js» de `DECISIONS.md`). Hoy va Ascuario como avatar provisional; el definitivo sale de la ronda de avatares holográficos y se enchufa cambiando una línea de `avatars/registry.ts`. El `.riv` queda como alternativa: si el usuario deja uno, tiene prioridad.
+  ⚠️ (2026-11-26) Por defecto `ACTIVE_AVATAR = null`: hasta que se elija el avatar holográfico, la app sigue mostrando el `.riv` o el SVG y no descarga Three.js.
 - [x] Crear estado idle.
   ⚠️ Hecho en el personaje provisional SVG; la versión `.riv` sigue pendiente (ver «Crear proyecto Rive»).
 - [x] Crear estado listening.
@@ -175,6 +177,7 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
   ⚠️ Provisional SVG. Cadena `agent.status_changed` → `protocol.ts` → `stores/agent.ts` → `CharacterSlot` comprobada por typecheck, lectura y render por estado. Falta el e2e `desktop.personaje` en Electron (hoy NO COMPROBADO: Electron no arranca por CDP en la pasada y la conversación da 503). `agent.expression_changed` se valida pero el SVG la ignora y el backend no la emite.
 - [x] Implementar sincronización labial.
   ⚠️ Hecho en el personaje provisional SVG (nivel real del audio vía `AnalyserNode`); en el `.riv` llega por el input `mouthOpen`, sin probar con un `.riv` real.
+  ⚠️ (2026-11-26) En el avatar 3D, el mismo nivel (`useMouthLevel`) llega a `setAudioLevel`. Se comprobó en Electron con una pista sintética por `outputLevel` (la mandíbula se abre y se cierra); falta probarlo con la voz real.
 - [x] Probar animaciones.
   ⚠️ Hecho en el personaje provisional SVG; la versión `.riv` sigue pendiente (ver «Crear proyecto Rive»).
 

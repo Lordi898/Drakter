@@ -1,5 +1,6 @@
 import { useState, type KeyboardEvent } from 'react'
 import { SendHorizontal, Square } from 'lucide-react'
+import { signalUserTyping } from '@/character/activity'
 import { ChatTranscript } from '@/chat/ChatTranscript'
 import { SpeakerToggle } from '@/chat/SpeakerToggle'
 import { Button } from '@/components/ui/button'
@@ -63,7 +64,10 @@ export function ChatComposer({ className }: { className?: string }) {
           rows={1}
           disabled={offline}
           value={draft}
-          onChange={(event) => setDraft(event.target.value)}
+          onChange={(event) => {
+            setDraft(event.target.value)
+            signalUserTyping()
+          }}
           onKeyDown={onKeyDown}
           aria-label="Mensaje para Drakter"
           aria-describedby={notice ? 'chat-notice' : undefined}

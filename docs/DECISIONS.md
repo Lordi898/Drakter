@@ -1296,3 +1296,44 @@ Decisiones técnicas, cambios de tecnología y motivos.
 - **Motivo:** cubrir los seis frentes pedidos con las skills de más calidad (las oficiales de GreenSock y Anthropic, las más instaladas de Three.js y las guías de producción de rig 2D), sin relleno.
 - **Impacto:** `.claude/skills/<16 nuevas>/`, `scripts/install-agent-skills.sh`, `THIRD_PARTY_NOTICES.md` y `.claude/skills/drakter-toolkit/SKILL.md`. No afecta a la app.
 
+
+## [2026-11-26] Avatar 3D Three.js sustituye al placeholder; Rive queda como alternativa
+- **Contexto:** el `.riv` de Drakter no puede generarse por código y el usuario no lo ha diseñado. El concurso de avatares 3D (Three.js 0.180, todo procedural) dio tres finalistas (Ascuario, Filamento y El Relojero) con la misma API: `createAvatar(canvas, opts) → { setState, setAudioLevel, setViseme?, lookAt, notify, setReducedMotion, resize, dispose }`. Además hay en marcha una ronda nueva de avatares holográficos, con la misma API, de la que saldrá el definitivo.
+- **Decisión:**
+  - El personaje por defecto es un **avatar 3D en Three.js 0.180.0** (MIT, versión fija), con un único lienzo WebGL2. Orden en `AdaptiveCharacter`: primero el `.riv` del usuario, si existe (Rive queda como **alternativa**, no se borra); si no, el avatar 3D; y, sin WebGL2 o si falla la carga, el SVG provisional. El SVG se dibuja desde el primer momento y se retira cuando el lienzo ya se ve, tras su fundido.
+  - **Anfitrión genérico**: `avatars/types.ts` (contrato común), `avatars/registry.ts` (carga diferida de cada avatar; **cambiar de avatar es cambiar `ACTIVE_AVATAR`**), `ThreeCharacter.tsx` (cableado) y `activity.ts` (aviso de escritura). Fuera de `avatars/<nombre>/` no hay nada específico de un avatar.
+  - Cableado: prop `state` → `setState`; `useMouthLevel` (nivel real de `voice/outputLevel`) → `setAudioLevel`; la mirada sigue al ratón por defecto (no se llama a `lookAt`); `focus`/`blur` de la ventana y la escritura en `ChatComposer` (como mucho un aviso cada 400 ms) → `notify`; el ajuste «Reducir movimiento» o `prefers-reduced-motion` → `setReducedMotion`; `ResizeObserver` → `resize`; el desmontaje → `dispose`. El bucle es del avatar, a 30 fps, y se para con `document.hidden`. `pixelRatio` tiene un tope de 1,5.
+  - **Avatar provisional: Ascuario**, portado sin cambios de lógica a `desktop/src/character/avatars/ascuario/` (TypeScript estricto; compila con el `tsconfig.web.json` de la app). Su malla horneada (`ascuario-geo.json`, 2 MB, generada por su `sculpt.ts`) va como asset de Vite (`?url`). Three, Ascuario y la malla van en un chunk aparte (549 KB + 2 MB) que no pesa en el arranque. Único cambio en el port: `setReducedMotion(false)` reactiva los micro-gestos.
+  - **CSP sin cambios.** Three/WebGL no necesita `eval` ni workers, y la malla se pide con `fetch` a `'self'`. Comprobado en la build de producción (`app://drakter`), sin violaciones. La comprobación de origen del backend no se toca.
+  - De paso: en desarrollo Vite responde a `/__character/drakter.riv` con `index.html` (200) y Rive avisaba «Bad header»; ahora una respuesta `text/html` cuenta como «no hay `.riv`».
+- **Alternativas descartadas:** esperar al `.riv` (bloquea el personaje sin plazo). Usar React Three Fiber (los avatares ya traen su propio bucle y su API imperativa; añadiría una capa sin beneficio). Importar `.mjs` precompilados con un `.d.ts` (Ascuario ya está en TypeScript estricto y portarlo tal cual es más limpio). Relajar la CSP «por si acaso» (no hace falta).
+- **Motivo:** dar ya un personaje expresivo y vivo, sin bloquear la elección del avatar definitivo, que se enchufa tocando una línea.
+- **Impacto:**
+  - Código: `desktop/src/character/{AdaptiveCharacter,ThreeCharacter}.tsx`, `character/{activity,plug}.ts`, `character/avatars/**`, `chat/ChatComposer.tsx`, `desktop/package.json` y el lockfile, y `THIRD_PARTY_NOTICES.md`. Checklist 5 (notas en «Crear proyecto Rive» y «sincronización labial»).
+  - Comprobado en Electron (instancia aparte, sin backend) en un i7-8665U con UHD 620. Los 9 estados cambian luz y expresión, la mandíbula sigue a una pista sintética inyectada en `outputLevel` y la cabeza sigue al cursor. El respaldo SVG funciona: al forzar un fallo del cargador no hay lienzo, se ve el SVG y queda aviso en el log. Arranque del avatar en 178 ms. En reposo, a ~22-30 fps: renderer 5,3 % y 6,7 % de CPU (dos medidas de 20 s) y proceso GPU 4,3 % y 7,5 %, con 0,4-0,9 ms de JS por fotograma, 20 llamadas de dibujo y 107 k triángulos. Con `document.hidden`, 0 % en ambos.
+  - Pendiente: probar la boca con la voz real, y sincronizar el port cuando drakter-93 cierre su pulido o cuando se elija el avatar holográfico.
+
+## [2026-11-26] Avatares 3D con fondo transparente (`AvatarOptions.transparent`)
+- **Contexto:** el avatar final saldrá de la ronda de avatares holográficos y debe flotar sobre la interfaz, no ir dentro de una tarjeta oscura.
+- **Decisión:**
+  - El contrato (`avatars/types.ts`) suma `transparent?: boolean`: lienzo con alfa premultiplicado y sin fondo propio.
+  - Cada entrada de `avatars/registry.ts` declara `transparent`. `ThreeCharacter` se lo pasa al avatar y, si es transparente, no lo enmarca (sin esquinas redondeadas).
+  - Ascuario lo soporta: limpia con alfa 0, usa `premultipliedAlpha` y oculta su halo. Aun así se queda en `transparent: false`, porque se diseñó sobre su halo: sin él se notan el corte plano del busto y el humo cortado en el borde del lienzo.
+- **Alternativas descartadas:**
+  - Detectarlo en tiempo de ejecución, leyendo el alfa del lienzo: es frágil y cuesta una lectura de la GPU.
+  - Una máscara de bordes genérica en CSS: puede recortar contenido propio de cada avatar.
+- **Motivo:** que un avatar holográfico se enchufe con una línea y flote sin tocar el anfitrión.
+- **Impacto:**
+  - Código: `desktop/src/character/{ThreeCharacter.tsx,avatars/{types,registry}.ts,avatars/ascuario/{index,scene}.ts}`.
+  - Comprobado en Electron con Ascuario forzado a `transparent: true`, en el tema claro (el actual) y en el oscuro: sin tarjeta, bordes limpios y sin halos oscuros. En el tema claro el contraste es alto; en el oscuro es más justo con un avatar negro, aunque legible gracias a las vetas y los reflejos.
+  - Cuidado para los avatares transparentes: lo que se salga del lienzo (partículas, humo) se corta en el borde.
+
+## [2026-11-26] Avatar 3D desactivado por defecto (`ACTIVE_AVATAR = null`)
+- **Contexto:** el PR #35 tiene que fusionarse ya, porque el modo Jarvis depende de él, y lo que ve el usuario no debe cambiar hasta que elija el avatar holográfico.
+- **Decisión:** `avatars/registry.ts` admite `ACTIVE_AVATAR = null`, que queda como valor por defecto. Sin avatar activo, `AdaptiveCharacter` hace lo de antes: el `.riv` del usuario si existe y, si no, el SVG. Ascuario sigue registrado, pero inactivo. Activar un avatar sigue siendo cambiar esa línea (p. ej. `'ascuario'`). `ThreeCharacter` recibe ahora la entrada del avatar como prop.
+- **Alternativas descartadas:** quitar Ascuario del registro, porque se perdería el avatar de prueba del anfitrión. Un ajuste en la interfaz, porque el usuario aún no ha elegido avatar.
+- **Motivo:** fusionar sin cambiar lo que ve el usuario.
+- **Impacto:**
+  - Código: `desktop/src/character/{AdaptiveCharacter,ThreeCharacter}.tsx`, `avatars/registry.ts` y `plug.ts`.
+  - Con `null`, el build no genera el chunk de Three ni la malla (el import diferido queda como código muerto y se elimina).
+  - Comprobado en Electron: con `null` se ve el SVG, sin lienzo y sin pedir nada de Three; con `'ascuario'`, el avatar 3D, sin avisos. Esto matiza la entrada «Avatar 3D Three.js sustituye al placeholder»: el anfitrión está listo, pero hoy no hay avatar activo.

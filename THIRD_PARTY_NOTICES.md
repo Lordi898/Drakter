@@ -50,12 +50,13 @@ Propio del proyecto (no es de terceros): `.claude/CLAUDE.md`, `.claude/agents/{c
 
 ### Escritorio (`desktop/package-lock.json`)
 
-Paquetes que acaban en la aplicación (dependencias de producción, 86 en total):
+Paquetes que acaban en la aplicación (dependencias de producción, 87 en total):
 
 | Licencia | Paquetes |
 |---|---|
-| MIT | 82 (entre ellos `react`, `react-dom`, `radix-ui`, `sonner`, `clsx`, `tailwind-merge`) |
+| MIT | 83 (entre ellos `react`, `react-dom`, `radix-ui`, `sonner`, `clsx`, `tailwind-merge`) |
 | MIT (añadido 2026-11-20) | `@rive-app/canvas` 2.53.0 (runtime de Rive para el personaje; ya cuenta dentro de los MIT) |
+| MIT (añadido 2026-11-26) | `three` 0.180.0 (avatar 3D del personaje; ya cuenta dentro de los MIT). `@types/three` 0.180.0 solo es de desarrollo. La malla y los shaders del avatar son código propio, sin modelos ni texturas de terceros |
 | ISC | `lucide-react` |
 | Apache-2.0 | `class-variance-authority` |
 | 0BSD | `tslib` |
