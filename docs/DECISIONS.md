@@ -1817,3 +1817,25 @@ Decisiones técnicas, cambios de tecnología y motivos.
   |---|---|---|
   | Equilibrado | 20 fps: 7,5-8,6 % y 7,1-7,8 % | 10 fps: 5,0-6,6 % y 2,9-3,9 % |
   | Cine | 30 fps: 10,3-16,1 % y 8,6-13,3 % | 10 fps: 2,1-5,2 % y 2,3-4,5 % |
+
+## [2026-11-26] Integración del modo Jarvis: prueba de conjunto y mediciones
+- **Contexto:** con las tres interfaces (Núcleo, Holomesa, Visor), los 8 avatares, D1, V1 y las confirmaciones comunes (#58, #59) en `main` (`90cd095`), el integrador prueba el conjunto.
+- **Decisión:**
+  - La prueba de conjunto usa el arnés e2e: stub LLM, Hermes real y Electron aislado lanzado sin `--disable-gpu` para medir con la UHD 620 dentro del lock de medición.
+  - Nuevo guion de stub `tests/e2e/stub-scenarios/cambiar-apariencia.json` (`[stub:cambiar-apariencia]`): el agente llama a `ui_set_appearance` (orbe y visor). Sirve para comprobar la ruta agente → `ui.appearance` → pantalla sin Haiku.
+  - El script de la prueba (`integ.py`) queda fuera del repo, en la carpeta de investigación de Jarvis: es de un solo uso y depende de la máquina.
+- **Resultados:**
+  - Drakter arranca sin descargar código de Jarvis.
+  - Ajustes, selector «Apariencia», Ctrl+K y la herramienta del agente cambian avatar e interfaz.
+  - Las 9 combinaciones interfaz × tema × movimiento reducido van sin excepciones.
+  - La confirmación destructiva se ve encima y se responde desde las tres interfaces.
+  - CPU del renderer en reposo (holo-contorno, Equilibrado): Núcleo 9,2 %, Holomesa 9,2 %, Visor 6,8 %. Proceso GPU: 8,0 %, 9,1 % y 7,5 %.
+  - Con la ventana minimizada: renderer 0,5 % y GPU 0,7 %, aunque Chromium no marca `document.hidden` con este gestor de ventanas.
+  - Al arrancar se cargan +4,3 KB de JS y +1,1 KB de CSS (gzip) frente a antes del modo Jarvis.
+  - Voz con texto inyectado: puente 12 de 12, capa 0 30 de 30, política y herramienta en verde.
+- **Alternativas descartadas:** verificar la ruta del agente con Haiku real (cuesta y no aporta para el cableado); medir con `--disable-gpu` como el arnés (no refleja la UHD 620).
+- **Motivo:** cerrar la fase visual con evidencia en el hardware real.
+- **Impacto:** `docs/IMPLEMENTATION_STATUS.md` (sección «Modo Jarvis») y `tests/e2e/stub-scenarios/cambiar-apariencia.json`. Pendiente:
+  - voz real con micrófono, y PCM de las frases nuevas;
+  - `document.hidden` al minimizar en este gestor de ventanas;
+  - detalles visuales de las interfaces, avisados a sus dueños: la cinta del Visor asoma bajo la esquina reservada, y Núcleo y Visor duplican controles del anfitrión (calidad, «Volver a Drakter»).
