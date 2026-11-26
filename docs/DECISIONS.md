@@ -1718,7 +1718,7 @@ Decisiones técnicas, cambios de tecnología y motivos.
 - **Decisión:**
   - Sectores Hoy, Tareas y proyectos, Hábitos, Calendario y asignaturas, Relaciones y Almacén sobre `useJarvisData` (D1). Cada uno se monta al acercarse a su rumbo y se queda montado (girar no recarga). Vacíos y errores dicen lo que pasa; no hay datos de ejemplo.
   - Acciones con `modules/*/api.ts`: completar tarea (con subtareas abiertas lleva a Drakter, donde vive ese diálogo), registrar hábito (hecho o saltado) y quitar relación. Quitar devuelve 409 `confirmation_required` y se aprueba solo en el diálogo nativo de main.
-  - Las confirmaciones pendientes se pintan en el cristal del Visor con «Revisar» (`reviewConfirmation` con el gesto real), porque la lista común de `App` queda detrás del lienzo en Jarvis. Sin botones de aprobar o rechazar.
+  - Las confirmaciones NO las pinta el Visor: las muestra el aviso común de la app, encima de cualquier interfaz (PR #58), que abre el diálogo nativo de main. Hubo una versión propia en el cristal mientras el aviso común quedaba detrás del lienzo; se retiró para que haya un único aviso (CLAUDE.md §8).
   - Alertas con barrido a partir de `stores/notifications`; los resultados de las acciones del HUD entran con `addNotification` (sin toast, que pisaría el muelle).
   - Gráficos 2D como funciones puras (`charts.ts`); 3D de datos en `stage/parts.ts`: grafo de relaciones (60 elementos más conectados), skyline de tareas abiertas por proyecto y semana de vencimiento (8 semanas; el backend no da actividad semanal) y núcleo de documentos según `index_status` de la muestra.
   - «Examen» = evento cuyo título lo dice: la agenda no tiene un tipo propio.
