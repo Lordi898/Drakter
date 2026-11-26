@@ -1755,6 +1755,7 @@ Decisiones técnicas, cambios de tecnología y motivos.
   - Arnés en Chrome (mismo Chromium y ANGLE, 1470×746 a DPR 1,25, orbe de reserva): Equilibrado 7,6 % en núcleo, Hoy y Relaciones; Ahorro 0,5–2,3 %; Cine 13,6–14,5 %. En el prototipo Relaciones daba 11,6 %: las etiquetas en el Stage lo bajan al mismo coste que el resto.
   - ⚠️ El objetivo ≤ 10 % se cumple en el límite con el avatar por defecto; la palanca que queda es del avatar (dibujarlo a menos fps en reposo), no de la interfaz.
   - Arnés y scripts: `~/.local/share/drakter/research/jarvis-hud/{nucleo-port,nucleo-app}/`.
+  - **Con `Stage.setIdleFps` (PR #57):** Núcleo pide 10 fps de ambiente en reposo con el agente `idle` u `offline`, y el fps del perfil con el agente activo, para que el halo de voz se vea fluido. Medido en la app aislada con holo-contorno: Equilibrado 8,5 % (vista núcleo), 4,1 % (Hoy) y 3,9 % (Relaciones), antes 10–12 %; Cine 3,3–8,4 %. El objetivo ≤ 10 % se cumple con margen.
 - **Trampa pisada:** liberar un material mientras `compileAsync` de Three sigue sondeando rompe el bucle (`isReady` de `undefined`); al rehacer satélites y nodos se reutiliza el material y solo se libera la geometría.
 
 ## [2026-11-26] Las confirmaciones pendientes siempre a la vista (también en Jarvis)

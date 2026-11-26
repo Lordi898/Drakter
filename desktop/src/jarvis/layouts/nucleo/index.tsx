@@ -132,6 +132,13 @@ export default function NucleoLayout({ stage, avatar, quality, reducedMotion, se
   useEffect(() => scene?.setAgentState(state), [scene, state])
   useEffect(() => scene?.setOrb(!avatar.available), [scene, avatar.available])
   useEffect(() => acquireAudioTaps(), [])
+  // Ambiente en reposo a 10 fps (los anillos giran despacio); con el agente activo, el del perfil (halo de voz fluido).
+  const calm = state === 'idle' || state === 'offline'
+  useEffect(() => {
+    if (!stage) return
+    stage.setIdleFps(calm ? 10 : null)
+    return () => stage.setIdleFps(null)
+  }, [stage, calm])
   // Ahorro en reposo dibuja a demanda: un fotograma al cambiar datos, estado o sección, y ritmo propio mientras hay voz o trabajo.
   useEffect(() => { stage?.requestFrame() }, [stage, model, state, focus, selTick])
   useEffect(() => {
