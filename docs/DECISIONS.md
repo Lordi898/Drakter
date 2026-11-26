@@ -1712,3 +1712,18 @@ Decisiones técnicas, cambios de tecnología y motivos.
     - Al hablar abre la boca y mira donde se le indica.
     - Sin errores en consola.
   - CPU en reposo en la pantalla Drakter (UHD 620, a 60 rAF/s, con el bucle del avatar limitado a 30 fps, dentro de `flock`): renderer 5,8 % y 4,7 %, proceso GPU 6,2 % y 4,8 %. Hubo una primera medida de 25,3 % que coincidió con una recarga de la página: el avatar volvió a tejer y a compilar. No cuenta como reposo.
+
+## [2026-11-26] Stage: fps de reposo por interfaz (`setIdleFps`)
+- **Contexto:** en reposo, la interfaz Visor gasta un 10,6-15,5 % de CPU, y casi todo es composición a 20 fps (lo midió drakter-108). Cada interfaz sabe cuánta animación de ambiente necesita.
+- **Decisión:** se añade al contrato `Stage.setIdleFps(fps | null)`, de forma aditiva.
+  - Solo puede **bajar** el `idleFps` del perfil y nunca subirlo, así que Ahorro sigue a demanda. Con 0 se dibuja a demanda y con `null` vuelve el valor del perfil.
+  - La interfaz lo fija al montarse y lo devuelve a `null` al desmontarse.
+  - No afecta al fps activo, a `hidden` ni al regulador.
+- **Alternativas descartadas:** bajar el `idleFps` de Equilibrado para todas las interfaces, porque no todas lo necesitan; y un campo nuevo en `QualityProfile`, porque el perfil es del nivel y no de la interfaz.
+- **Motivo:** menos CPU y GPU en reposo sin tocar a quien no lo use.
+- **Impacto:** `desktop/src/jarvis/stage/{types,createStage}.ts`. Se midió en la UHD 620, en dos pasadas bajo el lock, con rejilla, partículas y Ascuario; las cifras son el uso de CPU del renderer y del proceso GPU:
+
+  | Nivel | Perfil | Con `setIdleFps(10)` |
+  |---|---|---|
+  | Equilibrado | 20 fps: 7,5-8,6 % y 7,1-7,8 % | 10 fps: 5,0-6,6 % y 2,9-3,9 % |
+  | Cine | 30 fps: 10,3-16,1 % y 8,6-13,3 % | 10 fps: 2,1-5,2 % y 2,3-4,5 % |
