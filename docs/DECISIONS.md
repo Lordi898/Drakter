@@ -1621,3 +1621,36 @@ Decisiones técnicas, cambios de tecnología y motivos.
   - Medido en la UHD 620 (Chrome con ANGLE, dentro del lock de medición, carga media 3,8-5,8). Lienzo propio de 500×600 en tema oscuro: reposo a 30 fps con 8,3 % y 5,1 % de CPU del renderer (referencia del prototipo 5,1-7,9 %), hablando 7 %, 20 llamadas de dibujo y 0,53 ms de JS por fotograma. Stage en Equilibrado (1470×746, DPR 1,25), reposo: 3,3-3,7 % sin avatar y 4,6 % con él. Al quitar la capa, las geometrías pasan de 11 a 2 y los programas de 14 a 2. Sin errores en consola; temas oscuro, claro y `setTheme` en caliente comprobados con capturas.
   - Comprobado en Electron (build del worktree, datos y perfil aislados, sin backend): aparece en Ajustes → Avatar con su miniatura, al elegirlo la vista previa monta el lienzo 3D y sigue el tema real (tinta en claro, luz en oscuro; tenue porque sin backend el estado es `offline`), y al volver a «Clásico» se libera. Sin errores en consola.
   - ⚠️ La CPU se midió en Chrome y no en Electron, como W3, para no tocar la app del usuario. Arnés: `~/.local/share/drakter/research/avatar3d/holo-busto/port-harness/`.
+
+## [2026-11-26] V1: cambiar avatar e interfaz Jarvis por voz, por el agente y desde la interfaz
+- **Contexto:** el usuario quiere elegir cualquier avatar y cualquiera de las tres interfaces Jarvis también por voz (plan `jarvis-seleccion.md`). Los contratos son de J1 (`ui.appearance`, `AvatarChoice`, `JarvisLayoutChoice`).
+- **Decisión:**
+  - **Capa 0** (`voice/conversation/layer0.py`): `classify_appearance(text)` → `("avatar"|"layout", id)` o `None`, pura y aparte de `classify` (firma congelada) y de `classify_ui`.
+    - Forma cerrada, definida en `layer0.es.toml` `[ui_appearance]`: [verbo] [enlaces] [«avatar»/«interfaz»…] [enlaces] alias, con verbo o sustantivo y nada más salvo muletillas. «Quita el avatar» da `none`.
+    - Los alias que son palabras corrientes («mesa», «reloj», «hilo», «clásico», «ninguno») solo valen con el sustantivo, así que «pon la mesa» va al agente. El sustantivo restringe el tipo («interfaz dragón» no vale).
+    - Esa sección del TOML es la fuente de la voz: el proceso de voz no lee el TypeScript. Debe incluir los `voiceAliases` de cada ficha de `character/avatars/<id>/register.ts`.
+  - **Puente** (`voice/bridge.py`): emite `voice.local_command{command: "ui_appearance", avatar|layout}` y dice `ui_avatar` o `ui_layout`, sin turno.
+  - **Contrato:**
+    - `EvtLocalCommand` gana `ui_appearance` con exactamente uno de `avatar`/`layout`. Los campos solo valen con ese comando.
+    - `PhraseKey` gana `ui_avatar` y `ui_layout`, con frases de trato de usted repartido en `agent/identity/voice_phrases.es.toml`.
+  - **Backend:**
+    - `services/ui_mode.request_ui_appearance()` publica `ui.appearance`, con su propio límite de 1 por segundo (separado del de modo).
+    - `VoicePolicy.local_command` la llama y lo audita (destino y resultado).
+    - Herramienta `ui_set_appearance` en `tools/ui.py`: `avatar` y/o `layout` con `Literal` del contrato, permiso `ui.write`, `write` sin confirmación (sube a `confirm` en sesión contaminada), `audit` de los dos campos y error `ui_unavailable`. Entra en `catalog.json` sin deriva.
+  - **Escritorio:**
+    - En Ajustes → Modo Jarvis, el selector «Interfaz» guarda la preferencia sin abrir Jarvis.
+    - En `Ctrl+K`, la acción única «Abrir modo Jarvis» pasa a ser una lista (`modules/search/actions.ts`): modo, interfaces y avatares por nombre o alias, y «ninguno». Usa las mismas puertas (`requestUiMode`, `requestAppearance`).
+- **Alternativas descartadas:** leer los alias del registro TypeScript desde la voz (otro proceso y otro lenguaje); casar un alias suelto («orbe», «visor»), que daría falsos positivos en conversación; una frase de confirmación por avatar (ocho claves de caché para poco valor).
+- **Motivo:** las órdenes habituales son instantáneas y sin LLM, y cualquier otra forma de pedirlo llega al agente con las reglas de herramientas.
+- **Impacto:**
+  - Archivos: `voice/conversation/layer0.{py,es.toml}`, `voice/bridge.py`, `contracts/python/drakter_contracts/voice_ipc.py`, `contracts/ts/index.ts`, `contracts/tools/{catalog.json,README.md}`, `agent/identity/voice_phrases.es.toml`, `backend/app/{services/ui_mode.py,tools/ui.py,integrations/voice/{policy,service}.py}` y en `desktop/src/` `settings/JarvisSection.tsx` y `modules/search/{actions.ts,SearchPalette.tsx}`.
+  - Comprobado:
+    - capa 0: 30 casos;
+    - puente con el venv real de la voz: 12 casos (incluidos los 8 de W5);
+    - herramienta y política por el `ToolRegistry` real: 15 comprobaciones, y las 18 de W5 siguen bien;
+    - las 5 comprobaciones críticas del CI y `gen_ts.py` sin diferencias;
+    - Electron real aislado: `Ctrl+K` («interfaz visor», «ava»), Ajustes y sin excepciones (6 de 6).
+  - Pendiente:
+    - PCM de las frases nuevas (`python -m voice phrases`, que usa Fish).
+    - Probar con micrófono real.
+    - Cuando se porte un avatar con alias nuevos, añadirlos a `[ui_appearance.avatars]`.

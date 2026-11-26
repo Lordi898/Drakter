@@ -49,7 +49,7 @@ from app.integrations.voice.client import VoiceClient, VoiceUnavailableError, sh
 from app.integrations.voice.heard import HeardNotes
 from app.integrations.voice.policy import RuntimePort, VoicePolicy
 from app.integrations.voice.settings import VoiceSettings, read_env_file
-from app.services.ui_mode import request_ui_mode
+from app.services.ui_mode import request_ui_appearance, request_ui_mode
 from app.integrations.voice.supervisor import VoiceSupervisor, build_env
 from app.services import settings as settings_service
 from app.services.settings_models import SETTING_DEFAULTS
@@ -123,6 +123,9 @@ class VoiceOrchestrator:
             min_words=settings.bargein_min_words,
             ui_mode=lambda mode, utt_id: request_ui_mode(
                 getattr(runtime, "hub", None), mode, "voice", utt_id=utt_id
+            ),
+            ui_appearance=lambda avatar, layout, utt_id: request_ui_appearance(
+                getattr(runtime, "hub", None), "voice", avatar=avatar, layout=layout, utt_id=utt_id  # type: ignore[arg-type]
             ),
         )
         self.heard = HeardNotes()
