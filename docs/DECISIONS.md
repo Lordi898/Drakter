@@ -1525,6 +1525,136 @@ Decisiones técnicas, cambios de tecnología y motivos.
     - En SwiftShader detecta software, pasa a Ahorro sin partículas y «reducir movimiento» deja la escena quieta.
   - ⚠️ Se midió en Chrome y no en Electron, para no tocar la app de desarrollo del usuario; es el mismo Chromium y la misma ruta ANGLE. Playwright emula páginas siempre visibles, así que `hidden` se probó forzando `document.hidden` y `visibilitychange`, que es la misma ruta que sigue Electron al minimizar. Arnés y datos: `~/.local/share/drakter/research/jarvis-hud/w3-stage/`.
 
+## [2026-11-26] A1: varios avatares 3D elegibles (registro, preferencia `avatarId` y Ajustes → Avatar)
+- **Contexto:** el usuario quiere poder elegir cualquiera de los avatares 3D, desde la interfaz y por voz, en Drakter y en Jarvis; por defecto `holo-contorno` (plan `jarvis-seleccion.md`). Hasta ahora había un solo avatar fijado en código (`ACTIVE_AVATAR`).
+- **Decisión:**
+  - **Contrato** (`avatars/types.ts`, aditivo): `AvatarTheme`, `AvatarOptions.theme`, `setTheme?` opcional (un holograma aditivo no se ve sobre fondo claro) y `AvatarMeta` (id, nombre, descripción, miniatura, alias de voz).
+  - **Registro** (`avatars/registry.ts`): cada avatar se describe en su carpeta (`<id>/register.ts`, sin importar Three) y el registro solo los lista. `resolveAvatar(id)` devuelve `null` para `none`, para un id desconocido o para uno aún no portado: personaje clásico, nunca rompe. También exporta `useActiveAvatar()`, `listAvatars()`, `avatarIds()` y `findAvatarByAlias()` para la voz, la herramienta y el selector de Jarvis. Desaparece `ACTIVE_AVATAR`.
+  - **Preferencia** `avatarId: string` (`stores/preferences.ts`), por defecto `holo-contorno`. `load()` solo valida la forma (`[a-z0-9-]{1,40}`), sin importar el registro. Mientras `holo-contorno` no esté portado, el predeterminado se ve como «Clásico». Coordinado con drakter-100 (J1).
+  - **Anfitrión:** `AdaptiveCharacter` es reactivo. Con un avatar 3D usa ese, con el SVG debajo hasta que se ve y como respaldo; con «ninguno», el personaje clásico (el `.riv` si existe y, si no, el SVG). El `.riv` deja de tener prioridad sobre un avatar 3D elegido de forma explícita. Cambiar de avatar monta uno nuevo y libera el anterior (`key`). `ThreeCharacter` pasa el tema real de la app (clase `dark` de `<html>`, `useAppTheme`) y llama a `setTheme?` cuando cambia. La capa del Stage pasa `theme: 'dark'`.
+  - **Ajustes → Avatar** (`settings/AvatarSection.tsx`): grupo de radios nativo con miniaturas («Clásico» más los avatares portados) y vista previa en vivo con el mismo `CharacterSlot`.
+  - `avatars/README.md`: lista de lo que debe cumplir cada port (`create` y `createLayer`, `transparent`, `theme`, `dispose`, sin assets de terceros, Three externo 0.180.0, miniatura de 192 px, rendimiento).
+- **Alternativas descartadas:** validar `avatarId` contra el registro dentro de `preferences.ts`, porque acoplaría las preferencias a los avatares. Listar en el registro los avatares aún no portados (con su ficha), porque haría falta mantener fichas y miniaturas sin código detrás; cada port trae la suya.
+- **Motivo:** que cada port sea su carpeta más una línea, y que la elección funcione igual desde Ajustes, Jarvis y la voz.
+- **Impacto:**
+  - Código: `desktop/src/character/{AdaptiveCharacter,ThreeCharacter}.tsx`, `character/{plug,useAppTheme}.ts`, `character/avatars/{types,registry}.ts`, `avatars/README.md`, `avatars/ascuario/{register.ts,thumbnail.webp}`, `stores/preferences.ts`, `settings/{AvatarSection,SettingsPage}.tsx` y `jarvis/stage/layers/avatar.ts`.
+  - Comprobado en Electron:
+    - Con la preferencia por defecto se marca «Clásico» y se explica que el predeterminado aún no está.
+    - Al elegir Ascuario se guarda la preferencia y la vista previa pasa a 3D.
+    - Con las flechas se vuelve a «Clásico» y al SVG.
+    - Sin errores en consola.
+
+## [2026-11-26] J1: contratos de apariencia (avatar e interfaz Jarvis seleccionables)
+- **Contexto:** el usuario quiere elegir cualquiera de los avatares 3D y cualquiera de las tres interfaces Jarvis, desde la interfaz y por voz, con `holo-contorno` y `nucleo` por defecto (`~/.local/share/drakter/plan/jarvis-seleccion.md`). J1 congela los contratos antes de A1, D1, V1 y las tres interfaces.
+- **Decisión:**
+  - **Listas cerradas en el contrato:** `AvatarChoice` (8 avatares y `none` = el personaje de siempre) y `JarvisLayoutChoice` (`nucleo`, `holomesa`, `visor`), en `contracts/python/drakter_contracts/events.py`.
+  - **Evento WS `ui.appearance`** (`UiAppearanceRequested{avatar?, layout?, source, utt_id?}`, al menos uno de los dos): petición estética, sin estado en el backend. El renderer la aplica con `stores/appearance.requestAppearance()`, la única puerta para todas las vías:
+    - guarda la preferencia;
+    - límite de 1 por segundo para voz y agente;
+    - pedir una interfaz estando en Drakter también abre Jarvis; cambiar de avatar no cambia de modo.
+  - **Preferencias** (`stores/preferences.ts`):
+    - `avatarId` es el de A1 (#43): `string` validado por forma, que resuelve `character/avatars/registry.resolveAvatar`. Un id desconocido o sin portar da el personaje clásico.
+    - J1 añade `jarvisLayout: JarvisLayoutChoice` (defecto `nucleo`).
+    - `AVATAR_CHOICES` (la lista cerrada del contrato) solo valida el evento y la herramienta. Una comprobación de tipos falla al compilar si el contrato gana un valor que no está en `AVATAR_CHOICES` o `JARVIS_LAYOUT_CHOICES`.
+  - **Contrato de interfaz** (`jarvis/layouts/types.ts`): `JarvisLayoutProps` con:
+    - `stage` (`null` = sin lienzo);
+    - `avatar` (`JarvisAvatarSlot`: la interfaz solo decide el recuadro, que se lee por fotograma);
+    - `quality`, `reducedMotion`, `section`/`navigate`;
+    - `onReady` (una vez, cuando ya se ve), `exit` y `setExitTransition`.
+
+    Cada interfaz vive en `jarvis/layouts/<id>/index.tsx` (export default). La registra sola el `import.meta.glob` de `jarvis/layouts/registry.ts`, con carga diferida por interfaz; si falta, se usa la de defecto o el respaldo.
+  - **Datos** (`jarvis/data/types.ts`): `Snapshot<T>` y `useJarvisData(topics)` con los temas `today`, `tasks`, `projects`, `habits`, `agenda`, `timetable`, `relationships`, `resources`, `activity` y `memory`, todos sobre los tipos de `modules/*`. J1 deja un stub, siempre en `loading`, que implementa D1. El estado vivo se lee de `stores/*` y `voice/levels.ts`.
+  - **Las cuatro preguntas de las interfaces** (`visor-port.md` §6), documentadas en `jarvis/layouts/types.ts`:
+    1. Firma: la interfaz recibe el `Stage` creado y un `JarvisAvatarSlot`, sin factory. El avatar es una preferencia global; la interfaz solo da el recuadro.
+    2. Arranque y salida: los trae cada interfaz. La entrada empieza al montarse y llama a `onReady` en cuanto se ve. La salida se registra con `setExitTransition`; `ModeRoot` la espera (`uiMode.runLeaveTransition`, tope 1,5 s) antes de desmontar. Con `reducedMotion`, fundido de 150 ms como mucho.
+    3. Selector rápido de interfaz y avatar: componente común del shell en la esquina superior derecha (reservada), con `Ctrl+Shift+A`.
+    4. Teclas de sección: las captura el shell. `Ctrl+0…9` (global) y, en Jarvis, `0…9` sin modificadores fuera de campos de texto, con el mapa de `navigation/sections.ts`. La interfaz recibe `section`.
+  - **`JarvisShell` como anfitrión:**
+    - crea el único lienzo y el Stage, y añade la capa del avatar activo (`useActiveAvatar`; cambiarlo sustituye la capa) con `useAvatarWiring`;
+    - elige la interfaz con su `Suspense`;
+    - reserva la esquina superior derecha para «Volver a Drakter» y el selector «Apariencia» (interfaces instaladas y avatares portados, más «Ninguno»);
+    - si la interfaz no avisa de que ya se ve, cierra la transición a los 4 s.
+
+    El HUD va en una capa `absolute inset-0` sobre el lienzo, que es `position: fixed`.
+  - Los nombres visibles de las interfaces están en `app/jarvisLayouts.ts`, fuera de `jarvis/`, para que Ajustes y `Ctrl+K` no carguen el chunk.
+  - `app/useReducedMotion.ts` es el hook compartido de movimiento reducido.
+- **Alternativas descartadas:**
+  - Ids libres (`string`) en el evento: la herramienta y la voz no podrían validar con `Literal`.
+  - Pasar los datos como props: obligaría a cargar todos los temas aunque la interfaz no los use.
+  - Un selector de interfaz dentro de cada interfaz: serían tres implementaciones del mismo control.
+- **Motivo:** que A1, D1, V1 y las tres interfaces trabajen en paralelo sobre la misma forma.
+- **Impacto:**
+  - Código: `contracts/python/drakter_contracts/events.py`, `contracts/ts/index.ts`, `desktop/src/services/protocol.ts`, `desktop/src/stores/{preferences,appearance}.ts`, `desktop/src/app/{SessionHosts.tsx,jarvisLayouts.ts,useReducedMotion.ts}` y `desktop/src/jarvis/{JarvisShell.tsx,layouts/{types,registry}.ts,data/{types,index}.ts}`.
+  - Pendiente:
+    - Ajustes y `Ctrl+K` para la interfaz Jarvis, y la voz y la herramienta (V1). Ajustes → Avatar ya lo trajo A1.
+  - Comprobado en Electron real aislado: los 13 pasos de W1 con el Stage real, sin excepciones.
+
+## [2026-11-26] D1: datos de las interfaces Jarvis (`jarvis/data`)
+- **Contexto:** las tres interfaces Jarvis (Núcleo, Holomesa y Visor) leen los datos REST del Workspace con `useJarvisData(topics)` (contrato de J1). Los hooks de `modules/*` cargan siempre, sin opción para desactivarlos, y algunos borran los datos al fallar.
+- **Decisión:**
+  - `jarvis/data/snapshot.ts` tiene un cargador por tema (`useTopic`). Solo pide un tema si alguna interfaz lo usa. Conserva el último dato bueno, distingue `offline` (sin servicio local) de `error`, se recarga tras un resync del enlace y mantiene la identidad del objeto mientras no cambia.
+  - Llama a las funciones de lectura de `modules/*/api.ts` y de `pages/today/requests.ts`, sin `fetch` ni caché propios. La zona horaria sale del ajuste `default_timezone`, como en Hoy, y el día cambia solo a medianoche.
+  - Al contrato se añaden, de forma aditiva y a petición de Núcleo, `habitHistory` (28 días), `subjects`, `folders`, `resourceIndex` y `entityNames`:
+    - `resourceIndex` cuenta `index_status` solo sobre la muestra de `resources`, porque el backend no tiene un agregado.
+    - `entityNames` solo nombra lo que ya está cargado: pedir `getRelated` por cada nodo costaría N peticiones.
+  - Rangos y filtros de cada tema: `jarvis/data/types.ts`.
+- **Alternativas descartadas:**
+  - Llamar a todos los hooks de `modules/*`: cargaría los 15 temas en cada interfaz.
+  - Añadir `enabled` a cada hook de módulo: tocaría páginas de Drakter sin necesidad.
+  - Crear `modules/projects/useProjects`: se hizo y se quitó, porque D1 no lo usa.
+- **Motivo:** una sola capa de datos para las tres interfaces, sin duplicar reglas ni estado por fotograma.
+- **Impacto:** `desktop/src/jarvis/data/{index,snapshot,types}.ts`. Los stores (chat, agente, trabajos, avisos, voz y niveles de audio) se siguen leyendo directamente desde `stores/*` y `voice/levels.ts`.
+
+## [2026-11-26] Port de Holo-busto como avatar con capa del Stage
+- **Contexto:** el plan de selección de avatares pide portar `holo-busto` (prototipo de drakter-93 en `~/.local/share/drakter/research/avatar3d/holo-busto`) a `desktop/src/character/avatars/holo-busto/` con `create` y `createLayer`, temas oscuro y claro, y `dispose` completo.
+- **Decisión:**
+  - Misma estructura que Ascuario: `layer.ts` es el núcleo (`AvatarLayer`) y `index.ts` lo envuelve con renderer, bucle y ratón. `buildScene()` deja de llamar a `setSize`/`setPixelRatio`; `setClearColor` y la limpieza los hace el envoltorio, y la capa compila con `renderer.compileAsync` del anfitrión.
+  - `mat.ts` pasa de uniformes y materiales globales del módulo a un `Kit` por instancia (`makeKit()`), porque `setThemeBlending` y `U` eran compartidos y dos avatares a la vez (Drakter y Jarvis) se habrían pisado el tema.
+  - La capa fuerza `NoToneMapping` al compilar y al dibujar, y lo restaura, para que la clave de programa no dependa del anfitrión (los shaders escriben el color final premultiplicado).
+  - Tema: respeta `AvatarOptions.theme` y `setTheme(theme)` del contrato de A1; además acepta un segundo argumento opcional, `transparent`, para mostrar u ocultar su escenario propio (halo y haz del proyector).
+  - Malla horneada versionada como asset de Vite (`holo-busto-geo.json`, 2,5 MB); `geos.ts` solo acepta la URL (sin bloque `<script>` ni geometría incrustada) y esculpe en caliente si falta.
+  - El bucle del envoltorio mantiene el del prototipo (temporizador antes del `rAF`, 30 fps), que es el medido en la referencia. No escucha `focus`/`blur`: los avisa el anfitrión.
+- **Alternativas descartadas:** dejar el estado global en `mat.ts` (rompe con dos instancias); esculpir en el navegador (15-25 s).
+- **Motivo:** cumplir el contrato de capas (`avatars/README.md`) sin cambiar la lógica del prototipo.
+- **Impacto:**
+  - Código: `desktop/src/character/avatars/holo-busto/**` (con `register.ts` y `thumbnail.webp`) y su línea en `avatars/registry.ts` (`transparent: true`, alias de voz «busto»). Se elige en Ajustes → Avatar.
+  - Medido en la UHD 620 (Chrome con ANGLE, dentro del lock de medición, carga media 3,8-5,8). Lienzo propio de 500×600 en tema oscuro: reposo a 30 fps con 8,3 % y 5,1 % de CPU del renderer (referencia del prototipo 5,1-7,9 %), hablando 7 %, 20 llamadas de dibujo y 0,53 ms de JS por fotograma. Stage en Equilibrado (1470×746, DPR 1,25), reposo: 3,3-3,7 % sin avatar y 4,6 % con él. Al quitar la capa, las geometrías pasan de 11 a 2 y los programas de 14 a 2. Sin errores en consola; temas oscuro, claro y `setTheme` en caliente comprobados con capturas.
+  - Comprobado en Electron (build del worktree, datos y perfil aislados, sin backend): aparece en Ajustes → Avatar con su miniatura, al elegirlo la vista previa monta el lienzo 3D y sigue el tema real (tinta en claro, luz en oscuro; tenue porque sin backend el estado es `offline`), y al volver a «Clásico» se libera. Sin errores en consola.
+  - ⚠️ La CPU se midió en Chrome y no en Electron, como W3, para no tocar la app del usuario. Arnés: `~/.local/share/drakter/research/avatar3d/holo-busto/port-harness/`.
+
+## [2026-11-26] V1: cambiar avatar e interfaz Jarvis por voz, por el agente y desde la interfaz
+- **Contexto:** el usuario quiere elegir cualquier avatar y cualquiera de las tres interfaces Jarvis también por voz (plan `jarvis-seleccion.md`). Los contratos son de J1 (`ui.appearance`, `AvatarChoice`, `JarvisLayoutChoice`).
+- **Decisión:**
+  - **Capa 0** (`voice/conversation/layer0.py`): `classify_appearance(text)` → `("avatar"|"layout", id)` o `None`, pura y aparte de `classify` (firma congelada) y de `classify_ui`.
+    - Forma cerrada, definida en `layer0.es.toml` `[ui_appearance]`: [verbo] [enlaces] [«avatar»/«interfaz»…] [enlaces] alias, con verbo o sustantivo y nada más salvo muletillas. «Quita el avatar» da `none`.
+    - Los alias que son palabras corrientes («mesa», «reloj», «hilo», «clásico», «ninguno») solo valen con el sustantivo, así que «pon la mesa» va al agente. El sustantivo restringe el tipo («interfaz dragón» no vale).
+    - Esa sección del TOML es la fuente de la voz: el proceso de voz no lee el TypeScript. Debe incluir los `voiceAliases` de cada ficha de `character/avatars/<id>/register.ts`.
+  - **Puente** (`voice/bridge.py`): emite `voice.local_command{command: "ui_appearance", avatar|layout}` y dice `ui_avatar` o `ui_layout`, sin turno.
+  - **Contrato:**
+    - `EvtLocalCommand` gana `ui_appearance` con exactamente uno de `avatar`/`layout`. Los campos solo valen con ese comando.
+    - `PhraseKey` gana `ui_avatar` y `ui_layout`, con frases de trato de usted repartido en `agent/identity/voice_phrases.es.toml`.
+  - **Backend:**
+    - `services/ui_mode.request_ui_appearance()` publica `ui.appearance`, con su propio límite de 1 por segundo (separado del de modo).
+    - `VoicePolicy.local_command` la llama y lo audita (destino y resultado).
+    - Herramienta `ui_set_appearance` en `tools/ui.py`: `avatar` y/o `layout` con `Literal` del contrato, permiso `ui.write`, `write` sin confirmación (sube a `confirm` en sesión contaminada), `audit` de los dos campos y error `ui_unavailable`. Entra en `catalog.json` sin deriva.
+  - **Escritorio:**
+    - En Ajustes → Modo Jarvis, el selector «Interfaz» guarda la preferencia sin abrir Jarvis.
+    - En `Ctrl+K`, la acción única «Abrir modo Jarvis» pasa a ser una lista (`modules/search/actions.ts`): modo, interfaces y avatares por nombre o alias, y «ninguno». Usa las mismas puertas (`requestUiMode`, `requestAppearance`).
+- **Alternativas descartadas:** leer los alias del registro TypeScript desde la voz (otro proceso y otro lenguaje); casar un alias suelto («orbe», «visor»), que daría falsos positivos en conversación; una frase de confirmación por avatar (ocho claves de caché para poco valor).
+- **Motivo:** las órdenes habituales son instantáneas y sin LLM, y cualquier otra forma de pedirlo llega al agente con las reglas de herramientas.
+- **Impacto:**
+  - Archivos: `voice/conversation/layer0.{py,es.toml}`, `voice/bridge.py`, `contracts/python/drakter_contracts/voice_ipc.py`, `contracts/ts/index.ts`, `contracts/tools/{catalog.json,README.md}`, `agent/identity/voice_phrases.es.toml`, `backend/app/{services/ui_mode.py,tools/ui.py,integrations/voice/{policy,service}.py}` y en `desktop/src/` `settings/JarvisSection.tsx` y `modules/search/{actions.ts,SearchPalette.tsx}`.
+  - Comprobado:
+    - capa 0: 30 casos;
+    - puente con el venv real de la voz: 12 casos (incluidos los 8 de W5);
+    - herramienta y política por el `ToolRegistry` real: 15 comprobaciones, y las 18 de W5 siguen bien;
+    - las 5 comprobaciones críticas del CI y `gen_ts.py` sin diferencias;
+    - Electron real aislado: `Ctrl+K` («interfaz visor», «ava»), Ajustes y sin excepciones (6 de 6).
+  - Pendiente:
+    - PCM de las frases nuevas (`python -m voice phrases`, que usa Fish).
+    - Probar con micrófono real.
+    - Cuando se porte un avatar con alias nuevos, añadirlos a `[ui_appearance.avatars]`.
+
 ## [2026-11-26] Port de Holo-Contorno (avatar por defecto) y de Holo-Hilo como variante
 - **Contexto:** el plan de selección de avatares deja `holo-contorno` por defecto y pide portar `holo-hilo`. Los prototipos (drakter-92 y drakter-91) crean su propio `WebGLRenderer` y guardan los uniformes en un objeto global del módulo. Holo-Hilo copiaba casi todo Holo-Contorno, además con una versión anterior que animaba el polvo en la CPU.
 - **Decisión:**
@@ -1532,11 +1662,11 @@ Decisiones técnicas, cambios de tecnología y motivos.
   - Los uniformes pasan a ser por instancia (`holoUniforms()`, `threadUniforms()`), porque Drakter y el Stage pueden tener dos avatares vivos a la vez.
   - `holo-hilo/` es una `HoloVariant`: solo aporta `threads.ts` y sus modismos (`variant.ts`). El shader de contornos recibe `uLineK`/`uVol` para cubrir las dos estéticas con un único programa. El polvo de Holo-Hilo pasa a animarse en la GPU, como en la v2 de Holo-Contorno.
   - En la capa no se usa `forceContextLoss` ni se libera el renderer. El dibujo usa `NoToneMapping` y `LinearSRGBColorSpace`, `autoClear` se fuerza a falso y todo se restaura al terminar.
-  - `ACTIVE_AVATAR = 'holo-contorno'` hasta que A1 (drakter-95) lo sustituya por la preferencia `avatarId`. El tema (`theme`/`setTheme`) ya lo aceptan los dos avatares, pero lo cablea A1 en el anfitrión.
+  - Se registran con `register.ts` y miniatura, como pide A1, y van primero en la lista de `registry.ts`. `holo-contorno` ya era `DEFAULT_AVATAR_ID`. Los dos implementan `theme`/`setTheme`.
 - **Alternativas descartadas:** copiar Holo-Hilo entero, porque duplica unas 1.500 líneas que se desincronizarían. Mantener los uniformes globales, porque dos instancias se pisarían.
 - **Motivo:** una sola implementación por avatar, válida en los dos modos, con la CPU de la referencia.
 - **Impacto:**
-  - Código: `desktop/src/character/avatars/{holo-contorno,holo-hilo}/**` y `registry.ts`.
+  - Código: `desktop/src/character/avatars/{holo-contorno,holo-hilo}/**` y dos líneas en `registry.ts`.
   - Medido en la UHD 620 (Chrome, 500×600, DPR 1, 30 fps, con el lock de medición y carga media de 7 a 13), en A/B alternado frente a las páginas del prototipo:
     - CPU del renderer en reposo: 7,9-9,1 % en el port de Holo-Contorno frente a 7,9-11,6 % en la referencia, y 7,6-7,9 % en el port de Holo-Hilo frente a 8,1-8,5 %.
     - Hablando: 9,3-9,4 % frente a 9,4-10,3 %.
@@ -1545,4 +1675,3 @@ Decisiones técnicas, cambios de tecnología y motivos.
     - Capa en el Stage real (`createStage` + `createAvatarStageLayer`): 30 fps, 11 y 13 draw calls.
     - `dispose()`: 0 fotogramas después y ninguna traza en consola.
   - ⚠️ Se comprobó en Chrome y no en Electron, para no tocar la app del usuario; es el mismo Chromium. Arnés: `~/.local/share/drakter/research/avatar3d/port-105/`.
-

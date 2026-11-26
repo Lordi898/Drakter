@@ -6,6 +6,7 @@ import {
   FolderKanban,
   GraduationCap,
   Radar,
+  UserRound,
   Search,
   SquareCheckBig,
   type LucideIcon
@@ -13,7 +14,8 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { navigateTo } from '@/navigation/route'
-import { jarvisAvailable, prefetchJarvis, requestUiMode } from '@/stores/uiMode'
+import { prefetchJarvis } from '@/stores/uiMode'
+import { paletteActions, type PaletteAction } from './actions'
 import type { SectionId } from '@/navigation/sections'
 import type { SearchEntityType, SearchItem } from './searchApi'
 import { highlightTerms } from './highlight'
@@ -45,13 +47,6 @@ function groupItems(items: readonly SearchItem[]): Group[] {
     else map.set(item.entity_type, [item])
   }
   return Array.from(map, ([type, list]) => ({ type, items: list }))
-}
-
-/** Acción «Abrir modo Jarvis»: aparece si lo escrito es el principio de «modo jarvis» o contiene «jarvis». */
-function matchesJarvis(query: string): boolean {
-  const q = query.trim().toLowerCase().normalize('NFD').replace(/\p{M}/gu, '').replace(/\s+/g, ' ')
-  if (q.length < 3 || !jarvisAvailable()) return false
-  return 'modo jarvis'.startsWith(q) || 'jarvis'.startsWith(q) || q.includes('jarvis')
 }
 
 function Snippet({ item, query }: { item: SearchItem; query: string }) {
@@ -100,18 +95,18 @@ export function SearchPalette() {
     [state]
   )
   const flat = useMemo(() => groups.flatMap((g) => g.items), [groups])
-  const command = matchesJarvis(query)
-  // La acción, si la hay, ocupa la posición 0 y desplaza los resultados.
-  const offset = command ? 1 : 0
+  const actions = useMemo(() => paletteActions(query), [query])
+  // Las acciones, si las hay, van primero y desplazan los resultados.
+  const offset = actions.length
   const total = flat.length + offset
 
   useEffect(() => {
     setActive(0)
-  }, [flat, command])
+  }, [flat, actions])
 
   useEffect(() => {
-    if (command) prefetchJarvis()
-  }, [command])
+    if (actions.some((action) => action.kind !== 'avatar')) prefetchJarvis()
+  }, [actions])
 
   const optionId = (i: number) => `search-option-${i}`
 
@@ -133,9 +128,9 @@ export function SearchPalette() {
     navigateTo(TYPE_META[item.entity_type].section)
   }
 
-  const openJarvis = () => {
+  const runAction = (action: PaletteAction) => {
     changeOpen(false)
-    requestUiMode('jarvis', 'button')
+    action.run()
   }
 
   const onInputKey = (event: KeyboardEvent<HTMLInputElement>) => {
@@ -148,8 +143,9 @@ export function SearchPalette() {
       setActive((i) => (i - 1 + total) % total)
     } else if (event.key === 'Enter') {
       event.preventDefault()
-      if (command && active === 0) {
-        openJarvis()
+      const action = actions[active]
+      if (action) {
+        runAction(action)
         return
       }
       const item = flat[active - offset]
@@ -158,7 +154,7 @@ export function SearchPalette() {
   }
 
   const hasQuery = query.trim().length >= 1
-  const showList = command || (state.status === 'ready' && flat.length > 0)
+  const showList = actions.length > 0 || (state.status === 'ready' && flat.length > 0)
 
   let message: string | null = null
   if (!hasQuery) message = 'Escribe para buscar en tareas, proyectos, hábitos y más.'
@@ -169,7 +165,7 @@ export function SearchPalette() {
         ? 'La búsqueda no está conectada'
         : 'La búsqueda no está disponible ahora mismo'
   else if (state.status === 'error') message = state.message
-  else if (state.status === 'ready' && flat.length === 0 && !command) message = 'Sin resultados'
+  else if (state.status === 'ready' && flat.length === 0 && actions.length === 0) message = 'Sin resultados'
 
   let index = offset
   return (
@@ -215,23 +211,29 @@ export function SearchPalette() {
           hidden={!showList}
           className="max-h-80 overflow-y-auto p-1"
         >
-          {command ? (
+          {actions.length > 0 ? (
             <div role="group" aria-label="Acciones">
               <div aria-hidden="true" className="px-2 pt-2 pb-1 text-xs font-medium text-muted-foreground">
                 Acciones
               </div>
-              <div
-                id={optionId(0)}
-                role="option"
-                aria-selected={active === 0}
-                onMouseMove={() => setActive(0)}
-                onClick={openJarvis}
-                className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm text-foreground aria-selected:bg-accent aria-selected:text-accent-foreground"
-              >
-                <Radar className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-                <span className="flex-1">Abrir modo Jarvis</span>
-                <kbd className="text-xs text-muted-foreground">Ctrl+Shift+J</kbd>
-              </div>
+              {actions.map((action, i) => {
+                const Icon = action.kind === 'avatar' ? UserRound : Radar
+                return (
+                  <div
+                    key={action.id}
+                    id={optionId(i)}
+                    role="option"
+                    aria-selected={active === i}
+                    onMouseMove={() => setActive(i)}
+                    onClick={() => runAction(action)}
+                    className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm text-foreground aria-selected:bg-accent aria-selected:text-accent-foreground"
+                  >
+                    <Icon className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                    <span className="flex-1">{action.label}</span>
+                    {action.hint ? <kbd className="text-xs text-muted-foreground">{action.hint}</kbd> : null}
+                  </div>
+                )
+              })}
             </div>
           ) : null}
           {groups.map((group) => {

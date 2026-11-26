@@ -10,10 +10,10 @@ from __future__ import annotations
 
 from typing import Annotated, Any, Final, Literal, get_args
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from .common import ContractModel
-from .events import VoiceState
+from .events import AvatarChoice, JarvisLayoutChoice, VoiceState
 
 MAX_LINE_BYTES: Final = 256 * 1024
 
@@ -28,7 +28,7 @@ PlaybackState = Literal["started", "sentence_done", "finished", "interrupted"]
 PhraseKey = Literal[
     "ack_1", "ack_2", "ack_3", "wait_1", "wait_2", "wait_3", "tool_generic", "confirm_on_screen",
     "rest_on_screen", "busy", "job_started", "job_done", "job_failed", "tts_fallback", "offline",
-    "idle_nudge", "goodbye", "ui_jarvis", "ui_drakter",
+    "idle_nudge", "goodbye", "ui_jarvis", "ui_drakter", "ui_avatar", "ui_layout",
 ]
 PHRASE_KEYS: Final[tuple[str, ...]] = get_args(PhraseKey)
 
@@ -88,10 +88,23 @@ class EvtPlayback(BaseModel):
 
 
 class EvtLocalCommand(BaseModel):
-    """Orden de la capa 0, ya aplicada por la voz. `ui_*`: cambiar el modo de la interfaz (el backend publica `ui.mode`)."""
+    """Orden de la capa 0, ya aplicada por la voz. `ui_jarvis`/`ui_drakter`: cambiar el modo de la interfaz
+    (el backend publica `ui.mode`). `ui_appearance`: cambiar el avatar o la interfaz Jarvis, con
+    exactamente uno de `avatar` o `layout` (el backend publica `ui.appearance`)."""
 
-    command: Literal["stop_speech", "rest", "close", "ui_jarvis", "ui_drakter"]
+    command: Literal["stop_speech", "rest", "close", "ui_jarvis", "ui_drakter", "ui_appearance"]
     utt_id: str
+    avatar: AvatarChoice | None = None
+    layout: JarvisLayoutChoice | None = None
+
+    @model_validator(mode="after")
+    def _target(self) -> EvtLocalCommand:
+        targets = (self.avatar is not None) + (self.layout is not None)
+        if self.command == "ui_appearance" and targets != 1:
+            raise ValueError("ui_appearance needs exactly one of avatar or layout")
+        if self.command != "ui_appearance" and targets:
+            raise ValueError("avatar/layout only go with ui_appearance")
+        return self
 
 
 class EvtTtsFallback(BaseModel):

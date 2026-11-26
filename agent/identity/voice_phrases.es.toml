@@ -48,3 +48,5 @@ goodbye = ["A su disposición, señor.", "Aquí estaré, señor Imanol.", "Cuand
 # Modo Jarvis (capa 0 de la voz): confirman el cambio de interfaz.
 ui_jarvis = ["Modo Jarvis activado, señor.", "Interfaz holográfica en pantalla, señor Imanol.", "Paso al modo Jarvis, señor Magaña."]
 ui_drakter = ["De vuelta en Drakter, señor.", "Vuelvo a la interfaz de siempre, señor Imanol.", "Modo Drakter, señor Magaña."]
+ui_avatar = ["Avatar cambiado, señor.", "Ahí tiene su nuevo avatar, señor Imanol.", "Cambio de avatar hecho, señor Magaña."]
+ui_layout = ["Interfaz cambiada, señor.", "Le pongo esa interfaz, señor Imanol.", "Cambio de interfaz hecho, señor Magaña."]

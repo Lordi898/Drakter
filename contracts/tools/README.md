@@ -29,6 +29,8 @@
 
 `ui_set_mode` (`ui.write`, `write`, sin confirmación): pide al escritorio pasar al modo Jarvis o volver a Drakter publicando `ui.mode`. Es solo estética, reversible y sin datos; en una sesión contaminada la puerta la sube a `confirm` como a cualquier WRITE. Límite común de un cambio por segundo con la capa 0 de la voz (`app/services/ui_mode.py`). El dominio `ui` no está en los carriles de trabajos de fondo (`lanes.EXCLUDED_DOMAINS`).
 
+`ui_set_appearance` (`ui.write`, `write`, sin confirmación): pide cambiar el avatar (lista cerrada del contrato, `none` = personaje clásico) y/o la interfaz Jarvis publicando `ui.appearance`; elegir interfaz también abre Jarvis. Mismas reglas que `ui_set_mode`, con su propio límite de 1/s.
+
 ## Sin construir (4)
 
 `get_voice_status`, `get_workspace_summary`, `get_activity_log`, `get_pending_confirmations`. Etiquetas (`list_tags`, `add_tag`, `remove_tag`) y relaciones (`create_relationship`, `update_relationship`, `delete_relationship`, `get_related_items`, `search_relationships`) ya están construidas. `update_relationship` (`write`) solo sustituye `metadata` (2026-11-20).

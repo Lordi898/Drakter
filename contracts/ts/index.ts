@@ -412,7 +412,7 @@ export interface CmdSpeakOpen {
 }
 
 export interface CmdSpeakPhrase {
-  key: "ack_1" | "ack_2" | "ack_3" | "wait_1" | "wait_2" | "wait_3" | "tool_generic" | "confirm_on_screen" | "rest_on_screen" | "busy" | "job_started" | "job_done" | "job_failed" | "tts_fallback" | "offline" | "idle_nudge" | "goodbye" | "ui_jarvis" | "ui_drakter";
+  key: "ack_1" | "ack_2" | "ack_3" | "wait_1" | "wait_2" | "wait_3" | "tool_generic" | "confirm_on_screen" | "rest_on_screen" | "busy" | "job_started" | "job_done" | "job_failed" | "tts_fallback" | "offline" | "idle_nudge" | "goodbye" | "ui_jarvis" | "ui_drakter" | "ui_avatar" | "ui_layout";
   when?: "now" | "when_silent";
 }
 
@@ -597,10 +597,12 @@ export interface EvtError {
   message: string | null;
 }
 
-/** Orden de la capa 0, ya aplicada por la voz. `ui_*`: cambiar el modo de la interfaz (el backend publica `ui.mode`). */
+/** Orden de la capa 0, ya aplicada por la voz. `ui_jarvis`/`ui_drakter`: cambiar el modo de la interfaz (el backend publica `ui.mode`). `ui_appearance`: cambiar el avatar o la interfaz Jarvis, con exactamente uno de `avatar` o `layout` (el backend publica `ui.appearance`). */
 export interface EvtLocalCommand {
-  command: "stop_speech" | "rest" | "close" | "ui_jarvis" | "ui_drakter";
+  command: "stop_speech" | "rest" | "close" | "ui_jarvis" | "ui_drakter" | "ui_appearance";
   utt_id: string;
+  avatar: "holo-contorno" | "holo-hilo" | "holo-busto" | "holo-orbe" | "holo-filamento" | "ascuario" | "relojero" | "filamento" | "none" | null;
+  layout: "nucleo" | "holomesa" | "visor" | null;
 }
 
 /** Sin texto. `agent_ttft_ms` lo mide el backend. */
@@ -1684,6 +1686,14 @@ export interface TurnRef {
   turn_id: string;
 }
 
+/** Petición de cambiar el avatar y/o la interfaz del modo Jarvis. Solo estética: el renderer guarda la preferencia; el backend no guarda estado. Al menos uno de `avatar` o `layout`. `source`: `voice` (capa 0, frase cerrada) o `agent` (herramienta de apariencia). */
+export interface UiAppearanceRequested {
+  avatar: "holo-contorno" | "holo-hilo" | "holo-busto" | "holo-orbe" | "holo-filamento" | "ascuario" | "relojero" | "filamento" | "none" | null;
+  layout: "nucleo" | "holomesa" | "visor" | null;
+  source: "voice" | "agent";
+  utt_id: string | null;
+}
+
 /** Petición de cambiar el modo de la interfaz. El renderer decide si la aplica; no hay estado en el backend. `source`: `voice` (capa 0 de la voz, frase cerrada) o `agent` (herramienta `ui_set_mode`). `utt_id`: el del enunciado, solo si viene de la voz. */
 export interface UiModeRequested {
   mode: "jarvis" | "drakter";
@@ -1823,6 +1833,7 @@ export interface EventPayloads {
   "voice.error": VoiceError;
   "voice.profile_changed": VoiceProfileChanged;
   "ui.mode": UiModeRequested;
+  "ui.appearance": UiAppearanceRequested;
 }
 
 export type EventType = keyof EventPayloads;
