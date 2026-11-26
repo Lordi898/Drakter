@@ -164,7 +164,9 @@ export const createStage: CreateStage = (canvas, options) => {
 
   const draw = (now: number, steady: boolean): void => {
     if (disposed || lost) return
-    if (steady && prevNow >= 0) governor.push(now - prevNow, intervalMs)
+    // Un hueco de varios intervalos es una parada (ventana tapada, rAF frenado), no un tirón.
+    const delta = now - prevNow
+    if (steady && prevNow >= 0 && delta < intervalMs * 4) governor.push(delta, intervalMs)
     frame.dt = prevNow < 0 ? 0 : Math.min(0.1, (now - prevNow) / 1000)
     frame.time += frame.dt
     prevNow = now
