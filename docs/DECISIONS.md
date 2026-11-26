@@ -1603,3 +1603,20 @@ Decisiones técnicas, cambios de tecnología y motivos.
   - Crear `modules/projects/useProjects`: se hizo y se quitó, porque D1 no lo usa.
 - **Motivo:** una sola capa de datos para las tres interfaces, sin duplicar reglas ni estado por fotograma.
 - **Impacto:** `desktop/src/jarvis/data/{index,snapshot,types}.ts`. Los stores (chat, agente, trabajos, avisos, voz y niveles de audio) se siguen leyendo directamente desde `stores/*` y `voice/levels.ts`.
+
+## [2026-11-26] Interfaz Jarvis «Visor»: sectores con datos reales, acciones y rendimiento
+- **Contexto:** el Visor (cilindro de 7 sectores, capa `visor-world` del Stage y paneles CSS3D) estaba portado solo con el Núcleo (drakter-99). Faltaban los sectores 1-6 con datos reales, las alertas, las acciones y el objetivo de CPU en reposo (≤ 10 % del renderer en Equilibrado).
+- **Decisión:**
+  - Sectores Hoy, Tareas y proyectos, Hábitos, Calendario y asignaturas, Relaciones y Almacén sobre `useJarvisData` (D1). Cada uno se monta al acercarse a su rumbo y se queda montado (girar no recarga). Vacíos y errores dicen lo que pasa; no hay datos de ejemplo.
+  - Acciones con `modules/*/api.ts`: completar tarea (con subtareas abiertas lleva a Drakter, donde vive ese diálogo), registrar hábito (hecho o saltado) y quitar relación. Quitar devuelve 409 `confirmation_required` y se aprueba solo en el diálogo nativo de main.
+  - Las confirmaciones pendientes se pintan en el cristal del Visor con «Revisar» (`reviewConfirmation` con el gesto real), porque la lista común de `App` queda detrás del lienzo en Jarvis. Sin botones de aprobar o rechazar.
+  - Alertas con barrido a partir de `stores/notifications`; los resultados de las acciones del HUD entran con `addNotification` (sin toast, que pisaría el muelle).
+  - Gráficos 2D como funciones puras (`charts.ts`); 3D de datos en `stage/parts.ts`: grafo de relaciones (60 elementos más conectados), skyline de tareas abiertas por proyecto y semana de vencimiento (8 semanas; el backend no da actividad semanal) y núcleo de documentos según `index_status` de la muestra.
+  - «Examen» = evento cuyo título lo dice: la agenda no tiene un tipo propio.
+  - Rendimiento: lienzos 2D solo se redibujan si cambian sus datos o su minuto (relojes por minuto, no por segundo); el 3D de los sectores vecinos no se dibuja fuera del encuadre; tras 8 s sin puntero ni giro, el grafo, el skyline y el núcleo se quedan quietos y las etiquetas del grafo no se reescriben; firma de cámara del CSS3D sin cadenas por fotograma; sin `backdrop-filter`, sin animaciones infinitas ni `clip-path` en reposo.
+- **Alternativas descartadas:**
+  - Desmontar los sectores lejanos: cada giro volvería a pedir sus datos.
+  - Botón «Crear relación» en el HUD: el formulario completo vive en Drakter; aquí solo se ve, se selecciona y se quita.
+  - Cuenta atrás por segundo en «Lo siguiente»: rasteriza un panel 3D cada segundo.
+- **Motivo:** datos reales con acciones seguras y el reposo por debajo del presupuesto sin tocar el Stage ni el avatar (zonas de otros paquetes).
+- **Impacto:** solo `desktop/src/jarvis/layouts/visor/**`. Medición y herramientas de prueba (app aislada con datos ficticios): `~/.local/share/drakter/research/jarvis-hud/visor-app/`.
