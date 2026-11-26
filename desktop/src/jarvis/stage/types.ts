@@ -79,6 +79,12 @@ export interface Stage {
   /** `auto` = según la GPU y el regulador; un nivel fijo solo baja ante tirones sostenidos. */
   setQuality(tier: QualityTier | 'auto'): void
   setReducedMotion(on: boolean): void
+  /**
+   * Tope del fps en reposo para la interfaz montada (aditivo): solo BAJA el `idleFps` del perfil,
+   * nunca lo sube (Ahorro sigue a demanda). 0 = a demanda; `null` = el del perfil. La interfaz lo
+   * fija al montarse y lo devuelve a `null` al desmontarse.
+   */
+  setIdleFps(fps: number | null): void
   /** Pide un fotograma (modo a demanda o tras un cambio de datos). */
   requestFrame(): void
   anchor(id: string): StageAnchor | null
