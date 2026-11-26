@@ -11,6 +11,22 @@
  *   `voice/levels.ts` (espectro y onda). Las mutaciones, con las funciones de `modules/<x>/api.ts`;
  *   las confirmaciones, con `stores/confirmations` (diálogo nativo de main).
  * - Nada de `fetch` propio, ni caché, ni reglas de negocio en `jarvis/` (jarvis-arquitectura.md §2.2).
+ *
+ * Decisiones (preguntas de visor-port.md §6, válidas para las tres interfaces):
+ * 1. Firma: la interfaz recibe el `Stage` ya creado y un `JarvisAvatarSlot`, no una factory. El avatar
+ *    es una preferencia global (`avatarId`): lo crea y lo cambia el anfitrión; la interfaz solo da su
+ *    recuadro por función (por fotograma, como W4) y puede colgar paneles de `anchorId`.
+ * 2. Arranque y salida: cada interfaz trae los suyos. La entrada se reproduce al montarse y la interfaz
+ *    llama a `onReady` en cuanto su primer fotograma se ve (Drakter se desmonta entonces; la entrada
+ *    puede seguir). La salida se registra con `setExitTransition` y el anfitrión la espera (tope 1,5 s)
+ *    antes de desmontar. Con `reducedMotion`, ni secuencia de entrada ni de salida (fundido ≤ 150 ms).
+ * 3. Selector rápido de interfaz y avatar: componente común de `JarvisShell`, en la esquina superior
+ *    derecha (reservada: la interfaz no pinta ahí), siempre accesible, también con Ctrl+Shift+A.
+ *    También están «Volver a Drakter» (Ctrl+Shift+J), Ajustes y Ctrl+K.
+ * 4. Teclado de secciones: lo captura `JarvisShell`, no la interfaz. Ctrl+0…9 (global) y, en Jarvis,
+ *    también 0…9 sin modificadores (fuera de campos de texto) con el mismo mapa que la barra de Drakter
+ *    (`navigation/sections.ts`). La interfaz recibe `section` y lo representa a su manera (p. ej. el
+ *    visor gira al sector de esa sección); para ir a otra, `navigate(section)`.
  */
 import type { ComponentType } from 'react'
 import type { AvatarViewport } from '@/character/avatars/types'
@@ -51,6 +67,11 @@ export interface JarvisLayoutProps {
   readonly onReady: () => void
   /** Volver a Drakter (mismo efecto que el botón común o Ctrl+Shift+J). */
   readonly exit: () => void
+  /**
+   * Registra la secuencia de salida (al volver a Drakter por cualquier vía). Debe resolver al acabar;
+   * el anfitrión no espera más de 1,5 s. `null` la quita. Se borra sola al desmontar la interfaz.
+   */
+  readonly setExitTransition: (run: (() => Promise<void>) | null) => void
 }
 
 export type JarvisLayout = ComponentType<JarvisLayoutProps>

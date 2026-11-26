@@ -11,7 +11,10 @@ export type JarvisQuality = 'auto' | 'cine' | 'equilibrado' | 'ahorro'
 
 const JARVIS_QUALITIES: readonly JarvisQuality[] = ['auto', 'cine', 'equilibrado', 'ahorro']
 
-/** Avatar elegido (contrato `ui.appearance`). `none` = el personaje de siempre (.riv o SVG). */
+/**
+ * Avatar pedido por el evento `ui.appearance` o la herramienta (lista cerrada del contrato). La
+ * preferencia `avatarId` es un `string` validado por forma y la resuelve `character/avatars/registry.ts`.
+ */
 export type AvatarChoice = NonNullable<UiAppearanceRequested['avatar']>
 /** Interfaz del modo Jarvis (contrato `ui.appearance`). */
 export type JarvisLayoutChoice = NonNullable<UiAppearanceRequested['layout']>
@@ -36,10 +39,8 @@ const _layoutsComplete: Missing<JarvisLayoutChoice, (typeof JARVIS_LAYOUT_CHOICE
 void _avatarsComplete
 void _layoutsComplete
 
-export const DEFAULT_AVATAR: AvatarChoice = 'holo-contorno'
 export const DEFAULT_JARVIS_LAYOUT: JarvisLayoutChoice = 'nucleo'
 
-const isAvatarChoice = (v: unknown): v is AvatarChoice => (AVATAR_CHOICES as readonly unknown[]).includes(v)
 const isLayoutChoice = (v: unknown): v is JarvisLayoutChoice => (JARVIS_LAYOUT_CHOICES as readonly unknown[]).includes(v)
 
 export interface Preferences {
@@ -57,11 +58,16 @@ export interface Preferences {
   readonly lastUiMode: UiMode
   /** Nivel de calidad del modo Jarvis; `auto` lo elige según la GPU. */
   readonly jarvisQuality: JarvisQuality
-  /** Avatar del personaje en los dos modos. Lo resuelve `character/avatars/registry.ts`. */
-  readonly avatarId: AvatarChoice
+  /**
+   * Avatar 3D elegido (`character/avatars/registry.ts`): un id como `holo-orbe`, o `none` para el
+   * personaje clásico. Aquí solo se valida la forma; un id desconocido o no portado se resuelve a «ninguno».
+   */
+  readonly avatarId: string
   /** Interfaz del modo Jarvis. La resuelve `jarvis/layouts/registry.ts`. */
   readonly jarvisLayout: JarvisLayoutChoice
 }
+
+const AVATAR_ID = /^[a-z0-9-]{1,40}$/
 
 const STORAGE_KEY = 'drakter.preferences.v1'
 const DEFAULTS: Preferences = {
@@ -74,7 +80,7 @@ const DEFAULTS: Preferences = {
   jarvisStartup: 'drakter',
   lastUiMode: 'drakter',
   jarvisQuality: 'auto',
-  avatarId: DEFAULT_AVATAR,
+  avatarId: 'holo-contorno',
   jarvisLayout: DEFAULT_JARVIS_LAYOUT
 }
 
@@ -95,7 +101,8 @@ function load(): Preferences {
       jarvisQuality: JARVIS_QUALITIES.includes(parsed.jarvisQuality as JarvisQuality)
         ? (parsed.jarvisQuality as JarvisQuality)
         : 'auto',
-      avatarId: isAvatarChoice(parsed.avatarId) ? parsed.avatarId : DEFAULT_AVATAR,
+      avatarId:
+        typeof parsed.avatarId === 'string' && AVATAR_ID.test(parsed.avatarId) ? parsed.avatarId : DEFAULTS.avatarId,
       jarvisLayout: isLayoutChoice(parsed.jarvisLayout) ? parsed.jarvisLayout : DEFAULT_JARVIS_LAYOUT
     }
   } catch {
