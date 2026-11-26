@@ -1712,3 +1712,23 @@ Decisiones técnicas, cambios de tecnología y motivos.
     - Al hablar abre la boca y mira donde se le indica.
     - Sin errores en consola.
   - CPU en reposo en la pantalla Drakter (UHD 620, a 60 rAF/s, con el bucle del avatar limitado a 30 fps, dentro de `flock`): renderer 5,8 % y 4,7 %, proceso GPU 6,2 % y 4,8 %. Hubo una primera medida de 25,3 % que coincidió con una recarga de la página: el avatar volvió a tejer y a compilar. No cuenta como reposo.
+
+## [2026-11-26] Interfaz Jarvis «Visor»: sectores con datos reales, acciones y rendimiento
+- **Contexto:** el Visor (cilindro de 7 sectores, capa `visor-world` del Stage y paneles CSS3D) estaba portado solo con el Núcleo (drakter-99). Faltaban los sectores 1-6 con datos reales, las alertas, las acciones y el objetivo de CPU en reposo (≤ 10 % del renderer en Equilibrado).
+- **Decisión:**
+  - Sectores Hoy, Tareas y proyectos, Hábitos, Calendario y asignaturas, Relaciones y Almacén sobre `useJarvisData` (D1). Cada uno se monta al acercarse a su rumbo y se queda montado (girar no recarga). Vacíos y errores dicen lo que pasa; no hay datos de ejemplo.
+  - Acciones con `modules/*/api.ts`: completar tarea (con subtareas abiertas lleva a Drakter, donde vive ese diálogo), registrar hábito (hecho o saltado) y quitar relación. Quitar devuelve 409 `confirmation_required` y se aprueba solo en el diálogo nativo de main.
+  - Las confirmaciones pendientes se pintan en el cristal del Visor con «Revisar» (`reviewConfirmation` con el gesto real), porque la lista común de `App` queda detrás del lienzo en Jarvis. Sin botones de aprobar o rechazar.
+  - Alertas con barrido a partir de `stores/notifications`; los resultados de las acciones del HUD entran con `addNotification` (sin toast, que pisaría el muelle).
+  - Gráficos 2D como funciones puras (`charts.ts`); 3D de datos en `stage/parts.ts`: grafo de relaciones (60 elementos más conectados), skyline de tareas abiertas por proyecto y semana de vencimiento (8 semanas; el backend no da actividad semanal) y núcleo de documentos según `index_status` de la muestra.
+  - «Examen» = evento cuyo título lo dice: la agenda no tiene un tipo propio.
+  - Rendimiento: lienzos 2D solo se redibujan si cambian sus datos o su minuto (relojes por minuto, no por segundo); el 3D de los sectores vecinos no se dibuja fuera del encuadre; tras 8 s sin puntero ni giro, el grafo, el skyline y el núcleo se quedan quietos y las etiquetas del grafo no se reescriben; firma de cámara del CSS3D sin cadenas por fotograma; sin `backdrop-filter`, sin animaciones infinitas ni `clip-path` en reposo.
+- **Medición** (UHD 620, app aislada con datos ficticios, Equilibrado, CPU del renderer, ventanas de 10 s tras 10 s quieto, bajo `flock`, carga de la máquina 2-4 por otros workers):
+  - Reposo en Hoy: 5,7-9,0 %. Reposo en Relaciones: 7,1-10,0 %. **Reposo en el Núcleo: 10,6-15,5 %** con Holo-Contorno y 8,3-10,9 % sin avatar. Con el puntero en movimiento: 23-32 %. Prototipo de referencia en Equilibrado: ~23 % en reposo.
+  - Perfil de 8 s en reposo en el Núcleo: el JS del Visor suma ~10 ms y el del avatar ~60 ms; el resto es nativo (composición del WebGL + CSS3D a 20 fps). ⚠️ El Núcleo no queda de forma fiable ≤ 10 %: la palanca que falta es bajar los fps de ambiente en reposo (visor-port.md §4, palanca 1), que es del Stage (W3) y no de la interfaz; propuesta enviada al coordinador.
+- **Alternativas descartadas:**
+  - Desmontar los sectores lejanos: cada giro volvería a pedir sus datos.
+  - Botón «Crear relación» en el HUD: el formulario completo vive en Drakter; aquí solo se ve, se selecciona y se quita.
+  - Cuenta atrás por segundo en «Lo siguiente»: rasteriza un panel 3D cada segundo.
+- **Motivo:** datos reales con acciones seguras y el reposo por debajo del presupuesto sin tocar el Stage ni el avatar (zonas de otros paquetes).
+- **Impacto:** solo `desktop/src/jarvis/layouts/visor/**`. Medición y herramientas de prueba (app aislada con datos ficticios): `~/.local/share/drakter/research/jarvis-hud/visor-app/`.
