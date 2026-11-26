@@ -1420,6 +1420,24 @@ Decisiones técnicas, cambios de tecnología y motivos.
     - Después de la capa, `toneMapping` = 0, `scissorTest` = false y el viewport a lienzo completo.
     - El modo Drakter se ve igual: con `ACTIVE_AVATAR = null`, SVG y sin Three; con `'ascuario'`, la misma imagen que antes del cambio, sin avisos.
 
+## [2026-11-26] Modo Jarvis W1+W6: shell, activación y bandeja
+- **Contexto:** primer paquete de implementación del modo Jarvis sobre los contratos J0 (PR #36).
+- **Decisión:**
+  - `App` monta `SessionHosts` (voz, feed de notificaciones, atajos comunes y peticiones de modo), `ModeRoot` (un solo shell salvo en la transición), `ConfirmationHost` y `Toaster`. Los dos últimos son comunes, porque una confirmación puede llegar estando en Jarvis.
+  - `AppShell` conserva solo lo suyo: `Ctrl+\`, `Ctrl+K` (su paleta) y la precarga de secciones. `Ctrl+0…9` y `Ctrl+Shift+J` pasan a `useGlobalShortcuts`.
+  - Jarvis se superpone en `fixed inset-0 z-40`, por debajo de diálogos y avisos, y Drakter queda `inert` hasta que desaparece. Al volver, el foco va al botón de cabecera. El cambio se anuncia con `role="status"`.
+  - Si el chunk o el shell de Jarvis fallan, `JarvisBoundary` vuelve a Drakter con aviso: `settleUiMode('failed')`, o `resetUiMode()` si ya estaba en Jarvis. `resetUiMode()` es un añadido a `stores/uiMode.ts`.
+  - `JarvisShell` es un stub: fondo CSS estático (sin lienzo ni bucle), estado real del agente y «Volver a Drakter».
+  - Entradas: botón de cabecera (precarga al pasar por encima), `Ctrl+Shift+J`, acción «Abrir modo Jarvis» en `Ctrl+K`, sección «Modo Jarvis» en Configuración (abrir, al arrancar y calidad gráfica) y bandeja «Alternar modo Jarvis» (`ui:mode-toggle`, que además enfoca la ventana).
+  - El texto de la bandeja es fijo, porque el renderer no informa a main del modo.
+- **Alternativas descartadas:** dejar `ConfirmationHost` dentro de `AppShell` (en Jarvis no se verían las confirmaciones); una etiqueta de bandeja dinámica (otro canal IPC renderer→main sin necesidad).
+- **Motivo:** que cambiar de modo no corte la voz ni pierda confirmaciones, con Drakter igual que antes.
+- **Impacto:**
+  - Código: `desktop/src/app/{App,AppShell,ModeRoot,SessionHosts,JarvisModeButton,useGlobalShortcuts,useAppShortcuts}`, `desktop/src/jarvis/JarvisShell.tsx`, `desktop/src/settings/{JarvisSection,SettingsPage}.tsx`, `desktop/src/modules/search/SearchPalette.tsx`, `desktop/src/stores/uiMode.ts` y `desktop/electron/main/tray.ts`.
+  - Lo que se carga al arrancar crece +1,0 KB de JS y +0,46 KB de CSS con gzip (+7,8 KB sin comprimir). El stub va en un chunk aparte de 1,96 KB.
+  - Comprobado en Electron real (`DISPLAY=:0`), en una instancia aislada con perfil, datos y `HOME` propios y la voz desactivada: 13 de 13 pasos, sin excepciones ni errores de consola.
+  - Sin comprobar de extremo a extremo: que la voz no se corte al cambiar de modo. Está garantizado por estructura (`VoiceHost` vive fuera de `ModeRoot`) y falta probarlo con la voz real.
+
 ## [2026-11-26] W7: espectro y forma de onda reales de micrófono y salida (`voice/levels.ts`)
 - **Contexto:** los visualizadores del HUD de Jarvis (osciloscopio, espectro) necesitan el audio real del micrófono y de la voz de Drakter (jarvis-arquitectura.md §4.5), con 0 % de CPU sin usuarios y sin tocar la latencia de la voz. `VoiceClient` está congelado.
 - **Decisión:**
