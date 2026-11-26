@@ -1684,6 +1684,14 @@ export interface TurnRef {
   turn_id: string;
 }
 
+/** Petición de cambiar el avatar y/o la interfaz del modo Jarvis. Solo estética: el renderer guarda la preferencia; el backend no guarda estado. Al menos uno de `avatar` o `layout`. `source`: `voice` (capa 0, frase cerrada) o `agent` (herramienta de apariencia). */
+export interface UiAppearanceRequested {
+  avatar: "holo-contorno" | "holo-hilo" | "holo-busto" | "holo-orbe" | "holo-filamento" | "ascuario" | "relojero" | "filamento" | "none" | null;
+  layout: "nucleo" | "holomesa" | "visor" | null;
+  source: "voice" | "agent";
+  utt_id: string | null;
+}
+
 /** Petición de cambiar el modo de la interfaz. El renderer decide si la aplica; no hay estado en el backend. `source`: `voice` (capa 0 de la voz, frase cerrada) o `agent` (herramienta `ui_set_mode`). `utt_id`: el del enunciado, solo si viene de la voz. */
 export interface UiModeRequested {
   mode: "jarvis" | "drakter";
@@ -1823,6 +1831,7 @@ export interface EventPayloads {
   "voice.error": VoiceError;
   "voice.profile_changed": VoiceProfileChanged;
   "ui.mode": UiModeRequested;
+  "ui.appearance": UiAppearanceRequested;
 }
 
 export type EventType = keyof EventPayloads;
