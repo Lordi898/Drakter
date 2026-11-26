@@ -1524,6 +1524,7 @@ Decisiones técnicas, cambios de tecnología y motivos.
     - Al quitar las capas quedan 0 geometrías, 0 texturas y 0 programas, y no hay fotogramas tras `dispose()`. Después de una restauración, Three avisa de que «object does not belong to this context» al liberar, y es inocuo.
     - En SwiftShader detecta software, pasa a Ahorro sin partículas y «reducir movimiento» deja la escena quieta.
   - ⚠️ Se midió en Chrome y no en Electron, para no tocar la app de desarrollo del usuario; es el mismo Chromium y la misma ruta ANGLE. Playwright emula páginas siempre visibles, así que `hidden` se probó forzando `document.hidden` y `visibilitychange`, que es la misma ruta que sigue Electron al minimizar. Arnés y datos: `~/.local/share/drakter/research/jarvis-hud/w3-stage/`.
+
 ## [2026-11-26] A1: varios avatares 3D elegibles (registro, preferencia `avatarId` y Ajustes → Avatar)
 - **Contexto:** el usuario quiere poder elegir cualquiera de los avatares 3D, desde la interfaz y por voz, en Drakter y en Jarvis; por defecto `holo-contorno` (plan `jarvis-seleccion.md`). Hasta ahora había un solo avatar fijado en código (`ACTIVE_AVATAR`).
 - **Decisión:**
@@ -1603,3 +1604,20 @@ Decisiones técnicas, cambios de tecnología y motivos.
   - Crear `modules/projects/useProjects`: se hizo y se quitó, porque D1 no lo usa.
 - **Motivo:** una sola capa de datos para las tres interfaces, sin duplicar reglas ni estado por fotograma.
 - **Impacto:** `desktop/src/jarvis/data/{index,snapshot,types}.ts`. Los stores (chat, agente, trabajos, avisos, voz y niveles de audio) se siguen leyendo directamente desde `stores/*` y `voice/levels.ts`.
+
+## [2026-11-26] Port de Holo-busto como avatar con capa del Stage
+- **Contexto:** el plan de selección de avatares pide portar `holo-busto` (prototipo de drakter-93 en `~/.local/share/drakter/research/avatar3d/holo-busto`) a `desktop/src/character/avatars/holo-busto/` con `create` y `createLayer`, temas oscuro y claro, y `dispose` completo.
+- **Decisión:**
+  - Misma estructura que Ascuario: `layer.ts` es el núcleo (`AvatarLayer`) y `index.ts` lo envuelve con renderer, bucle y ratón. `buildScene()` deja de llamar a `setSize`/`setPixelRatio`; `setClearColor` y la limpieza los hace el envoltorio, y la capa compila con `renderer.compileAsync` del anfitrión.
+  - `mat.ts` pasa de uniformes y materiales globales del módulo a un `Kit` por instancia (`makeKit()`), porque `setThemeBlending` y `U` eran compartidos y dos avatares a la vez (Drakter y Jarvis) se habrían pisado el tema.
+  - La capa fuerza `NoToneMapping` al compilar y al dibujar, y lo restaura, para que la clave de programa no dependa del anfitrión (los shaders escriben el color final premultiplicado).
+  - Tema: respeta `AvatarOptions.theme` y `setTheme(theme)` del contrato de A1; además acepta un segundo argumento opcional, `transparent`, para mostrar u ocultar su escenario propio (halo y haz del proyector).
+  - Malla horneada versionada como asset de Vite (`holo-busto-geo.json`, 2,5 MB); `geos.ts` solo acepta la URL (sin bloque `<script>` ni geometría incrustada) y esculpe en caliente si falta.
+  - El bucle del envoltorio mantiene el del prototipo (temporizador antes del `rAF`, 30 fps), que es el medido en la referencia. No escucha `focus`/`blur`: los avisa el anfitrión.
+- **Alternativas descartadas:** dejar el estado global en `mat.ts` (rompe con dos instancias); esculpir en el navegador (15-25 s).
+- **Motivo:** cumplir el contrato de capas (`avatars/README.md`) sin cambiar la lógica del prototipo.
+- **Impacto:**
+  - Código: `desktop/src/character/avatars/holo-busto/**` (con `register.ts` y `thumbnail.webp`) y su línea en `avatars/registry.ts` (`transparent: true`, alias de voz «busto»). Se elige en Ajustes → Avatar.
+  - Medido en la UHD 620 (Chrome con ANGLE, dentro del lock de medición, carga media 3,8-5,8). Lienzo propio de 500×600 en tema oscuro: reposo a 30 fps con 8,3 % y 5,1 % de CPU del renderer (referencia del prototipo 5,1-7,9 %), hablando 7 %, 20 llamadas de dibujo y 0,53 ms de JS por fotograma. Stage en Equilibrado (1470×746, DPR 1,25), reposo: 3,3-3,7 % sin avatar y 4,6 % con él. Al quitar la capa, las geometrías pasan de 11 a 2 y los programas de 14 a 2. Sin errores en consola; temas oscuro, claro y `setTheme` en caliente comprobados con capturas.
+  - Comprobado en Electron (build del worktree, datos y perfil aislados, sin backend): aparece en Ajustes → Avatar con su miniatura, al elegirlo la vista previa monta el lienzo 3D y sigue el tema real (tinta en claro, luz en oscuro; tenue porque sin backend el estado es `offline`), y al volver a «Clásico» se libera. Sin errores en consola.
+  - ⚠️ La CPU se midió en Chrome y no en Electron, como W3, para no tocar la app del usuario. Arnés: `~/.local/share/drakter/research/avatar3d/holo-busto/port-harness/`.
