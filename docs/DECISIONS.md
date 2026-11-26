@@ -1400,3 +1400,22 @@ Decisiones técnicas, cambios de tecnología y motivos.
 - **Alternativas descartadas:** abrir `worker-src blob:` o recursos remotos «por si acaso».
 - **Motivo:** mantener la superficie de seguridad del renderer.
 - **Impacto:** todos los paquetes W de Jarvis. La comprobación se hace en la build `app://`, no solo en desarrollo.
+
+## [2026-11-26] W4: el avatar como capa del Stage (`createAvatarLayer`)
+- **Contexto:** el modo Jarvis dibuja todo en un único lienzo WebGL (jarvis-arquitectura.md §2.5 y §4.4). El avatar no puede crear su propio renderer ni su propio bucle.
+- **Decisión:**
+  - **Una sola implementación por avatar**: la capa es el núcleo y `createAvatar` es su envoltorio. En Ascuario, `layer.ts` (`createAscuarioLayer`) cumple `AvatarLayer`; `index.ts` pone el renderer, el bucle de 30 fps con pausa por `document.hidden` y la entrada de ratón, y llama a la capa con el lienzo completo. `scene.resize` ya no toca el renderer. `entry.ts` exporta `create` y `createLayer`, y el registro gana `loadLayer`.
+  - En `render(dt, viewport)`, la capa fija su viewport y su scissor (convirtiendo el origen arriba-izquierda del contrato a la convención de Three) y limpia **solo la profundidad** dentro de su recuadro, para que las capas de debajo no la tapen. Aplica su tone mapping (ACES, exposición 1,15) y al terminar restaura viewport, scissor, scissor test y tone mapping. No limpia el color.
+  - `jarvis/stage/layers/avatar.ts`: `createAvatarStageLayer({ load, viewport, order?, transparent? })` es un `StageLayer` genérico, sin saber qué avatar es. El recuadro se pide en cada fotograma, porque lo decide el HUD. El puntero del Stage (y hacia arriba) se convierte en `lookAt` respecto al recuadro, y `reducedMotion` sale del fotograma. Expone `controls` estables, que guardan el último estado hasta que la capa existe, y `failed()`. Si el avatar no carga, el Stage sigue y queda aviso. Por defecto `transparent: true` y `order` 50.
+  - `avatars/wiring.ts` (`useAvatarWiring`): los mismos cables que `ThreeCharacter` (estado, voz real, foco y blur, escritura) para cualquier anfitrión. `ThreeCharacter` no se toca.
+  - `types.ts` aclara que la `y` de `lookAt` es positiva hacia abajo (lo que ya hacía Ascuario). `avatars/README.md` documenta cómo debe exponer la capa un avatar nuevo (el holográfico).
+- **Alternativas descartadas:**
+  - Que el Stage fije viewport y scissor y la capa confíe en ello: el contrato no lo garantiza, y fijarlos en la capa es barato y robusto.
+  - Bajar el avatar a 24 fps en Ahorro dentro de la capa: con un solo bucle, saltarse fotogramas dejaría el hueco vacío tras el `clear` del Stage. Lo decide el Stage.
+- **Motivo:** el avatar holográfico se escribe una vez y sirve en Drakter y en Jarvis.
+- **Impacto:**
+  - Código: `desktop/src/character/avatars/{types,registry,wiring}.ts`, `avatars/README.md`, `avatars/ascuario/{layer,index,entry,scene}.ts` y `desktop/src/jarvis/stage/layers/avatar.ts`. Sin cambios en `jarvis/stage/types.ts` ni en el resto del Stage (W3).
+  - Comprobado en Electron con un Stage mínimo temporal (renderer compartido, `autoClear = false`, fondo, avatar en un recuadro de 420 px y una capa de primer plano a pantalla completa):
+    - Ascuario se dibuja en su recuadro, cambia de estado, abre la boca con nivel 1 y sigue al puntero. Arranque de la capa en 843 ms, con la malla y la compilación incluidas.
+    - Después de la capa, `toneMapping` = 0, `scissorTest` = false y el viewport a lienzo completo.
+    - El modo Drakter se ve igual: con `ACTIVE_AVATAR = null`, SVG y sin Three; con `'ascuario'`, la misma imagen que antes del cambio, sin avisos.
