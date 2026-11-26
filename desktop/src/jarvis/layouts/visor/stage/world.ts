@@ -89,6 +89,16 @@ export interface VisorWorld extends StageLayer {
   setRevealed(on: boolean): void
   /** Llamada a ritmo limitado desde `update` (gráficos 2D, cinta…). Devuelve la baja. */
   onTick(fn: (frame: StageFrame) => void, hz: number): () => void
+  /** Llamada en cada `update` tras mover la cámara (3D de los sectores). Devuelve la baja. */
+  onFrame(fn: (frame: StageFrame) => void): () => void
+  /** El rumbo actual (o el de destino, durante un giro) está a menos de `rad` del sector. */
+  near(sector: number, rad?: number): boolean
+  /** Proyecta un punto del mundo a px CSS; reutiliza el objeto devuelto. */
+  toScreen(v: THREE.Vector3): { x: number; y: number; visible: boolean }
+  /** Rayo desde la cámara por el punto de pantalla (px CSS). */
+  ray(x: number, y: number): THREE.Raycaster
+  /** Escala de tamaño de los puntos (renderScale × alto / 1080). */
+  readonly pointScale: number
   readonly onFirstFrame: Promise<void>
 }
 
@@ -215,6 +225,9 @@ export function createVisorWorld(): VisorWorld {
   const bins = new Uint8Array(SPECTRUM_BANDS)
   let releaseTaps: (() => void) | null = null
   const ticks = new Set<{ fn: (f: StageFrame) => void; iv: number; last: number }>()
+  const frames = new Set<(f: StageFrame) => void>()
+  const screen = { x: 0, y: 0, visible: false }, caster = new THREE.Raycaster(), ndc = new THREE.Vector2()
+  let pointScale = 1
 
   const tv = new THREE.Vector3(), corners = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()]
   let W = 1, H = 1
@@ -251,6 +264,15 @@ export function createVisorWorld(): VisorWorld {
     },
     setRevealed(on) { revealed = on; if (on) rig.bootT = rig.bootT || 0.0001; schedule() },
     onTick(fn, hz) { const t = { fn, iv: 1 / hz, last: -1 }; ticks.add(t); return () => { ticks.delete(t) } },
+    onFrame(fn) { frames.add(fn); return () => { frames.delete(fn) } },
+    near(i, rad = 1.05) { const a = i * SECTOR_STEP; return Math.abs(angDist(rig.yaw, a)) < rad || (rig.t < 1 && Math.abs(angDist(rig.to, a)) < rad) },
+    toScreen(v) {
+      tv.copy(v).project(cam)
+      screen.x = (tv.x * 0.5 + 0.5) * W; screen.y = (-tv.y * 0.5 + 0.5) * H; screen.visible = tv.z < 1 && Math.abs(tv.x) < 1.1 && Math.abs(tv.y) < 1.1
+      return screen
+    },
+    ray(x, y) { ndc.set((x / W) * 2 - 1, -(y / H) * 2 + 1); caster.setFromCamera(ndc, cam); return caster },
+    get pointScale() { return pointScale },
     onFirstFrame,
 
     async init(frame) {
@@ -263,7 +285,7 @@ export function createVisorWorld(): VisorWorld {
       W = frame.width; H = frame.height
       cam.aspect = W / Math.max(1, H); cam.updateProjectionMatrix(); css.setSize(W, H); cssDirty = true
       const pr = frame.renderScale * (H / 1080)
-      dMat.uniforms.uPR!.value = pr
+      dMat.uniforms.uPR!.value = pr; pointScale = pr
     },
     setQuality(q) { dGeo.setDrawRange(0, Math.min(NMAX, q.particles)); vault.visible = q.tier !== 'ahorro' },
     update(frame) {
@@ -318,6 +340,8 @@ export function createVisorWorld(): VisorWorld {
       }
       for (const { g, sector: s } of groups) g.visible = Math.abs(angDist(rig.yaw, s * SECTOR_STEP)) < 1.2
       haloG.visible = nearCore
+      cam.updateMatrixWorld()
+      for (const f of frames) f(frame)
       for (const t of ticks) if (time - t.last >= t.iv) { t.last = time; t.fn(frame) }
     },
     render(frame) {
@@ -334,7 +358,7 @@ export function createVisorWorld(): VisorWorld {
       return { 'visor-avatar': { x: (tv.x * 0.5 + 0.5) * W, y: (-tv.y * 0.5 + 0.5) * H, visible: tv.z < 1 && Math.abs(tv.x) < 1 } }
     },
     dispose() {
-      releaseTaps?.(); releaseTaps = null; ticks.clear()
+      releaseTaps?.(); releaseTaps = null; ticks.clear(); frames.clear()
       for (const p of [...plates]) { clearTimeout(p.timer); p.off() }
       scene.traverse((o) => { const m = o as THREE.Mesh; m.geometry?.dispose(); const mat = m.material as THREE.Material | THREE.Material[] | undefined; if (Array.isArray(mat)) mat.forEach((x) => x.dispose()); else mat?.dispose() })
       css.domElement.remove()

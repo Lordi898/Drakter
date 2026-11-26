@@ -123,3 +123,17 @@ export const GLOW_FS = /* glsl */ `precision highp float; varying vec2 vUv; unif
     float rays = 0.55 + 0.45 * sin(a * 9.0 + uTime * 0.2) * sin(a * 23.0 - uTime * 0.13);
     float g = exp(-r * r * 5.0) * (0.22 + uVoice * 0.35) * (0.7 + 0.3 * rays) + exp(-r * r * 40.0) * 0.12;
     gl_FragColor = vec4(uCol * g * uBoot, 0.0); }`
+
+// ── Sectores con 3D de datos: nodos (grafo y núcleo de documentos), aristas y columnas (skyline)
+export const NODE_VS = /* glsl */ `attribute float aSize; attribute vec3 aCol; attribute float aHi; uniform float uPR, uTime; varying vec3 vC; varying float vHi;
+void main(){ vec4 mv = modelViewMatrix * vec4(position, 1.0); vC = aCol; vHi = aHi; gl_PointSize = aSize * uPR * (1300.0 / -mv.z) * (1.0 + aHi * 0.6 + 0.08 * sin(uTime * 2.0 + position.x)); gl_Position = projectionMatrix * mv; }`
+export const NODE_FS = /* glsl */ `varying vec3 vC; varying float vHi; void main(){ vec2 c = gl_PointCoord - 0.5; float r = length(c) * 2.0; float core = smoothstep(0.32, 0.22, r); float ringv = smoothstep(0.06, 0.0, abs(r - 0.62)) * 0.8; float halo = exp(-r * r * 4.0) * 0.45; gl_FragColor = vec4((vC * (halo + ringv) + mix(vC, vec3(1.0), 0.6) * core) * (1.0 + vHi), 0.0); }`
+export const EDGE_VS = /* glsl */ `attribute float aT; attribute float aSeed; varying float vT; varying float vS; void main(){ vT = aT; vS = aSeed; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`
+export const EDGE_FS = /* glsl */ `varying float vT; varying float vS; uniform float uTime, uPulse; uniform vec3 uCol; void main(){ float ph = fract(uTime * 0.25 + vS); float p = exp(-pow((vT - ph) * 9.0, 2.0)) * uPulse; gl_FragColor = vec4(uCol * (0.42 + p * 2.2), 0.0); }`
+export const BAR_VS = /* glsl */ `attribute vec3 aCol; attribute float aH; uniform float uGrow; varying vec3 vL; varying vec3 vC; varying float vH;
+void main(){ vL = position; vC = aCol; vec3 p = position; p.y = (p.y + 0.5) * aH * uGrow; vH = p.y; gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(p, 1.0); }`
+export const BAR_FS = /* glsl */ `varying vec3 vL; varying vec3 vC; varying float vH; uniform float uTime;
+void main(){ vec3 q = abs(vL) * 2.0; float e = 0.0; e += step(0.93, q.x) * step(0.93, q.z); e += step(0.93, q.x) * step(0.96, abs(vL.y * 2.0)); e += step(0.93, q.z) * step(0.96, abs(vL.y * 2.0)); e = min(e, 1.0);
+  float scan = 0.5 + 0.5 * sin(vH * 0.12 - uTime * 3.0); float fill = 0.08 + 0.06 * scan;
+  float top = step(0.49, vL.y);
+  gl_FragColor = vec4(vC * (fill + e * 1.1 + top * 0.5), 0.0); }`
