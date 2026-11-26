@@ -260,7 +260,7 @@ export default function NucleoLayout({ stage, avatar, quality, reducedMotion, se
       wake()
       if (scene?.booting) { scene.skipBoot(); return }
       const typing = (e.target as HTMLElement | null)?.closest?.('input, textarea, [contenteditable="true"], [role="dialog"]')
-      if (typing || e.ctrlKey || e.metaKey || e.altKey) return
+      if (e.defaultPrevented || typing || document.querySelector('[role="dialog"], [role="alertdialog"]') || e.ctrlKey || e.metaKey || e.altKey) return
       if (e.key === 'Escape' && focus) { e.preventDefault(); navigate('home') }
       if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
         const i = NAV.findIndex((n) => n.id === focus), n = NAV[(i + (e.key === 'ArrowRight' ? 1 : NAV.length - 1)) % NAV.length]!
