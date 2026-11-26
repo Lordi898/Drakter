@@ -1,14 +1,12 @@
 /**
- * Barra superior: marca, reloj, estado del agente, telemetría del Stage (de Visor) y nivel de calidad.
+ * Barra superior: marca, reloj, estado del agente y telemetría del Stage (de Visor). La calidad se elige en Ajustes.
  * El reloj y la telemetría escriben en el DOM por ref (1 Hz), sin renders de React.
  */
 import { useEffect, useRef } from 'react'
 import type { CharacterState } from '@/character/types'
 import { CHARACTER_STATE_LABELS } from '@/character/labels'
-import { updatePreferences, usePreferences, type JarvisQuality } from '@/stores/preferences'
 import type { Stage } from '../../../stage/types'
 
-const QUALITIES: readonly [JarvisQuality, string][] = [['auto', 'Auto'], ['cine', 'Cine'], ['equilibrado', 'Equilibrado'], ['ahorro', 'Ahorro']]
 const pad2 = (n: number): string => String(n).padStart(2, '0')
 const fecha = new Intl.DateTimeFormat('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })
 
@@ -16,7 +14,6 @@ export function TopBar({ state, stage, tz }: { readonly state: CharacterState; r
   const clock = useRef<HTMLElement>(null)
   const date = useRef<HTMLSpanElement>(null)
   const tel = useRef<HTMLDivElement>(null)
-  const { jarvisQuality } = usePreferences()
 
   useEffect(() => {
     const fmt = new Intl.DateTimeFormat('es-ES', { timeZone: tz, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
@@ -60,11 +57,6 @@ export function TopBar({ state, stage, tz }: { readonly state: CharacterState; r
             <svg viewBox="0 0 100 10" preserveAspectRatio="none" aria-hidden="true"><polyline points="" /></svg>
           </div>
         ) : null}
-        <div className="nx-seg" role="group" aria-label="Calidad gráfica">
-          {QUALITIES.map(([q, name]) => (
-            <button key={q} type="button" aria-pressed={jarvisQuality === q} onClick={() => updatePreferences({ jarvisQuality: q })}>{name}</button>
-          ))}
-        </div>
       </div>
     </header>
   )
