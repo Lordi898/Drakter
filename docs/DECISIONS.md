@@ -1706,4 +1706,10 @@ Decisiones técnicas, cambios de tecnología y motivos.
   - Fuentes (Oxanium, Saira Semi Condensed y Saira Condensed para el atlas; SIL OFL) copiadas en `nucleo/fonts/` con su licencia, en el chunk de la interfaz: no se añaden dependencias a `package.json`.
 - **Alternativas descartadas:** etiquetas DOM (lo que hacía rozar el 11,6 % en Relaciones en el prototipo); colores de entidad del usuario (el color significa algo: paleta fría estable por id); `compileAsync` sin respaldo (falla si el avatar compila a la vez; se cae a `compile`).
 - **Motivo:** la interfaz por defecto con la máxima calidad visual sin pasarse del presupuesto de CPU.
-- **Impacto:** solo `desktop/src/jarvis/layouts/nucleo/**` y esta entrada.
+- **Impacto:** solo `desktop/src/jarvis/layouts/nucleo/**` y esta entrada. Chunk diferido propio: 109 KB de JS + 22 KB de CSS + 60 KB de fuentes.
+- **Medido** en la UHD 620, dentro del lock de medición, CPU del renderer en % de un núcleo, ventana de 10 s tras 9,5 s sin tocar nada:
+  - App real aislada (Electron del worktree, backend con LLM simulado, Workspace sembrado por la API, ventana de 2048×1272 px CSS a DPR 1,25), Equilibrado, vista núcleo: **5,4 % sin avatar 3D** y **10,0 % con holo-contorno** (el avatar aporta ≈ 4,6 puntos). Referencia: el modo Drakter en reposo en esa misma app, 16,7 %. Una segunda pasada con más carga dio 11,1 % (núcleo), 12,1 % (Hoy) y 6,7 % (Relaciones) con holo-contorno; Ahorro 0,6–0,8 % (dibuja a demanda); Cine 14–18 % (objetivo ≲ 20 %).
+  - Arnés en Chrome (mismo Chromium y ANGLE, 1470×746 a DPR 1,25, orbe de reserva): Equilibrado 7,6 % en núcleo, Hoy y Relaciones; Ahorro 0,5–2,3 %; Cine 13,6–14,5 %. En el prototipo Relaciones daba 11,6 %: las etiquetas en el Stage lo bajan al mismo coste que el resto.
+  - ⚠️ El objetivo ≤ 10 % se cumple en el límite con el avatar por defecto; la palanca que queda es del avatar (dibujarlo a menos fps en reposo), no de la interfaz.
+  - Arnés y scripts: `~/.local/share/drakter/research/jarvis-hud/{nucleo-port,nucleo-app}/`.
+- **Trampa pisada:** liberar un material mientras `compileAsync` de Three sigue sondeando rompe el bucle (`isReady` de `undefined`); al rehacer satélites y nodos se reutiliza el material y solo se libera la geometría.

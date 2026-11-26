@@ -4,7 +4,7 @@
  */
 import * as THREE from 'three'
 import type { EntityType } from '@/modules/relationships/types'
-import { C, RingBuilder, disposeMesh, linesMaterial, makePoints, type ColorName, type PointCloud } from '../gl/kit'
+import { C, RingBuilder, disposeMesh, linesMaterial, makePoints, type ColorName, type LinesMaterial, type PointCloud } from '../gl/kit'
 import { createLabels, type Label, type LabelBatch } from '../gl/labels'
 import { ENTITY_ES } from '../model'
 import { type ModuleDef } from './base'
@@ -86,8 +86,10 @@ export const relaciones: ModuleDef<RelState> = {
       s.labels = createLabels(gfx)
       s.inner.add(s.labels.mesh)
     }
-    if (s.pts) { s.inner.remove(s.pts.pts); disposeMesh(s.pts.pts); s.pts = null }
-    if (s.lines) { s.inner.remove(s.lines); disposeMesh(s.lines); s.lines = null }
+    // Se reutilizan los materiales: liberarlos mientras el Stage aún compila (compileAsync) rompe a Three.
+    const oldPts = s.pts?.mat, oldLines = s.lines?.material as LinesMaterial | undefined
+    if (s.pts) { s.inner.remove(s.pts.pts); s.pts.pts.geometry.dispose(); s.pts = null }
+    if (s.lines) { s.inner.remove(s.lines); s.lines.geometry.dispose(); s.lines = null }
     const g = model.graph
     if (!g) { s.nodes = []; s.edges = []; return }
     // Los más conectados primero; el resto no cabe sin volverse ruido.
@@ -110,7 +112,7 @@ export const relaciones: ModuleDef<RelState> = {
     const order = P.map((p, i) => [p.length(), i] as const).sort((a, b) => a[0] - b[0])
     order.forEach(([, i], k) => { P[i]!.normalize().multiplyScalar(2.75 + 1.55 * Math.pow(k / Math.max(1, N - 1), 0.8)); P[i]!.y *= 0.9 })
     s.P = P
-    s.pts = makePoints(gfx, N)
+    s.pts = makePoints(gfx, N, oldPts)
     s.nodes.forEach((_, i) => s.pts!.set(i, P[i]!.x, P[i]!.y, P[i]!.z))
     s.pts.flush()
     s.pts.mat.uniforms.uDepth = { value: s.depth }
@@ -122,7 +124,7 @@ export const relaciones: ModuleDef<RelState> = {
     geo.setAttribute('aColor', new THREE.BufferAttribute(s.ecol, 4))
     geo.setAttribute('aT', new THREE.BufferAttribute(tt, 2))
     geo.setDrawRange(0, s.edges.length * 2)
-    const mat = linesMaterial(gfx)
+    const mat = oldLines ?? linesMaterial(gfx)
     mat.uniforms.uDepth = { value: s.depth }
     s.lines = new THREE.LineSegments(geo, mat)
     s.lines.frustumCulled = false

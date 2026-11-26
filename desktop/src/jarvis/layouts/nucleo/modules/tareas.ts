@@ -53,7 +53,9 @@ export const tareas: ModuleDef<TareasState> = {
   },
   sync(m, { gfx, model }) {
     const s = m.s
-    if (s.pts) { m.group.remove(s.pts.pts); disposeMesh(s.pts.pts) }
+    // Se reutiliza el material: liberarlo mientras el Stage aún compila (compileAsync) rompe a Three.
+    const oldMat = s.pts?.mat
+    if (s.pts) { m.group.remove(s.pts.pts); s.pts.pts.geometry.dispose() }
     const tasks = (model.tasks ?? []).filter((t) => !t.done).slice(0, MAX_SATS)
     const per = new Map<number, number>()
     s.sats = tasks.map((t) => {
@@ -64,7 +66,7 @@ export const tareas: ModuleDef<TareasState> = {
       return { t, oi, base: 0, speed: (oi % 2 ? -1 : 1) * (0.0075 - oi * 0.0009), x: 0, y: 0 }
     })
     for (const sat of s.sats) (sat as { base: number }).base = sat.oi * 0.13 + s.sats.filter((x) => x.oi === sat.oi).indexOf(sat) / Math.max(1, per.get(sat.oi) ?? 1)
-    s.pts = makePoints(gfx, s.sats.length)
+    s.pts = makePoints(gfx, s.sats.length, oldMat)
     s.sats.forEach((sat, i) => {
       const t = sat.t, col = t.tone === 'late' ? C.red : t.tone === 'soon' ? C.amber : C[s.orbits[sat.oi]?.col ?? 'cyan']
       s.pts!.style(i, col, 1, 0.27 + t.prio * 0.1, t.tone === 'open' ? 2 : 3, t.num)

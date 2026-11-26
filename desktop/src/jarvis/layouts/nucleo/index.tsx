@@ -128,6 +128,13 @@ export default function NucleoLayout({ stage, avatar, quality, reducedMotion, se
   useEffect(() => scene?.setAgentState(state), [scene, state])
   useEffect(() => scene?.setOrb(!avatar.available), [scene, avatar.available])
   useEffect(() => acquireAudioTaps(), [])
+  // Ahorro en reposo dibuja a demanda: un fotograma al cambiar datos, estado o sección, y ritmo propio mientras hay voz o trabajo.
+  useEffect(() => { stage?.requestFrame() }, [stage, model, state, focus, selTick])
+  useEffect(() => {
+    if (!stage || quality !== 'ahorro' || state === 'idle' || state === 'offline') return
+    const id = setInterval(() => stage.requestFrame(), 100)
+    return () => clearInterval(id)
+  }, [stage, quality, state])
 
   // ── Sección común a los dos modos → anillo desplegado.
   const target = SECTION_TO_MODULE[section] ?? null
