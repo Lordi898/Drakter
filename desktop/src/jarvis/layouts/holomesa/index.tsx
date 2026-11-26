@@ -21,20 +21,20 @@ const TO_APP: Record<SectionId, AppSection> = TO_APP_SECTION
 const FROM_APP: Partial<Record<AppSection, SectionId | null>> = { home: null, today: 'hoy', calendar: 'calendario', subjects: 'calendario', tasks: 'tareas', projects: 'proyectos', habits: 'habitos', relationships: 'relaciones', storage: 'almacen' }
 const OVERVIEW: AppSection = 'home'
 
-const EMPTY_METRICS = Object.fromEntries(SECTION_ORDER.map((id) => [id, ''])) as Record<SectionId, string>
-
 const isTyping = (t: EventTarget | null): boolean =>
   t instanceof HTMLElement && (t.isContentEditable || t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT')
 
 export default function Holomesa({ stage, avatar, reducedMotion, section, navigate, onReady, exit }: JarvisLayoutProps) {
   const [scene] = useState(() => createHolomesaScene(reducedMotion))
-  useEffect(() => () => scene.dispose(), [scene])
+  useEffect(() => {
+    scene.revive()
+    return () => scene.dispose()
+  }, [scene])
 
   const data = useJarvisData(HOLO_TOPICS)
   const agent = useDrakterState()
   const jobs = useJobs()
   const view: HolomesaView = useSyncExternalStore(scene.subscribe, scene.getView)
-  const [metrics, setMetrics] = useState<Record<SectionId, string>>(EMPTY_METRICS)
   const [booted, setBooted] = useState(false)
   const [bootMark, setBootMark] = useState(false)
   const [selected, setSelected] = useState<PickInfo | null>(null)
@@ -47,10 +47,7 @@ export default function Holomesa({ stage, avatar, reducedMotion, section, naviga
     () => buildSnapshot(data, new Date()),
     [data.today, data.tasks, data.projects, data.habits, data.habitHistory, data.agenda, data.relationships, data.resources, data.folders, data.subjects, data.entityNames]
   )
-  useEffect(() => {
-    scene.setData(snapshot)
-    setMetrics(Object.fromEntries(scene.stations.map((s) => [s.id, s.metric])) as Record<SectionId, string>)
-  }, [scene, snapshot])
+  useEffect(() => scene.setData(snapshot), [scene, snapshot])
 
   // La selección del holograma (clic) y la de la lista del panel comparten un mismo estado.
   useEffect(() => setSelected(view.selected), [view.selected])
@@ -234,7 +231,7 @@ export default function Holomesa({ stage, avatar, reducedMotion, section, naviga
         <AgentChip state={agent} />
       </header>
 
-      <Rail focus={view.focusId} metrics={metrics} onGo={go} />
+      <Rail focus={view.focusId} metrics={view.metrics} onGo={go} />
       <Chat inputRef={inputRef} />
       <VoiceConsole state={agent} dockRef={dockRef} />
       <Jobs />
