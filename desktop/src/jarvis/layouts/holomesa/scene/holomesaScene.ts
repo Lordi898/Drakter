@@ -34,6 +34,8 @@ export interface HolomesaView {
   readonly hoverId: SectionId | null
   /** Elemento seleccionado con clic en la sección abierta. */
   readonly selected: PickInfo | null
+  /** Resumen de una línea por estación; cambia cuando se aplican datos nuevos (también los diferidos). */
+  readonly metrics: Readonly<Record<SectionId, string>>
 }
 
 export interface HolomesaScene {
@@ -62,6 +64,9 @@ export interface HolomesaScene {
   subscribe(listener: () => void): () => void
   /** Conecta el `requestFrame` del Stage (bombeo de fotogramas en reposo o a demanda). */
   attach(requestFrame: (() => void) | null): void
+  /** Vuelve a activar la escena tras `dispose()` (StrictMode monta, desmonta y remonta la misma instancia). */
+  revive(): void
+  /** Para temporizadores, animaciones y analizadores de audio. Los suscriptores se van con su propia baja. */
   dispose(): void
 }
 
@@ -126,11 +131,11 @@ export function createHolomesaScene(initialReduced: boolean): HolomesaScene {
   // ── estado
   const ctx: { -readonly [K in keyof Ctx]: Ctx[K] } = { camera, quality: 0.6, reduced: initialReduced, agent: 'idle', voice: 0, nowHours: 12, indexing: false }
   let snap: HoloSnapshot | null = null
-  let view: HolomesaView = { focusId: null, hoverId: null, selected: null }
+  let view: HolomesaView = { focusId: null, hoverId: null, selected: null, metrics: Object.fromEntries(SECTION_ORDER.map((id) => [id, ''])) as Record<SectionId, string> }
   const listeners = new Set<() => void>()
   const emit = (next: Partial<HolomesaView>): void => {
     const merged = { ...view, ...next }
-    if (merged.focusId === view.focusId && merged.hoverId === view.hoverId && merged.selected === view.selected) return
+    if (merged.focusId === view.focusId && merged.hoverId === view.hoverId && merged.selected === view.selected && merged.metrics === view.metrics) return
     view = merged
     for (const l of listeners) l()
   }
@@ -466,7 +471,7 @@ export function createHolomesaScene(initialReduced: boolean): HolomesaScene {
       snap = next
       ctx.nowHours = next.nowHours
       for (const s of stations) s.setData(next)
-      if (view.selected) emit({ selected: null })
+      emit({ selected: null, metrics: Object.fromEntries(stations.map((s) => [s.id, s.metric])) as Record<SectionId, string> })
       hoverPick = null
       pointerDirty = true
       pump()
@@ -580,12 +585,16 @@ export function createHolomesaScene(initialReduced: boolean): HolomesaScene {
       listeners.add(listener)
       return () => listeners.delete(listener)
     },
+    revive() {
+      disposed = false
+      api.setAgent(ctx.agent)
+    },
     dispose() {
       disposed = true
       if (pumpTimer) clearTimeout(pumpTimer)
+      pumpTimer = 0
       releaseTaps?.()
       releaseTaps = null
-      listeners.clear()
       for (const tw of tweens) tw.done()
       tweens = []
     }
