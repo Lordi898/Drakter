@@ -1420,6 +1420,76 @@ Decisiones técnicas, cambios de tecnología y motivos.
     - Después de la capa, `toneMapping` = 0, `scissorTest` = false y el viewport a lienzo completo.
     - El modo Drakter se ve igual: con `ACTIVE_AVATAR = null`, SVG y sin Three; con `'ascuario'`, la misma imagen que antes del cambio, sin avisos.
 
+## [2026-11-26] Modo Jarvis W1+W6: shell, activación y bandeja
+- **Contexto:** primer paquete de implementación del modo Jarvis sobre los contratos J0 (PR #36).
+- **Decisión:**
+  - `App` monta `SessionHosts` (voz, feed de notificaciones, atajos comunes y peticiones de modo), `ModeRoot` (un solo shell salvo en la transición), `ConfirmationHost` y `Toaster`. Los dos últimos son comunes, porque una confirmación puede llegar estando en Jarvis.
+  - `AppShell` conserva solo lo suyo: `Ctrl+\`, `Ctrl+K` (su paleta) y la precarga de secciones. `Ctrl+0…9` y `Ctrl+Shift+J` pasan a `useGlobalShortcuts`.
+  - Jarvis se superpone en `fixed inset-0 z-40`, por debajo de diálogos y avisos, y Drakter queda `inert` hasta que desaparece. Al volver, el foco va al botón de cabecera. El cambio se anuncia con `role="status"`.
+  - Si el chunk o el shell de Jarvis fallan, `JarvisBoundary` vuelve a Drakter con aviso: `settleUiMode('failed')`, o `resetUiMode()` si ya estaba en Jarvis. `resetUiMode()` es un añadido a `stores/uiMode.ts`.
+  - `JarvisShell` es un stub: fondo CSS estático (sin lienzo ni bucle), estado real del agente y «Volver a Drakter».
+  - Entradas: botón de cabecera (precarga al pasar por encima), `Ctrl+Shift+J`, acción «Abrir modo Jarvis» en `Ctrl+K`, sección «Modo Jarvis» en Configuración (abrir, al arrancar y calidad gráfica) y bandeja «Alternar modo Jarvis» (`ui:mode-toggle`, que además enfoca la ventana).
+  - El texto de la bandeja es fijo, porque el renderer no informa a main del modo.
+- **Alternativas descartadas:** dejar `ConfirmationHost` dentro de `AppShell` (en Jarvis no se verían las confirmaciones); una etiqueta de bandeja dinámica (otro canal IPC renderer→main sin necesidad).
+- **Motivo:** que cambiar de modo no corte la voz ni pierda confirmaciones, con Drakter igual que antes.
+- **Impacto:**
+  - Código: `desktop/src/app/{App,AppShell,ModeRoot,SessionHosts,JarvisModeButton,useGlobalShortcuts,useAppShortcuts}`, `desktop/src/jarvis/JarvisShell.tsx`, `desktop/src/settings/{JarvisSection,SettingsPage}.tsx`, `desktop/src/modules/search/SearchPalette.tsx`, `desktop/src/stores/uiMode.ts` y `desktop/electron/main/tray.ts`.
+  - Lo que se carga al arrancar crece +1,0 KB de JS y +0,46 KB de CSS con gzip (+7,8 KB sin comprimir). El stub va en un chunk aparte de 1,96 KB.
+  - Comprobado en Electron real (`DISPLAY=:0`), en una instancia aislada con perfil, datos y `HOME` propios y la voz desactivada: 13 de 13 pasos, sin excepciones ni errores de consola.
+  - Sin comprobar de extremo a extremo: que la voz no se corte al cambiar de modo. Está garantizado por estructura (`VoiceHost` vive fuera de `ModeRoot`) y falta probarlo con la voz real.
+
+## [2026-11-26] W7: espectro y forma de onda reales de micrófono y salida (`voice/levels.ts`)
+- **Contexto:** los visualizadores del HUD de Jarvis (osciloscopio, espectro) necesitan el audio real del micrófono y de la voz de Drakter (jarvis-arquitectura.md §4.5), con 0 % de CPU sin usuarios y sin tocar la latencia de la voz. `VoiceClient` está congelado.
+- **Decisión:**
+  - `levels.ts` es el **único dueño del grafo de audio**: un `AudioContext` compartido y un `AnalyserNode` por toma (`input`, `output`), con `fftSize` 1024. Se crean solo con demanda y pista, y se cierran sin ellas.
+    - Hay dos cuentas de demanda: `acquireAudioTaps` (las dos tomas, Jarvis) y una interna solo de salida (la boca).
+    - Con `document.hidden` el contexto se suspende y vuelve al mostrarse.
+    - Los analizadores no se conectan al destino: no suena nada más ni se añade latencia.
+  - Espectro: 64 bandas aproximadamente logarítmicas entre 80 Hz y 8 kHz, graves primero. Es el pico de los bins de cada banda, de −90 a −25 dB y suavizado 0,7; en graves cada banda es un bin, por la resolución de 47 Hz. Onda: la ventana de 1024 muestras (~21 ms) reducida a 256 por media.
+  - Las firmas del contrato de J0 no cambian. Se añaden exportaciones internas para `outputLevel.ts`: `setOutputTapStream`, `acquireOutputTap`, `readTimeDomain` y `TIME_DOMAIN_SAMPLES`.
+  - `outputLevel.ts` (boca) usa la toma de salida compartida con la misma ventana, la misma fórmula RMS y el mismo suavizado: `useMouthLevel` no cambia de comportamiento. Su `setOutputStream` reenvía a `levels`.
+  - `webrtcClient.ts`: solo `syncInputTap()`, que llama a `setInputStream` cuando cambia la pista del micrófono (desde `notify()` y tras capturar en `connect()`). No toca la pista enviada ni la señalización.
+- **Alternativas descartadas:** un contexto por toma o por consumidor, que serían varios hilos de audio. `AudioWorklet`, que es más código y otro archivo cargado, para lo mismo que da `AnalyserNode`. `fftSize` 2048, que cambiaría la ventana de la boca.
+- **Motivo:** visualizadores con audio real y coste nulo cuando nadie los usa.
+- **Impacto:**
+  - Código: `desktop/src/voice/{levels,outputLevel,webrtcClient}.ts`.
+  - Probado en Electron con fuentes **sintéticas**, no con la voz real: conectarse al servicio de voz del usuario le quitaría su conexión WebRTC, y el micrófono del usuario no se toca. El micrófono es el falso de Chromium (`--use-fake-device-for-media-stream`), que entra por el `getUserMedia` real del cliente de voz; la salida es una pista de oscilador por `setOutputStream`.
+  - Resultados:
+    - Sin usuarios no hay señal ni contexto, aunque el micro esté abierto.
+    - Con `acquireAudioTaps`, espectro y onda del micrófono y de la salida. Al parar el cliente, el micrófono deja de analizarse.
+    - Boca a 30 valores/s, en 0,47–1,0.
+    - Oculto, sin señal; al mostrarse, vuelve.
+    - Tras la baja de Jarvis, la boca conserva solo la salida, y sin ella se cierra todo.
+    - CPU del renderer: leer las dos tomas en cada fotograma suma ~0,4 %.
+  - Pendiente: probar con la voz real cuando el usuario pueda.
+
+## [2026-11-26] Modo Jarvis W5: voz local y herramienta `ui_set_mode`
+- **Contexto:** las dos vías de voz del modo Jarvis (diseño §3.2-§3.3, contratos J0 `ui.mode` y `EvtLocalCommand.ui_*`).
+- **Decisión:**
+  - **Capa 0:** `classify_ui(text)` en `voice/conversation/layer0.py`, aparte de `classify`, cuya firma está congelada en `voice/ports.py`.
+    - Frases cerradas en `layer0.es.toml`, secciones `[ui_jarvis]` y `[ui_drakter]`. Cuenta solo el enunciado entero más muletillas: «¿qué es el modo Jarvis?» y las órdenes compuestas van al agente.
+    - Las variantes del STT de «jarvis» (`[wake]`) y de «drakter» (`[ui].drakter_words`) se leen en su forma canónica.
+  - **Puente (`voice/bridge.py`):**
+    - La orden se atiende antes que el resto de la capa 0: emite `voice.local_command{ui_*}` y dice la frase `ui_jarvis` o `ui_drakter`, sin turno.
+    - Trampa: en reposo, «activa el modo Jarvis» despierta por la palabra del final y `strip_wake_word` devuelve `None`. Si la frase entera es `ui_*`, se atiende y se vuelve a reposo en vez de descartarla como falso positivo.
+  - **Frases:** `ui_jarvis` y `ui_drakter` en `PhraseKey` y en `agent/identity/voice_phrases.es.toml`, con el trato repartido (señor, señor Imanol, señor Magaña).
+  - **Backend:**
+    - `app/services/ui_mode.request_ui_mode()` es la única salida para las dos vías. Publica `ui.mode` con un límite común de un cambio por segundo, nunca lanza y no guarda el modo.
+    - `VoicePolicy.local_command` la llama para `ui_*` y audita el resultado (`ui: published|rate_limited|unavailable`).
+    - Herramienta `ui_set_mode` (`app/tools/ui.py`, dominio `ui`, permiso `ui.write`, riesgo `write` sin confirmación, `audit={"mode": "log"}`). Si se pasa del límite, devuelve `delivered=false`; sin hub, `ui_unavailable`.
+    - `ui` entra en `TOOL_DOMAINS`, en `permissions.json` y en `catalog.json` (fase `jarvis`), y sale de los carriles de trabajos de fondo (`EXCLUDED_DOMAINS`).
+- **Alternativas descartadas:** ampliar `classify` (rompe la firma congelada); que la voz publique directamente (la voz nunca toca el hub); límite solo en el renderer (el agente podría inundar el canal).
+- **Motivo:** orden instantánea y sin LLM para las frases habituales, y el agente para todo lo demás, con las reglas de herramientas de CLAUDE.md §8.
+- **Impacto:**
+  - Archivos: `voice/conversation/layer0.{py,es.toml}`, `voice/bridge.py`, `agent/identity/voice_phrases.es.toml`, `contracts/python/drakter_contracts/{tools,voice_ipc}.py`, `contracts/ts/index.ts`, `contracts/tools/{catalog.json,README.md}`, `agent/configuration/permissions.json` y en `backend/app/` `tools/ui.py`, `services/ui_mode.py`, `integrations/voice/{policy,service}.py` e `integrations/hermes/lanes.py`.
+  - Riesgo mitigado: en una sesión contaminada por documentos o memoria, `ui_set_mode` pasa a `confirm` (`gate.effective_risk`), así que una inyección no cambia el modo sin aprobación.
+  - Comprobado con pruebas puntuales en el worktree, sin tocar la voz ni la app del usuario:
+    - `classify_ui`: 17 casos.
+    - Puente con sesión simulada y el venv real de la voz: 8 casos, incluida la trampa.
+    - Herramienta por el `ToolRegistry` real: permiso, esquema, auditoría, evento, límite, sin hub, sin deriva del catálogo, sesión contaminada y política de voz (18 comprobaciones).
+    - Las 5 comprobaciones críticas del CI.
+  - Pendiente: las frases nuevas no tienen PCM en caché y hasta generarlas (`python -m voice phrases`, que usa Fish) suenan con el TTS en vivo. Tampoco se ha probado con micrófono real.
+
 ## [2026-11-26] W3: motor del Stage de Jarvis (`createStage`)
 - **Contexto:** jarvis-arquitectura.md §2.4-§2.7 y el contrato congelado `desktop/src/jarvis/stage/types.ts` (J0), que no cambia.
 - **Decisión:**

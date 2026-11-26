@@ -85,6 +85,13 @@ export function settleUiMode(result: 'ready' | 'failed'): void {
   }
 }
 
+/** Vuelve a Drakter al instante, sin transición ni límite de frecuencia: el shell de Jarvis falló. */
+export function resetUiMode(): void {
+  if (snapshot.mode === 'drakter' && snapshot.phase === 'idle') return
+  lastChangeAt = performance.now()
+  set({ mode: 'drakter', target: 'drakter', phase: 'idle', source: snapshot.source })
+}
+
 export function getUiMode(): UiModeSnapshot {
   return snapshot
 }

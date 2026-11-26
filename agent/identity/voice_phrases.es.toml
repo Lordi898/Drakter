@@ -44,3 +44,7 @@ offline = [
 idle_nudge = ["¿Sigue ahí, señor?", "¿Necesita algo más, señor Imanol?"]
 
 goodbye = ["A su disposición, señor.", "Aquí estaré, señor Imanol.", "Cuando quiera, señor Magaña."]
+
+# Modo Jarvis (capa 0 de la voz): confirman el cambio de interfaz.
+ui_jarvis = ["Modo Jarvis activado, señor.", "Interfaz holográfica en pantalla, señor Imanol.", "Paso al modo Jarvis, señor Magaña."]
+ui_drakter = ["De vuelta en Drakter, señor.", "Vuelvo a la interfaz de siempre, señor Imanol.", "Modo Drakter, señor Magaña."]

@@ -1,7 +1,8 @@
 """Capa 0 de la voz (V-10): órdenes locales sin LLM, con listas cerradas en `layer0.es.toml`.
 
 `classify` es puro (firma congelada en voice/ports.py §4.7). Lo usan `DrakterStartStrategy`
-(barge-in con el bot hablando) y el puente de WP1 (cada turno final).
+(barge-in con el bot hablando) y el puente de WP1 (cada turno final). `classify_ui` (modo Jarvis,
+W5) va aparte para no tocar esa firma: también es puro y lo usa solo el puente.
 """
 
 from __future__ import annotations
@@ -14,6 +15,7 @@ from pathlib import Path
 from typing import Literal
 
 Command = Literal["stop_speech", "rest", "close", "backchannel"]
+UiCommand = Literal["ui_jarvis", "ui_drakter"]
 
 _TOML = Path(__file__).with_name("layer0.es.toml")
 _WORD = re.compile(r"[a-z0-9ñ]+")
@@ -37,6 +39,16 @@ def _lists() -> dict[str, object]:
         return frozenset(w for x in xs for w in normalize(x))
 
     wake = raw.get("wake", {})
+    wake_words = words(wake.get("words", ["jarvis"]))
+    drakter_words = words(raw.get("ui", {}).get("drakter_words", ["drakter"]))
+    # Variantes de «jarvis» y de «drakter» → forma canónica, solo para las frases de modo.
+    canon = {w: "drakter" for w in drakter_words} | {
+        w: "jarvis" for w in wake_words - drakter_words - {"despierta"}
+    }
+
+    def ui_phrases(section: str) -> tuple[tuple[str, ...], ...]:
+        return tuple(tuple(canon.get(t, t) for t in p) for p in phrases(raw.get(section, {}).get("phrases", [])))
+
     return {
         "fillers": words(raw["fillers"]) | words(wake.get("words", [])),
         "wake_words": words(wake.get("words", ["jarvis"])),
@@ -46,6 +58,9 @@ def _lists() -> dict[str, object]:
         "rest": phrases(raw["rest"]["phrases"]),
         "close": phrases(raw["close"]["phrases"]),
         "backchannel": words(raw["backchannel"]["words"]),
+        "ui_canon": canon,
+        "ui_jarvis": ui_phrases("ui_jarvis"),
+        "ui_drakter": ui_phrases("ui_drakter"),
     }
 
 
@@ -93,4 +108,23 @@ def classify(
         return "rest"
     if not awaiting_answer and all(t in lists["backchannel"] for t in tokens):  # type: ignore[operator]
         return "backchannel"
+    return None
+
+
+def classify_ui(text: str) -> UiCommand | None:
+    """Orden local de cambio de modo de interfaz (`[ui_jarvis]`/`[ui_drakter]`), o `None`.
+
+    Cuenta solo si el enunciado es la frase entera más muletillas; «¿qué es el modo Jarvis?» no.
+    Las variantes del STT de «jarvis» y «drakter» (`[wake]`, `[ui]`) se leen en su forma canónica.
+    """
+    lists = _lists()
+    canon: dict[str, str] = lists["ui_canon"]  # type: ignore[assignment]
+    tokens = [canon.get(t, t) for t in normalize(text)]
+    if not tokens:
+        return None
+    fillers: frozenset[str] = lists["fillers"]  # type: ignore[assignment]
+    if _only_phrase(tokens, lists["ui_jarvis"], fillers):  # type: ignore[arg-type]
+        return "ui_jarvis"
+    if _only_phrase(tokens, lists["ui_drakter"], fillers):  # type: ignore[arg-type]
+        return "ui_drakter"
     return None

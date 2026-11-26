@@ -25,6 +25,10 @@
 
 `voice_list_profiles` (`voice.read`, `read`) y `voice_set_profile` (`voice.write`, `write`, sin confirmación: guarda un nombre de perfil). Los IDs de Fish no pasan por aquí: viven solo en `~/.config/drakter/voces.toml` y ningún resultado los lleva enteros. Ver `docs/usage/voces.md`.
 
+## Interfaz (modo Jarvis)
+
+`ui_set_mode` (`ui.write`, `write`, sin confirmación): pide al escritorio pasar al modo Jarvis o volver a Drakter publicando `ui.mode`. Es solo estética, reversible y sin datos; en una sesión contaminada la puerta la sube a `confirm` como a cualquier WRITE. Límite común de un cambio por segundo con la capa 0 de la voz (`app/services/ui_mode.py`). El dominio `ui` no está en los carriles de trabajos de fondo (`lanes.EXCLUDED_DOMAINS`).
+
 ## Sin construir (4)
 
 `get_voice_status`, `get_workspace_summary`, `get_activity_log`, `get_pending_confirmations`. Etiquetas (`list_tags`, `add_tag`, `remove_tag`) y relaciones (`create_relationship`, `update_relationship`, `delete_relationship`, `get_related_items`, `search_relationships`) ya están construidas. `update_relationship` (`write`) solo sustituye `metadata` (2026-11-20).

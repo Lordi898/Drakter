@@ -1,9 +1,8 @@
 import { useEffect, useState } from 'react'
 import { ChevronRight, Folder as FolderIcon, Library } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { listFolders } from './api'
-import { notifyError } from './errors'
 import type { Folder } from './types'
+import { useFolders } from './useStorage'
 
 interface Props {
   readonly selectedId: string | null
@@ -12,20 +11,7 @@ interface Props {
 }
 
 export function FolderTree({ selectedId, onSelect, reloadKey }: Props) {
-  const [roots, setRoots] = useState<readonly Folder[] | null>(null)
-
-  useEffect(() => {
-    let live = true
-    listFolders(null)
-      .then((folders) => live && setRoots(folders))
-      .catch((error: unknown) => {
-        if (live) setRoots([])
-        notifyError('No se han podido cargar las carpetas', error)
-      })
-    return () => {
-      live = false
-    }
-  }, [reloadKey])
+  const roots = useFolders(null, true, reloadKey)
 
   return (
     <nav aria-label="Carpetas" className="flex flex-col gap-0.5">
@@ -60,22 +46,11 @@ function FolderNode({
   folder, depth, selectedId, onSelect
 }: { folder: Folder; depth: number; selectedId: string | null; onSelect: (id: string | null) => void }) {
   const [open, setOpen] = useState(false)
-  const [children, setChildren] = useState<readonly Folder[] | null>(null)
-  const [loading, setLoading] = useState(false)
+  const children = useFolders(folder.id, open)
+  const loading = open && children === null
 
   function toggle() {
-    const next = !open
-    setOpen(next)
-    if (next && children === null && !loading) {
-      setLoading(true)
-      listFolders(folder.id)
-        .then(setChildren)
-        .catch((error: unknown) => {
-          setChildren([])
-          notifyError('No se han podido cargar las subcarpetas', error)
-        })
-        .finally(() => setLoading(false))
-    }
+    setOpen(!open)
   }
 
   const selected = selectedId === folder.id
