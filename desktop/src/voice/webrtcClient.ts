@@ -6,6 +6,7 @@
 import { getPreferences, subscribePreferences } from '@/stores/preferences'
 import { applySink } from './audioOutput'
 import { registerVoiceClient, type VoiceClient } from './contract'
+import { setInputStream } from './levels'
 import { setOutputStream } from './outputLevel'
 
 const AUDIO_CONSTRAINTS: MediaTrackConstraints = {
@@ -191,7 +192,18 @@ class WebRtcVoiceClient implements VoiceClient {
 
   private micGeneration = 0
 
+  /** Pista del micrófono que analizan los visualizadores (`levels.ts`); solo cuando cambia. */
+  private inputTapTrack: MediaStreamTrack | null = null
+
+  private syncInputTap(): void {
+    const track = this.micOpen() ? this.track : null
+    if (track === this.inputTapTrack) return
+    this.inputTapTrack = track
+    setInputStream(track ? new MediaStream([track]) : null)
+  }
+
   private notify(): void {
+    this.syncInputTap()
     const open = this.micOpen()
     if (open !== this.reportedMic) {
       this.reportedMic = open
@@ -302,6 +314,7 @@ class WebRtcVoiceClient implements VoiceClient {
     this.closePeer()
     try {
       if (this.wantMic && !this.micOpen()) this.track = await this.captureMic()
+      this.syncInputTap()
       if (generation !== this.generation) return
 
       const pc = new RTCPeerConnection({ iceServers: [] })
