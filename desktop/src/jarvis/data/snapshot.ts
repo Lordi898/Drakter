@@ -64,7 +64,7 @@ export function useTopic<T>(load: () => Promise<T>, key: string, enabled: boolea
  * datos (si una falla, el resultado es parcial y el estado lo dice).
  */
 export function useDerived<T>(sources: readonly Snapshot<unknown>[], derive: () => T | null, deps: readonly unknown[]): Snapshot<T> {
-  const statuses = sources.map((s) => s.status).join()
+  const statuses = sources.map((s) => `${s.status}:${s.error ?? ''}`).join('|')
   const reloadAll = useRef<() => void>(() => undefined)
   reloadAll.current = () => sources.forEach((s) => s.reload())
   const reload = useCallback(() => reloadAll.current(), [])

@@ -412,7 +412,7 @@ export interface CmdSpeakOpen {
 }
 
 export interface CmdSpeakPhrase {
-  key: "ack_1" | "ack_2" | "ack_3" | "wait_1" | "wait_2" | "wait_3" | "tool_generic" | "confirm_on_screen" | "rest_on_screen" | "busy" | "job_started" | "job_done" | "job_failed" | "tts_fallback" | "offline" | "idle_nudge" | "goodbye" | "ui_jarvis" | "ui_drakter";
+  key: "ack_1" | "ack_2" | "ack_3" | "wait_1" | "wait_2" | "wait_3" | "tool_generic" | "confirm_on_screen" | "rest_on_screen" | "busy" | "job_started" | "job_done" | "job_failed" | "tts_fallback" | "offline" | "idle_nudge" | "goodbye" | "ui_jarvis" | "ui_drakter" | "ui_avatar" | "ui_layout";
   when?: "now" | "when_silent";
 }
 
@@ -597,10 +597,12 @@ export interface EvtError {
   message: string | null;
 }
 
-/** Orden de la capa 0, ya aplicada por la voz. `ui_*`: cambiar el modo de la interfaz (el backend publica `ui.mode`). */
+/** Orden de la capa 0, ya aplicada por la voz. `ui_jarvis`/`ui_drakter`: cambiar el modo de la interfaz (el backend publica `ui.mode`). `ui_appearance`: cambiar el avatar o la interfaz Jarvis, con exactamente uno de `avatar` o `layout` (el backend publica `ui.appearance`). */
 export interface EvtLocalCommand {
-  command: "stop_speech" | "rest" | "close" | "ui_jarvis" | "ui_drakter";
+  command: "stop_speech" | "rest" | "close" | "ui_jarvis" | "ui_drakter" | "ui_appearance";
   utt_id: string;
+  avatar: "holo-contorno" | "holo-hilo" | "holo-busto" | "holo-orbe" | "holo-filamento" | "ascuario" | "relojero" | "filamento" | "none" | null;
+  layout: "nucleo" | "holomesa" | "visor" | null;
 }
 
 /** Sin texto. `agent_ttft_ms` lo mide el backend. */
