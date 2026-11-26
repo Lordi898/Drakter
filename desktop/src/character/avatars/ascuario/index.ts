@@ -9,6 +9,8 @@ export { STATES, EXPRESSIONS } from './brain';
 
 export interface AvatarOptions {
   reducedMotion?: boolean; pixelRatio?: number;
+  /** Lienzo con alfa premultiplicado y sin fondo propio (sin halo). */
+  transparent?: boolean;
   /** Límite de fotogramas (30 por defecto; 0 = sin límite). */
   fps?: number;
   /** Micro-gestos en reposo (por defecto sí, salvo con movimiento reducido). */
@@ -39,9 +41,9 @@ export interface Avatar {
 
 export function createAvatar(canvas: HTMLCanvasElement, opts: AvatarOptions = {}): Avatar {
   const t0 = performance.now();
-  const gl = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true, powerPreference: 'low-power', stencil: false });
+  const gl = new THREE.WebGLRenderer({ canvas, alpha: true, premultipliedAlpha: true, antialias: true, powerPreference: 'low-power', stencil: false });
   if (!gl.capabilities.isWebGL2) { gl.dispose(); throw new Error('webgl2-unavailable'); }
-  gl.toneMapping = THREE.ACESFilmicToneMapping; gl.toneMappingExposure = 1.15;
+  gl.setClearColor(0x000000, 0); gl.toneMapping = THREE.ACESFilmicToneMapping; gl.toneMappingExposure = 1.15;
   canvas.style.opacity = '0'; canvas.style.transition = 'opacity .6s ease-out';
   const onLost = (e: Event): void => e.preventDefault(); canvas.addEventListener('webglcontextlost', onLost);
 
@@ -90,7 +92,7 @@ export function createAvatar(canvas: HTMLCanvasElement, opts: AvatarOptions = {}
   const ready = (async () => {
     performance.mark('av:start'); const geos = await loadGeos(opts.geometryUrl); performance.mark('av:geos');
     if (disposed) return;
-    sc = buildScene(gl, geos, opts.view); performance.mark('av:scene');
+    sc = buildScene(gl, geos, opts.view, opts.transparent ?? false); performance.mark('av:scene');
     sc.resize(size.w, size.h, dpr);
     await sc.compile(); performance.mark('av:compiled');
     if (disposed) return;

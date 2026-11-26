@@ -6,6 +6,11 @@ export type AvatarEvent = 'userTyping' | 'focus' | 'blur'
 export interface AvatarOptions {
   readonly reducedMotion?: boolean
   readonly pixelRatio?: number
+  /**
+   * Lienzo con alfa premultiplicado y sin fondo propio: el avatar flota sobre la interfaz.
+   * Solo se pide a los avatares que lo declaran en `registry.ts`.
+   */
+  readonly transparent?: boolean
 }
 
 /**

@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useSyncExternalStore } from 'react'
+import { cn } from '@/lib/utils'
 import { usePreferences } from '@/stores/preferences'
 import { subscribeUserTyping } from './activity'
-import { loadActiveAvatar } from './avatars/registry'
+import { activeAvatar } from './avatars/registry'
 import type { Avatar3D } from './avatars/types'
 import { warnCharacter } from './log'
 import type { CharacterRendererProps } from './types'
@@ -52,11 +53,13 @@ export function ThreeCharacter({ state, onReady, onFail }: ThreeCharacterProps) 
     let fadeTimer: ReturnType<typeof setTimeout> | undefined
     const cleanups: Array<() => void> = []
 
-    loadActiveAvatar()
+    activeAvatar
+      .load()
       .then((create) => {
         if (!alive) return
         const created = create(canvas, {
           reducedMotion: latestReduced.current,
+          transparent: activeAvatar.transparent,
           pixelRatio: Math.min(window.devicePixelRatio || 1, MAX_PIXEL_RATIO)
         })
         instance = created
@@ -116,5 +119,11 @@ export function ThreeCharacter({ state, onReady, onFail }: ThreeCharacterProps) 
   }, [])
   useMouthLevel(state, applyMouth)
 
-  return <canvas ref={canvasRef} className="absolute inset-0 block size-full rounded-2xl" />
+  // Con fondo propio va enmarcado como una tarjeta; transparente, flota sobre la interfaz.
+  return (
+    <canvas
+      ref={canvasRef}
+      className={cn('absolute inset-0 block size-full', !activeAvatar.transparent && 'rounded-2xl')}
+    />
+  )
 }

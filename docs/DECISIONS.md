@@ -1312,3 +1312,18 @@ Decisiones técnicas, cambios de tecnología y motivos.
   - Código: `desktop/src/character/{AdaptiveCharacter,ThreeCharacter}.tsx`, `character/{activity,plug}.ts`, `character/avatars/**`, `chat/ChatComposer.tsx`, `desktop/package.json` y el lockfile, y `THIRD_PARTY_NOTICES.md`. Checklist 5 (notas en «Crear proyecto Rive» y «sincronización labial»).
   - Comprobado en Electron (instancia aparte, sin backend) en un i7-8665U con UHD 620. Los 9 estados cambian luz y expresión, la mandíbula sigue a una pista sintética inyectada en `outputLevel` y la cabeza sigue al cursor. El respaldo SVG funciona: al forzar un fallo del cargador no hay lienzo, se ve el SVG y queda aviso en el log. Arranque del avatar en 178 ms. En reposo, a ~22-30 fps: renderer 5,3 % y 6,7 % de CPU (dos medidas de 20 s) y proceso GPU 4,3 % y 7,5 %, con 0,4-0,9 ms de JS por fotograma, 20 llamadas de dibujo y 107 k triángulos. Con `document.hidden`, 0 % en ambos.
   - Pendiente: probar la boca con la voz real, y sincronizar el port cuando drakter-93 cierre su pulido o cuando se elija el avatar holográfico.
+
+## [2026-11-26] Avatares 3D con fondo transparente (`AvatarOptions.transparent`)
+- **Contexto:** el avatar final saldrá de la ronda de avatares holográficos y debe flotar sobre la interfaz, no ir dentro de una tarjeta oscura.
+- **Decisión:**
+  - El contrato (`avatars/types.ts`) suma `transparent?: boolean`: lienzo con alfa premultiplicado y sin fondo propio.
+  - Cada entrada de `avatars/registry.ts` declara `transparent`. `ThreeCharacter` se lo pasa al avatar y, si es transparente, no lo enmarca (sin esquinas redondeadas).
+  - Ascuario lo soporta: limpia con alfa 0, usa `premultipliedAlpha` y oculta su halo. Aun así se queda en `transparent: false`, porque se diseñó sobre su halo: sin él se notan el corte plano del busto y el humo cortado en el borde del lienzo.
+- **Alternativas descartadas:**
+  - Detectarlo en tiempo de ejecución, leyendo el alfa del lienzo: es frágil y cuesta una lectura de la GPU.
+  - Una máscara de bordes genérica en CSS: puede recortar contenido propio de cada avatar.
+- **Motivo:** que un avatar holográfico se enchufe con una línea y flote sin tocar el anfitrión.
+- **Impacto:**
+  - Código: `desktop/src/character/{ThreeCharacter.tsx,avatars/{types,registry}.ts,avatars/ascuario/{index,scene}.ts}`.
+  - Comprobado en Electron con Ascuario forzado a `transparent: true`, en el tema claro (el actual) y en el oscuro: sin tarjeta, bordes limpios y sin halos oscuros. En el tema claro el contraste es alto; en el oscuro es más justo con un avatar negro, aunque legible gracias a las vetas y los reflejos.
+  - Cuidado para los avatares transparentes: lo que se salga del lienzo (partículas, humo) se corta en el borde.

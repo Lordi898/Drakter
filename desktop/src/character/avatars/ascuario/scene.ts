@@ -11,7 +11,8 @@ export interface View { zoom?: number; tx?: number; ty?: number }
 const FOV = 20.5, CAM_Z = 11.5, LOOK_Y = -0.74, LOOK_X = 0.14;
 const BASE_YAW = 0.5, BASE_PITCH = 0.14;
 
-export function buildScene(gl: THREE.WebGLRenderer, geos: Geos, view: View = {}) {
+/** `transparent`: sin fondo propio (el halo es el fondo), para flotar sobre la interfaz. */
+export function buildScene(gl: THREE.WebGLRenderer, geos: Geos, view: View = {}, transparent = false) {
   const scene = new THREE.Scene();
   const cam = new THREE.PerspectiveCamera(FOV, 1, 6, 20);
   const tx = view.tx ?? LOOK_X, ty = view.ty ?? LOOK_Y;
@@ -27,7 +28,7 @@ export function buildScene(gl: THREE.WebGLRenderer, geos: Geos, view: View = {})
   const mEye = [eyeMat(), eyeMat()], mGlass = glassMat(), mGem = gemMat(), mHalo = haloMat();
   const mEmber = pointsMat('ember'), mSmoke = pointsMat('smoke');
 
-  const halo = new THREE.Mesh(new THREE.PlaneGeometry(7.4, 7.4), mHalo); halo.position.set(0.3, -0.5, -3.2); halo.renderOrder = -1; scene.add(halo);
+  const halo = new THREE.Mesh(new THREE.PlaneGeometry(7.4, 7.4), mHalo); halo.position.set(0.3, -0.5, -3.2); halo.renderOrder = -1; halo.visible = !transparent; scene.add(halo);
   const bust = new THREE.Group(); scene.add(bust);
   const body = new THREE.Mesh(geos.body, mBody); bust.add(body);
   const gem = new THREE.Mesh(new THREE.IcosahedronGeometry(0.11, 1), mGem); gem.position.set(S.MEDAL[0], S.MEDAL[1], S.MEDAL[2] + 0.05); gem.scale.set(1, 1.25, 0.6); gem.rotation.x = -0.25; bust.add(gem);
