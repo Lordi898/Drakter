@@ -1,0 +1,66 @@
+/**
+ * Contrato de datos de las interfaces Jarvis (J1; lo implementa D1 en `jarvis/data/**`).
+ *
+ * Instantáneas de los datos REST del Workspace, adaptadas de los hooks de `modules/*` y de
+ * `pages/today` (W2): mismo origen de verdad, sin peticiones ni caché propias. Lo que ya vive en
+ * stores (chat, estado del agente, trabajos, avisos, confirmaciones, voz, niveles de audio) lo leen
+ * las interfaces directamente de `stores/*` y `voice/levels.ts`; no pasa por aquí.
+ *
+ * Todo texto que venga de aquí es dato no confiable: se pinta como texto plano, nunca como HTML.
+ */
+import type { AuditEvent } from '@/modules/activity/types'
+import type { AgendaItem } from '@/modules/calendar/types'
+import type { Habit } from '@/modules/habits/types'
+import type { MemoryBackendStatus } from '@/modules/memory/types'
+import type { Project } from '@/modules/projects/types'
+import type { RelationshipOut } from '@/modules/relationships/types'
+import type { ResourceSummary } from '@/modules/storage/types'
+import type { TimetableEntry } from '@/modules/subjects/types'
+import type { Task } from '@/modules/tasks/types'
+import type { TodayResponse } from '@/pages/today/contract'
+
+/** `offline`: el servicio local no responde. Con `error` u `offline`, `data` conserva lo último bueno. */
+export type SnapshotStatus = 'loading' | 'ready' | 'offline' | 'error'
+
+export interface Snapshot<T> {
+  readonly status: SnapshotStatus
+  /** Último dato bueno (también durante una recarga o tras un fallo); `null` si nunca llegó. */
+  readonly data: T | null
+  /** Texto corto en español para mostrar; `null` si no hay error. */
+  readonly error: string | null
+  /** `Date.now()` del último dato bueno. */
+  readonly updatedAt: number | null
+  readonly reload: () => void
+}
+
+/** Temas disponibles. Los rangos y filtros los fija D1 y los documenta aquí. */
+export interface JarvisData {
+  /** `GET /today` en la zona del usuario. */
+  readonly today: Snapshot<TodayResponse>
+  /** Tareas abiertas (sin archivadas). */
+  readonly tasks: Snapshot<readonly Task[]>
+  /** Proyectos activos. */
+  readonly projects: Snapshot<readonly Project[]>
+  /** Hábitos sin archivar. */
+  readonly habits: Snapshot<readonly Habit[]>
+  /** Agenda expandida de hoy a +7 días, en la zona del usuario. */
+  readonly agenda: Snapshot<readonly AgendaItem[]>
+  /** Horario de clases de hoy. */
+  readonly timetable: Snapshot<readonly TimetableEntry[]>
+  /** Relaciones del Workspace (para el grafo). */
+  readonly relationships: Snapshot<readonly RelationshipOut[]>
+  /** Recursos del almacén más recientes. */
+  readonly resources: Snapshot<readonly ResourceSummary[]>
+  /** Actividad reciente (auditoría filtrada). */
+  readonly activity: Snapshot<readonly AuditEvent[]>
+  /** Estado de la memoria. */
+  readonly memory: Snapshot<MemoryBackendStatus>
+}
+
+export type JarvisTopic = keyof JarvisData
+
+/**
+ * Hook único de datos. Solo carga los temas pedidos; se recargan solos tras un resync del enlace.
+ * La lista de temas debe ser estable entre renders (constante de módulo).
+ */
+export type UseJarvisData = <K extends JarvisTopic>(topics: readonly K[]) => Pick<JarvisData, K>
