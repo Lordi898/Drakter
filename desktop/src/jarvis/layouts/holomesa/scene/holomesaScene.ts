@@ -23,7 +23,7 @@ interface Shot {
   readonly fov: number
 }
 
-const OVER: Shot = { pos: new THREE.Vector3(2.7, 13.4, 18.6), target: new THREE.Vector3(2.7, 0.3, -0.9), fov: 42 }
+const OVER: Shot = { pos: new THREE.Vector3(3.6, 13.4, 18.6), target: new THREE.Vector3(3.6, 0.3, -0.9), fov: 42 }
 const BOOT: Shot = { pos: new THREE.Vector3(0, 30, 6), target: new THREE.Vector3(0, 0, -0.5), fov: 50 }
 const easeInOut = (x: number): number => (x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2)
 const easeOut = (x: number): number => 1 - Math.pow(1 - x, 2)
@@ -163,6 +163,8 @@ export function createHolomesaScene(initialReduced: boolean): HolomesaScene {
   let requestFrame: (() => void) | null = null
   let disposed = false
   let reticleRot = 0
+  let compiling = false
+  let pendingSnap: HoloSnapshot | null = null
 
   const shotFor = (id: SectionId | null): Shot => {
     if (!id) return OVER
@@ -218,7 +220,19 @@ export function createHolomesaScene(initialReduced: boolean): HolomesaScene {
     async init(frame) {
       camera.aspect = frame.width / Math.max(1, frame.height)
       camera.updateProjectionMatrix()
-      await frame.renderer.compileAsync(scene, camera)
+      // Mientras compila no se reconstruye nada (Three consulta los programas de los materiales):
+      // los datos que lleguen se aplican al terminar.
+      compiling = true
+      try {
+        await frame.renderer.compileAsync(scene, camera)
+      } finally {
+        compiling = false
+        if (pendingSnap) {
+          const next = pendingSnap
+          pendingSnap = null
+          api.setData(next)
+        }
+      }
     },
     setQuality(q) {
       profile = q
@@ -284,7 +298,10 @@ export function createHolomesaScene(initialReduced: boolean): HolomesaScene {
       par.lerp(parT, Math.min(1, dt * 3))
       if (par.lengthSq() < 1e-6) par.set(0, 0)
       const aspect = frame.width / Math.max(1, frame.height)
-      camera.position.copy(cur.pos)
+      // La vista general se encuadra para la proporción del prototipo (~2:1); en ventanas más altas o
+      // estrechas la cámara se aleja para que la mesa no quede bajo el carril ni la conversación.
+      const fit = 1 + (Math.min(1.7, Math.max(1, 2.05 / aspect)) - 1) * (1 - focusK)
+      camera.position.copy(cur.target).addScaledVector(v3.subVectors(cur.pos, cur.target), fit)
       camera.lookAt(cur.target)
       const pk = view.focusId ? 0.55 : frame.quality.tier === 'cine' ? 0.9 : 0.6
       camera.updateMatrixWorld()
@@ -442,6 +459,10 @@ export function createHolomesaScene(initialReduced: boolean): HolomesaScene {
     overlay,
     stations,
     setData(next) {
+      if (compiling) {
+        pendingSnap = next
+        return
+      }
       snap = next
       ctx.nowHours = next.nowHours
       for (const s of stations) s.setData(next)

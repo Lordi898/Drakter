@@ -12,7 +12,7 @@ const IDX_PER_SEG = 24
 const hourA = (h: number): number => -Math.PI / 2 + (h / 24) * Math.PI * 2
 
 export function hoy(M: Materials): Station {
-  const b = base(M, 'hoy', 'Hoy', '1', new THREE.Vector3(0, 0, 0.3), 2.0, 2.0)
+  const b = base(M, 'hoy', 'Hoy', '0', new THREE.Vector3(0, 0, 0.3), 2.0, 2.0)
   let evMeshes: { mesh: THREE.Mesh; ev: HmEvent }[] = []
   let events: readonly HmEvent[] = []
   let rings: THREE.Line[] = []

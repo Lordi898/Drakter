@@ -15,7 +15,7 @@ const aOf = (h: number, d: number): number => (d / ND) * Math.PI * 1.75 + h * 0.
 const DAY_TEXT: Record<Exclude<HmHabitDay, null>, string> = { done: 'cumplido', skipped: 'saltado', missed: 'no cumplido', open: 'pendiente' }
 
 export function habitos(M: Materials, pos: THREE.Vector3): Station {
-  const b = base(M, 'habitos', 'Hábitos', '5', pos, 1.35, 3.1)
+  const b = base(M, 'habitos', 'Hábitos', '2', pos, 1.35, 3.1)
   let helix: THREE.Group | null = null
   let habits: readonly HmHabit[] = []
   let cubes: THREE.InstancedMesh | null = null

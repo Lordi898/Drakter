@@ -11,6 +11,9 @@ export type SectionId = 'hoy' | 'calendario' | 'tareas' | 'proyectos' | 'habitos
 
 export const SECTION_ORDER: readonly SectionId[] = ['hoy', 'calendario', 'tareas', 'proyectos', 'habitos', 'relaciones', 'almacen']
 
+/** Estación → sección común de la app (su atajo 0…9 lo gestiona el anfitrión, igual en las tres interfaces). */
+export const TO_APP_SECTION = { hoy: 'today', calendario: 'calendar', tareas: 'tasks', proyectos: 'projects', habitos: 'habits', relaciones: 'relationships', almacen: 'storage' } as const
+
 export const SECTION_NAMES: Readonly<Record<SectionId, string>> = {
   hoy: 'Hoy',
   calendario: 'Calendario',

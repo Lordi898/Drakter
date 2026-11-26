@@ -16,7 +16,7 @@ const KIND_COLOR: Record<EntityType, number> = {
 }
 
 export function relaciones(M: Materials, pos: THREE.Vector3): Station {
-  const b = base(M, 'relaciones', 'Relaciones', '6', pos, 1.45, 3.9)
+  const b = base(M, 'relaciones', 'Relaciones', '8', pos, 1.45, 3.9)
   let net: THREE.Group | null = null
   let shell: THREE.LineSegments | null = null
   let hub: THREE.Mesh | null = null

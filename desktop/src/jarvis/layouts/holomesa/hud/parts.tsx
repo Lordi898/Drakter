@@ -6,7 +6,8 @@ import { cancelActiveTurn, MAX_MESSAGE_CHARS, sendMessage, useActiveTurn, useCha
 import { reviewConfirmation, useConfirmations } from '@/stores/confirmations'
 import { cancelJob, useJobs } from '@/stores/jobs'
 import { acquireAudioTaps, readSpectrum, SPECTRUM_BANDS } from '@/voice/levels'
-import { SECTION_NAMES, SECTION_ORDER, type SectionId } from '../model'
+import { getSection } from '@/navigation/sections'
+import { SECTION_NAMES, SECTION_ORDER, TO_APP_SECTION, type SectionId } from '../model'
 
 // ───────────────────────────── estado del agente
 
@@ -77,15 +78,15 @@ const ICONS: Record<SectionId, string> = {
 export function Rail({ focus, metrics, onGo }: { readonly focus: SectionId | null; readonly metrics: Readonly<Record<SectionId, string>>; readonly onGo: (id: SectionId | null) => void }) {
   return (
     <nav className="hm-rail hm-unfold" style={{ ['--d' as string]: '0.1s' }} aria-label="Secciones de la Holomesa">
-      <button type="button" className={focus === null ? 'on' : ''} onClick={() => onGo(null)} aria-current={focus === null ? 'true' : undefined} aria-keyshortcuts="0">
-        <span className="k num">0</span>
+      <button type="button" className={focus === null ? 'on' : ''} onClick={() => onGo(null)} aria-current={focus === null ? 'true' : undefined} aria-keyshortcuts={getSection('home').shortcut}>
+        <span className="k num">{getSection('home').shortcut}</span>
         <span className="txt"><span className="n">Vista general</span><span className="m">la mesa completa</span></span>
       </button>
       <div className="sep" />
-      {SECTION_ORDER.map((id, i) => (
-        <button key={id} type="button" className={focus === id ? 'on' : ''} onClick={() => onGo(id)} aria-current={focus === id ? 'true' : undefined} aria-keyshortcuts={String(i + 1)}>
+      {SECTION_ORDER.map((id) => (
+        <button key={id} type="button" className={focus === id ? 'on' : ''} onClick={() => onGo(id)} aria-current={focus === id ? 'true' : undefined} aria-keyshortcuts={getSection(TO_APP_SECTION[id]).shortcut}>
           {/* Iconos fijos del propio HUD (no vienen del usuario). */}
-          <span className="k num"><svg viewBox="0 0 16 16" aria-hidden="true" dangerouslySetInnerHTML={{ __html: ICONS[id] }} />{i + 1}</span>
+          <span className="k num"><svg viewBox="0 0 16 16" aria-hidden="true" dangerouslySetInnerHTML={{ __html: ICONS[id] }} />{getSection(TO_APP_SECTION[id]).shortcut}</span>
           <span className="txt"><span className="n">{SECTION_NAMES[id]}</span><span className="m">{metrics[id]}</span></span>
         </button>
       ))}

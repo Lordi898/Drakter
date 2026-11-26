@@ -28,7 +28,7 @@ export function fmtSize(bytes: number | null): string {
 export const unindexed = (f: HmFile): boolean => f.index === 'pending' || f.index === 'failed'
 
 export function almacen(M: Materials, pos: THREE.Vector3): Station {
-  const b = base(M, 'almacen', 'Almacén', '7', pos, 1.55, 2.7)
+  const b = base(M, 'almacen', 'Almacén', '5', pos, 1.55, 2.7)
   let files: HmFile[] = []
   let hs: number[] = []
   let fm: THREE.InstancedMesh | null = null

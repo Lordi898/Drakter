@@ -12,12 +12,14 @@ import type { JarvisLayoutProps } from '../types'
 import { buildSnapshot, HOLO_TOPICS } from './adapt'
 import { DetailPanel, type ReloadTopic } from './hud/Detail'
 import { AgentChip, Chat, Clock, Confirmations, Jobs, Rail, VoiceConsole } from './hud/parts'
-import { SECTION_NAMES, SECTION_ORDER, type PickInfo, type SectionId } from './model'
+import { SECTION_NAMES, SECTION_ORDER, TO_APP_SECTION, type PickInfo, type SectionId } from './model'
 import { createHolomesaScene, type HolomesaView } from './scene/holomesaScene'
 import './holomesa.css'
 
-const TO_APP: Record<SectionId, AppSection> = { hoy: 'today', calendario: 'calendar', tareas: 'tasks', proyectos: 'projects', habitos: 'habits', relaciones: 'relationships', almacen: 'storage' }
-const FROM_APP: Partial<Record<AppSection, SectionId>> = { today: 'hoy', calendar: 'calendario', subjects: 'calendario', tasks: 'tareas', projects: 'proyectos', habits: 'habitos', relationships: 'relaciones', storage: 'almacen' }
+const TO_APP: Record<SectionId, AppSection> = TO_APP_SECTION
+/** Sección común → estación. «Drakter» (la conversación) es la vista general de la mesa; Configuración no tiene estación. */
+const FROM_APP: Partial<Record<AppSection, SectionId | null>> = { home: null, today: 'hoy', calendar: 'calendario', subjects: 'calendario', tasks: 'tareas', projects: 'proyectos', habits: 'habitos', relationships: 'relaciones', storage: 'almacen' }
+const OVERVIEW: AppSection = 'home'
 
 const EMPTY_METRICS = Object.fromEntries(SECTION_ORDER.map((id) => [id, ''])) as Record<SectionId, string>
 
@@ -100,10 +102,8 @@ export default function Holomesa({ stage, avatar, reducedMotion, section, naviga
     return () => clearInterval(timer)
   }, [stage, avatar.available, avatar.anchorId, scene])
 
-  // ── arranque: sección inicial (común a los dos modos), mesa que se dibuja y HUD que se despliega
-  const initialSection = useRef(section)
+  // ── arranque: siempre en la vista general (la mesa entera se revela); luego sigue a la sección común.
   useEffect(() => {
-    scene.focus(FROM_APP[initialSection.current] ?? null, true)
     const raf = requestAnimationFrame(() => setBooted(true))
     if (!reducedMotion) setBootMark(true)
     void scene.boot()
@@ -115,24 +115,27 @@ export default function Holomesa({ stage, avatar, reducedMotion, section, naviga
   const go = useCallback(
     (id: SectionId | null) => {
       scene.focus(id)
-      if (id) navigate(TO_APP[id])
+      navigate(id ? TO_APP[id] : OVERVIEW)
     },
     [scene, navigate]
   )
+  const lastSection = useRef(section)
   useEffect(() => {
+    if (section === lastSection.current) return
+    lastSection.current = section
     const id = FROM_APP[section]
-    if (id && id !== scene.getView().focusId) scene.focus(id)
+    if (id !== undefined && id !== scene.getView().focusId) scene.focus(id)
   }, [section, scene])
 
-  // ── teclado: 0/Esc vista general, 1-7 secciones, ←/→ anterior/siguiente, «/» escribir
+  // ── teclado: los dígitos los gestiona el anfitrión (mapa común de secciones, 0…9); aquí Esc vista
+  //    general, ←/→ estación anterior/siguiente y «/» para escribir.
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
       if (e.ctrlKey || e.metaKey || e.altKey || isTyping(e.target)) return
       const cur = scene.getView().focusId
-      if (e.key === 'Escape' || e.key === '0') {
+      if (e.key === 'Escape') {
         if (cur) go(null)
-      } else if (/^[1-7]$/.test(e.key)) go(SECTION_ORDER[Number(e.key) - 1]!)
-      else if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+      } else if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
         const i = cur ? SECTION_ORDER.indexOf(cur) : -1, n = SECTION_ORDER.length
         const next = e.key === 'ArrowRight' ? (i + 1) % n : i < 0 ? n - 1 : (i - 1 + n) % n
         go(SECTION_ORDER[next]!)
@@ -225,7 +228,7 @@ export default function Holomesa({ stage, avatar, reducedMotion, section, naviga
           {focusName ? (
             <>Vista general / <b>{focusName}</b> · Esc para salir</>
           ) : (
-            <>Vista general · <b>7 secciones</b> · 1-7 o clic</>
+            <>Vista general · <b>7 secciones</b> · clic, números o ←/→</>
           )}
         </div>
         <Clock timezone={snapshot.timezone} />

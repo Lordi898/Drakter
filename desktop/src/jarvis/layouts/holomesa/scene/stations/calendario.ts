@@ -17,7 +17,7 @@ const KIND_Z: Record<HmEvent['kind'], number> = { clase: -0.32, evento: 0.12, re
 const KIND_NAME: Record<HmEvent['kind'], string> = { clase: 'clase', evento: 'evento', recordatorio: 'recordatorio', bloque: 'bloque de tiempo' }
 
 export function calendario(M: Materials, pos: THREE.Vector3): Station {
-  const b = base(M, 'calendario', 'Calendario', '2', pos, 1.35, 3.5)
+  const b = base(M, 'calendario', 'Calendario', '6', pos, 1.35, 3.5)
   const plateM: THREE.Matrix4[] = Array.from({ length: MAX_N }, () => new THREE.Matrix4())
   const local = new THREE.Matrix4()
   let plates: THREE.InstancedMesh | null = null
