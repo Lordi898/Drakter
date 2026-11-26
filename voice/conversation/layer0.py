@@ -12,10 +12,11 @@ import tomllib
 import unicodedata
 from functools import lru_cache
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 Command = Literal["stop_speech", "rest", "close", "backchannel"]
 UiCommand = Literal["ui_jarvis", "ui_drakter"]
+AppearanceKind = Literal["avatar", "layout"]
 
 _TOML = Path(__file__).with_name("layer0.es.toml")
 _WORD = re.compile(r"[a-z0-9ñ]+")
@@ -61,6 +62,32 @@ def _lists() -> dict[str, object]:
         "ui_canon": canon,
         "ui_jarvis": ui_phrases("ui_jarvis"),
         "ui_drakter": ui_phrases("ui_drakter"),
+        "appearance": _appearance_lists(raw.get("ui_appearance", {}), phrases),
+    }
+
+
+def _appearance_lists(section: dict[str, Any], phrases: Any) -> dict[str, object]:
+    """Listas de `[ui_appearance]`: alias normalizados → (tipo, id)."""
+
+    def seqs(xs: list[str]) -> tuple[tuple[str, ...], ...]:
+        # Las más largas primero: «cambia al» antes que «cambia».
+        return tuple(sorted({tuple(normalize(x)) for x in xs if normalize(x)}, key=len, reverse=True))
+
+    aliases: dict[tuple[str, ...], set[tuple[str, str]]] = {}
+    for kind, table in (("avatar", section.get("avatars", {})), ("layout", section.get("layouts", {}))):
+        for target, names in table.items():
+            for name in names:
+                key = tuple(normalize(name))
+                if key:
+                    aliases.setdefault(key, set()).add((kind, target))
+    return {
+        "verbs": seqs(section.get("verbs", [])),
+        "links": seqs(section.get("links", [])),
+        "avatar_nouns": frozenset(w for x in section.get("avatar_nouns", []) for w in normalize(x)),
+        "layout_nouns": frozenset(w for x in section.get("layout_nouns", []) for w in normalize(x)),
+        "needs_noun": frozenset(tuple(normalize(x)) for x in section.get("needs_noun", [])),
+        "avatar_off": phrases(section.get("avatar_off", [])),
+        "aliases": aliases,
     }
 
 
@@ -128,3 +155,55 @@ def classify_ui(text: str) -> UiCommand | None:
     if _only_phrase(tokens, lists["ui_drakter"], fillers):  # type: ignore[arg-type]
         return "ui_drakter"
     return None
+
+
+def _skip(tokens: list[str], i: int, seqs: tuple[tuple[str, ...], ...], *, repeat: bool) -> int:
+    """Avanza sobre una (o varias, con `repeat`) de las secuencias en la posición `i`."""
+    moved = True
+    while moved and i < len(tokens):
+        moved = False
+        for seq in seqs:
+            if tuple(tokens[i : i + len(seq)]) == seq:
+                i += len(seq)
+                moved = True
+                break
+        if not repeat:
+            break
+    return i
+
+
+def classify_appearance(text: str) -> tuple[AppearanceKind, str] | None:
+    """Orden local de apariencia (`[ui_appearance]`): `("avatar", id)`, `("layout", id)` o `None`.
+
+    Forma cerrada: [verbo] [enlaces] [sustantivo] [enlaces] alias, sin nada más salvo muletillas, y con
+    verbo o sustantivo. El sustantivo («avatar», «interfaz»…) restringe el tipo; sin él, el alias debe ser
+    de un solo tipo y no estar en `needs_noun`. `none` es el personaje clásico (sin avatar 3D).
+    """
+    lists = _lists()
+    app: dict[str, Any] = lists["appearance"]  # type: ignore[assignment]
+    if not app["aliases"]:
+        return None
+    fillers: frozenset[str] = lists["fillers"]  # type: ignore[assignment]
+    raw = normalize(text)
+    if not raw:
+        return None
+    if _only_phrase(raw, app["avatar_off"], fillers):
+        return ("avatar", "none")
+    tokens = [t for t in raw if t not in fillers]
+    i = _skip(tokens, 0, app["verbs"], repeat=False)
+    has_verb = i > 0
+    i = _skip(tokens, i, app["links"], repeat=True)
+    kind: AppearanceKind | None = None
+    if i < len(tokens) and tokens[i] in app["avatar_nouns"]:
+        kind, i = "avatar", i + 1
+    elif i < len(tokens) and tokens[i] in app["layout_nouns"]:
+        kind, i = "layout", i + 1
+    if not has_verb and kind is None:
+        return None
+    i = _skip(tokens, i, app["links"], repeat=True)
+    alias = tuple(tokens[i:])
+    targets = {t for t in app["aliases"].get(alias, set()) if kind is None or t[0] == kind}
+    if len(targets) != 1 or (kind is None and alias in app["needs_noun"]):
+        return None
+    found_kind, target = next(iter(targets))
+    return (found_kind, target)  # type: ignore[return-value]

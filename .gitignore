@@ -58,6 +58,8 @@ coverage/
 
 # --- Datos de usuario (viven fuera del repo; por si se apunta DRAKTER_DATA_DIR aquí) ---
 data/
+# Código, no datos: los adaptadores de datos de las interfaces Jarvis.
+!desktop/src/jarvis/data/
 *.sqlite
 *.sqlite3
 *.db
