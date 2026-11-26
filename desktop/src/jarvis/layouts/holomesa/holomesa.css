@@ -117,7 +117,7 @@
 .hm-voice .vl { display: flex; justify-content: space-between; gap: 10px; font-size: 12px; color: var(--hm-dim); }
 .hm-voice .vl b { color: var(--hm-core); font-weight: 600; }
 
-/* Trabajos y confirmaciones */
+/* Trabajos (las confirmaciones las pinta el aviso común, encima de cualquier interfaz) */
 .hm-jobs { left: 24px; bottom: 20px; width: 320px; }
 .hm-job { padding: 7px 14px; border-bottom: 1px solid var(--hm-line2); font-size: 12px; }
 .hm-job:last-child { border-bottom: 0; }
@@ -129,10 +129,6 @@
 @keyframes hm-run { from { transform: translateX(-40%) scaleX(0.35); } to { transform: translateX(130%) scaleX(0.35); } }
 .hm-job.failed .jn { color: #ffb3bd; }
 .hm-empty { padding: 8px 14px; font-size: 12px; color: var(--hm-dim); }
-.hm-confirm { left: 50%; top: 84px; width: 440px; transform: translateX(-50%); border-color: rgba(255, 176, 80, 0.6); z-index: 2; }
-.hm-confirm .row { display: flex; align-items: center; gap: 10px; padding: 8px 14px; border-bottom: 1px solid var(--hm-line2); }
-.hm-confirm .row p { flex: 1; font-size: 12.5px; }
-.hm-confirm .row small { display: block; color: var(--hm-dim); }
 
 /* Detalle de la sección abierta: llega desde la profundidad (una sola transición, no sigue al ratón). */
 .hm-detail-wrap { position: absolute; right: 3vw; top: 92px; bottom: 140px; width: min(500px, 37vw); perspective: 1400px; pointer-events: none; }

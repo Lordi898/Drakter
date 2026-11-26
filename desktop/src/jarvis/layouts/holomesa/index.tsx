@@ -11,7 +11,7 @@ import { useJobs } from '@/stores/jobs'
 import type { JarvisLayoutProps } from '../types'
 import { buildSnapshot, HOLO_TOPICS } from './adapt'
 import { DetailPanel, type ReloadTopic } from './hud/Detail'
-import { AgentChip, Chat, Clock, Confirmations, Jobs, Rail, VoiceConsole } from './hud/parts'
+import { AgentChip, Chat, Clock, Jobs, Rail, VoiceConsole } from './hud/parts'
 import { SECTION_NAMES, SECTION_ORDER, TO_APP_SECTION, type PickInfo, type SectionId } from './model'
 import { createHolomesaScene, type HolomesaView } from './scene/holomesaScene'
 import './holomesa.css'
@@ -238,7 +238,6 @@ export default function Holomesa({ stage, avatar, reducedMotion, section, naviga
       <Chat inputRef={inputRef} />
       <VoiceConsole state={agent} dockRef={dockRef} />
       <Jobs />
-      <Confirmations />
       <DetailPanel
         focus={view.focusId}
         snap={snapshot}

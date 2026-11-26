@@ -1,9 +1,8 @@
 /** Piezas del HUD de la Holomesa. Datos de stores y del modelo real; sin trabajo por fotograma salvo la onda de voz activa. */
-import { useEffect, useRef, useState, type FormEvent, type MouseEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { CHARACTER_STATE_LABELS } from '@/character/labels'
 import type { CharacterState } from '@/character/types'
 import { cancelActiveTurn, MAX_MESSAGE_CHARS, sendMessage, useActiveTurn, useChatMessages } from '@/stores/chat'
-import { reviewConfirmation, useConfirmations } from '@/stores/confirmations'
 import { cancelJob, useJobs } from '@/stores/jobs'
 import { acquireAudioTaps, readSpectrum, SPECTRUM_BANDS } from '@/voice/levels'
 import { getSection } from '@/navigation/sections'
@@ -274,35 +273,6 @@ export function Jobs() {
             </em>
           </div>
           <div className="jb"><i style={j.state === 'running' ? undefined : { transform: 'scaleX(1)', opacity: j.state === 'completed' ? 0.6 : 0.3 }} /></div>
-        </div>
-      ))}
-    </section>
-  )
-}
-
-// ───────────────────────────── confirmaciones pendientes (la decisión la toma el diálogo nativo de main)
-
-export function Confirmations() {
-  const items = useConfirmations()
-  const [busy, setBusy] = useState<string | null>(null)
-  if (items.length === 0) return null
-  const review = (id: string, e: MouseEvent<HTMLButtonElement>): void => {
-    setBusy(id)
-    void reviewConfirmation(id, e.nativeEvent).finally(() => setBusy(null))
-  }
-  return (
-    <section className="hm-pane hm-confirm" role="alert" aria-label="Confirmaciones pendientes">
-      <div className="hm-ph">
-        <h3>Confirmación pendiente</h3>
-        <span>{items.length}</span>
-      </div>
-      {items.slice(0, 3).map((c) => (
-        <div key={c.action_id} className="row">
-          <p>
-            {c.summary}
-            <small>{c.tool}{c.affected_count ? ` · ${c.affected_count} elementos` : ''}</small>
-          </p>
-          <button type="button" className="hm-btn warn" disabled={busy === c.action_id} onClick={(e) => review(c.action_id, e)}>Revisar</button>
         </div>
       ))}
     </section>
