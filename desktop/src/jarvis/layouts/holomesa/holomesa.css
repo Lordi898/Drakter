@@ -137,7 +137,8 @@
 /* Detalle de la sección abierta: llega desde la profundidad (una sola transición, no sigue al ratón). */
 .hm-detail-wrap { position: absolute; right: 3vw; top: 92px; bottom: 140px; width: min(500px, 37vw); perspective: 1400px; pointer-events: none; }
 .hm-detail { position: absolute; inset: 0; pointer-events: none; opacity: 0; transform: rotateY(-48deg) translate3d(120px, 0, -380px); transition: transform 0.85s var(--hm-ease), opacity 0.45s; }
-.hm.focused .hm-detail { opacity: 1; pointer-events: auto; transform: rotateY(-9deg); }
+/* Llegada en 3D; en reposo queda plano (sin capa 3D que recomponer en cada fotograma del lienzo). */
+.hm.focused .hm-detail { opacity: 1; pointer-events: auto; transform: none; }
 .hm-detail .front { position: absolute; inset: 0; clip-path: var(--hm-cut); background: linear-gradient(160deg, rgba(12, 56, 100, 0.86), rgba(3, 18, 36, 0.9) 60%); border: 1px solid var(--hm-line); padding: 16px 18px; display: flex; flex-direction: column; gap: 11px; overflow: hidden; }
 .hm-dh { display: flex; align-items: flex-end; gap: 12px; }
 .hm-dh .no { font-size: 44px; line-height: 0.9; font-weight: 200; color: var(--hm-ice); }
@@ -165,10 +166,9 @@
 .hm-list .it em { font-style: normal; color: var(--hm-dim); font-size: 12px; white-space: nowrap; }
 .hm-state { font-size: 12.5px; color: var(--hm-dim); padding: 6px 0; }
 
-/* Estado sin conexión o error: aviso estático en el marco. */
-.hm-frame { position: absolute; inset: 10px; border: 1px solid var(--hm-line2); clip-path: var(--hm-cut); pointer-events: none; }
-.hm.st-error .hm-frame { border-color: rgba(255, 77, 94, 0.7); }
-.hm.st-offline .hm-frame { border-color: rgba(143, 180, 204, 0.3); }
+/* Sin marco a pantalla completa: una capa del tamaño de la ventana se mezclaría con el lienzo en cada
+   fotograma (medido: ~2-3 puntos de CPU en reposo). El error y la desconexión los señala el chip del agente
+   y la propia escena (tinte en el shader). */
 
 /* Arranque: marca de agua que se desvanece. */
 .hm-boot { position: absolute; left: 50%; top: 42%; transform: translate(-50%, -50%); text-align: center; pointer-events: none; opacity: 0; }

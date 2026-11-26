@@ -205,7 +205,6 @@ export default function Holomesa({ stage, avatar, reducedMotion, section, naviga
         onPointerDown={onDown}
         onPointerUp={onUp}
       />
-      <div className="hm-frame" aria-hidden="true" />
       {bootMark ? (
         <div className="hm-boot on" aria-hidden="true" onAnimationEnd={() => setBootMark(false)}>
           <div className="wm">HOLOMESA</div>
