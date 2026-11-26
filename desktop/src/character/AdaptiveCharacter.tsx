@@ -25,6 +25,8 @@ export function AdaptiveCharacter(props: CharacterRendererProps) {
       .then((response) => {
         // 204 (o 404) = el usuario no tiene .riv: es lo normal y no se avisa.
         if (response.status === 204) return null
+        // En desarrollo el servidor de Vite responde a cualquier ruta con index.html.
+        if (response.headers.get('Content-Type')?.startsWith('text/html')) return null
         if (response.ok) return response.arrayBuffer()
         if (response.status !== 404) warnCharacter(`el .riv no se pudo leer (HTTP ${response.status}); se usa el avatar 3D`)
         return null

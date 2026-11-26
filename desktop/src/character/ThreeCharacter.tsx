@@ -116,5 +116,5 @@ export function ThreeCharacter({ state, onReady, onFail }: ThreeCharacterProps) 
   }, [])
   useMouthLevel(state, applyMouth)
 
-  return <canvas ref={canvasRef} className="absolute inset-0 block size-full" />
+  return <canvas ref={canvasRef} className="absolute inset-0 block size-full rounded-2xl" />
 }
