@@ -1,0 +1,15 @@
+{
+  "description": "Modo Jarvis (V1): «pon el orbe y la interfaz visor» acaba en ui_set_appearance; el escritorio guarda avatarId y jarvisLayout y abre Jarvis.",
+  "steps": [
+    {
+      "text": "Cambio la apariencia.",
+      "tool_calls": [{"name": "drakter__ui_set_appearance", "input": {"avatar": "holo-orbe", "layout": "visor"}}]
+    },
+    {
+      "text": "FALLO: la petición no se envió. Resultado: {{tool_result}}",
+      "branches": [
+        {"contains": "Petición enviada", "text": "Hecho: avatar y interfaz pedidos. Detalle: {{tool_result}}"}
+      ]
+    }
+  ]
+}

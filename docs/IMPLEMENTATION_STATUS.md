@@ -28,6 +28,7 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 | 15. Automejora | 11 | 11 | 2 | 0 | 0 |
 | 16. Seguridad y fiabilidad | 15 | 15 | 3 | 0 | 0 |
 | 17. Optimización y lanzamiento | 17 | 16 | 5 | 0 | 1 |
+| Modo Jarvis (ampliación) | 16 | 15 | 3 | 1 | 0 |
 | 18. Ampliaciones futuras | 10 | 0 | 0 | 0 | 10 |
 | **Total 0–17** | **342** | **336** | **53** | **3** | **3** |
 
@@ -544,6 +545,31 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
   Nota (2026-11-20): documentada en `docs/usage/copias-y-actualizacion.md` («Copia inicial» y «Restaurar»), desde el repositorio y desde la app instalada (`drakter-backend -m app.database.cli`). Comprobado sobre una base de prueba con el binario empaquetado: `backup` crea `.db` + `.sha256` con permisos 600; tras cambiar un valor, `restore` devuelve el original y guarda `pre-restore`; una copia alterada se rechaza («no coincide con su hash»). La copia de la base real la hace el usuario (el protocolo prohíbe tocar `~/.local/share/drakter`).
 - [x] Realizar pruebas de aceptación.
   Nota: pasada integrada final `scripts/verify-all.sh` sobre `drakter/integracion@183cc25`: 44/44 comprobaciones PASA, 0 FALLA (backend, módulos, confirmaciones, copia y restauración, conversación, escritorio con Electron real y parada limpia). La conversación de esa pasada usa el stub; el modelo real se probó en los informes de Hermes, evals, tareas y relaciones. No cubre el sandbox real de Electron ni el paquete instalado (ver «Crear instalador»).
+
+## Modo Jarvis (ampliación pedida por el usuario)
+
+> Fuera de las checklists 0-17 del plan: interfaz alternativa pedida por el usuario (`DECISIONS.md`, entradas «Modo Jarvis» del 2026-11-26). Prueba de conjunto del integrador (drakter-100) en Electron real aislado sobre `90cd095`, con la GPU real (UHD 620), stub LLM y Hermes real, y voz desactivada; informe y capturas en el artefacto `jarvis-integracion.md` (sesión drakter-100).
+
+- [x] Segundo shell con carga diferida y una sola capa de datos (J0, W1). Drakter arranca igual: no se descarga nada de Jarvis al arrancar.
+  ⚠️ Lo que se carga al arrancar crece +4,3 KB de JS y +1,1 KB de CSS (gzip) frente a antes del modo Jarvis (+14,9 KB y +5,2 KB sin comprimir): registro de avatares, apariencia, modo y acciones de Ctrl+K. El objetivo inicial de W1 era menos de 3 KB.
+- [x] Activación por botón de cabecera, Ctrl+Shift+J, Ctrl+K, Ajustes y bandeja (W1, W6).
+- [x] La voz, los avisos y los atajos sobreviven al cambio de modo (`SessionHosts`).
+  ⚠️ Comprobado por estructura y con la voz desactivada; falta probarlo con la voz real.
+- [x] Un único lienzo WebGL (Stage) con niveles de calidad, regulador y movimiento reducido (W3).
+- [x] Avatar como capa del Stage, elegible entre 8 avatares más el clásico (W4, A1 y ports).
+- [x] Datos reales de las interfaces con `useJarvisData` (D1).
+- [x] Interfaz Núcleo.
+- [x] Interfaz Holomesa.
+- [x] Interfaz Visor.
+- [x] Cada interfaz con tema claro, oscuro y movimiento reducido: se ve, termina de cargar y sin excepciones (9 combinaciones).
+- [x] Cambiar avatar e interfaz desde Ajustes, el selector «Apariencia» (Ctrl+Shift+A) y Ctrl+K.
+- [x] Cambiar modo, avatar e interfaz por la herramienta del agente (`ui_set_mode`, `ui_set_appearance`). El agente simulado, con un mensaje de chat, llega a la pantalla (orbe y visor).
+- [x] Cambiar modo, avatar e interfaz por voz local (capa 0: `classify_ui` y `classify_appearance`), sin LLM.
+  ⚠️ Probado con texto inyectado en el puente real (12 de 12) y en la política del backend; sin micrófono real. Las frases nuevas aún no están en la caché PCM (`python -m voice phrases`, que usa Fish).
+- [x] Confirmación destructiva visible, encima de todo y respondible desde cada interfaz (Núcleo, Holomesa, Visor), con el diálogo nativo de main (#58, #59).
+- [x] CPU del renderer en reposo con holo-contorno en Equilibrado (UHD 620): Núcleo 9,2 %, Holomesa 9,2 %, Visor 6,8 %; proceso GPU 8,0 %, 9,1 % y 7,5 %.
+- [ ] Ventana oculta: `document.hidden` y bucle parado.
+  ⚠️ Al minimizar con este gestor de ventanas, Chromium no marca la página como oculta, aunque deja de pintar: renderer 0,5 % y GPU 0,7 %. La parada del Stage con `document.hidden` la midió W3 (0 %).
 
 ## Checklist 18. Ampliaciones futuras
 
