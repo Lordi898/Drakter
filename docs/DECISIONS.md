@@ -1756,3 +1756,18 @@ Decisiones técnicas, cambios de tecnología y motivos.
   - ⚠️ El objetivo ≤ 10 % se cumple en el límite con el avatar por defecto; la palanca que queda es del avatar (dibujarlo a menos fps en reposo), no de la interfaz.
   - Arnés y scripts: `~/.local/share/drakter/research/jarvis-hud/{nucleo-port,nucleo-app}/`.
 - **Trampa pisada:** liberar un material mientras `compileAsync` de Three sigue sondeando rompe el bucle (`isReady` de `undefined`); al rehacer satélites y nodos se reutiliza el material y solo se libera la geometría.
+
+## [2026-11-26] Las confirmaciones pendientes siempre a la vista (también en Jarvis)
+- **Contexto:**
+  - drakter-108 vio que el aviso común de confirmación (`ConfirmationHost`, con «Revisar») quedaba detrás del lienzo en el modo Jarvis.
+  - Causa: en W1 el aviso pasó de ser una pieza de la rejilla de `AppShell` a ir en `App` detrás de `ModeRoot`, en el flujo normal y sin posición propia.
+  - Efecto: en Jarvis lo tapaba la capa `fixed z-40`. En Drakter quedaba detrás del bloque de altura completa, fuera de la vista.
+  - Las acciones destructivas no pueden esperar a un aviso invisible (CLAUDE.md §8).
+- **Decisión:**
+  - `ConfirmationHost` se pinta en una capa propia `fixed`, arriba al centro, con `z-[70]`, por encima de Jarvis (`z-40`), de los diálogos (`z-50`) y de cualquier lienzo. Solo los avisos (Sonner) quedan más arriba.
+  - Al llegar una confirmación nueva, el foco va a su «Revisar», salvo que se esté escribiendo en un campo.
+  - La decisión sigue siendo solo del diálogo nativo de main (`requestApproval`).
+  - Las interfaces Jarvis **no** pintan confirmaciones propias: usan la común.
+- **Alternativas descartadas:** pintarla dentro de cada interfaz (tres implementaciones de un control de seguridad); un portal dentro de `JarvisShell` (solo cubriría Jarvis).
+- **Motivo:** CLAUDE.md §8: confirmación de acciones destructivas visible y respondible en cualquier modo.
+- **Impacto:** `desktop/src/chat/ConfirmationDialog.tsx`. Comprobado en Electron real aislado con una confirmación de verdad (borrado de tarea → 409): visible y encima en Drakter y en Jarvis, con foco, y respondida con el diálogo nativo sustituido para cancelar. La tarea sigue existiendo.
