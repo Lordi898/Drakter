@@ -112,6 +112,7 @@ export const createStage: CreateStage = (canvas, options) => {
   let framesInSecond = 0
   let secondStart = performance.now()
   let fps = 0
+  let lastDrawAt = -1
   let calls = 0
   let tris = 0
 
@@ -192,6 +193,7 @@ export const createStage: CreateStage = (canvas, options) => {
     tris = renderer.info.render.triangles
 
     framesInSecond++
+    lastDrawAt = now
     if (now - secondStart >= 1000) {
       fps = (framesInSecond * 1000) / (now - secondStart)
       framesInSecond = 0
@@ -337,7 +339,9 @@ export const createStage: CreateStage = (canvas, options) => {
       return null
     },
     stats(): StageStats {
-      return { fps, p90ms: governor.p90ms, tier: frame.quality.tier, renderScale: frame.renderScale, calls, tris }
+      // A demanda o parado no hay fotogramas nuevos: el último valor ya no vale.
+      const live = lastDrawAt >= 0 && performance.now() - lastDrawAt < 1500
+      return { fps: live ? fps : 0, p90ms: governor.p90ms, tier: frame.quality.tier, renderScale: frame.renderScale, calls, tris }
     },
     dispose() {
       if (disposed) return
