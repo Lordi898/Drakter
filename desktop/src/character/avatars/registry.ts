@@ -22,6 +22,24 @@ const AVATARS = {
     load: () => import('./ascuario/entry').then((module) => module.create),
     loadLayer: () => import('./ascuario/entry').then((module) => module.createLayer),
     transparent: false
+  },
+  // El Relojero v2: figura opaca de latón y laca. Con `transparent` no pinta su fondo; en tema claro baja la ganancia de los destellos.
+  relojero: {
+    load: () => import('./relojero/entry').then((module) => module.create),
+    loadLayer: () => import('./relojero/entry').then((module) => module.createLayer),
+    transparent: true
+  },
+  // Filamento v2 (dorado): luz aditiva pura. En tema claro pone una tarjeta oscura propia con esquinas redondeadas.
+  filamento: {
+    load: () => import('./filamento/entry').then((module) => module.create),
+    loadLayer: () => import('./filamento/entry').then((module) => module.createLayer),
+    transparent: true
+  },
+  // Holo-Filamento (azul): busto sólido oscuro más hebras de luz. En tema claro, lo que flota fuera del busto pasa a tinta cobalto.
+  'holo-filamento': {
+    load: () => import('./holo-filamento/entry').then((module) => module.create),
+    loadLayer: () => import('./holo-filamento/entry').then((module) => module.createLayer),
+    transparent: true
   }
 } satisfies Record<string, AvatarEntry>
 
