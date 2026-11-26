@@ -86,6 +86,14 @@ export default function Holomesa({ stage, avatar, reducedMotion, section, naviga
     avatar.setViewport(stage ? (frame) => scene.avatarViewport(frame) : null)
   }, [avatar, stage, scene])
 
+  // Ambiente en reposo a 10 fps (barrido, giros lentos): lo que importa (vuelos, arranque, voz, fundidos)
+  // ya pide sus fotogramas al ritmo máximo con `requestFrame`. Nunca sube por encima del perfil.
+  useEffect(() => {
+    if (!stage) return
+    stage.setIdleFps(10)
+    return () => stage.setIdleFps(null)
+  }, [stage])
+
   // El orbe propio preside hasta que el avatar 3D se dibuja de verdad (su anclaje existe).
   useEffect(() => {
     scene.setAvatarReady(false)
