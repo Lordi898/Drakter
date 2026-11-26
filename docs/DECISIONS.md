@@ -1712,3 +1712,33 @@ Decisiones técnicas, cambios de tecnología y motivos.
     - Al hablar abre la boca y mira donde se le indica.
     - Sin errores en consola.
   - CPU en reposo en la pantalla Drakter (UHD 620, a 60 rAF/s, con el bucle del avatar limitado a 30 fps, dentro de `flock`): renderer 5,8 % y 4,7 %, proceso GPU 6,2 % y 4,8 %. Hubo una primera medida de 25,3 % que coincidió con una recarga de la página: el avatar volvió a tejer y a compilar. No cuenta como reposo.
+
+## [2026-11-26] Interfaz Jarvis «Holomesa» (`jarvis/layouts/holomesa/`)
+- **Contexto:** segunda de las tres interfaces Jarvis elegibles (jarvis-seleccion.md). Se porta el prototipo de drakter-98 (mesa de operaciones holográfica con 7 estaciones) sobre el contrato `JarvisLayout` (J1), el Stage único (W3), la capa del avatar (W4) y `jarvis/data` (D1). El prototipo daba 26-49 % de CPU del renderer en reposo; el objetivo es ≤ 10 % en Equilibrado.
+- **Decisión:**
+  - **Escena en el Stage, en dos capas propias:** `holomesa` (orden 20: mesa en un solo shader, 7 estaciones, orbe de reserva, polvo y estrellas) y `holomesa-overlay` (orden 80, sobre el avatar: etiquetas de estación, tags anclados a los datos, tooltip y retícula). Los uniformes globales del prototipo pasan a ser por instancia de escena.
+  - **Etiquetas en WebGL, no en el DOM** (lección medida del prototipo): cada texto se pinta una vez en un atlas (canvas 2D, `fillText`, sin `shadowBlur`) y todas las etiquetas visibles son una sola malla instanciada en espacio de pantalla. Por fotograma solo se suben posiciones y opacidades. El HUD DOM es estático: nada se mueve por fotograma desde JS.
+  - **CSS:** solo se animan `transform` y `opacity`; sin `backdrop-filter`, sin sombras animadas, sin animaciones infinitas en reposo (el glifo del agente solo gira en estados activos; la barra de un trabajo solo se mueve si hay uno en curso). Se quitan del prototipo la viñeta y las líneas de barrido a pantalla completa, el marco que se trazaba con `stroke-dashoffset`, el carril que animaba `width` y el panel de detalle que seguía al ratón.
+  - **Ritmo:** manda el Stage (`maxFps`/`idleFps`). Mientras hay animación (vuelo, arranque, voz, fundidos, ondas) la escena «bombea» `requestFrame` con un temporizador al ritmo máximo del nivel, sin pasar de él; así los vuelos son fluidos también en Ahorro (a demanda) y en el reposo de Equilibrado. Los `pointermove` sintéticos (misma posición) no recalculan nada.
+  - **Datos reales** (`adapt.ts`, puro): `today`, `tasks`, `projects`, `habits` + `habitHistory` (28 días; la racha se calcula del historial), `agenda` (hoy a +7), `relationships` con `entityNames`, `resources` + `folders`, `subjects`. Como `tasks` solo trae abiertas, la tercera pila de Tareas es «en espera» (no «hecha»), y la columna de Hoy mide los hábitos de hoy cumplidos. Lo que no ha llegado se muestra como «cargando…» o «sin datos»; nada se simula.
+  - **Acciones reales:** completar una tarea (`completeTask` con su `revision`), marcar o saltar el hábito de hoy (`registerRecord`) y «Abrir en Drakter» (navega y sale). Las confirmaciones pendientes se muestran y «Revisar» abre el diálogo nativo de main (`reviewConfirmation` con el gesto real). Conversación con `stores/chat`, trabajos con `stores/jobs`, consola de voz con `voice/levels` (analizadores solo mientras habla o escucha; canvas 2D sin sombras).
+  - **Navegación común:** las teclas 0-9 son las del anfitrión (mapa de secciones compartido por las tres interfaces). La sección «Drakter» (1) es la vista general de la mesa; Esc vuelve a ella; ←/→ recorren las estaciones; «/» escribe. Entrar en una estación cambia la sección común, así que al volver a Drakter se está en la misma.
+  - **Avatar:** preside la cabecera de la mesa (recuadro proyectado por `setViewport`) y se acopla en la consola de voz cuando hay una sección abierta. Hasta que su anclaje existe (o si no hay avatar 3D) preside el orbe propio.
+  - Arranque siempre en la vista general: la mesa se dibuja del centro al canto, la cámara baja desde el cenit y los hologramas se imprimen escalonados; con «reducir movimiento», todo aparece ya en su sitio.
+- **Alternativas descartadas:** HUD DOM con etiquetas movidas por `transform` (es lo que disparaba la CPU del prototipo); un segundo lienzo para el avatar (el contrato ya lo integra en el Stage); mapa propio 1-7 (chocaba con el del anfitrión).
+- **Motivo:** el aspecto del prototipo con datos y acciones reales, dentro del presupuesto de CPU de la UHD 620.
+- **Impacto:** solo `desktop/src/jarvis/layouts/holomesa/**` (chunk propio de 91 KB + 11,5 KB de CSS; el principal no crece).
+  - Medido en Electron 45 (la app real, no Chrome) aislado (HOME, XDG y datos propios con un Workspace de prueba sembrado; el stub del modelo como agente), en la UHD 620 con GPU, ventana de 1280×795 px CSS a DPR 2, dentro del lock de medición. Carga media de 1,4 a 6 por otros workers. CPU del renderer en %, reposo = 10 s sin entrada tras 9,5 s de asentamiento:
+
+    | Nivel | Avatar | Activo (ratón) | Reposo, vista general | Reposo, sección abierta |
+    |---|---|---|---|---|
+    | Equilibrado | holo-contorno (por defecto) | 17,7-24,5 | 6,6 / 6,9 / 9,6 / 11,5 | 8,5 / 8,8 / 11,1 |
+    | Equilibrado | Ascuario | 23,2 | 8,2 | 8,3 |
+    | Equilibrado | ninguno (orbe propio) | 13,1-19,1 | 6,2 / 7,9 | 6,6 / 6,7 |
+    | Ahorro | holo-contorno / ninguno | 12,7-24,6 | 2,3 / 2,4 | 0,2 / 0,2 |
+    | Cine | holo-contorno | 21,1-31,1 | 11,2 / 11,6 | 13,2 / 14,9 |
+
+    - Objetivo cumplido en mediana: Equilibrado ≈ 8 % en reposo con el avatar por defecto (prototipo: 26-27 %). Los picos de 11 % coinciden con más carga de otros workers. Ahorro ≤ 2,4 %, Cine ≤ 15 % (objetivos ≲ 10 % y ≲ 20 %).
+    - A/B del HUD (Equilibrado, holo-contorno): antes de quitar el marco a pantalla completa y la inclinación 3D del panel en reposo, 10,2 % con HUD frente a 7,5 % sin él; después, 9,6 % frente a 9,7 %: el HUD DOM ya no añade coste. El JavaScript de la escena es < 1 % del tiempo perfilado.
+    - Funcional: datos sembrados visibles en las 7 estaciones y en los paneles; «Completar» cerró una tarea en el backend (16 → 15 abiertas) y la lista se recargó; el clic en un holograma abre su estación; teclas del anfitrión, Esc y ←/→ correctos; sin errores en consola (solo avisos de voz, que no hay en el entorno aislado).
+  - ⚠️ No probado: la voz real (espectro y ondas con audio), la confirmación nativa desde el panel (no hubo acciones destructivas que la pidieran) y «reducir movimiento» en la app. Arnés y datos: `~/.local/share/drakter/research/jarvis-hud/holomesa-app/`.
