@@ -85,6 +85,28 @@ export function settleUiMode(result: 'ready' | 'failed'): void {
   }
 }
 
+/** Tope de la secuencia de salida de una interfaz Jarvis: nunca retiene la vuelta a Drakter más. */
+const LEAVE_MAX_MS = 1500
+let leaveTransition: (() => Promise<void>) | null = null
+
+/**
+ * Secuencia de salida del shell que está a la vista (la registra `JarvisShell` por su interfaz).
+ * `null` la quita. Solo puede haber una.
+ */
+export function setLeaveTransition(run: (() => Promise<void>) | null): void {
+  leaveTransition = run
+}
+
+/** Ejecuta la secuencia de salida registrada (si la hay), con tope de tiempo. Nunca rechaza. */
+export function runLeaveTransition(): Promise<void> {
+  const run = leaveTransition
+  if (!run) return Promise.resolve()
+  return Promise.race([
+    run().catch(() => undefined),
+    new Promise<void>((resolve) => setTimeout(resolve, LEAVE_MAX_MS))
+  ])
+}
+
 /** Vuelve a Drakter al instante, sin transición ni límite de frecuencia: el shell de Jarvis falló. */
 export function resetUiMode(): void {
   if (snapshot.mode === 'drakter' && snapshot.phase === 'idle') return

@@ -2,7 +2,15 @@ import { Component, lazy, Suspense, useEffect, useRef, type ReactNode } from 're
 import { AppShell } from '@/app/AppShell'
 import { UI_MODE_BUTTON_ID } from '@/app/JarvisModeButton'
 import { notify } from '@/services/notify'
-import { getUiMode, loadJarvisShell, resetUiMode, settleUiMode, useUiMode, type UiMode } from '@/stores/uiMode'
+import {
+  getUiMode,
+  loadJarvisShell,
+  resetUiMode,
+  runLeaveTransition,
+  settleUiMode,
+  useUiMode,
+  type UiMode
+} from '@/stores/uiMode'
 
 // React guarda el resultado de `lazy`: tras un fallo de carga se crea otro para poder reintentar.
 let JarvisShell = lazy(loadJarvisShell)
@@ -51,10 +59,17 @@ export function ModeRoot() {
     document.documentElement.dataset.uiMode = mode
   }, [mode])
 
+  // Al salir, Drakter ya está montado debajo: la interfaz Jarvis hace su secuencia de salida (tope 1,5 s)
+  // y entonces se cierra la transición y Jarvis se desmonta.
   useEffect(() => {
     if (phase !== 'leaving') return
-    const frame = requestAnimationFrame(() => settleUiMode('ready'))
-    return () => cancelAnimationFrame(frame)
+    let alive = true
+    void runLeaveTransition().then(() => {
+      if (alive) requestAnimationFrame(() => settleUiMode('ready'))
+    })
+    return () => {
+      alive = false
+    }
   }, [phase])
 
   // De vuelta en Drakter, el foco va al botón que abre Jarvis en vez de perderse en <body>.

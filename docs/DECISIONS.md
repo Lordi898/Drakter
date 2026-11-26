@@ -1524,3 +1524,82 @@ Decisiones técnicas, cambios de tecnología y motivos.
     - Al quitar las capas quedan 0 geometrías, 0 texturas y 0 programas, y no hay fotogramas tras `dispose()`. Después de una restauración, Three avisa de que «object does not belong to this context» al liberar, y es inocuo.
     - En SwiftShader detecta software, pasa a Ahorro sin partículas y «reducir movimiento» deja la escena quieta.
   - ⚠️ Se midió en Chrome y no en Electron, para no tocar la app de desarrollo del usuario; es el mismo Chromium y la misma ruta ANGLE. Playwright emula páginas siempre visibles, así que `hidden` se probó forzando `document.hidden` y `visibilitychange`, que es la misma ruta que sigue Electron al minimizar. Arnés y datos: `~/.local/share/drakter/research/jarvis-hud/w3-stage/`.
+## [2026-11-26] A1: varios avatares 3D elegibles (registro, preferencia `avatarId` y Ajustes → Avatar)
+- **Contexto:** el usuario quiere poder elegir cualquiera de los avatares 3D, desde la interfaz y por voz, en Drakter y en Jarvis; por defecto `holo-contorno` (plan `jarvis-seleccion.md`). Hasta ahora había un solo avatar fijado en código (`ACTIVE_AVATAR`).
+- **Decisión:**
+  - **Contrato** (`avatars/types.ts`, aditivo): `AvatarTheme`, `AvatarOptions.theme`, `setTheme?` opcional (un holograma aditivo no se ve sobre fondo claro) y `AvatarMeta` (id, nombre, descripción, miniatura, alias de voz).
+  - **Registro** (`avatars/registry.ts`): cada avatar se describe en su carpeta (`<id>/register.ts`, sin importar Three) y el registro solo los lista. `resolveAvatar(id)` devuelve `null` para `none`, para un id desconocido o para uno aún no portado: personaje clásico, nunca rompe. También exporta `useActiveAvatar()`, `listAvatars()`, `avatarIds()` y `findAvatarByAlias()` para la voz, la herramienta y el selector de Jarvis. Desaparece `ACTIVE_AVATAR`.
+  - **Preferencia** `avatarId: string` (`stores/preferences.ts`), por defecto `holo-contorno`. `load()` solo valida la forma (`[a-z0-9-]{1,40}`), sin importar el registro. Mientras `holo-contorno` no esté portado, el predeterminado se ve como «Clásico». Coordinado con drakter-100 (J1).
+  - **Anfitrión:** `AdaptiveCharacter` es reactivo. Con un avatar 3D usa ese, con el SVG debajo hasta que se ve y como respaldo; con «ninguno», el personaje clásico (el `.riv` si existe y, si no, el SVG). El `.riv` deja de tener prioridad sobre un avatar 3D elegido de forma explícita. Cambiar de avatar monta uno nuevo y libera el anterior (`key`). `ThreeCharacter` pasa el tema real de la app (clase `dark` de `<html>`, `useAppTheme`) y llama a `setTheme?` cuando cambia. La capa del Stage pasa `theme: 'dark'`.
+  - **Ajustes → Avatar** (`settings/AvatarSection.tsx`): grupo de radios nativo con miniaturas («Clásico» más los avatares portados) y vista previa en vivo con el mismo `CharacterSlot`.
+  - `avatars/README.md`: lista de lo que debe cumplir cada port (`create` y `createLayer`, `transparent`, `theme`, `dispose`, sin assets de terceros, Three externo 0.180.0, miniatura de 192 px, rendimiento).
+- **Alternativas descartadas:** validar `avatarId` contra el registro dentro de `preferences.ts`, porque acoplaría las preferencias a los avatares. Listar en el registro los avatares aún no portados (con su ficha), porque haría falta mantener fichas y miniaturas sin código detrás; cada port trae la suya.
+- **Motivo:** que cada port sea su carpeta más una línea, y que la elección funcione igual desde Ajustes, Jarvis y la voz.
+- **Impacto:**
+  - Código: `desktop/src/character/{AdaptiveCharacter,ThreeCharacter}.tsx`, `character/{plug,useAppTheme}.ts`, `character/avatars/{types,registry}.ts`, `avatars/README.md`, `avatars/ascuario/{register.ts,thumbnail.webp}`, `stores/preferences.ts`, `settings/{AvatarSection,SettingsPage}.tsx` y `jarvis/stage/layers/avatar.ts`.
+  - Comprobado en Electron:
+    - Con la preferencia por defecto se marca «Clásico» y se explica que el predeterminado aún no está.
+    - Al elegir Ascuario se guarda la preferencia y la vista previa pasa a 3D.
+    - Con las flechas se vuelve a «Clásico» y al SVG.
+    - Sin errores en consola.
+
+## [2026-11-26] J1: contratos de apariencia (avatar e interfaz Jarvis seleccionables)
+- **Contexto:** el usuario quiere elegir cualquiera de los avatares 3D y cualquiera de las tres interfaces Jarvis, desde la interfaz y por voz, con `holo-contorno` y `nucleo` por defecto (`~/.local/share/drakter/plan/jarvis-seleccion.md`). J1 congela los contratos antes de A1, D1, V1 y las tres interfaces.
+- **Decisión:**
+  - **Listas cerradas en el contrato:** `AvatarChoice` (8 avatares y `none` = el personaje de siempre) y `JarvisLayoutChoice` (`nucleo`, `holomesa`, `visor`), en `contracts/python/drakter_contracts/events.py`.
+  - **Evento WS `ui.appearance`** (`UiAppearanceRequested{avatar?, layout?, source, utt_id?}`, al menos uno de los dos): petición estética, sin estado en el backend. El renderer la aplica con `stores/appearance.requestAppearance()`, la única puerta para todas las vías:
+    - guarda la preferencia;
+    - límite de 1 por segundo para voz y agente;
+    - pedir una interfaz estando en Drakter también abre Jarvis; cambiar de avatar no cambia de modo.
+  - **Preferencias** (`stores/preferences.ts`):
+    - `avatarId` es el de A1 (#43): `string` validado por forma, que resuelve `character/avatars/registry.resolveAvatar`. Un id desconocido o sin portar da el personaje clásico.
+    - J1 añade `jarvisLayout: JarvisLayoutChoice` (defecto `nucleo`).
+    - `AVATAR_CHOICES` (la lista cerrada del contrato) solo valida el evento y la herramienta. Una comprobación de tipos falla al compilar si el contrato gana un valor que no está en `AVATAR_CHOICES` o `JARVIS_LAYOUT_CHOICES`.
+  - **Contrato de interfaz** (`jarvis/layouts/types.ts`): `JarvisLayoutProps` con:
+    - `stage` (`null` = sin lienzo);
+    - `avatar` (`JarvisAvatarSlot`: la interfaz solo decide el recuadro, que se lee por fotograma);
+    - `quality`, `reducedMotion`, `section`/`navigate`;
+    - `onReady` (una vez, cuando ya se ve), `exit` y `setExitTransition`.
+
+    Cada interfaz vive en `jarvis/layouts/<id>/index.tsx` (export default). La registra sola el `import.meta.glob` de `jarvis/layouts/registry.ts`, con carga diferida por interfaz; si falta, se usa la de defecto o el respaldo.
+  - **Datos** (`jarvis/data/types.ts`): `Snapshot<T>` y `useJarvisData(topics)` con los temas `today`, `tasks`, `projects`, `habits`, `agenda`, `timetable`, `relationships`, `resources`, `activity` y `memory`, todos sobre los tipos de `modules/*`. J1 deja un stub, siempre en `loading`, que implementa D1. El estado vivo se lee de `stores/*` y `voice/levels.ts`.
+  - **Las cuatro preguntas de las interfaces** (`visor-port.md` §6), documentadas en `jarvis/layouts/types.ts`:
+    1. Firma: la interfaz recibe el `Stage` creado y un `JarvisAvatarSlot`, sin factory. El avatar es una preferencia global; la interfaz solo da el recuadro.
+    2. Arranque y salida: los trae cada interfaz. La entrada empieza al montarse y llama a `onReady` en cuanto se ve. La salida se registra con `setExitTransition`; `ModeRoot` la espera (`uiMode.runLeaveTransition`, tope 1,5 s) antes de desmontar. Con `reducedMotion`, fundido de 150 ms como mucho.
+    3. Selector rápido de interfaz y avatar: componente común del shell en la esquina superior derecha (reservada), con `Ctrl+Shift+A`.
+    4. Teclas de sección: las captura el shell. `Ctrl+0…9` (global) y, en Jarvis, `0…9` sin modificadores fuera de campos de texto, con el mapa de `navigation/sections.ts`. La interfaz recibe `section`.
+  - **`JarvisShell` como anfitrión:**
+    - crea el único lienzo y el Stage, y añade la capa del avatar activo (`useActiveAvatar`; cambiarlo sustituye la capa) con `useAvatarWiring`;
+    - elige la interfaz con su `Suspense`;
+    - reserva la esquina superior derecha para «Volver a Drakter» y el selector «Apariencia» (interfaces instaladas y avatares portados, más «Ninguno»);
+    - si la interfaz no avisa de que ya se ve, cierra la transición a los 4 s.
+
+    El HUD va en una capa `absolute inset-0` sobre el lienzo, que es `position: fixed`.
+  - Los nombres visibles de las interfaces están en `app/jarvisLayouts.ts`, fuera de `jarvis/`, para que Ajustes y `Ctrl+K` no carguen el chunk.
+  - `app/useReducedMotion.ts` es el hook compartido de movimiento reducido.
+- **Alternativas descartadas:**
+  - Ids libres (`string`) en el evento: la herramienta y la voz no podrían validar con `Literal`.
+  - Pasar los datos como props: obligaría a cargar todos los temas aunque la interfaz no los use.
+  - Un selector de interfaz dentro de cada interfaz: serían tres implementaciones del mismo control.
+- **Motivo:** que A1, D1, V1 y las tres interfaces trabajen en paralelo sobre la misma forma.
+- **Impacto:**
+  - Código: `contracts/python/drakter_contracts/events.py`, `contracts/ts/index.ts`, `desktop/src/services/protocol.ts`, `desktop/src/stores/{preferences,appearance}.ts`, `desktop/src/app/{SessionHosts.tsx,jarvisLayouts.ts,useReducedMotion.ts}` y `desktop/src/jarvis/{JarvisShell.tsx,layouts/{types,registry}.ts,data/{types,index}.ts}`.
+  - Pendiente:
+    - Ajustes y `Ctrl+K` para la interfaz Jarvis, y la voz y la herramienta (V1). Ajustes → Avatar ya lo trajo A1.
+  - Comprobado en Electron real aislado: los 13 pasos de W1 con el Stage real, sin excepciones.
+
+## [2026-11-26] D1: datos de las interfaces Jarvis (`jarvis/data`)
+- **Contexto:** las tres interfaces Jarvis (Núcleo, Holomesa y Visor) leen los datos REST del Workspace con `useJarvisData(topics)` (contrato de J1). Los hooks de `modules/*` cargan siempre, sin opción para desactivarlos, y algunos borran los datos al fallar.
+- **Decisión:**
+  - `jarvis/data/snapshot.ts` tiene un cargador por tema (`useTopic`). Solo pide un tema si alguna interfaz lo usa. Conserva el último dato bueno, distingue `offline` (sin servicio local) de `error`, se recarga tras un resync del enlace y mantiene la identidad del objeto mientras no cambia.
+  - Llama a las funciones de lectura de `modules/*/api.ts` y de `pages/today/requests.ts`, sin `fetch` ni caché propios. La zona horaria sale del ajuste `default_timezone`, como en Hoy, y el día cambia solo a medianoche.
+  - Al contrato se añaden, de forma aditiva y a petición de Núcleo, `habitHistory` (28 días), `subjects`, `folders`, `resourceIndex` y `entityNames`:
+    - `resourceIndex` cuenta `index_status` solo sobre la muestra de `resources`, porque el backend no tiene un agregado.
+    - `entityNames` solo nombra lo que ya está cargado: pedir `getRelated` por cada nodo costaría N peticiones.
+  - Rangos y filtros de cada tema: `jarvis/data/types.ts`.
+- **Alternativas descartadas:**
+  - Llamar a todos los hooks de `modules/*`: cargaría los 15 temas en cada interfaz.
+  - Añadir `enabled` a cada hook de módulo: tocaría páginas de Drakter sin necesidad.
+  - Crear `modules/projects/useProjects`: se hizo y se quitó, porque D1 no lo usa.
+- **Motivo:** una sola capa de datos para las tres interfaces, sin duplicar reglas ni estado por fotograma.
+- **Impacto:** `desktop/src/jarvis/data/{index,snapshot,types}.ts`. Los stores (chat, agente, trabajos, avisos, voz y niveles de audio) se siguen leyendo directamente desde `stores/*` y `voice/levels.ts`.
