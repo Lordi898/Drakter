@@ -1,6 +1,6 @@
 /**
  * Bandeja del sistema (voz v2). Con la ventana oculta la voz sigue viva; desde aquí
- * se abre, se activa la conversación, se alterna el micrófono o se sale de verdad.
+ * se abre, se activa la conversación, se alterna el micrófono o el modo Jarvis, o se sale de verdad.
  */
 import { app, Menu, nativeImage, Tray, type NativeImage } from 'electron'
 import { IPC_CHANNELS } from '../shared/bridge'
@@ -48,6 +48,8 @@ function buildMenu(backend: BackendHost): Menu {
       label: micOpen ? 'Silenciar micrófono' : 'Activar micrófono',
       click: () => getMainWindow()?.webContents.send(IPC_CHANNELS.voiceMicToggle)
     },
+    // Alterna Drakter/Jarvis en el renderer (`ui:mode-toggle`); se muestra la ventana para verlo.
+    { label: 'Alternar modo Jarvis', click: () => toggleUiMode() },
     { type: 'separator' },
     {
       label: 'Salir',
@@ -57,6 +59,11 @@ function buildMenu(backend: BackendHost): Menu {
       }
     }
   ])
+}
+
+function toggleUiMode(): void {
+  focusMainWindow()
+  getMainWindow()?.webContents.send(IPC_CHANNELS.uiModeToggle)
 }
 
 export function setTrayMicOpen(open: boolean): void {
