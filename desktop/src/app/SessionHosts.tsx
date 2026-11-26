@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, type ComponentType } from 'react'
 import { useGlobalShortcuts } from '@/app/useGlobalShortcuts'
 import { startNotificationFeed } from '@/modules/notifications'
 import { subscribeServerEvents } from '@/services/ws'
+import { requestAppearance } from '@/stores/appearance'
 import { getPreferences } from '@/stores/preferences'
 import { requestUiMode } from '@/stores/uiMode'
 
@@ -12,12 +13,14 @@ const VoiceHost = voiceHostLoader
   ? lazy(async () => ({ default: (await voiceHostLoader()).VoiceHost }))
   : null
 
-/** `ui.mode` (voz o agente) y la bandeja piden cambiar de modo; el store decide si procede. */
+/** `ui.mode`/`ui.appearance` (voz o agente) y la bandeja piden cambios; los stores deciden si proceden. */
 function useUiModeRequests(): void {
   useEffect(
     () =>
       subscribeServerEvents((event) => {
         if (event.type === 'ui.mode') requestUiMode(event.payload.mode, event.payload.source)
+        else if (event.type === 'ui.appearance')
+          requestAppearance({ avatar: event.payload.avatar, layout: event.payload.layout }, event.payload.source)
       }),
     []
   )

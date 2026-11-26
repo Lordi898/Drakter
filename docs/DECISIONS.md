@@ -1524,3 +1524,40 @@ Decisiones técnicas, cambios de tecnología y motivos.
     - Al quitar las capas quedan 0 geometrías, 0 texturas y 0 programas, y no hay fotogramas tras `dispose()`. Después de una restauración, Three avisa de que «object does not belong to this context» al liberar, y es inocuo.
     - En SwiftShader detecta software, pasa a Ahorro sin partículas y «reducir movimiento» deja la escena quieta.
   - ⚠️ Se midió en Chrome y no en Electron, para no tocar la app de desarrollo del usuario; es el mismo Chromium y la misma ruta ANGLE. Playwright emula páginas siempre visibles, así que `hidden` se probó forzando `document.hidden` y `visibilitychange`, que es la misma ruta que sigue Electron al minimizar. Arnés y datos: `~/.local/share/drakter/research/jarvis-hud/w3-stage/`.
+## [2026-11-26] J1: contratos de apariencia (avatar e interfaz Jarvis seleccionables)
+- **Contexto:** el usuario quiere elegir cualquiera de los avatares 3D y cualquiera de las tres interfaces Jarvis, desde la interfaz y por voz, con `holo-contorno` y `nucleo` por defecto (`~/.local/share/drakter/plan/jarvis-seleccion.md`). J1 congela los contratos antes de A1, D1, V1 y las tres interfaces.
+- **Decisión:**
+  - **Listas cerradas en el contrato:** `AvatarChoice` (8 avatares y `none` = el personaje de siempre) y `JarvisLayoutChoice` (`nucleo`, `holomesa`, `visor`), en `contracts/python/drakter_contracts/events.py`.
+  - **Evento WS `ui.appearance`** (`UiAppearanceRequested{avatar?, layout?, source, utt_id?}`, al menos uno de los dos): petición estética, sin estado en el backend. El renderer la aplica con `stores/appearance.requestAppearance()`, la única puerta para todas las vías:
+    - guarda la preferencia;
+    - límite de 1 por segundo para voz y agente;
+    - pedir una interfaz estando en Drakter también abre Jarvis; cambiar de avatar no cambia de modo.
+  - **Preferencias** (`stores/preferences.ts`, declaradas aquí y consumidas por A1): `avatarId: AvatarChoice` (defecto `holo-contorno`) y `jarvisLayout: JarvisLayoutChoice` (defecto `nucleo`). `AVATAR_CHOICES` y `JARVIS_LAYOUT_CHOICES` se validan al leer, y una comprobación de tipos falla al compilar si el contrato gana un valor que no está en ellas.
+  - **Contrato de interfaz** (`jarvis/layouts/types.ts`): `JarvisLayoutProps` con:
+    - `stage` (`null` = sin lienzo);
+    - `avatar` (`JarvisAvatarSlot`: la interfaz solo decide el recuadro, que se lee por fotograma);
+    - `quality`, `reducedMotion`, `section`/`navigate`;
+    - `onReady` (una vez, cuando ya se ve) y `exit`.
+
+    Cada interfaz vive en `jarvis/layouts/<id>/index.tsx` (export default). La registra sola el `import.meta.glob` de `jarvis/layouts/registry.ts`, con carga diferida por interfaz; si falta, se usa la de defecto o el respaldo.
+  - **Datos** (`jarvis/data/types.ts`): `Snapshot<T>` y `useJarvisData(topics)` con los temas `today`, `tasks`, `projects`, `habits`, `agenda`, `timetable`, `relationships`, `resources`, `activity` y `memory`, todos sobre los tipos de `modules/*`. J1 deja un stub, siempre en `loading`, que implementa D1. El estado vivo se lee de `stores/*` y `voice/levels.ts`.
+  - **`JarvisShell` como anfitrión:**
+    - crea el único lienzo y el Stage, y añade la capa del avatar con `useAvatarWiring`;
+    - elige la interfaz con su `Suspense`;
+    - reserva la esquina superior derecha para «Volver a Drakter» y el selector rápido de interfaz (visible con dos o más instaladas);
+    - si la interfaz no avisa de que ya se ve, cierra la transición a los 4 s.
+
+    El HUD va en una capa `absolute inset-0` sobre el lienzo, que es `position: fixed`.
+  - Los nombres visibles de las interfaces están en `app/jarvisLayouts.ts`, fuera de `jarvis/`, para que Ajustes y `Ctrl+K` no carguen el chunk.
+  - `app/useReducedMotion.ts` es el hook compartido de movimiento reducido.
+- **Alternativas descartadas:**
+  - Ids libres (`string`) en el evento: la herramienta y la voz no podrían validar con `Literal`.
+  - Pasar los datos como props: obligaría a cargar todos los temas aunque la interfaz no los use.
+  - Un selector de interfaz dentro de cada interfaz: serían tres implementaciones del mismo control.
+- **Motivo:** que A1, D1, V1 y las tres interfaces trabajen en paralelo sobre la misma forma.
+- **Impacto:**
+  - Código: `contracts/python/drakter_contracts/events.py`, `contracts/ts/index.ts`, `desktop/src/services/protocol.ts`, `desktop/src/stores/{preferences,appearance}.ts`, `desktop/src/app/{SessionHosts.tsx,jarvisLayouts.ts,useReducedMotion.ts}` y `desktop/src/jarvis/{JarvisShell.tsx,layouts/{types,registry}.ts,data/{types,index}.ts}`.
+  - Pendiente:
+    - `JarvisShell` usa `activeAvatar` hasta que A1 exponga `avatarEntry(avatarId)` (lo propuse a drakter-95).
+    - Ajustes y `Ctrl+K` para la apariencia, y la voz (V1).
+  - Comprobado en Electron real aislado: los 13 pasos de W1 con el Stage real, sin excepciones.
