@@ -3,7 +3,8 @@
 `version` es la versión del payload de ese `type`; la del protocolo va en el subprotocolo `drakter.v1`.
 `voice.*` es experimental hasta que el frente de voz mida latencia. Voz v2 (Pipecat) usa `voice.state`,
 `voice.playback`, `voice.error` y `voice.profile_changed`. `ui.mode` pide al escritorio cambiar de modo
-de interfaz (Drakter o Jarvis): es solo estética y el backend no guarda el modo.
+de interfaz (Drakter o Jarvis) y `ui.appearance`, de avatar o de interfaz Jarvis: son solo estética y el
+backend no guarda nada.
 """
 
 from __future__ import annotations
@@ -11,7 +12,7 @@ from __future__ import annotations
 from enum import StrEnum
 from typing import Annotated, Any, Final, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from .common import ActorType, EntityType, Id, Instant
 
@@ -245,6 +246,33 @@ class UiModeRequested(BaseModel):
     utt_id: Annotated[str, Field(max_length=64)] | None = None
 
 
+# Listas cerradas de la apariencia (plan jarvis-seleccion.md). `none` = el personaje de siempre (.riv o SVG).
+AvatarChoice = Literal[
+    "holo-contorno", "holo-hilo", "holo-busto", "holo-orbe", "holo-filamento", "ascuario", "relojero",
+    "filamento", "none",
+]
+JarvisLayoutChoice = Literal["nucleo", "holomesa", "visor"]
+
+
+class UiAppearanceRequested(BaseModel):
+    """Petición de cambiar el avatar y/o la interfaz del modo Jarvis. Solo estética: el renderer guarda la
+    preferencia; el backend no guarda estado. Al menos uno de `avatar` o `layout`.
+
+    `source`: `voice` (capa 0, frase cerrada) o `agent` (herramienta de apariencia).
+    """
+
+    avatar: AvatarChoice | None = None
+    layout: JarvisLayoutChoice | None = None
+    source: Literal["voice", "agent"]
+    utt_id: Annotated[str, Field(max_length=64)] | None = None
+
+    @model_validator(mode="after")
+    def _something(self) -> UiAppearanceRequested:
+        if self.avatar is None and self.layout is None:
+            raise ValueError("ui.appearance needs avatar or layout")
+        return self
+
+
 EVENTS: Final[dict[str, type[BaseModel]]] = {
     "agent.status_changed": AgentStatusChanged,
     "agent.expression_changed": AgentExpressionChanged,
@@ -278,5 +306,6 @@ EVENTS: Final[dict[str, type[BaseModel]]] = {
     "voice.error": VoiceError,
     "voice.profile_changed": VoiceProfileChanged,
     "ui.mode": UiModeRequested,
+    "ui.appearance": UiAppearanceRequested,
 }
 EXPERIMENTAL_PREFIXES: Final = ("voice.",)

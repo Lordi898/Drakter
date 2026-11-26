@@ -6,6 +6,7 @@ import type { AvatarEntry } from './avatars/registry'
 import type { Avatar3D } from './avatars/types'
 import { warnCharacter } from './log'
 import type { CharacterRendererProps } from './types'
+import { useAppTheme } from './useAppTheme'
 import { useMouthLevel } from './useMouthLevel'
 
 /** Tope de densidad de píxeles: nitidez suficiente sin disparar el coste en GPU integrada. */
@@ -46,6 +47,8 @@ export function ThreeCharacter({ avatar: entry, state, onReady, onFail }: ThreeC
   const latestState = useRef(state)
   const reduced = useReducedMotion()
   const latestReduced = useRef(reduced)
+  const theme = useAppTheme()
+  const latestTheme = useRef(theme)
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -62,6 +65,7 @@ export function ThreeCharacter({ avatar: entry, state, onReady, onFail }: ThreeC
         const created = create(canvas, {
           reducedMotion: latestReduced.current,
           transparent: entry.transparent,
+          theme: latestTheme.current,
           pixelRatio: Math.min(window.devicePixelRatio || 1, MAX_PIXEL_RATIO)
         })
         instance = created
@@ -123,6 +127,11 @@ export function ThreeCharacter({ avatar: entry, state, onReady, onFail }: ThreeC
     latestReduced.current = reduced
     avatar.current?.setReducedMotion(reduced)
   }, [reduced])
+
+  useEffect(() => {
+    latestTheme.current = theme
+    avatar.current?.setTheme?.(theme)
+  }, [theme])
 
   const applyMouth = useCallback((level: number | null) => {
     avatar.current?.setAudioLevel(level ?? 0)
