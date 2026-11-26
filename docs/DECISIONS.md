@@ -1462,3 +1462,30 @@ Decisiones técnicas, cambios de tecnología y motivos.
     - Tras la baja de Jarvis, la boca conserva solo la salida, y sin ella se cierra todo.
     - CPU del renderer: leer las dos tomas en cada fotograma suma ~0,4 %.
   - Pendiente: probar con la voz real cuando el usuario pueda.
+
+## [2026-11-26] Modo Jarvis W5: voz local y herramienta `ui_set_mode`
+- **Contexto:** las dos vías de voz del modo Jarvis (diseño §3.2-§3.3, contratos J0 `ui.mode` y `EvtLocalCommand.ui_*`).
+- **Decisión:**
+  - **Capa 0:** `classify_ui(text)` en `voice/conversation/layer0.py`, aparte de `classify`, cuya firma está congelada en `voice/ports.py`.
+    - Frases cerradas en `layer0.es.toml`, secciones `[ui_jarvis]` y `[ui_drakter]`. Cuenta solo el enunciado entero más muletillas: «¿qué es el modo Jarvis?» y las órdenes compuestas van al agente.
+    - Las variantes del STT de «jarvis» (`[wake]`) y de «drakter» (`[ui].drakter_words`) se leen en su forma canónica.
+  - **Puente (`voice/bridge.py`):**
+    - La orden se atiende antes que el resto de la capa 0: emite `voice.local_command{ui_*}` y dice la frase `ui_jarvis` o `ui_drakter`, sin turno.
+    - Trampa: en reposo, «activa el modo Jarvis» despierta por la palabra del final y `strip_wake_word` devuelve `None`. Si la frase entera es `ui_*`, se atiende y se vuelve a reposo en vez de descartarla como falso positivo.
+  - **Frases:** `ui_jarvis` y `ui_drakter` en `PhraseKey` y en `agent/identity/voice_phrases.es.toml`, con el trato repartido (señor, señor Imanol, señor Magaña).
+  - **Backend:**
+    - `app/services/ui_mode.request_ui_mode()` es la única salida para las dos vías. Publica `ui.mode` con un límite común de un cambio por segundo, nunca lanza y no guarda el modo.
+    - `VoicePolicy.local_command` la llama para `ui_*` y audita el resultado (`ui: published|rate_limited|unavailable`).
+    - Herramienta `ui_set_mode` (`app/tools/ui.py`, dominio `ui`, permiso `ui.write`, riesgo `write` sin confirmación, `audit={"mode": "log"}`). Si se pasa del límite, devuelve `delivered=false`; sin hub, `ui_unavailable`.
+    - `ui` entra en `TOOL_DOMAINS`, en `permissions.json` y en `catalog.json` (fase `jarvis`), y sale de los carriles de trabajos de fondo (`EXCLUDED_DOMAINS`).
+- **Alternativas descartadas:** ampliar `classify` (rompe la firma congelada); que la voz publique directamente (la voz nunca toca el hub); límite solo en el renderer (el agente podría inundar el canal).
+- **Motivo:** orden instantánea y sin LLM para las frases habituales, y el agente para todo lo demás, con las reglas de herramientas de CLAUDE.md §8.
+- **Impacto:**
+  - Archivos: `voice/conversation/layer0.{py,es.toml}`, `voice/bridge.py`, `agent/identity/voice_phrases.es.toml`, `contracts/python/drakter_contracts/{tools,voice_ipc}.py`, `contracts/ts/index.ts`, `contracts/tools/{catalog.json,README.md}`, `agent/configuration/permissions.json` y en `backend/app/` `tools/ui.py`, `services/ui_mode.py`, `integrations/voice/{policy,service}.py` e `integrations/hermes/lanes.py`.
+  - Riesgo mitigado: en una sesión contaminada por documentos o memoria, `ui_set_mode` pasa a `confirm` (`gate.effective_risk`), así que una inyección no cambia el modo sin aprobación.
+  - Comprobado con pruebas puntuales en el worktree, sin tocar la voz ni la app del usuario:
+    - `classify_ui`: 17 casos.
+    - Puente con sesión simulada y el venv real de la voz: 8 casos, incluida la trampa.
+    - Herramienta por el `ToolRegistry` real: permiso, esquema, auditoría, evento, límite, sin hub, sin deriva del catálogo, sesión contaminada y política de voz (18 comprobaciones).
+    - Las 5 comprobaciones críticas del CI.
+  - Pendiente: las frases nuevas no tienen PCM en caché y hasta generarlas (`python -m voice phrases`, que usa Fish) suenan con el TTS en vivo. Tampoco se ha probado con micrófono real.

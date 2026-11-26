@@ -119,6 +119,15 @@ def _classify(text: str, bot_speaking: bool, awaiting_answer: bool) -> str | Non
     return classify(text, bot_speaking, awaiting_answer)
 
 
+def _classify_ui(text: str) -> str | None:
+    """Capa 0 del modo de interfaz (W5): `ui_jarvis`, `ui_drakter` o `None`."""
+    try:
+        from voice.conversation.layer0 import classify_ui
+    except ImportError:
+        return None
+    return classify_ui(text)
+
+
 @dataclass
 class _Utterance:
     overlap: str
@@ -253,13 +262,25 @@ class BackendBridgeProcessor(FrameProcessor):
         # openWakeWord va a umbral bajo: la confirmación es el texto. En conversación,
         # un «hey jarvis» inicial también se quita (no llega al chat).
         rest = strip_wake_word(text)
-        if trigger == "wake" and rest is None:
+        # En reposo, «activa el modo Jarvis» despierta por la palabra del FINAL: no empieza por ella,
+        # pero es una orden local válida. Se atiende y se vuelve a reposo, como si no hubiera turno.
+        wake_inside = trigger == "wake" and rest is None and _classify_ui(text) is not None
+        if trigger == "wake" and rest is None and not wake_inside:
             await session.set_mode("standby", "wake")  # falso positivo: sin sonido
             return
         if rest is not None:
             text = rest
             if not text:
                 return
+
+        # Modo de interfaz (Drakter/Jarvis): frase cerrada, sin agente ni turno. El backend publica `ui.mode`.
+        ui = _classify_ui(text)
+        if ui is not None:
+            await session.emit("voice.local_command", {"command": ui, "utt_id": utt.utt_id})
+            await session.play_phrase(ui)
+            if wake_inside:
+                await session.set_mode("standby", trigger)
+            return
 
         # Con un turno del agente en curso (aún sin audio, o entre el acuse y la respuesta),
         # «para …» también es una orden de parada.
