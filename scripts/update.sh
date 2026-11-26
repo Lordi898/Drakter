@@ -19,12 +19,23 @@ for arg in "$@"; do
   case "$arg" in
     --package) package=1 ;;
     --no-restart) restart=0 ;;
-    -h|--help) sed -n '2,13p' "$0"; exit 0 ;;
+    -h|--help) show_help=1; sed -n '2,13p' "$0"; exit 0 ;;
     *) echo "Opción desconocida: $arg" >&2; exit 2 ;;
   esac
 done
 
-step() { echo "── $*"; }
+current_step="inicio"
+step() { current_step="$*"; echo "── $*"; }
+# Aviso final claro si cualquier paso falla (set -e corta el script sin más explicación).
+on_exit() {
+  rc=$?
+  if [ "$rc" -ne 0 ] && [ "${show_help:-0}" != 1 ]; then
+    echo >&2
+    echo "⚠️  La actualización NO se completó (fallo en el paso: $current_step, código $rc)." >&2
+    echo "   Puede que falten dependencias, compilación o migraciones. Corrige el error de arriba y vuelve a ejecutar scripts/update.sh." >&2
+  fi
+}
+trap on_exit EXIT
 die() { echo "ERROR: $1" >&2; [ -n "${2:-}" ] && echo "  Arreglo: $2" >&2; exit 1; }
 cd "$repo"
 export PATH="$HOME/.local/bin:$PATH"
@@ -40,7 +51,10 @@ new="$(git rev-parse HEAD)"
 if [ "$old" = "$new" ]; then
   echo "Ya estabas en la última versión ($(git log -1 --format='%h %s'))."
 else
-  git log --oneline "$old..$new" | head -n 20
+  # Sin tubería: con pipefail, "| head" mataba el script por SIGPIPE si había más de 20 commits.
+  git log --oneline -n 20 "$old..$new"
+  total="$(git rev-list --count "$old..$new")"
+  [ "$total" -le 20 ] || echo "… y $((total - 20)) commits más."
 fi
 changed() { [ "$old" != "$new" ] && ! git diff --quiet "$old" "$new" -- "$@"; }
 
@@ -68,7 +82,10 @@ fi
 
 # ── 3. Parar la app de drakter-local.sh para poder migrar ──────────────────────
 was_running=0
-if [ "$restart" = 1 ] && scripts/drakter-local.sh status | grep -q "app: en marcha"; then
+# Se captura la salida (sin "grep -q" en tubería: cerraría la tubería antes de tiempo).
+local_status=""
+[ "$restart" = 1 ] && local_status="$(scripts/drakter-local.sh status 2>&1 || true)"
+if [ "$restart" = 1 ] && [[ "$local_status" == *"app: en marcha"* ]]; then
   step "parando Drakter (drakter-local.sh)"
   scripts/drakter-local.sh stop >/dev/null
   was_running=1
