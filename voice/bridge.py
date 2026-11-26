@@ -128,6 +128,15 @@ def _classify_ui(text: str) -> str | None:
     return classify_ui(text)
 
 
+def _classify_appearance(text: str) -> tuple[str, str] | None:
+    """Capa 0 de la apariencia (V1): `("avatar"|"layout", id)` o `None`."""
+    try:
+        from voice.conversation.layer0 import classify_appearance
+    except ImportError:
+        return None
+    return classify_appearance(text)
+
+
 @dataclass
 class _Utterance:
     overlap: str
@@ -280,6 +289,16 @@ class BackendBridgeProcessor(FrameProcessor):
             await session.play_phrase(ui)
             if wake_inside:
                 await session.set_mode("standby", trigger)
+            return
+
+        # Avatar o interfaz Jarvis: frase cerrada, sin agente ni turno. El backend publica `ui.appearance`.
+        appearance = _classify_appearance(text)
+        if appearance is not None:
+            kind, target = appearance
+            await session.emit(
+                "voice.local_command", {"command": "ui_appearance", "utt_id": utt.utt_id, kind: target}
+            )
+            await session.play_phrase("ui_avatar" if kind == "avatar" else "ui_layout")
             return
 
         # Con un turno del agente en curso (aún sin audio, o entre el acuse y la respuesta),

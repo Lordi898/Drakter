@@ -1,7 +1,15 @@
+import { JARVIS_LAYOUTS } from '@/app/jarvisLayouts'
 import { UI_MODE_SHORTCUT_LABEL } from '@/app/useGlobalShortcuts'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { updatePreferences, usePreferences, type JarvisQuality, type JarvisStartup } from '@/stores/preferences'
+import {
+  JARVIS_LAYOUT_CHOICES,
+  updatePreferences,
+  usePreferences,
+  type JarvisLayoutChoice,
+  type JarvisQuality,
+  type JarvisStartup
+} from '@/stores/preferences'
 import { getUiMode, jarvisAvailable, prefetchJarvis, requestUiMode } from '@/stores/uiMode'
 import { Rows, Section, SettingRow } from './settingsUi'
 
@@ -18,6 +26,7 @@ const QUALITY_OPTIONS: readonly { readonly value: JarvisQuality; readonly label:
 ]
 
 const isStartup = (value: string): value is JarvisStartup => STARTUP_OPTIONS.some((o) => o.value === value)
+const isLayout = (value: string): value is JarvisLayoutChoice => (JARVIS_LAYOUT_CHOICES as readonly string[]).includes(value)
 const isQuality = (value: string): value is JarvisQuality => QUALITY_OPTIONS.some((o) => o.value === value)
 
 export function JarvisSection() {
@@ -39,6 +48,31 @@ export function JarvisSection() {
           >
             Abrir modo Jarvis
           </Button>
+        </SettingRow>
+        <SettingRow
+          title="Interfaz"
+          description="Cómo se ve el modo Jarvis. También desde el selector «Apariencia» de Jarvis o por voz («interfaz visor»)."
+          labelFor="setting-jarvis-layout"
+        >
+          {(describedBy) => (
+            <Select
+              value={preferences.jarvisLayout}
+              onValueChange={(value) => {
+                if (isLayout(value)) updatePreferences({ jarvisLayout: value })
+              }}
+            >
+              <SelectTrigger id="setting-jarvis-layout" aria-describedby={describedBy} className="w-56">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {JARVIS_LAYOUTS.map((layout) => (
+                  <SelectItem key={layout.id} value={layout.id}>
+                    {layout.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
         </SettingRow>
         <SettingRow
           title="Al arrancar"

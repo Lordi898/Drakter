@@ -1596,5 +1596,21 @@
   "args_model": "SetUiModeArgs",
   "result_model": "SetUiModeResult",
   "phase": "jarvis"
+ },
+ {
+  "name": "ui_set_appearance",
+  "domain": "ui",
+  "description": "Cambia el avatar 3D del personaje (en los dos modos) y/o la interfaz del modo Jarvis. Solo cambia el aspecto: no toca datos ni tu forma de ser. Úsala cuando el usuario lo pida; elegir una interfaz también abre el modo Jarvis.",
+  "permission": "ui.write",
+  "risk": "write",
+  "idempotent": true,
+  "returns_untrusted": false,
+  "timeout_s": 3.0,
+  "errors": [
+   "ui_unavailable"
+  ],
+  "args_model": "SetAppearanceArgs",
+  "result_model": "SetAppearanceResult",
+  "phase": "jarvis"
  }
 ]

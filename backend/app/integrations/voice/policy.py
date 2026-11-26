@@ -83,6 +83,8 @@ AuditFn = Callable[[str, Mapping[str, object]], Awaitable[None]]
 ErrorFn = Callable[[str], None]
 # (modo, utt_id) → resultado de publicar `ui.mode` (`app.services.ui_mode.request_ui_mode`).
 UiModeFn = Callable[[Literal["jarvis", "drakter"], str], str]
+# (avatar, layout, utt_id) → resultado de publicar `ui.appearance` (`request_ui_appearance`).
+UiAppearanceFn = Callable[[str | None, str | None, str], str]
 
 
 class VoicePolicy:
@@ -96,6 +98,7 @@ class VoicePolicy:
         bot_speaking: Callable[[], bool],
         min_words: int,
         ui_mode: UiModeFn | None = None,
+        ui_appearance: UiAppearanceFn | None = None,
     ) -> None:
         self._runtime = runtime
         self._speech = speech
@@ -104,6 +107,7 @@ class VoicePolicy:
         self._bot_speaking = bot_speaking
         self._min_words = min_words
         self._ui_mode = ui_mode
+        self._ui_appearance = ui_appearance
         self._queued: list[str] = []
         self._pending_confirmations: set[str] = set()
         self._reminded: set[str] = set()  # recordado ya en un turno de voz: una vez por acción
@@ -149,6 +153,11 @@ class VoicePolicy:
         if evt.command in ("ui_jarvis", "ui_drakter"):
             mode: Literal["jarvis", "drakter"] = "jarvis" if evt.command == "ui_jarvis" else "drakter"
             meta["ui"] = self._ui_mode(mode, evt.utt_id) if self._ui_mode else "unavailable"
+        elif evt.command == "ui_appearance":
+            meta.update({k: v for k, v in (("avatar", evt.avatar), ("layout", evt.layout)) if v})
+            meta["ui"] = (
+                self._ui_appearance(evt.avatar, evt.layout, evt.utt_id) if self._ui_appearance else "unavailable"
+            )
         await self._audit("voice.local_command", meta)
 
     async def turn_ended(self) -> None:

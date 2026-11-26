@@ -42,6 +42,38 @@ phrases = ["vuelve a drakter", "volver a drakter", "modo drakter", "modo normal"
 drakter_words = ["drakter", "dracter", "draxter", "dragter", "drapter", "draqter", "draquer", "draker",
                  "dracker", "tracter"]
 
+[ui_appearance]
+# Cambiar el avatar o la interfaz del modo Jarvis por voz (V1, evento `ui.appearance`), sin LLM ni turno.
+# Forma cerrada: [verbo] [enlaces] [sustantivo] [enlaces] alias, y nada más salvo muletillas. Hace falta
+# verbo o sustantivo («pon el orbe», «interfaz visor»); un alias suelto no cuenta. Lo demás va al agente
+# (herramienta ui_set_appearance). Los alias de avatares deben incluir los `voiceAliases` de su ficha en
+# desktop/src/character/avatars/<id>/register.ts (sin tildes ni artículos).
+verbs = ["pon", "ponme", "usa", "cambia a", "cambia al", "cambia", "activa", "elige", "selecciona",
+         "quiero", "muestra", "muestrame", "vuelve a", "vuelve al", "pasa a", "pasa al"]
+links = ["el", "la", "al", "a", "a la", "del", "de", "de la", "un", "una", "mi"]
+avatar_nouns = ["avatar", "personaje"]
+layout_nouns = ["interfaz", "vista", "pantalla", "hud"]
+# Alias que, solos, son palabras corrientes: solo valen con el sustantivo («interfaz mesa», no «pon la mesa»).
+needs_noun = ["mesa", "reloj", "hilo", "hilos", "clasico", "ninguno"]
+# Quitan el avatar 3D (personaje clásico).
+avatar_off = ["quita el avatar", "sin avatar", "quitar el avatar", "desactiva el avatar"]
+
+[ui_appearance.avatars]
+holo-contorno = ["holo contorno", "holocontorno", "contorno", "holograma"]
+holo-hilo = ["holo hilo", "holohilo", "hilo", "hilos"]
+holo-busto = ["holo busto", "holobusto", "busto"]
+holo-orbe = ["holo orbe", "holoorbe", "orbe"]
+holo-filamento = ["holo filamento", "holofilamento", "filamento azul"]
+ascuario = ["ascuario", "dragon"]
+relojero = ["relojero", "reloj"]
+filamento = ["filamento", "filamento dorado"]
+none = ["ninguno", "clasico", "personaje clasico"]
+
+[ui_appearance.layouts]
+nucleo = ["nucleo"]
+holomesa = ["holomesa", "holo mesa", "mesa"]
+visor = ["visor"]
+
 [backchannel]
 # Asentimientos: se descartan sin más, salvo que el bot esté esperando una respuesta.
 # Cuenta si TODAS las palabras del enunciado están aquí.

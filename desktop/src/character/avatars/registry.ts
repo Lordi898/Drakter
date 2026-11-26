@@ -1,6 +1,12 @@
 import { useSyncExternalStore } from 'react'
 import { getPreferences, subscribePreferences } from '@/stores/preferences'
 import { avatar as ascuario } from './ascuario/register'
+import { avatar as filamento } from './filamento/register'
+import { avatar as holoFilamento } from './holo-filamento/register'
+import { avatar as relojero } from './relojero/register'
+import { avatar as holoBusto } from './holo-busto/register'
+import { avatar as holoContorno } from './holo-contorno/register'
+import { avatar as holoHilo } from './holo-hilo/register'
 import type { AvatarMeta, CreateAvatar, CreateAvatarLayer } from './types'
 
 export interface AvatarEntry {
@@ -18,11 +24,11 @@ export interface AvatarEntry {
  * Avatares portados, en el orden en que se muestran. Para añadir uno: `README.md` de esta carpeta
  * (su `register.ts` exporta `avatar: AvatarEntry`) y una línea aquí y otra en los imports.
  */
-const AVATARS: readonly AvatarEntry[] = [ascuario]
+const AVATARS: readonly AvatarEntry[] = [holoContorno, holoHilo, holoBusto, holoFilamento, ascuario, relojero, filamento]
 
 /** Valor de la preferencia `avatarId` para «sin avatar 3D» (personaje clásico: .riv o SVG). */
 export const NO_AVATAR = 'none'
-/** Avatar por defecto (decisión del usuario). Mientras no esté portado, se resuelve a «ninguno». */
+/** Avatar por defecto (decisión del usuario). */
 export const DEFAULT_AVATAR_ID = 'holo-contorno'
 
 const BY_ID: ReadonlyMap<string, AvatarEntry> = new Map(AVATARS.map((entry) => [entry.meta.id, entry]))
