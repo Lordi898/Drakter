@@ -1,11 +1,11 @@
-/** CALENDARIO: torre de días (14 placas desde el lunes de esta semana; hoy sobresale). */
+/** CALENDARIO: torre de días (una placa por día de la agenda, de hoy en adelante; hoy sobresale). */
 import * as THREE from 'three'
 import { hhmm, type HmEvent, type HoloSnapshot, type PickInfo } from '../../model'
 import { circlePts, segments } from '../geo'
 import type { Materials } from '../materials'
 import { base, C, clamp01, ease, instanced, pickInstanced, clearInstancedPick, stationState, tmpM, tmpP, tmpQ, tmpS, yAxis, type Station, type Tag } from './base'
 
-const N = 14
+const MAX_N = 14
 const Y0 = 0.32
 const DY = 0.215
 /** Franja horaria visible en cada placa. */
@@ -18,7 +18,7 @@ const KIND_NAME: Record<HmEvent['kind'], string> = { clase: 'clase', evento: 'ev
 
 export function calendario(M: Materials, pos: THREE.Vector3): Station {
   const b = base(M, 'calendario', 'Calendario', '2', pos, 1.35, 3.5)
-  const plateM: THREE.Matrix4[] = Array.from({ length: N }, () => new THREE.Matrix4())
+  const plateM: THREE.Matrix4[] = Array.from({ length: MAX_N }, () => new THREE.Matrix4())
   const local = new THREE.Matrix4()
   let plates: THREE.InstancedMesh | null = null
   let evMesh: THREE.InstancedMesh | null = null
@@ -27,12 +27,14 @@ export function calendario(M: Materials, pos: THREE.Vector3): Station {
   let todayIdx = 0
   let busyDays = new Set<number>()
   let picked = -1
+  let N = 0
 
   const s: Station = {
     ...stationState(b),
     setData(snap: HoloSnapshot) {
       const root = b.rebuild()
-      days = snap.calendar.days
+      days = snap.calendar.days.slice(0, MAX_N)
+      N = days.length
       todayIdx = snap.calendar.todayIndex
       evs = snap.calendar.events.filter((e) => e.day >= 0 && e.day < N)
       busyDays = new Set(evs.filter((e) => e.kind !== 'clase').map((e) => e.day))
@@ -101,7 +103,7 @@ export function calendario(M: Materials, pos: THREE.Vector3): Station {
       clearInstancedPick(evMesh)
     },
     tags(): Tag[] {
-      return days.slice(0, N).map((d, i) => {
+      return days.map((d, i) => {
         tmpP.set(-0.95, 0.02, 0.62).applyMatrix4(plateM[i]!)
         return { p: b.body.localToWorld(tmpP.clone()), t: i === todayIdx ? `${d} · hoy` : d, k: i === todayIdx ? 'hi' : busyDays.has(i) && i > todayIdx ? 'warn' : '' }
       })
