@@ -13,12 +13,16 @@ export interface AvatarEntry {
 }
 
 /**
- * Avatares 3D disponibles. Para añadir otro: su carpeta con un `entry.ts` que exporte
- * `create: CreateAvatar`, y una entrada aquí.
+ * Avatares 3D disponibles. Cómo añadir uno: `README.md` de esta carpeta (su `entry.ts` exporta
+ * `create: CreateAvatar` y, para el Stage de Jarvis, `createLayer: CreateAvatarLayer`).
  */
 const AVATARS = {
   // Provisional. Soporta `transparent`, pero su diseño cuenta con su halo de fondo.
-  ascuario: { load: () => import('./ascuario/entry').then((module) => module.create), transparent: false }
+  ascuario: {
+    load: () => import('./ascuario/entry').then((module) => module.create),
+    loadLayer: () => import('./ascuario/entry').then((module) => module.createLayer),
+    transparent: false
+  }
 } satisfies Record<string, AvatarEntry>
 
 export type AvatarId = keyof typeof AVATARS

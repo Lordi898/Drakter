@@ -22,7 +22,10 @@ export interface Avatar3D {
   /** Nivel de voz 0..1. */
   setAudioLevel(level: number): void
   setViseme?(viseme: string | null): void
-  /** Mirada en coordenadas normalizadas -1..1. Si nunca se llama, el avatar sigue al ratón. */
+  /**
+   * Mirada en coordenadas normalizadas -1..1 respecto al centro del avatar, con la `y` positiva hacia
+   * abajo (como la pantalla). Si nunca se llama, el avatar sigue al ratón.
+   */
   lookAt(x: number, y: number): void
   notify(event: AvatarEvent): void
   setReducedMotion(on: boolean): void
