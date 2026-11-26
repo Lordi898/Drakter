@@ -1689,3 +1689,26 @@ Decisiones técnicas, cambios de tecnología y motivos.
     - Capa en el Stage real (`createStage` + `createAvatarStageLayer`): 30 fps, 11 y 13 draw calls.
     - `dispose()`: 0 fotogramas después y ninguna traza en consola.
   - ⚠️ Se comprobó en Chrome y no en Electron, para no tocar la app del usuario; es el mismo Chromium. Arnés: `~/.local/share/drakter/research/avatar3d/port-105/`.
+
+## [2026-11-26] Port de Holo-Orbe (`avatars/holo-orbe/`)
+- **Contexto:** segundo avatar elegible del plan de selección (jarvis-seleccion.md), primero de la ronda holográfica. El prototipo (drakter-96, v2) creaba su propio `WebGLRenderer` y su escena le cambiaba el tamaño, lo redibujaba al redimensionar y en `dispose` forzaba la pérdida del contexto.
+- **Decisión:**
+  - Mismo esquema que Ascuario: `layer.ts` (núcleo `AvatarLayer`) y `index.ts` (envoltorio `createAvatar`).
+  - `render.ts` pasa a `createScene(renderer)`: no cambia el tamaño ni la densidad del renderer, no lo libera ni fuerza la pérdida del contexto, y no dibuja dentro de `resize`.
+  - El fondo propio (solo sin `transparent`) usa `uOrigin` para medir `gl_FragCoord` desde la esquina del recuadro.
+  - El tejido de filamentos sigue por tandas de 8 ms, ahora dentro de `render()` de la capa. `ready` se resuelve con los shaders compilados.
+  - En `render`, la capa fija viewport y scissor, limpia solo su profundidad y lo restaura todo con `try/finally`. No toca el tone mapping.
+  - `transparent: true` en el registro. Implementa `setTheme`: tinta de cobalto en claro, luz aditiva en oscuro.
+  - El envoltorio conserva la entrada de ratón del original: tacto de los filamentos, viento, arrastre para girar y clics por zona.
+  - `brain.ts` y `bust.ts` sin cambios; no se portan las fuentes del panel de pruebas.
+- **Alternativas descartadas:** usar el `.mjs` del artefacto, que lleva Three empaquetado dentro (incumple «Three externo, una sola copia»).
+- **Motivo:** que Holo-Orbe se pueda elegir en Drakter, en Ajustes y en el Stage de Jarvis con una sola implementación.
+- **Impacto:**
+  - Código: `desktop/src/character/avatars/holo-orbe/**` y una línea en `avatars/registry.ts`.
+  - Comprobado en Electron:
+    - En Ajustes se elige y la vista previa pasa a 3D.
+    - En la pantalla Drakter flota sin tarjeta y cambia en vivo entre tema oscuro (aditivo) y claro (cobalto).
+    - Como capa de un renderer compartido: lista en 28 ms y, tras 90 fotogramas, el estado global intacto (tone mapping 0, sin scissor, viewport y color de borrado sin cambios). Sin recompilar (5 programas antes y después).
+    - Al hablar abre la boca y mira donde se le indica.
+    - Sin errores en consola.
+  - CPU en reposo en la pantalla Drakter (UHD 620, a 60 rAF/s, con el bucle del avatar limitado a 30 fps, dentro de `flock`): renderer 5,8 % y 4,7 %, proceso GPU 6,2 % y 4,8 %. Hubo una primera medida de 25,3 % que coincidió con una recarga de la página: el avatar volvió a tejer y a compilar. No cuenta como reposo.

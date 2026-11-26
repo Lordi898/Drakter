@@ -7,6 +7,7 @@ import { avatar as relojero } from './relojero/register'
 import { avatar as holoBusto } from './holo-busto/register'
 import { avatar as holoContorno } from './holo-contorno/register'
 import { avatar as holoHilo } from './holo-hilo/register'
+import { avatar as holoOrbe } from './holo-orbe/register'
 import type { AvatarMeta, CreateAvatar, CreateAvatarLayer } from './types'
 
 export interface AvatarEntry {
@@ -24,7 +25,7 @@ export interface AvatarEntry {
  * Avatares portados, en el orden en que se muestran. Para añadir uno: `README.md` de esta carpeta
  * (su `register.ts` exporta `avatar: AvatarEntry`) y una línea aquí y otra en los imports.
  */
-const AVATARS: readonly AvatarEntry[] = [holoContorno, holoHilo, holoBusto, holoFilamento, ascuario, relojero, filamento]
+const AVATARS: readonly AvatarEntry[] = [holoContorno, holoHilo, holoBusto, holoOrbe, holoFilamento, ascuario, relojero, filamento]
 
 /** Valor de la preferencia `avatarId` para «sin avatar 3D» (personaje clásico: .riv o SVG). */
 export const NO_AVATAR = 'none'
