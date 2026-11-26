@@ -1525,6 +1525,20 @@ Decisiones técnicas, cambios de tecnología y motivos.
     - En SwiftShader detecta software, pasa a Ahorro sin partículas y «reducir movimiento» deja la escena quieta.
   - ⚠️ Se midió en Chrome y no en Electron, para no tocar la app de desarrollo del usuario; es el mismo Chromium y la misma ruta ANGLE. Playwright emula páginas siempre visibles, así que `hidden` se probó forzando `document.hidden` y `visibilitychange`, que es la misma ruta que sigue Electron al minimizar. Arnés y datos: `~/.local/share/drakter/research/jarvis-hud/w3-stage/`.
 
+## [2026-11-26] Port de Relojero v2, Filamento v2 (dorado) y Holo-Filamento a `character/avatars/`
+- **Contexto:** los tres avatares existían solo como prototipos con `createAvatar(canvas, opts)` y renderer propio. El plan común de selección (`jarvis-seleccion.md`) los quiere seleccionables en Drakter y en el Stage de Jarvis, con tema claro/oscuro.
+- **Decisión:**
+  - Cada uno vive en `avatars/<id>/` con `layer.ts` (`create<Nombre>Layer(renderer, opts)`, el núcleo), `index.ts` (envoltorio con renderer, bucle de 30 fps y ratón) y `entry.ts` (`create` y `createLayer`), más su línea en `registry.ts` (`transparent: true`).
+  - Los renderers (`render.ts`, `mats.ts`…) reciben el `WebGLRenderer` del anfitrión: no lo crean, no llaman a `setSize`/`setPixelRatio` y `dispose()` no hace `gl.dispose()` ni `forceContextLoss()` (en modo capa el contexto es compartido; el envoltorio hace `gl.dispose()` solo en su lienzo).
+  - Los fondos que usaban `gl_FragCoord` (Filamento y Holo-Filamento) restan el origen del recuadro (`uOrg`) para funcionar dentro de un viewport del Stage.
+  - Limitador por calendario (`due += 1000/cap`) en los tres envoltorios (el Relojero usaba el viejo).
+  - `transparent` con alfa premultiplicado. La luz aditiva se escribe con alfa 0 y mezcla `One / OneMinusSrcAlpha`, que suma igual en lienzos opacos y transparentes (Relojero: cristal, destellos; Filamento: hebras y polvo).
+  - Tema `theme`/`setTheme('dark'|'light')` (Holo-Filamento renombra `surface`/`setSurface`). Variante clara: **Holo-Filamento** pasa a tinta cobalto lo que flota fuera del busto (ya diseñado así); **Relojero** es opaco y se lee igual, solo baja a la mitad la ganancia de los destellos aditivos; **Filamento**, luz aditiva pura que desaparecería sobre claro, pone su propio fondo oscuro como tarjeta de esquinas redondeadas (la tinta cambiaría su carácter ámbar).
+  - El precalentado de la GPU del Relojero se hace con el scissor a cero (no pinta en el lienzo compartido) y compila con el tone mapping de `render()`.
+- **Alternativas descartadas:** tinta en Filamento (pierde el carácter); duplicar el módulo para el modo capa (la capa es el núcleo y `createAvatar` su envoltorio, como Ascuario); render target para el precalentado del Relojero (cambia el espacio de color de salida y obligaría a recompilar).
+- **Motivo:** una sola implementación por avatar, dos formas de montarla, y el contrato de `README.md` de `avatars/` cumplido.
+- **Impacto:** solo `desktop/src/character/avatars/{relojero,filamento,holo-filamento}/` y `registry.ts`. Usan `AvatarOptions.theme` y `setTheme` de `types.ts` (A1) y, para el registro, un `register.ts` con su ficha y una miniatura `thumbnail.webp` (192 px) cada uno. CPU del renderer en reposo en la UHD 620 (Chrome con ventana, 500×600, 30 fps), similar a los prototipos dentro del ruido de la máquina (carga media de 8–9): Relojero 7–10 % (prototipo 8–12 %), Filamento 7 % (5,6 %), Holo-Filamento 6 % (6 %). Comprobados además montados en el `createStage` real de Jarvis (`createAvatarStageLayer`), en lienzo propio y en una capa dentro de un viewport desplazado, en oscuro y claro.
+
 ## [2026-11-26] A1: varios avatares 3D elegibles (registro, preferencia `avatarId` y Ajustes → Avatar)
 - **Contexto:** el usuario quiere poder elegir cualquiera de los avatares 3D, desde la interfaz y por voz, en Drakter y en Jarvis; por defecto `holo-contorno` (plan `jarvis-seleccion.md`). Hasta ahora había un solo avatar fijado en código (`ACTIVE_AVATAR`).
 - **Decisión:**
