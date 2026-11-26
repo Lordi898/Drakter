@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { activeAvatar } from './avatars/registry'
 import { warnCharacter } from './log'
 import { RiveCharacter } from './RiveCharacter'
 import { SvgCharacter } from './SvgCharacter'
@@ -10,10 +11,14 @@ const RIV_URL = '/__character/drakter.riv'
 
 type Source = { kind: 'checking' } | { kind: 'rive'; buffer: ArrayBuffer } | { kind: 'three' } | { kind: 'svg' }
 
+/** Sin .riv: el avatar 3D activo o, si no hay ninguno (`ACTIVE_AVATAR = null`), el SVG. */
+const NO_RIV: Source = activeAvatar ? { kind: 'three' } : { kind: 'svg' }
+const NO_RIV_LABEL = activeAvatar ? 'el avatar 3D' : 'el SVG'
+
 /**
- * Orden: el .riv del usuario si existe (alternativa explícita), si no el avatar 3D y, si no hay
- * WebGL2 o algo falla, el SVG provisional. El SVG se dibuja desde el primer momento y se retira
- * cuando el avatar 3D ya se ve, para no dejar nunca el hueco vacío.
+ * Orden: el .riv del usuario si existe (alternativa explícita); si no, el avatar 3D activo, si lo hay;
+ * y, sin avatar 3D, sin WebGL2 o si algo falla, el SVG provisional. El SVG se dibuja desde el primer
+ * momento y se retira cuando el avatar 3D ya se ve, para no dejar nunca el hueco vacío.
  */
 export function AdaptiveCharacter(props: CharacterRendererProps) {
   const [source, setSource] = useState<Source>({ kind: 'checking' })
@@ -28,17 +33,17 @@ export function AdaptiveCharacter(props: CharacterRendererProps) {
         // En desarrollo el servidor de Vite responde a cualquier ruta con index.html.
         if (response.headers.get('Content-Type')?.startsWith('text/html')) return null
         if (response.ok) return response.arrayBuffer()
-        if (response.status !== 404) warnCharacter(`el .riv no se pudo leer (HTTP ${response.status}); se usa el avatar 3D`)
+        if (response.status !== 404) warnCharacter(`el .riv no se pudo leer (HTTP ${response.status}); se usa ${NO_RIV_LABEL}`)
         return null
       })
       .then((buffer) => {
         if (!alive) return
-        if (buffer && buffer.byteLength === 0) warnCharacter('el .riv está vacío; se usa el avatar 3D')
-        setSource(buffer && buffer.byteLength > 0 ? { kind: 'rive', buffer } : { kind: 'three' })
+        if (buffer && buffer.byteLength === 0) warnCharacter(`el .riv está vacío; se usa ${NO_RIV_LABEL}`)
+        setSource(buffer && buffer.byteLength > 0 ? { kind: 'rive', buffer } : NO_RIV)
       })
       .catch((reason: unknown) => {
-        warnCharacter('no se pudo pedir el .riv; se usa el avatar 3D', reason)
-        if (alive) setSource({ kind: 'three' })
+        warnCharacter(`no se pudo pedir el .riv; se usa ${NO_RIV_LABEL}`, reason)
+        if (alive) setSource(NO_RIV)
       })
     return () => {
       alive = false
@@ -46,14 +51,15 @@ export function AdaptiveCharacter(props: CharacterRendererProps) {
   }, [])
 
   const riveFailed = useCallback(() => {
-    warnCharacter('el .riv no cargó o no tiene la state machine «Drakter»; se usa el avatar 3D')
-    setSource({ kind: 'three' })
+    warnCharacter(`el .riv no cargó o no tiene la state machine «Drakter»; se usa ${NO_RIV_LABEL}`)
+    setSource(NO_RIV)
   }, [])
   const threeFailed = useCallback(() => setSource({ kind: 'svg' }), [])
   const threeShown = useCallback(() => setThreeReady(true), [])
 
   if (source.kind === 'rive') return <RiveCharacter {...props} buffer={source.buffer} onFail={riveFailed} />
-  const svgVisible = source.kind !== 'three' || !threeReady
+  const three = source.kind === 'three' ? activeAvatar : null
+  const svgVisible = !three || !threeReady
   // Hijos en posiciones fijas: el SVG no se vuelve a montar al pasar de «checking» a «three».
   return (
     <div className="relative size-full">
@@ -62,7 +68,7 @@ export function AdaptiveCharacter(props: CharacterRendererProps) {
           <SvgCharacter {...props} />
         </div>
       ) : null}
-      {source.kind === 'three' ? <ThreeCharacter {...props} onReady={threeShown} onFail={threeFailed} /> : null}
+      {three ? <ThreeCharacter {...props} avatar={three} onReady={threeShown} onFail={threeFailed} /> : null}
     </div>
   )
 }

@@ -1327,3 +1327,13 @@ Decisiones técnicas, cambios de tecnología y motivos.
   - Código: `desktop/src/character/{ThreeCharacter.tsx,avatars/{types,registry}.ts,avatars/ascuario/{index,scene}.ts}`.
   - Comprobado en Electron con Ascuario forzado a `transparent: true`, en el tema claro (el actual) y en el oscuro: sin tarjeta, bordes limpios y sin halos oscuros. En el tema claro el contraste es alto; en el oscuro es más justo con un avatar negro, aunque legible gracias a las vetas y los reflejos.
   - Cuidado para los avatares transparentes: lo que se salga del lienzo (partículas, humo) se corta en el borde.
+
+## [2026-11-26] Avatar 3D desactivado por defecto (`ACTIVE_AVATAR = null`)
+- **Contexto:** el PR #35 tiene que fusionarse ya, porque el modo Jarvis depende de él, y lo que ve el usuario no debe cambiar hasta que elija el avatar holográfico.
+- **Decisión:** `avatars/registry.ts` admite `ACTIVE_AVATAR = null`, que queda como valor por defecto. Sin avatar activo, `AdaptiveCharacter` hace lo de antes: el `.riv` del usuario si existe y, si no, el SVG. Ascuario sigue registrado, pero inactivo. Activar un avatar sigue siendo cambiar esa línea (p. ej. `'ascuario'`). `ThreeCharacter` recibe ahora la entrada del avatar como prop.
+- **Alternativas descartadas:** quitar Ascuario del registro, porque se perdería el avatar de prueba del anfitrión. Un ajuste en la interfaz, porque el usuario aún no ha elegido avatar.
+- **Motivo:** fusionar sin cambiar lo que ve el usuario.
+- **Impacto:**
+  - Código: `desktop/src/character/{AdaptiveCharacter,ThreeCharacter}.tsx`, `avatars/registry.ts` y `plug.ts`.
+  - Con `null`, el build no genera el chunk de Three ni la malla (el import diferido queda como código muerto y se elimina).
+  - Comprobado en Electron: con `null` se ve el SVG, sin lienzo y sin pedir nada de Three; con `'ascuario'`, el avatar 3D, sin avisos. Esto matiza la entrada «Avatar 3D Three.js sustituye al placeholder»: el anfitrión está listo, pero hoy no hay avatar activo.

@@ -150,6 +150,7 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
   ⚠️ Se ve el personaje sustituto (SVG) en la pantalla Drakter; el `.riv` real sigue pendiente.
   ⚠️ El `.riv` se diseña a mano en el editor de Rive. Por código solo se cubre el personaje provisional; las casillas de estados, transiciones e integración dependen de ese archivo hasta que el usuario lo entregue.
   ⚠️ (2026-11-26) Rive deja de ser el camino principal: el personaje es un avatar 3D en Three.js 0.180 con la API común `createAvatar` (`desktop/src/character/avatars/`, entrada «Avatar 3D Three.js» de `DECISIONS.md`). Hoy va Ascuario como avatar provisional; el definitivo sale de la ronda de avatares holográficos y se enchufa cambiando una línea de `avatars/registry.ts`. El `.riv` queda como alternativa: si el usuario deja uno, tiene prioridad.
+  ⚠️ (2026-11-26) Por defecto `ACTIVE_AVATAR = null`: hasta que se elija el avatar holográfico, la app sigue mostrando el `.riv` o el SVG y no descarga Three.js.
 - [x] Crear estado idle.
   ⚠️ Hecho en el personaje provisional SVG; la versión `.riv` sigue pendiente (ver «Crear proyecto Rive»).
 - [x] Crear estado listening.

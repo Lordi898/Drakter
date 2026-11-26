@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useSyncExternalStore } from 'react'
 import { cn } from '@/lib/utils'
 import { usePreferences } from '@/stores/preferences'
 import { subscribeUserTyping } from './activity'
-import { activeAvatar } from './avatars/registry'
+import type { AvatarEntry } from './avatars/registry'
 import type { Avatar3D } from './avatars/types'
 import { warnCharacter } from './log'
 import type { CharacterRendererProps } from './types'
@@ -28,6 +28,8 @@ function useReducedMotion(): boolean {
 }
 
 interface ThreeCharacterProps extends CharacterRendererProps {
+  /** Avatar que se dibuja (el activo de `avatars/registry.ts`). */
+  readonly avatar: AvatarEntry
   /** El avatar ya se ve (tras el fundido). */
   readonly onReady: () => void
   /** No hay WebGL2 o la carga falló: el padre vuelve al SVG. */
@@ -38,7 +40,7 @@ interface ThreeCharacterProps extends CharacterRendererProps {
  * Renderer 3D: un único lienzo WebGL con el avatar activo de `avatars/registry.ts`.
  * El bucle de dibujo lo lleva el avatar y se para solo con `document.hidden`.
  */
-export function ThreeCharacter({ state, onReady, onFail }: ThreeCharacterProps) {
+export function ThreeCharacter({ avatar: entry, state, onReady, onFail }: ThreeCharacterProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const avatar = useRef<Avatar3D | null>(null)
   const latestState = useRef(state)
@@ -53,13 +55,13 @@ export function ThreeCharacter({ state, onReady, onFail }: ThreeCharacterProps) 
     let fadeTimer: ReturnType<typeof setTimeout> | undefined
     const cleanups: Array<() => void> = []
 
-    activeAvatar
+    entry
       .load()
       .then((create) => {
         if (!alive) return
         const created = create(canvas, {
           reducedMotion: latestReduced.current,
-          transparent: activeAvatar.transparent,
+          transparent: entry.transparent,
           pixelRatio: Math.min(window.devicePixelRatio || 1, MAX_PIXEL_RATIO)
         })
         instance = created
@@ -110,7 +112,7 @@ export function ThreeCharacter({ state, onReady, onFail }: ThreeCharacterProps) 
       instance?.dispose()
       avatar.current = null
     }
-  }, [onReady, onFail])
+  }, [entry, onReady, onFail])
 
   useEffect(() => {
     latestState.current = state
@@ -131,7 +133,7 @@ export function ThreeCharacter({ state, onReady, onFail }: ThreeCharacterProps) 
   return (
     <canvas
       ref={canvasRef}
-      className={cn('absolute inset-0 block size-full', !activeAvatar.transparent && 'rounded-2xl')}
+      className={cn('absolute inset-0 block size-full', !entry.transparent && 'rounded-2xl')}
     />
   )
 }
