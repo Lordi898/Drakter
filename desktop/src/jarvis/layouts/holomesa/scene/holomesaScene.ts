@@ -58,6 +58,8 @@ export interface HolomesaScene {
   shock(color: number): void
   /** Secuencia de arranque (mesa que se dibuja, cámara que baja, hologramas que se imprimen). */
   boot(): Promise<void>
+  /** Salida (≈1,2 s): los hologramas se desimprimen, el orbe se apaga y la mesa se borra hacia el canto. */
+  unboot(): Promise<void>
   /** Recuadro del avatar para `JarvisAvatarSlot.setViewport`. */
   avatarViewport(frame: StageFrame): AvatarViewport
   getView(): HolomesaView
@@ -560,6 +562,14 @@ export function createHolomesaScene(initialReduced: boolean): HolomesaScene {
       const built = Promise.all(stations.map((_, i) => tween(1300, (k) => (boot.build[i] = k), easeOut, 1100 + i * 150)))
       const orbIn = tween(1200, (k) => (boot.orb = k), easeOut, 1600)
       await Promise.all([drawn, built, orbIn])
+    },
+    async unboot() {
+      api.focus(null)
+      const b0 = [...boot.build], o0 = boot.orb
+      const out = Promise.all(stations.map((_, i) => tween(650, (k) => (boot.build[i] = b0[i]! * (1 - k)))))
+      const orbOut = tween(700, (k) => (boot.orb = o0 * (1 - k)))
+      const erase = tween(700, (k) => (boot.draw = 1 - k), (x) => x * x, 450)
+      await Promise.all([out, orbOut, erase])
     },
     avatarViewport(frame) {
       // Preside la cabecera de la mesa en la vista general; con una sección abierta se acopla al hueco del HUD.
