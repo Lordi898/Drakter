@@ -49,7 +49,9 @@ export function AvatarSection() {
   const { avatarId } = usePreferences()
   const state = useDrakterState()
   const active = resolveAvatar(avatarId)
-  const selected = active ? active.meta.id : NO_AVATAR
+  // «Clásico» solo se marca si se eligió de verdad: con un avatar aún no portado no hay tarjeta marcada y,
+  // al pulsar «Clásico», se guarda `none` (si no, al portarse ese avatar cambiaría sin que el usuario lo pidiera).
+  const selected = active ? active.meta.id : avatarId === NO_AVATAR ? NO_AVATAR : null
   const pending = !active && avatarId !== NO_AVATAR
 
   return (
@@ -62,7 +64,8 @@ export function AvatarSection() {
           {pending ? (
             <p className="mt-2 text-sm text-muted-foreground">
               {avatarId === DEFAULT_AVATAR_ID ? 'El avatar predeterminado' : 'El avatar elegido'} aún no está
-              disponible en esta versión; mientras tanto se usa el personaje clásico.
+              disponible en esta versión; mientras tanto se ve el personaje clásico y aparecerá solo cuando llegue.
+              Si prefieres quedarte con el clásico, elígelo abajo.
             </p>
           ) : null}
           <div role="radiogroup" aria-label="Avatar" className="mt-4 grid grid-cols-[repeat(auto-fill,minmax(7.5rem,1fr))] gap-3">
