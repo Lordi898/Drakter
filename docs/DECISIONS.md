@@ -1524,3 +1524,21 @@ Decisiones técnicas, cambios de tecnología y motivos.
     - Al quitar las capas quedan 0 geometrías, 0 texturas y 0 programas, y no hay fotogramas tras `dispose()`. Después de una restauración, Three avisa de que «object does not belong to this context» al liberar, y es inocuo.
     - En SwiftShader detecta software, pasa a Ahorro sin partículas y «reducir movimiento» deja la escena quieta.
   - ⚠️ Se midió en Chrome y no en Electron, para no tocar la app de desarrollo del usuario; es el mismo Chromium y la misma ruta ANGLE. Playwright emula páginas siempre visibles, así que `hidden` se probó forzando `document.hidden` y `visibilitychange`, que es la misma ruta que sigue Electron al minimizar. Arnés y datos: `~/.local/share/drakter/research/jarvis-hud/w3-stage/`.
+## [2026-11-26] A1: varios avatares 3D elegibles (registro, preferencia `avatarId` y Ajustes → Avatar)
+- **Contexto:** el usuario quiere poder elegir cualquiera de los avatares 3D, desde la interfaz y por voz, en Drakter y en Jarvis; por defecto `holo-contorno` (plan `jarvis-seleccion.md`). Hasta ahora había un solo avatar fijado en código (`ACTIVE_AVATAR`).
+- **Decisión:**
+  - **Contrato** (`avatars/types.ts`, aditivo): `AvatarTheme`, `AvatarOptions.theme`, `setTheme?` opcional (un holograma aditivo no se ve sobre fondo claro) y `AvatarMeta` (id, nombre, descripción, miniatura, alias de voz).
+  - **Registro** (`avatars/registry.ts`): cada avatar se describe en su carpeta (`<id>/register.ts`, sin importar Three) y el registro solo los lista. `resolveAvatar(id)` devuelve `null` para `none`, para un id desconocido o para uno aún no portado: personaje clásico, nunca rompe. También exporta `useActiveAvatar()`, `listAvatars()`, `avatarIds()` y `findAvatarByAlias()` para la voz, la herramienta y el selector de Jarvis. Desaparece `ACTIVE_AVATAR`.
+  - **Preferencia** `avatarId: string` (`stores/preferences.ts`), por defecto `holo-contorno`. `load()` solo valida la forma (`[a-z0-9-]{1,40}`), sin importar el registro. Mientras `holo-contorno` no esté portado, el predeterminado se ve como «Clásico». Coordinado con drakter-100 (J1).
+  - **Anfitrión:** `AdaptiveCharacter` es reactivo. Con un avatar 3D usa ese, con el SVG debajo hasta que se ve y como respaldo; con «ninguno», el personaje clásico (el `.riv` si existe y, si no, el SVG). El `.riv` deja de tener prioridad sobre un avatar 3D elegido de forma explícita. Cambiar de avatar monta uno nuevo y libera el anterior (`key`). `ThreeCharacter` pasa el tema real de la app (clase `dark` de `<html>`, `useAppTheme`) y llama a `setTheme?` cuando cambia. La capa del Stage pasa `theme: 'dark'`.
+  - **Ajustes → Avatar** (`settings/AvatarSection.tsx`): grupo de radios nativo con miniaturas («Clásico» más los avatares portados) y vista previa en vivo con el mismo `CharacterSlot`.
+  - `avatars/README.md`: lista de lo que debe cumplir cada port (`create` y `createLayer`, `transparent`, `theme`, `dispose`, sin assets de terceros, Three externo 0.180.0, miniatura de 192 px, rendimiento).
+- **Alternativas descartadas:** validar `avatarId` contra el registro dentro de `preferences.ts`, porque acoplaría las preferencias a los avatares. Listar en el registro los avatares aún no portados (con su ficha), porque haría falta mantener fichas y miniaturas sin código detrás; cada port trae la suya.
+- **Motivo:** que cada port sea su carpeta más una línea, y que la elección funcione igual desde Ajustes, Jarvis y la voz.
+- **Impacto:**
+  - Código: `desktop/src/character/{AdaptiveCharacter,ThreeCharacter}.tsx`, `character/{plug,useAppTheme}.ts`, `character/avatars/{types,registry}.ts`, `avatars/README.md`, `avatars/ascuario/{register.ts,thumbnail.webp}`, `stores/preferences.ts`, `settings/{AvatarSection,SettingsPage}.tsx` y `jarvis/stage/layers/avatar.ts`.
+  - Comprobado en Electron:
+    - Con la preferencia por defecto se marca «Clásico» y se explica que el predeterminado aún no está.
+    - Al elegir Ascuario se guarda la preferencia y la vista previa pasa a 3D.
+    - Con las flechas se vuelve a «Clásico» y al SVG.
+    - Sin errores en consola.
