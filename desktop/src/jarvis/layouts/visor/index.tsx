@@ -5,6 +5,7 @@
  */
 import { useEffect, useMemo, useRef, useState, type ComponentType } from 'react'
 import type { SectionId } from '@/navigation/sections'
+import { useDrakterState } from '@/stores/agent'
 import type { JarvisLayoutProps } from '../types'
 import { Alerts } from './Alerts'
 import { Glass } from './Glass'
@@ -30,6 +31,9 @@ export const SECTOR_NAMES = ['Núcleo', 'Hoy', 'Tareas y proyectos', 'Hábitos',
 const SECTOR_VIEWS: readonly ComponentType[] = [Hoy, Tareas, Habitos, Calendario, Relaciones, Almacen]
 const around = (i: number): number[] => [((i + 6) % 7), i, (i + 1) % 7]
 
+/** fps de ambiente en reposo (visor-port.md §4, palanca 1). */
+const IDLE_FPS = 10
+
 const isField = (t: EventTarget | null): boolean => t instanceof HTMLElement && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))
 
 export default function VisorLayout({ stage, avatar, reducedMotion, section, navigate, onReady, exit }: JarvisLayoutProps) {
@@ -51,6 +55,15 @@ export default function VisorLayout({ stage, avatar, reducedMotion, section, nav
     return () => { alive = false; avatar.setViewport(null); stage.remove(w.id); setWorld(null) }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stage])
+  // Ambiente en reposo a 10 fps (el Stage solo lo aplica tras 8 s sin puntero, foco ni cambios). Con el
+  // agente activo (escuchando, pensando, hablando…) el halo y la onda siguen la voz: fps del perfil.
+  const agentState = useDrakterState()
+  const calm = agentState === 'idle' || agentState === 'offline'
+  useEffect(() => {
+    if (!stage) return
+    stage.setIdleFps(calm ? IDLE_FPS : null)
+    return () => stage.setIdleFps(null)
+  }, [stage, calm])
   // Sin lienzo: el HUD en DOM ya se ve.
   useEffect(() => { if (!stage) ready() })
 
@@ -90,7 +103,7 @@ export default function VisorLayout({ stage, avatar, reducedMotion, section, nav
           <Nucleo avatar={avatar} />
           {SECTOR_VIEWS.map((View, i) => (seen.has(i + 1) ? <View key={i} /> : null))}
         </div>
-        <Glass world={world} sector={cur} names={SECTOR_NAMES} go={go} exit={exit} />
+        <Glass world={world} sector={cur} names={SECTOR_NAMES} go={go} />
         <Alerts />
       </div>
     </WorldContext.Provider>

@@ -77,7 +77,8 @@
 /* ── Cristal (fijo en pantalla; la esquina superior derecha es del shell) */
 .jv-visor-glass { position: absolute; inset: 0; pointer-events: none; z-index: 2; }
 .jv-visor-bezel { position: absolute; inset: 0; background: radial-gradient(ellipse 75% 70% at 50% 48%, transparent 58%, rgba(0,3,9,.55) 86%, rgba(0,2,6,.9) 100%), linear-gradient(rgba(1,5,12,.85), transparent 13%, transparent 85%, rgba(1,5,12,.9)); }
-.jv-visor-tape { position: absolute; left: 0; top: 16px; width: 100%; height: 58px; pointer-events: auto; }
+/* la cinta no llega a la esquina superior derecha, reservada al anfitrión (Apariencia, Volver a Drakter) */
+.jv-visor-tape { position: absolute; left: 380px; top: 16px; width: calc(100% - 760px); min-width: 360px; height: 58px; pointer-events: auto; }
 .jv-visor-ladder { position: absolute; left: 18px; top: 22%; height: 56%; width: 64px; }
 .jv-visor-brand { position: absolute; left: 34px; top: 92px; }
 .jv-visor-brand b { font-weight: 300; font-size: 22px; letter-spacing: .12em; color: var(--v-core); } .jv-visor-brand span { font-weight: 200; color: var(--v-ice); letter-spacing: .04em; }
@@ -87,7 +88,6 @@
 .jv-visor-dock { position: absolute; right: 34px; bottom: 22px; display: flex; gap: 4px; pointer-events: auto; }
 .jv-visor-dock button { font-size: 11.5px; padding: 5px 9px; }
 .jv-visor-dock button.on { background: rgba(var(--v-ice-r), .24); border-color: var(--v-core); color: #fff; }
-.jv-visor-dock button.exit { margin-left: 10px; }
 .jv-visor-dock kbd { font-size: 8.5px; border: 1px solid rgba(var(--v-ice-r), .35); border-radius: 3px; padding: 0 3px; margin-right: 5px; color: var(--v-ice); }
 .jv-visor-ret { position: absolute; left: 0; top: 0; z-index: 9; }
 .jv-visor-ret .rr { position: absolute; left: -17px; top: -17px; width: 34px; height: 34px; border: 1px solid rgba(var(--v-ice-r), .85); border-radius: 50%; border-left-color: transparent; border-right-color: transparent; transition: transform .2s var(--v-out); }

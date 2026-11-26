@@ -11,11 +11,10 @@ interface GlassProps {
   readonly sector: number
   readonly names: readonly string[]
   readonly go: (sector: number) => void
-  readonly exit: () => void
 }
 const ICE = '139,233,255', CORE = '233,252,255'
 
-export function Glass({ world, sector, names, go, exit }: GlassProps) {
+export function Glass({ world, sector, names, go }: GlassProps) {
   const tapeRef = useRef<HTMLCanvasElement>(null)
   const ladderRef = useRef<HTMLCanvasElement>(null)
   const retRef = useRef<HTMLDivElement>(null)
@@ -100,7 +99,7 @@ export function Glass({ world, sector, names, go, exit }: GlassProps) {
       <canvas ref={tapeRef} className="jv-visor-tape" aria-hidden="true" onClick={(e) => {
         const W = e.currentTarget.clientWidth, perDeg = W / 110, cur = world ? (((world.yaw * 180) / Math.PI) % 360 + 360) % 360 : 0
         let best = 0, bd = Infinity
-        names.forEach((_, i) => { let d = (i * SECTOR_STEP * 180) / Math.PI - cur; d = ((d + 540) % 360) - 180; const dd = Math.abs(W / 2 + d * perDeg - e.clientX); if (dd < bd) { bd = dd; best = i } })
+        names.forEach((_, i) => { let d = (i * SECTOR_STEP * 180) / Math.PI - cur; d = ((d + 540) % 360) - 180; const dd = Math.abs(W / 2 + d * perDeg - e.nativeEvent.offsetX); if (dd < bd) { bd = dd; best = i } })
         go(best)
       }} />
       <canvas ref={ladderRef} className="jv-visor-ladder" aria-hidden="true" />
@@ -112,7 +111,6 @@ export function Glass({ world, sector, names, go, exit }: GlassProps) {
             <kbd>{i}</kbd>{n}
           </button>
         ))}
-        <button type="button" className="exit" data-lock="Volver a Drakter" onClick={exit}>Volver a Drakter</button>
       </nav>
       <div ref={lockRef} className="jv-visor-lock" data-on="false" aria-hidden="true"><i /><i /><i /><i /><span ref={labelRef} /></div>
       <div ref={retRef} className="jv-visor-ret" aria-hidden="true"><i className="rr" /><i className="rd" /></div>
