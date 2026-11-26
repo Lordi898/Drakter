@@ -34,7 +34,8 @@ export function createAnchorLayer(stage: Pick<Stage, 'anchor'>): AnchorLayer {
       for (const b of bindings) {
         const a = stage.anchor(b.id)
         const visible = a?.visible ?? false
-        if (a && (Math.abs(a.x - b.x) >= 0.25 || Math.abs(a.y - b.y) >= 0.25)) {
+        // Con NaN la resta da NaN y la comparación «< 0.25» es falsa: el primer valor siempre se escribe.
+        if (a && !(Math.abs(a.x - b.x) < 0.25 && Math.abs(a.y - b.y) < 0.25)) {
           b.x = a.x
           b.y = a.y
           b.element.style.setProperty('--jv-x', `${a.x.toFixed(1)}px`)

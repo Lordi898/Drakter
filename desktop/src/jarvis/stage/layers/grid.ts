@@ -19,10 +19,10 @@ float lines(vec2 p, float cell, float width) {
 }
 void main() {
   vec2 p = vWorld.xz;
-  float minor = lines(p, 1.0, 1.0) * 0.35;
+  float minor = lines(p, 1.0, 1.0) * 0.5;
   float major = lines(p, 5.0, 1.4);
   float d = length(p - vec2(0.0, -10.0));
-  float fade = exp(-d * 0.055);
+  float fade = exp(-d * 0.04) * 1.6;
   float ring = uSweep * exp(-abs(d - mod(uTime * 6.0, 60.0)) * 1.5);
   float a = (max(minor, major) * (0.6 + ring) + ring * 0.25) * fade;
   // Núcleo blanco donde la línea es más intensa: glow en el propio shader.
