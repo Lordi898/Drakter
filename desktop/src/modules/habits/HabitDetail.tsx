@@ -1,17 +1,18 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Archive, ArchiveRestore, ArrowLeft, Bell, Pencil } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import { errorText } from '@/modules/calendar/workspaceApi'
-import { getHistory, getStatistics, registerRecord, setArchived } from './api'
+import { registerRecord, setArchived } from './api'
 import { BackendState } from './BackendState'
-import { addDays, formatDate, formatLongDate, todayIn } from './dates'
+import { formatDate, formatLongDate, todayIn } from './dates'
 import { HabitHistoryGrid, HistoryLegend } from './HabitHistoryGrid'
 import { HabitStats } from './HabitStats'
 import { QuickMark } from './QuickMark'
 import { describeRrule } from './rrule'
-import type { Habit, HabitHistory, HabitStatistics, RecordStatus } from './types'
+import type { Habit, RecordStatus } from './types'
+import { useHabitStats } from './useHabits'
 
 const RANGES = [
   { days: 30, label: '30 días' },
@@ -29,25 +30,10 @@ export interface HabitDetailProps {
 export function HabitDetail({ habit, onBack, onEdit, onChanged }: HabitDetailProps) {
   const today = todayIn(habit.timezone)
   const [range, setRange] = useState<number>(90)
-  const [history, setHistory] = useState<HabitHistory | null>(null)
-  const [stats, setStats] = useState<HabitStatistics | null>(null)
-  const [loadError, setLoadError] = useState<unknown>(null)
+  const { history, stats, error: loadError, reload: load } = useHabitStats(habit, range)
   const [actionError, setActionError] = useState<string | null>(null)
   const [selected, setSelected] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
-
-  const load = useCallback(() => {
-    const from = addDays(today, -(range - 1))
-    setLoadError(null)
-    Promise.all([getHistory(habit.id, from, today), getStatistics(habit.id, from, today)])
-      .then(([h, s]) => {
-        setHistory(h)
-        setStats(s)
-      })
-      .catch(setLoadError)
-  }, [habit.id, range, today])
-
-  useEffect(load, [load])
 
   const archived = habit.archived_at !== null
   const selectedDay = history?.days.find((d) => d.date === selected) ?? null

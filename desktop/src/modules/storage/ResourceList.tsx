@@ -1,18 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
 import { FileText, Link as LinkIcon, NotebookPen } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import { listResources, searchResources } from './api'
-import { notifyError } from './errors'
 import { AVAILABILITY_LABELS, TYPE_LABELS, type ResourceSummary } from './types'
-
-export interface Filters {
-  readonly folderId: string | null
-  readonly search: string
-  readonly type: string
-  readonly availability: string
-}
+import { useResources, type Filters } from './useStorage'
 
 interface Props {
   readonly filters: Filters
@@ -21,55 +12,8 @@ interface Props {
   readonly onSelect: (id: string) => void
 }
 
-interface Row {
-  readonly resource: ResourceSummary
-  readonly snippet?: string
-}
-
 export function ResourceList({ filters, reloadKey, selectedId, onSelect }: Props) {
-  const [rows, setRows] = useState<readonly Row[]>([])
-  const [cursor, setCursor] = useState<string | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [failed, setFailed] = useState(false)
-  const generation = useRef(0)
-  const searching = filters.search.trim() !== ''
-
-  const fetchPage = useCallback(
-    async (after: string | null) => {
-      const mine = ++generation.current
-      setLoading(true)
-      setFailed(false)
-      try {
-        let page: { rows: Row[]; next: string | null }
-        if (searching) {
-          const result = await searchResources(filters.search.trim(), filters.type, after)
-          const kept = result.items.filter(
-            (hit) => filters.availability === '' || hit.resource.availability_status === filters.availability
-          )
-          page = { rows: kept.map((hit) => ({ resource: hit.resource, snippet: hit.snippet })), next: result.next_cursor }
-        } else {
-          const result = await listResources({
-            folderId: filters.folderId, type: filters.type, availability: filters.availability, cursor: after
-          })
-          page = { rows: result.items.map((resource) => ({ resource })), next: result.next_cursor }
-        }
-        if (mine !== generation.current) return
-        setRows((prev) => (after ? [...prev, ...page.rows] : page.rows))
-        setCursor(page.next)
-      } catch (error) {
-        if (mine !== generation.current) return
-        setFailed(true)
-        notifyError('No se han podido cargar los recursos', error)
-      } finally {
-        if (mine === generation.current) setLoading(false)
-      }
-    },
-    [filters.folderId, filters.search, filters.type, filters.availability, searching]
-  )
-
-  useEffect(() => {
-    void fetchPage(null)
-  }, [fetchPage, reloadKey])
+  const { rows, hasMore, loading, failed, searching, loadMore, retry } = useResources(filters, reloadKey)
 
   if (loading && rows.length === 0) {
     return <p role="status" className="p-4 text-sm text-muted-foreground">Cargando recursos…</p>
@@ -78,7 +22,7 @@ export function ResourceList({ filters, reloadKey, selectedId, onSelect }: Props
     return (
       <div className="flex flex-col items-start gap-2 p-4 text-sm">
         <p className="text-muted-foreground">No se han podido cargar los recursos.</p>
-        <Button size="sm" variant="outline" onClick={() => void fetchPage(null)}>Reintentar</Button>
+        <Button size="sm" variant="outline" onClick={retry}>Reintentar</Button>
       </div>
     )
   }
@@ -122,8 +66,8 @@ export function ResourceList({ filters, reloadKey, selectedId, onSelect }: Props
           </li>
         ))}
       </ul>
-      {cursor ? (
-        <Button variant="outline" size="sm" disabled={loading} onClick={() => void fetchPage(cursor)} className="self-center">
+      {hasMore ? (
+        <Button variant="outline" size="sm" disabled={loading} onClick={loadMore} className="self-center">
           {loading ? 'Cargando…' : 'Cargar más'}
         </Button>
       ) : null}

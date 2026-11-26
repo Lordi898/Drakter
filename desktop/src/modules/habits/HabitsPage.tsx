@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Plus } from 'lucide-react'
 import { EmptyState } from '@/components/EmptyState'
 import { PageHeader } from '@/components/PageHeader'
@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { errorText } from '@/modules/calendar/workspaceApi'
-import { listHabits, registerRecord } from './api'
+import { registerRecord } from './api'
 import { BackendState } from './BackendState'
 import { todayIn } from './dates'
 import { HabitDetail } from './HabitDetail'
@@ -14,27 +14,17 @@ import { HabitDialog } from './HabitDialog'
 import { HabitRow } from './HabitRow'
 import { HabitsDrawing } from './HabitsDrawing'
 import type { Habit, RecordStatus } from './types'
+import { useHabits } from './useHabits'
 
 type DialogState = { readonly habit: Habit | null } | null
 
 export function HabitsPage() {
-  const [habits, setHabits] = useState<readonly Habit[] | null>(null)
-  const [error, setError] = useState<unknown>(null)
   const [showArchived, setShowArchived] = useState(false)
+  const { habits, error, reload: load } = useHabits(showArchived)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [dialog, setDialog] = useState<DialogState>(null)
   const [busyId, setBusyId] = useState<string | null>(null)
   const [markError, setMarkError] = useState<string | null>(null)
-
-  const load = useCallback(() => {
-    setError(null)
-    listHabits(showArchived).then(setHabits).catch((e: unknown) => {
-      setHabits(null)
-      setError(e)
-    })
-  }, [showArchived])
-
-  useEffect(load, [load])
 
   async function mark(habit: Habit, status: RecordStatus) {
     setBusyId(habit.id)

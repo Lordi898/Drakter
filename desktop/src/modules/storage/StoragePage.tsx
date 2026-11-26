@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Plus, Search } from 'lucide-react'
 import { EmptyState } from '@/components/EmptyState'
 import { PageHeader } from '@/components/PageHeader'
@@ -7,23 +7,13 @@ import { CreateResourceDialog } from './CreateResourceDialog'
 import { FolderTree } from './FolderTree'
 import { LocationsPanel } from './LocationsPanel'
 import { ResourceDetail } from './ResourceDetail'
-import { ResourceList, type Filters } from './ResourceList'
+import { ResourceList } from './ResourceList'
 import { StorageDrawing } from './StorageDrawing'
-import { listLocations } from './api'
-import { isDisconnected, notifyError } from './errors'
 import { NativeSelect, TextInput } from './ui'
-import { AVAILABILITY_LABELS, TYPE_LABELS, type StorageLocation } from './types'
+import { AVAILABILITY_LABELS, TYPE_LABELS } from './types'
+import { useDebounced, useLocations, type Filters } from './useStorage'
 
 const SUMMARY = 'Un catálogo de tus archivos, enlaces y notas que Drakter podrá buscar y abrir cuando lo necesite.'
-
-function useDebounced<T>(value: T, ms: number): T {
-  const [debounced, setDebounced] = useState(value)
-  useEffect(() => {
-    const timer = setTimeout(() => setDebounced(value), ms)
-    return () => clearTimeout(timer)
-  }, [value, ms])
-  return debounced
-}
 
 function Disconnected({ onRetry }: { onRetry: () => void }) {
   return (
@@ -44,8 +34,6 @@ export function StoragePage() {
 }
 
 function ConnectedStorage() {
-  const [locations, setLocations] = useState<readonly StorageLocation[] | null>(null)
-  const [offline, setOffline] = useState(false)
   const [folderId, setFolderId] = useState<string | null>(null)
   const [searchText, setSearchText] = useState('')
   const [type, setType] = useState('')
@@ -56,27 +44,7 @@ function ConnectedStorage() {
   const [locationsKey, setLocationsKey] = useState(0)
   const search = useDebounced(searchText, 300)
 
-  useEffect(() => {
-    let live = true
-    listLocations()
-      .then((l) => {
-        if (!live) return
-        setOffline(false)
-        setLocations(l)
-      })
-      .catch((error: unknown) => {
-        if (!live) return
-        if (isDisconnected(error)) {
-          setOffline(true)
-          return
-        }
-        setLocations([])
-        notifyError('No se han podido cargar las ubicaciones', error)
-      })
-    return () => {
-      live = false
-    }
-  }, [locationsKey])
+  const { locations, offline } = useLocations(locationsKey)
 
   const filters: Filters = { folderId, search, type, availability }
   const reload = () => setReloadKey((k) => k + 1)
