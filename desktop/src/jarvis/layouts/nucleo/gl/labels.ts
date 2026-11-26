@@ -5,7 +5,7 @@
  * El texto viene de datos del usuario: se dibuja glifo a glifo, nunca se interpreta.
  */
 import * as THREE from 'three'
-import { C, type Gfx, type RGB } from './kit'
+import { C, additive, type Gfx, type RGB } from './kit'
 
 export interface Label {
   readonly x: number
@@ -46,15 +46,12 @@ void main(){ float a = texture2D(uAtlas, vUv).r; gl_FragColor = vec4(vColor.rgb*
 const toneColor = (l: Label): RGB => (l.tone === 'late' ? C.red : l.tone === 'soon' ? C.amber : l.strong ? C.white : C.ice)
 
 export function createLabels(gfx: Gfx): LabelBatch {
-  const uniforms = { uOpacity: { value: 1 }, uScale: { value: 1 } }
-  const mat = gfx.track(new THREE.ShaderMaterial({
-    uniforms: { uAtlas: gfx.U.uAtlas, uView: gfx.U.uView, ...uniforms },
-    vertexShader: VS, fragmentShader: FS,
-    blending: THREE.AdditiveBlending, depthTest: false, depthWrite: false, transparent: true
-  }))
+  const uniforms = { uOpacity: { value: 1 }, uScale: gfx.U.uLabelScale }
+  const mat = gfx.track(additive(new THREE.ShaderMaterial({ uniforms: { uAtlas: gfx.U.uAtlas, uView: gfx.U.uView, ...uniforms }, vertexShader: VS, fragmentShader: FS })))
   const geom = gfx.track(new THREE.BufferGeometry())
   const mesh = new THREE.Mesh(geom, mat)
   mesh.frustumCulled = false
+  mesh.visible = false
   let key = ''
   let ranges: [number, number][] = []
   let pos = new Float32Array(0)

@@ -1587,3 +1587,21 @@ Decisiones técnicas, cambios de tecnología y motivos.
   - Pendiente:
     - Ajustes y `Ctrl+K` para la interfaz Jarvis, y la voz y la herramienta (V1). Ajustes → Avatar ya lo trajo A1.
   - Comprobado en Electron real aislado: los 13 pasos de W1 con el Stage real, sin excepciones.
+
+## [2026-11-26] Interfaz Jarvis «Núcleo» (por defecto) portada a la app
+- **Contexto:** plan `jarvis-seleccion.md`: la interfaz por defecto del modo Jarvis es Núcleo (prototipo de drakter-97), con los extras de Visor que pidió el orquestador (telemetría, retícula de fijación y estado de error en rojo). Contrato J1 (`jarvis/layouts/types.ts`) y Stage W3. Objetivo: CPU del renderer en reposo ≤ 10 % en Equilibrado.
+- **Decisión:**
+  - Todo en `desktop/src/jarvis/layouts/nucleo/**`. `gl/` (kit de anillos, etiquetas, núcleo, escena, fondo y viñeta), `modules/` (un archivo por anillo: Hoy, Tareas, Hábitos, Calendario, Relaciones, Almacén), `model.ts` (adaptador puro de los tipos de dominio de `jarvis/data` a los modelos de vista), `hud/` (React) y `nucleo.css`.
+  - Tres capas propias en el Stage: fondo (orden 0, opaco), escena (60, aditiva, encima del avatar de W4 en 50) y viñeta (95). Fondo y viñeta pasan del DOM al Stage: dos superficies menos para el compositor.
+  - **Etiquetas en el Stage**, no en el DOM: texto del atlas de glifos en px de pantalla anclado a un punto 3D y proyectado en el shader de vértices. Girar el grafo no cuesta CPU ni escrituras DOM; la geometría se rehace solo si cambia el conjunto (foco, filtro, sección).
+  - Uniformes y atlas en un `Gfx` por instancia (no globales de módulo) para liberarlo todo al salir.
+  - Datos **reales** (`useJarvisData`): lo que no existe no se simula y el anillo lo oculta («sin historial», «cargando…»). Sustituciones respecto al prototipo: la actividad por cuartos de hora y alba/ocaso de Hoy se quitan; el «Parte de Drakter» pasa a un botón que se lo pide al agente por el chat; la franja de exámenes de Calendario pasa a «tareas que vencen cada día» (35 días); la rueda semanal es móvil (hoy + 6 días, hoy al frente); el disco del Almacén agrupa por tipo de recurso y, dentro, por estado de indexación.
+  - Acciones reales: completar/reabrir tarea (`modules/tasks/api`, con la revisión), marcar hábito de hoy (`registerRecord`: hecho ↔ omitido), enviar al chat, cancelar trabajos y la respuesta en curso. Las confirmaciones siguen el camino común (`stores/confirmations`, diálogo nativo).
+  - Voz real: el halo circular lee `readSpectrum` (salida al hablar, micrófono al escuchar) y el osciloscopio 2D `readWaveform` a 15 Hz, solo mientras hay voz. En reposo no se toca el audio.
+  - Extras de Visor: telemetría del Stage (fps, p90, llamadas, escala y micrográfico) a 1 Hz por ref; retícula de cuatro corchetes que vuela hasta cualquier `[data-lock]` del HUD o hasta el elemento del lienzo bajo el puntero (su bucle solo corre mientras se mueve); alertas con barrido para avisos reales (acción hecha o fallida, enlace caído o recuperado, error del agente); el estado `error` tiñe núcleo, halo y polvo de rojo, lanza una onda roja y enciende un marco rojo fijo (sin parpadeo).
+  - Sin `backdrop-filter`. Las animaciones CSS continuas (sigilo y anillo de estado) solo existen en Cine y se paran en reposo. El paralaje DOM solo en Cine. Reloj y telemetría escriben por ref a 1 Hz.
+  - Secciones: Núcleo representa la sección común (`section`) desplegando su anillo (Proyectos → Tareas, Asignaturas → Calendario; Drakter y Configuración → vista núcleo); un clic en un anillo navega (`navigate`). Las teclas 0…9 son del shell; Núcleo añade Esc (núcleo), ←/→ y `/`.
+  - Fuentes (Oxanium, Saira Semi Condensed y Saira Condensed para el atlas; SIL OFL) copiadas en `nucleo/fonts/` con su licencia, en el chunk de la interfaz: no se añaden dependencias a `package.json`.
+- **Alternativas descartadas:** etiquetas DOM (lo que hacía rozar el 11,6 % en Relaciones en el prototipo); colores de entidad del usuario (el color significa algo: paleta fría estable por id); `compileAsync` sin respaldo (falla si el avatar compila a la vez; se cae a `compile`).
+- **Motivo:** la interfaz por defecto con la máxima calidad visual sin pasarse del presupuesto de CPU.
+- **Impacto:** solo `desktop/src/jarvis/layouts/nucleo/**` y esta entrada.

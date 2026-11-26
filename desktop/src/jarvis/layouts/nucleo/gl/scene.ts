@@ -71,6 +71,8 @@ export interface NucleoScene extends StageLayer {
   shock(kind?: ShockKind): void
   boot(instant: boolean): void
   skipBoot(): void
+  /** Salida: los anillos se recogen hacia el núcleo y todo se apaga (≈ 1 s). */
+  collapse(): Promise<void>
   readonly booting: boolean
   avatarViewport(frame: StageFrame): AvatarViewport
   focusFrame(): FocusFrame
@@ -101,12 +103,14 @@ export function createNucleoScene(ids: IdMap, model: NucleoModel, cb: SceneCallb
   const mouse = { x: -1, y: -1, nx: 0, ny: 0, dirty: false, inside: false }
   let drag: { x: number; y: number; x0: number; on: boolean } | null = null
   let booting = false
+  let orb = false
   let avatar = { x: 0, y: 0, h: 0 }
   const anchor = new THREE.Vector3(0, 0.7, 0)
   const camPos = HOME_CAM.pos.clone(), camTgt = HOME_CAM.tgt.clone(), par = new THREE.Vector2()
   const v = new THREE.Vector3(), v2 = new THREE.Vector3(), qh = new THREE.Quaternion(), qt = new THREE.Quaternion(), qf = new THREE.Quaternion(), eu = new THREE.Euler()
   const ray = new THREE.Raycaster(), ndc = new THREE.Vector2(), plane = new THREE.Plane(), Z = new THREE.Vector3(0, 0, 1), inv = new THREE.Matrix4()
   const target = new THREE.Vector3(0.31, 0.85, 1)
+  const labelScale = gfx.U.uLabelScale
   const sc: SceneCtx = { camera, project: (wp) => { v2.copy(wp).project(camera); return { x: (v2.x * 0.5 + 0.5) * w, y: (-v2.y * 0.5 + 0.5) * h } } }
   const pxPerUnit = (dist: number) => h / 2 / (Math.tan((camera.fov * Math.PI) / 360) * dist)
   let lastTipKey = ''
@@ -176,7 +180,8 @@ export function createNucleoScene(ids: IdMap, model: NucleoModel, cb: SceneCallb
     async init(frame) {
       layer.resize?.(frame)
       setQuality(frame.quality)
-      await frame.renderer.compileAsync(scene, camera)
+      // compileAsync de Three falla si otra capa compila a la vez (p. ej. el avatar): se cae a la compilación síncrona.
+      try { await frame.renderer.compileAsync(scene, camera) } catch { frame.renderer.compile(scene, camera) }
     },
     resize(frame) {
       w = frame.width
@@ -186,6 +191,7 @@ export function createNucleoScene(ids: IdMap, model: NucleoModel, cb: SceneCallb
       camera.updateProjectionMatrix()
       gfx.U.uPx.value = (h * pr) / 2 / Math.tan((camera.fov * Math.PI) / 360)
       gfx.U.uView.value.set(w * pr, h * pr)
+      labelScale.value = pr
     },
     setQuality,
     update(frame) {
@@ -357,6 +363,16 @@ export function createNucleoScene(ids: IdMap, model: NucleoModel, cb: SceneCallb
       if (instant || reduced) tw.flush(T, true)
     },
     skipBoot() { if (booting) tw.flush('boot', true) },
+    collapse() {
+      const T = 'exit'
+      tw.flush('boot', true)
+      go(null)
+      modules.forEach((m, i) => tw.tween({ delay: 0.05 + (modules.length - i) * 0.05, dur: 0.5, ease: ease.inCubic, update: (k) => { m.intro = 1 - k }, tag: T }))
+      tw.tween({ dur: 0.45, update: (k) => { nucleus.haloK = 1 - k; avatarK = 1 - k }, tag: T })
+      tw.tween({ delay: 0.15, dur: 0.55, ease: ease.inCubic, update: (k) => { nucleus.intro = 1 - k; zoom = 1 - k * 0.5; nucleus.orbK = orb ? 1 - k : Math.sin(k * Math.PI) * 0.5 }, tag: T })
+      tw.tween({ delay: 0.5, dur: 0.45, update: (k) => { G = 1 - k }, tag: T })
+      return new Promise((resolve) => tw.after(1.0, resolve, T))
+    },
     avatarViewport() {
       const s = avatar.h / AH
       return { x: avatar.x - (AW * s) / 2, y: avatar.y - avatar.h * 0.02 - (AH * s) / 2, width: AW * s, height: AH * s }
@@ -381,6 +397,5 @@ export function createNucleoScene(ids: IdMap, model: NucleoModel, cb: SceneCallb
       gfx.dispose()
     }
   }
-  let orb = false
   return layer
 }

@@ -8,7 +8,7 @@ const C0 = 0.075, SP = 0.85 / 28
 /** id de la casilla: num del hábito * 100 + día (27 = hoy). */
 const cell = (h: VHabit, d: number) => h.num * 100 + d
 const list = (hs: readonly VHabit[] | null) => (hs ?? []).slice(0, MAX)
-const doneToday = (hs: readonly VHabit[]) => hs.filter((h) => h.todayDone).length
+const doneToday = (hs: readonly VHabit[]) => hs.filter((h) => h.todayScheduled && h.todayDone).length
 const avgRate = (hs: readonly VHabit[]): number | null => { const r = hs.map((h) => h.rate).filter((x): x is number => x !== null); return r.length ? r.reduce((a, b) => a + b, 0) / r.length : null }
 
 export const habitos: ModuleDef = {

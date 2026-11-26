@@ -36,6 +36,8 @@ export interface Uniforms {
   readonly uVoice: U<number>
   /** Tamaño del lienzo en px físicos (etiquetas en pantalla). */
   readonly uView: U<THREE.Vector2>
+  /** px físicos por px CSS (tamaño de las etiquetas). */
+  readonly uLabelScale: U<number>
 }
 
 export interface Glyph { u0: number; u1: number; v0: number; v1: number; adv: number }
@@ -55,7 +57,7 @@ export function createGfx(): Gfx {
   const U: Uniforms = {
     uTime: { value: 0 }, uPx: { value: 800 }, uAtlas: { value: null },
     uCore: { value: new THREE.Vector4(0, 0, 1, 1) }, uCoreZ: { value: 17 }, uDepth: { value: new THREE.Vector2(10, 24) },
-    uVoice: { value: 0 }, uView: { value: new THREE.Vector2(1, 1) }
+    uVoice: { value: 0 }, uView: { value: new THREE.Vector2(1, 1) }, uLabelScale: { value: 1 }
   }
   const glyphs: Glyphs = { map: {}, cw: 0, ch: 0, pad: 0 }
   const gfx: Gfx = {
