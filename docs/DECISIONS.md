@@ -1587,3 +1587,19 @@ Decisiones técnicas, cambios de tecnología y motivos.
   - Pendiente:
     - Ajustes y `Ctrl+K` para la interfaz Jarvis, y la voz y la herramienta (V1). Ajustes → Avatar ya lo trajo A1.
   - Comprobado en Electron real aislado: los 13 pasos de W1 con el Stage real, sin excepciones.
+
+## [2026-11-26] D1: datos de las interfaces Jarvis (`jarvis/data`)
+- **Contexto:** las tres interfaces Jarvis (Núcleo, Holomesa y Visor) leen los datos REST del Workspace con `useJarvisData(topics)` (contrato de J1). Los hooks de `modules/*` cargan siempre, sin opción para desactivarlos, y algunos borran los datos al fallar.
+- **Decisión:**
+  - `jarvis/data/snapshot.ts` tiene un cargador por tema (`useTopic`). Solo pide un tema si alguna interfaz lo usa. Conserva el último dato bueno, distingue `offline` (sin servicio local) de `error`, se recarga tras un resync del enlace y mantiene la identidad del objeto mientras no cambia.
+  - Llama a las funciones de lectura de `modules/*/api.ts` y de `pages/today/requests.ts`, sin `fetch` ni caché propios. La zona horaria sale del ajuste `default_timezone`, como en Hoy, y el día cambia solo a medianoche.
+  - Al contrato se añaden, de forma aditiva y a petición de Núcleo, `habitHistory` (28 días), `subjects`, `folders`, `resourceIndex` y `entityNames`:
+    - `resourceIndex` cuenta `index_status` solo sobre la muestra de `resources`, porque el backend no tiene un agregado.
+    - `entityNames` solo nombra lo que ya está cargado: pedir `getRelated` por cada nodo costaría N peticiones.
+  - Rangos y filtros de cada tema: `jarvis/data/types.ts`.
+- **Alternativas descartadas:**
+  - Llamar a todos los hooks de `modules/*`: cargaría los 15 temas en cada interfaz.
+  - Añadir `enabled` a cada hook de módulo: tocaría páginas de Drakter sin necesidad.
+  - Crear `modules/projects/useProjects`: se hizo y se quitó, porque D1 no lo usa.
+- **Motivo:** una sola capa de datos para las tres interfaces, sin duplicar reglas ni estado por fotograma.
+- **Impacto:** `desktop/src/jarvis/data/{index,snapshot,types}.ts`. Los stores (chat, agente, trabajos, avisos, voz y niveles de audio) se siguen leyendo directamente desde `stores/*` y `voice/levels.ts`.
