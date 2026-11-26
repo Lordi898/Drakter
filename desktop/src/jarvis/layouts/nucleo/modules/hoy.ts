@@ -8,7 +8,7 @@ const pad2 = (n: number): string => String(n).padStart(2, '0')
 const taskCol = (t: VTask) => (t.done ? C.cyan : t.tone === 'late' ? C.red : t.tone === 'soon' ? C.amber : C.ice)
 
 export const hoy: ModuleDef = {
-  id: 'hoy', name: 'Hoy', key: '1', rIn: 2.5, rOut: 3.1,
+  id: 'hoy', name: 'Hoy', key: '0', rIn: 2.5, rOut: 3.1,
   home: { pos: [0, 0, 0], rx: -1.08, rz: 0.07, scale: 1, spin: 0 },
   kpi: ({ model }) => {
     if (!model.todayEvents && !model.todayTasks) return 'cargando la agenda…'

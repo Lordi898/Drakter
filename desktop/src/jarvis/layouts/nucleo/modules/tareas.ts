@@ -23,7 +23,7 @@ function orbitsOf(projects: readonly { id: string; name: string; col: ColorName;
 }
 
 export const tareas: ModuleDef<TareasState> = {
-  id: 'tareas', name: 'Tareas', key: '2', rIn: 4.85, rOut: 5.95,
+  id: 'tareas', name: 'Tareas', key: '3', rIn: 4.85, rOut: 5.95,
   home: { pos: [0, 0, 0], rx: -1.02, rz: 0.11, scale: 1, spin: 0 },
   kpi: ({ model }) => {
     if (!model.tasks) return 'cargando tareas…'

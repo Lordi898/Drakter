@@ -9,7 +9,7 @@ export interface AlmState { sweep: RingMesh | null; group: number }
 export const almState = (): AlmState => ({ sweep: null, group: 0 })
 
 export const almacen: ModuleDef<AlmState> = {
-  id: 'almacen', name: 'Almacén', key: '6', single: true, rIn: 2.8, rOut: 4.75,
+  id: 'almacen', name: 'Almacén', key: '5', single: true, rIn: 2.8, rOut: 4.75,
   home: { pos: [0, -2.85, 0], rx: -1.4, rz: 0, scale: 1.2, spin: 0.03 },
   kpi: ({ model }) => {
     const s = model.store

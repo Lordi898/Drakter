@@ -10,7 +10,7 @@ const clampH = (h: number) => Math.min(22, Math.max(8, h))
 const STRIP = 1_000_000 // ids de la franja: STRIP + día
 
 export const calendario: ModuleDef = {
-  id: 'calendario', name: 'Calendario', key: '4', rIn: 6.3, rOut: 7.3,
+  id: 'calendario', name: 'Calendario', key: '6', rIn: 6.3, rOut: 7.3,
   home: { pos: [0, 0, 0], rx: -1.16, rz: -0.03, scale: 1, spin: 0 },
   kpi: ({ model }) => {
     if (!model.week) return 'cargando la agenda…'
