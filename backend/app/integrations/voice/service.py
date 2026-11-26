@@ -49,6 +49,7 @@ from app.integrations.voice.client import VoiceClient, VoiceUnavailableError, sh
 from app.integrations.voice.heard import HeardNotes
 from app.integrations.voice.policy import RuntimePort, VoicePolicy
 from app.integrations.voice.settings import VoiceSettings, read_env_file
+from app.services.ui_mode import request_ui_mode
 from app.integrations.voice.supervisor import VoiceSupervisor, build_env
 from app.services import settings as settings_service
 from app.services.settings_models import SETTING_DEFAULTS
@@ -120,6 +121,9 @@ class VoiceOrchestrator:
             on_error=lambda code: self._publish_error(code, "turn", True),
             bot_speaking=lambda: self._bot_speaking,
             min_words=settings.bargein_min_words,
+            ui_mode=lambda mode, utt_id: request_ui_mode(
+                getattr(runtime, "hub", None), mode, "voice", utt_id=utt_id
+            ),
         )
         self.heard = HeardNotes()
         # snapshot published as `voice.state`

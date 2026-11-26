@@ -29,6 +29,7 @@
     "tasks.delete",
     "tasks.read",
     "tasks.write",
+    "ui.write",
     "voice.read",
     "voice.write"
   ]

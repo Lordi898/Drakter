@@ -31,7 +31,8 @@ from app.tools.turns import TurnBusyError, TurnTracker
 logger = logging.getLogger("drakter.agent.lanes")
 
 REPO_ROOT: Final = Path(__file__).resolve().parents[4]
-EXCLUDED_DOMAINS: Final = frozenset({"jobs"})  # a worker never starts or steers jobs
+# A worker never starts or steers jobs, nor switches the desktop UI under the user.
+EXCLUDED_DOMAINS: Final = frozenset({"jobs", "ui"})
 
 
 class LaneBusy(RuntimeError):

@@ -23,6 +23,25 @@ phrases = ["descansa", "deja de escuchar", "eso es todo", "a dormir", "puedes de
 phrases = ["adios", "hasta luego", "hasta manana", "buenas noches", "nos vemos", "chao", "hasta otra",
            "hasta despues"]
 
+[ui_jarvis]
+# Pasan el escritorio al modo Jarvis (evento `ui.mode`), sin LLM ni turno. Solo si el enunciado es la
+# frase entera (más muletillas); cualquier otra forma de pedirlo va al agente (herramienta ui_set_mode).
+phrases = ["modo jarvis", "activa el modo jarvis", "activa modo jarvis", "activar el modo jarvis",
+           "pon el modo jarvis", "pon modo jarvis", "cambia a modo jarvis", "cambia al modo jarvis",
+           "entra en modo jarvis", "entra en el modo jarvis"]
+
+[ui_drakter]
+# Vuelven al modo Drakter.
+phrases = ["vuelve a drakter", "volver a drakter", "modo drakter", "modo normal", "sal del modo jarvis",
+           "salir del modo jarvis", "desactiva el modo jarvis", "quita el modo jarvis",
+           "cambia a modo drakter", "cambia al modo drakter"]
+
+[ui]
+# En [ui_jarvis] y [ui_drakter], las variantes de [wake] cuentan como «jarvis» salvo estas, que son
+# variantes de «drakter» (y «despierta», que no cuenta como ninguna).
+drakter_words = ["drakter", "dracter", "draxter", "dragter", "drapter", "draqter", "draquer", "draker",
+                 "dracker", "tracter"]
+
 [backchannel]
 # Asentimientos: se descartan sin más, salvo que el bot esté esperando una respuesta.
 # Cuenta si TODAS las palabras del enunciado están aquí.

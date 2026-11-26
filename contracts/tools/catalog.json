@@ -1580,5 +1580,21 @@
   "args_model": "JobsCancelArgs",
   "result_model": "JobsCancelResult",
   "phase": "voz-v2"
+ },
+ {
+  "name": "ui_set_mode",
+  "domain": "ui",
+  "description": "Cambia el aspecto de la app de escritorio entre el modo Jarvis (interfaz holográfica) y Drakter (la normal). Solo cambia la interfaz: no toca datos ni tu forma de ser. Úsala cuando el usuario lo pida.",
+  "permission": "ui.write",
+  "risk": "write",
+  "idempotent": true,
+  "returns_untrusted": false,
+  "timeout_s": 3.0,
+  "errors": [
+   "ui_unavailable"
+  ],
+  "args_model": "SetUiModeArgs",
+  "result_model": "SetUiModeResult",
+  "phase": "jarvis"
  }
 ]

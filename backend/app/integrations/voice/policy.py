@@ -81,6 +81,8 @@ class SpeechPort(Protocol):
 
 AuditFn = Callable[[str, Mapping[str, object]], Awaitable[None]]
 ErrorFn = Callable[[str], None]
+# (modo, utt_id) → resultado de publicar `ui.mode` (`app.services.ui_mode.request_ui_mode`).
+UiModeFn = Callable[[Literal["jarvis", "drakter"], str], str]
 
 
 class VoicePolicy:
@@ -93,6 +95,7 @@ class VoicePolicy:
         on_error: ErrorFn,
         bot_speaking: Callable[[], bool],
         min_words: int,
+        ui_mode: UiModeFn | None = None,
     ) -> None:
         self._runtime = runtime
         self._speech = speech
@@ -100,6 +103,7 @@ class VoicePolicy:
         self._on_error = on_error
         self._bot_speaking = bot_speaking
         self._min_words = min_words
+        self._ui_mode = ui_mode
         self._queued: list[str] = []
         self._pending_confirmations: set[str] = set()
         self._reminded: set[str] = set()  # recordado ya en un turno de voz: una vez por acción
@@ -139,8 +143,13 @@ class VoicePolicy:
         return decision
 
     async def local_command(self, evt: EvtLocalCommand) -> None:
-        # Voice already acted on it (layer 0); the backend only keeps the trace.
-        await self._audit("voice.local_command", {"command": evt.command, "utt_id": evt.utt_id[:64]})
+        # Voice already acted on it (layer 0); the backend keeps the trace and, for the UI mode
+        # commands, asks the desktop to switch (`ui.mode`). Nothing here reaches the agent.
+        meta: dict[str, object] = {"command": evt.command, "utt_id": evt.utt_id[:64]}
+        if evt.command in ("ui_jarvis", "ui_drakter"):
+            mode: Literal["jarvis", "drakter"] = "jarvis" if evt.command == "ui_jarvis" else "drakter"
+            meta["ui"] = self._ui_mode(mode, evt.utt_id) if self._ui_mode else "unavailable"
+        await self._audit("voice.local_command", meta)
 
     async def turn_ended(self) -> None:
         """Called after a terminal: a turn that could not steer runs now."""
