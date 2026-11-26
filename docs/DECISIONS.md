@@ -1713,6 +1713,95 @@ Decisiones técnicas, cambios de tecnología y motivos.
     - Sin errores en consola.
   - CPU en reposo en la pantalla Drakter (UHD 620, a 60 rAF/s, con el bucle del avatar limitado a 30 fps, dentro de `flock`): renderer 5,8 % y 4,7 %, proceso GPU 6,2 % y 4,8 %. Hubo una primera medida de 25,3 % que coincidió con una recarga de la página: el avatar volvió a tejer y a compilar. No cuenta como reposo.
 
+## [2026-11-26] Interfaz Jarvis «Visor»: sectores con datos reales, acciones y rendimiento
+- **Contexto:** el Visor (cilindro de 7 sectores, capa `visor-world` del Stage y paneles CSS3D) estaba portado solo con el Núcleo (drakter-99). Faltaban los sectores 1-6 con datos reales, las alertas, las acciones y el objetivo de CPU en reposo (≤ 10 % del renderer en Equilibrado).
+- **Decisión:**
+  - Sectores Hoy, Tareas y proyectos, Hábitos, Calendario y asignaturas, Relaciones y Almacén sobre `useJarvisData` (D1). Cada uno se monta al acercarse a su rumbo y se queda montado (girar no recarga). Vacíos y errores dicen lo que pasa; no hay datos de ejemplo.
+  - Acciones con `modules/*/api.ts`: completar tarea (con subtareas abiertas lleva a Drakter, donde vive ese diálogo), registrar hábito (hecho o saltado) y quitar relación. Quitar devuelve 409 `confirmation_required` y se aprueba solo en el diálogo nativo de main.
+  - Las confirmaciones NO las pinta el Visor: las muestra el aviso común de la app, encima de cualquier interfaz (PR #58), que abre el diálogo nativo de main. Hubo una versión propia en el cristal mientras el aviso común quedaba detrás del lienzo; se retiró para que haya un único aviso (CLAUDE.md §8).
+  - Alertas con barrido a partir de `stores/notifications`; los resultados de las acciones del HUD entran con `addNotification` (sin toast, que pisaría el muelle).
+  - Gráficos 2D como funciones puras (`charts.ts`); 3D de datos en `stage/parts.ts`: grafo de relaciones (60 elementos más conectados), skyline de tareas abiertas por proyecto y semana de vencimiento (8 semanas; el backend no da actividad semanal) y núcleo de documentos según `index_status` de la muestra.
+  - «Examen» = evento cuyo título lo dice: la agenda no tiene un tipo propio.
+  - Rendimiento: lienzos 2D solo se redibujan si cambian sus datos o su minuto (relojes por minuto, no por segundo); el 3D de los sectores vecinos no se dibuja fuera del encuadre; tras 8 s sin puntero ni giro, el grafo, el skyline y el núcleo se quedan quietos y las etiquetas del grafo no se reescriben; firma de cámara del CSS3D sin cadenas por fotograma; sin `backdrop-filter`, sin animaciones infinitas ni `clip-path` en reposo.
+- **Medición** (UHD 620, app aislada con datos ficticios, Equilibrado, CPU del renderer, ventanas de 10 s tras 10 s quieto, bajo `flock`, carga de la máquina 2-4 por otros workers):
+  - Reposo en Hoy: 5,7-9,0 %. Reposo en Relaciones: 7,1-10,0 %. **Reposo en el Núcleo: 10,6-15,5 %** con Holo-Contorno y 8,3-10,9 % sin avatar. Con el puntero en movimiento: 23-32 %. Prototipo de referencia en Equilibrado: ~23 % en reposo.
+  - Perfil de 8 s en reposo en el Núcleo: el JS del Visor suma ~10 ms y el del avatar ~60 ms; el resto es nativo (composición del WebGL + CSS3D a 20 fps). ⚠️ El Núcleo no queda de forma fiable ≤ 10 %: la palanca que falta es bajar los fps de ambiente en reposo (visor-port.md §4, palanca 1), que es del Stage (W3) y no de la interfaz; propuesta enviada al coordinador.
+- **Alternativas descartadas:**
+  - Desmontar los sectores lejanos: cada giro volvería a pedir sus datos.
+  - Botón «Crear relación» en el HUD: el formulario completo vive en Drakter; aquí solo se ve, se selecciona y se quita.
+  - Cuenta atrás por segundo en «Lo siguiente»: rasteriza un panel 3D cada segundo.
+- **Motivo:** datos reales con acciones seguras y el reposo por debajo del presupuesto sin tocar el Stage ni el avatar (zonas de otros paquetes).
+- **Impacto:** solo `desktop/src/jarvis/layouts/visor/**`. Medición y herramientas de prueba (app aislada con datos ficticios): `~/.local/share/drakter/research/jarvis-hud/visor-app/`.
+
+## [2026-11-26] Interfaz Jarvis «Núcleo» (por defecto) portada a la app
+- **Contexto:** plan `jarvis-seleccion.md`: la interfaz por defecto del modo Jarvis es Núcleo (prototipo de drakter-97), con los extras de Visor que pidió el orquestador (telemetría, retícula de fijación y estado de error en rojo). Contrato J1 (`jarvis/layouts/types.ts`) y Stage W3. Objetivo: CPU del renderer en reposo ≤ 10 % en Equilibrado.
+- **Decisión:**
+  - Todo en `desktop/src/jarvis/layouts/nucleo/**`. `gl/` (kit de anillos, etiquetas, núcleo, escena, fondo y viñeta), `modules/` (un archivo por anillo: Hoy, Tareas, Hábitos, Calendario, Relaciones, Almacén), `model.ts` (adaptador puro de los tipos de dominio de `jarvis/data` a los modelos de vista), `hud/` (React) y `nucleo.css`.
+  - Tres capas propias en el Stage: fondo (orden 0, opaco), escena (60, aditiva, encima del avatar de W4 en 50) y viñeta (95). Fondo y viñeta pasan del DOM al Stage: dos superficies menos para el compositor.
+  - **Etiquetas en el Stage**, no en el DOM: texto del atlas de glifos en px de pantalla anclado a un punto 3D y proyectado en el shader de vértices. Girar el grafo no cuesta CPU ni escrituras DOM; la geometría se rehace solo si cambia el conjunto (foco, filtro, sección).
+  - Uniformes y atlas en un `Gfx` por instancia (no globales de módulo) para liberarlo todo al salir.
+  - Datos **reales** (`useJarvisData`): lo que no existe no se simula y el anillo lo oculta («sin historial», «cargando…»). Sustituciones respecto al prototipo: la actividad por cuartos de hora y alba/ocaso de Hoy se quitan; el «Parte de Drakter» pasa a un botón que se lo pide al agente por el chat; la franja de exámenes de Calendario pasa a «tareas que vencen cada día» (35 días); la rueda semanal es móvil (hoy + 6 días, hoy al frente); el disco del Almacén agrupa por tipo de recurso y, dentro, por estado de indexación.
+  - Acciones reales: completar/reabrir tarea (`modules/tasks/api`, con la revisión), marcar hábito de hoy (`registerRecord`: hecho ↔ omitido), enviar al chat, cancelar trabajos y la respuesta en curso. Las confirmaciones siguen el camino común (`stores/confirmations`, diálogo nativo).
+  - Voz real: el halo circular lee `readSpectrum` (salida al hablar, micrófono al escuchar) y el osciloscopio 2D `readWaveform` a 15 Hz, solo mientras hay voz. En reposo no se toca el audio.
+  - Extras de Visor: telemetría del Stage (fps, p90, llamadas, escala y micrográfico) a 1 Hz por ref; retícula de cuatro corchetes que vuela hasta cualquier `[data-lock]` del HUD o hasta el elemento del lienzo bajo el puntero (su bucle solo corre mientras se mueve); alertas con barrido para avisos reales (acción hecha o fallida, enlace caído o recuperado, error del agente); el estado `error` tiñe núcleo, halo y polvo de rojo, lanza una onda roja y enciende un marco rojo fijo (sin parpadeo).
+  - Sin `backdrop-filter`. Las animaciones CSS continuas (sigilo y anillo de estado) solo existen en Cine y se paran en reposo. El paralaje DOM solo en Cine. Reloj y telemetría escriben por ref a 1 Hz.
+  - Secciones: Núcleo representa la sección común (`section`) desplegando su anillo (Proyectos → Tareas, Asignaturas → Calendario; Drakter y Configuración → vista núcleo); un clic en un anillo navega (`navigate`). Las teclas 0…9 son del shell; Núcleo añade Esc (núcleo), ←/→ y `/`.
+  - Fuentes (Oxanium, Saira Semi Condensed y Saira Condensed para el atlas; SIL OFL) copiadas en `nucleo/fonts/` con su licencia, en el chunk de la interfaz: no se añaden dependencias a `package.json`.
+- **Alternativas descartadas:** etiquetas DOM (lo que hacía rozar el 11,6 % en Relaciones en el prototipo); colores de entidad del usuario (el color significa algo: paleta fría estable por id); `compileAsync` sin respaldo (falla si el avatar compila a la vez; se cae a `compile`).
+- **Motivo:** la interfaz por defecto con la máxima calidad visual sin pasarse del presupuesto de CPU.
+- **Impacto:** solo `desktop/src/jarvis/layouts/nucleo/**` y esta entrada. Chunk diferido propio: 109 KB de JS + 22 KB de CSS + 60 KB de fuentes.
+- **Medido** en la UHD 620, dentro del lock de medición, CPU del renderer en % de un núcleo, ventana de 10 s tras 9,5 s sin tocar nada:
+  - App real aislada (Electron del worktree, backend con LLM simulado, Workspace sembrado por la API, ventana de 2048×1272 px CSS a DPR 1,25), Equilibrado, vista núcleo: **5,4 % sin avatar 3D** y **10,0 % con holo-contorno** (el avatar aporta ≈ 4,6 puntos). Referencia: el modo Drakter en reposo en esa misma app, 16,7 %. Una segunda pasada con más carga dio 11,1 % (núcleo), 12,1 % (Hoy) y 6,7 % (Relaciones) con holo-contorno; Ahorro 0,6–0,8 % (dibuja a demanda); Cine 14–18 % (objetivo ≲ 20 %).
+  - Arnés en Chrome (mismo Chromium y ANGLE, 1470×746 a DPR 1,25, orbe de reserva): Equilibrado 7,6 % en núcleo, Hoy y Relaciones; Ahorro 0,5–2,3 %; Cine 13,6–14,5 %. En el prototipo Relaciones daba 11,6 %: las etiquetas en el Stage lo bajan al mismo coste que el resto.
+  - ⚠️ El objetivo ≤ 10 % se cumple en el límite con el avatar por defecto; la palanca que queda es del avatar (dibujarlo a menos fps en reposo), no de la interfaz.
+  - Arnés y scripts: `~/.local/share/drakter/research/jarvis-hud/{nucleo-port,nucleo-app}/`.
+- **Trampa pisada:** liberar un material mientras `compileAsync` de Three sigue sondeando rompe el bucle (`isReady` de `undefined`); al rehacer satélites y nodos se reutiliza el material y solo se libera la geometría.
+
+## [2026-11-26] Las confirmaciones pendientes siempre a la vista (también en Jarvis)
+- **Contexto:**
+  - drakter-108 vio que el aviso común de confirmación (`ConfirmationHost`, con «Revisar») quedaba detrás del lienzo en el modo Jarvis.
+  - Causa: en W1 el aviso pasó de ser una pieza de la rejilla de `AppShell` a ir en `App` detrás de `ModeRoot`, en el flujo normal y sin posición propia.
+  - Efecto: en Jarvis lo tapaba la capa `fixed z-40`. En Drakter quedaba detrás del bloque de altura completa, fuera de la vista.
+  - Las acciones destructivas no pueden esperar a un aviso invisible (CLAUDE.md §8).
+- **Decisión:**
+  - `ConfirmationHost` se pinta en una capa propia `fixed`, arriba al centro, con `z-[70]`, por encima de Jarvis (`z-40`), de los diálogos (`z-50`) y de cualquier lienzo. Solo los avisos (Sonner) quedan más arriba.
+  - Al llegar una confirmación nueva, el foco va a su «Revisar», salvo que se esté escribiendo en un campo.
+  - La decisión sigue siendo solo del diálogo nativo de main (`requestApproval`).
+  - Las interfaces Jarvis **no** pintan confirmaciones propias: usan la común.
+- **Alternativas descartadas:** pintarla dentro de cada interfaz (tres implementaciones de un control de seguridad); un portal dentro de `JarvisShell` (solo cubriría Jarvis).
+- **Motivo:** CLAUDE.md §8: confirmación de acciones destructivas visible y respondible en cualquier modo.
+- **Impacto:** `desktop/src/chat/ConfirmationDialog.tsx`. Comprobado en Electron real aislado con una confirmación de verdad (borrado de tarea → 409): visible y encima en Drakter y en Jarvis, con foco, y respondida con el diálogo nativo sustituido para cancelar. La tarea sigue existiendo.
+
+## [2026-11-26] Interfaz Jarvis «Holomesa» (`jarvis/layouts/holomesa/`)
+- **Contexto:** segunda de las tres interfaces Jarvis elegibles (jarvis-seleccion.md). Se porta el prototipo de drakter-98 (mesa de operaciones holográfica con 7 estaciones) sobre el contrato `JarvisLayout` (J1), el Stage único (W3), la capa del avatar (W4) y `jarvis/data` (D1). El prototipo daba 26-49 % de CPU del renderer en reposo; el objetivo es ≤ 10 % en Equilibrado.
+- **Decisión:**
+  - **Escena en el Stage, en dos capas propias:** `holomesa` (orden 20: mesa en un solo shader, 7 estaciones, orbe de reserva, polvo y estrellas) y `holomesa-overlay` (orden 80, sobre el avatar: etiquetas de estación, tags anclados a los datos, tooltip y retícula). Los uniformes globales del prototipo pasan a ser por instancia de escena.
+  - **Etiquetas en WebGL, no en el DOM** (lección medida del prototipo): cada texto se pinta una vez en un atlas (canvas 2D, `fillText`, sin `shadowBlur`) y todas las etiquetas visibles son una sola malla instanciada en espacio de pantalla. Por fotograma solo se suben posiciones y opacidades. El HUD DOM es estático: nada se mueve por fotograma desde JS.
+  - **CSS:** solo se animan `transform` y `opacity`; sin `backdrop-filter`, sin sombras animadas, sin animaciones infinitas en reposo (el glifo del agente solo gira en estados activos; la barra de un trabajo solo se mueve si hay uno en curso). Se quitan del prototipo la viñeta y las líneas de barrido a pantalla completa, el marco que se trazaba con `stroke-dashoffset`, el carril que animaba `width` y el panel de detalle que seguía al ratón.
+  - **Ritmo:** manda el Stage (`maxFps`/`idleFps`). Mientras hay animación (vuelo, arranque, voz, fundidos, ondas) la escena «bombea» `requestFrame` con un temporizador al ritmo máximo del nivel, sin pasar de él; así los vuelos son fluidos también en Ahorro (a demanda) y en el reposo de Equilibrado. Los `pointermove` sintéticos (misma posición) no recalculan nada.
+  - **Datos reales** (`adapt.ts`, puro): `today`, `tasks`, `projects`, `habits` + `habitHistory` (28 días; la racha se calcula del historial), `agenda` (hoy a +7), `relationships` con `entityNames`, `resources` + `folders`, `subjects`. Como `tasks` solo trae abiertas, la tercera pila de Tareas es «en espera» (no «hecha»), y la columna de Hoy mide los hábitos de hoy cumplidos. Lo que no ha llegado se muestra como «cargando…» o «sin datos»; nada se simula.
+  - **Acciones reales:** completar una tarea (`completeTask` con su `revision`), marcar o saltar el hábito de hoy (`registerRecord`) y «Abrir en Drakter» (navega y sale). Las confirmaciones las pinta el aviso común (`ConfirmationHost`, encima de Jarvis) y las decide el diálogo nativo de main; la Holomesa no pinta las suyas. Conversación con `stores/chat`, trabajos con `stores/jobs`, consola de voz con `voice/levels` (analizadores solo mientras habla o escucha; canvas 2D sin sombras).
+  - **Navegación común:** las teclas 0-9 son las del anfitrión (mapa de secciones compartido por las tres interfaces). La sección «Drakter» (1) es la vista general de la mesa; Esc vuelve a ella; ←/→ recorren las estaciones; «/» escribe. Entrar en una estación cambia la sección común, así que al volver a Drakter se está en la misma.
+  - **Avatar:** preside la cabecera de la mesa (recuadro proyectado por `setViewport`) y se acopla en la consola de voz cuando hay una sección abierta. Hasta que su anclaje existe (o si no hay avatar 3D) preside el orbe propio.
+  - Arranque siempre en la vista general: la mesa se dibuja del centro al canto, la cámara baja desde el cenit y los hologramas se imprimen escalonados; con «reducir movimiento», todo aparece ya en su sitio.
+- **Alternativas descartadas:** HUD DOM con etiquetas movidas por `transform` (es lo que disparaba la CPU del prototipo); un segundo lienzo para el avatar (el contrato ya lo integra en el Stage); mapa propio 1-7 (chocaba con el del anfitrión).
+- **Motivo:** el aspecto del prototipo con datos y acciones reales, dentro del presupuesto de CPU de la UHD 620.
+- **Impacto:** solo `desktop/src/jarvis/layouts/holomesa/**` (chunk propio de 91 KB + 11,5 KB de CSS; el principal no crece).
+  - Medido en Electron 45 (la app real, no Chrome) aislado (HOME, XDG y datos propios con un Workspace de prueba sembrado; el stub del modelo como agente), en la UHD 620 con GPU, ventana de 1280×795 px CSS a DPR 2, dentro del lock de medición. Carga media de 1,4 a 6 por otros workers. CPU del renderer en %, reposo = 10 s sin entrada tras 9,5 s de asentamiento:
+
+    | Nivel | Avatar | Activo (ratón) | Reposo, vista general | Reposo, sección abierta |
+    |---|---|---|---|---|
+    | Equilibrado | holo-contorno (por defecto) | 17,7-24,5 | 6,6 / 6,9 / 9,6 / 11,5 | 8,5 / 8,8 / 11,1 |
+    | Equilibrado | Ascuario | 23,2 | 8,2 | 8,3 |
+    | Equilibrado | ninguno (orbe propio) | 13,1-19,1 | 6,2 / 7,9 | 6,6 / 6,7 |
+    | Ahorro | holo-contorno / ninguno | 12,7-24,6 | 2,3 / 2,4 | 0,2 / 0,2 |
+    | Cine | holo-contorno | 21,1-31,1 | 11,2 / 11,6 | 13,2 / 14,9 |
+
+    - Objetivo cumplido en mediana: Equilibrado ≈ 8 % en reposo con el avatar por defecto (prototipo: 26-27 %). Los picos de 11 % coinciden con más carga de otros workers. Ahorro ≤ 2,4 %, Cine ≤ 15 % (objetivos ≲ 10 % y ≲ 20 %).
+    - A/B del HUD (Equilibrado, holo-contorno): antes de quitar el marco a pantalla completa y la inclinación 3D del panel en reposo, 10,2 % con HUD frente a 7,5 % sin él; después, 9,6 % frente a 9,7 %: el HUD DOM ya no añade coste. El JavaScript de la escena es < 1 % del tiempo perfilado.
+    - Funcional: datos sembrados visibles en las 7 estaciones y en los paneles; «Completar» cerró una tarea en el backend (16 → 15 abiertas) y la lista se recargó; el clic en un holograma abre su estación; teclas del anfitrión, Esc y ←/→ correctos; sin errores en consola (solo avisos de voz, que no hay en el entorno aislado).
+  - ⚠️ No probado: la voz real (espectro y ondas con audio), una confirmación real lanzada desde la Holomesa (sus acciones no son destructivas; el aviso común ya se comprobó en Jarvis) y «reducir movimiento» en la app. Arnés y datos: `~/.local/share/drakter/research/jarvis-hud/holomesa-app/`.
+
 ## [2026-11-26] Stage: fps de reposo por interfaz (`setIdleFps`)
 - **Contexto:** en reposo, la interfaz Visor gasta un 10,6-15,5 % de CPU, y casi todo es composición a 20 fps (lo midió drakter-108). Cada interfaz sabe cuánta animación de ambiente necesita.
 - **Decisión:** se añade al contrato `Stage.setIdleFps(fps | null)`, de forma aditiva.
