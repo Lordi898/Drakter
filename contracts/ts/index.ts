@@ -597,8 +597,9 @@ export interface EvtError {
   message: string | null;
 }
 
+/** Orden de la capa 0, ya aplicada por la voz. `ui_*`: cambiar el modo de la interfaz (el backend publica `ui.mode`). */
 export interface EvtLocalCommand {
-  command: "stop_speech" | "rest" | "close";
+  command: "stop_speech" | "rest" | "close" | "ui_jarvis" | "ui_drakter";
   utt_id: string;
 }
 
@@ -1683,6 +1684,13 @@ export interface TurnRef {
   turn_id: string;
 }
 
+/** Petición de cambiar el modo de la interfaz. El renderer decide si la aplica; no hay estado en el backend. `source`: `voice` (capa 0 de la voz, frase cerrada) o `agent` (herramienta `ui_set_mode`). `utt_id`: el del enunciado, solo si viene de la voz. */
+export interface UiModeRequested {
+  mode: "jarvis" | "drakter";
+  source: "voice" | "agent";
+  utt_id: string | null;
+}
+
 /** Sobre obligatorio de todo contenido de documentos o memoria. */
 export interface UntrustedEnvelope {
   trust: "untrusted";
@@ -1814,6 +1822,7 @@ export interface EventPayloads {
   "voice.playback": VoicePlayback;
   "voice.error": VoiceError;
   "voice.profile_changed": VoiceProfileChanged;
+  "ui.mode": UiModeRequested;
 }
 
 export type EventType = keyof EventPayloads;

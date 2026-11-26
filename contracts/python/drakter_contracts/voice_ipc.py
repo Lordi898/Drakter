@@ -88,7 +88,9 @@ class EvtPlayback(BaseModel):
 
 
 class EvtLocalCommand(BaseModel):
-    command: Literal["stop_speech", "rest", "close"]
+    """Orden de la capa 0, ya aplicada por la voz. `ui_*`: cambiar el modo de la interfaz (el backend publica `ui.mode`)."""
+
+    command: Literal["stop_speech", "rest", "close", "ui_jarvis", "ui_drakter"]
     utt_id: str
 
 

@@ -97,6 +97,7 @@ export type EventType = Extract<
   | 'job.started'
   | 'job.progress'
   | 'job.finished'
+  | 'ui.mode'
 >
 
 /** Unión discriminada generada: `switch (event.type)` estrecha `payload`. */
@@ -148,6 +149,8 @@ const INPUT_SOURCES = new Set(['text', 'voice'])
 const VOICE_STAGES = new Set(['transport', 'stt', 'turn', 'tts', 'ipc', 'wake'])
 const PLAYBACK_STATES = new Set(['started', 'sentence_done', 'finished', 'interrupted'])
 const TURN_OUTCOMES = new Set(['completed', 'failed', 'cancelled', 'interrupted'])
+const UI_MODES = new Set(['jarvis', 'drakter'])
+const UI_MODE_SOURCES = new Set(['voice', 'agent'])
 
 export function isPendingConfirmation(value: unknown): value is PendingConfirmation {
   return isRecord(value) && has(value, CONFIRMATION)
@@ -268,6 +271,12 @@ const PAYLOAD_CHECKS: { readonly [T in EventType]: (payload: Json) => boolean } 
       reason: isOptionalString,
       pending_actions: isCount,
       finished_at: isDate
+    }),
+  'ui.mode': (p) =>
+    has(p, {
+      mode: (v) => UI_MODES.has(v as string),
+      source: (v) => UI_MODE_SOURCES.has(v as string),
+      utt_id: isOptionalString
     })
 }
 

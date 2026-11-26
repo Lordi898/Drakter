@@ -1,10 +1,15 @@
-import type { CreateAvatar } from './types'
+import type { CreateAvatar, CreateAvatarLayer } from './types'
 
 export interface AvatarEntry {
   /** Carga diferida: Three.js y la malla no pesan en el arranque ni se descargan si el avatar no se usa. */
   readonly load: () => Promise<CreateAvatar>
   /** El avatar sabe dibujarse sin fondo propio (`AvatarOptions.transparent`) y flota sobre la interfaz. */
   readonly transparent: boolean
+  /**
+   * Variante de capa para un lienzo compartido (modo Jarvis). Si falta, Jarvis usa `load` en un
+   * segundo lienzo. Mismo Three.js (versión fija) que el anfitrión.
+   */
+  readonly loadLayer?: () => Promise<CreateAvatarLayer>
 }
 
 /**

@@ -69,6 +69,14 @@ function onMicToggle(callback: () => void): () => void {
   }
 }
 
+function onModeToggle(callback: () => void): () => void {
+  const listener = (): void => callback()
+  ipcRenderer.on(IPC_CHANNELS.uiModeToggle, listener)
+  return () => {
+    ipcRenderer.removeListener(IPC_CHANNELS.uiModeToggle, listener)
+  }
+}
+
 /** Operación con nombre de `OPERATIONS`: main resuelve método y ruta y valida `params`. */
 const op = (name: OperationName, body?: unknown, params?: Record<string, string>) =>
   ipcRenderer.invoke(IPC_CHANNELS.apiCall, { op: name, params, body })
@@ -95,7 +103,8 @@ const api: DrakterApi = {
   jobs: {
     list: () => op('jobs.list'),
     cancel: (jobId) => op('jobs.cancel', undefined, { job_id: jobId })
-  }
+  },
+  ui: { onModeToggle }
 }
 
 const bridge: DrakterBridge = {
