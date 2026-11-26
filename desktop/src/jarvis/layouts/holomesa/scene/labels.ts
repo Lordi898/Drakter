@@ -221,13 +221,23 @@ export function createLabelRenderer(): LabelRenderer {
         }
         if (n >= MAX) continue
         const gl = l.glyph
-        aRect.setXYZW(n, Math.round(l.x + gl.ox), Math.round(l.y + gl.oy), gl.w, gl.h)
-        aUv.setXYZW(n, gl.u0, gl.v0, gl.u1, gl.v1)
-        aAlpha.setX(n, l.alpha)
+        const x = Math.round(l.x + gl.ox), y = Math.round(l.y + gl.oy)
+        // Solo se suben a la GPU los atributos que cambian (en reposo, ninguno).
+        if (aRect.getX(n) !== x || aRect.getY(n) !== y || aRect.getZ(n) !== gl.w || aRect.getW(n) !== gl.h) {
+          aRect.setXYZW(n, x, y, gl.w, gl.h)
+          aRect.needsUpdate = true
+        }
+        if (aUv.getX(n) !== gl.u0 || aUv.getY(n) !== gl.v0) {
+          aUv.setXYZW(n, gl.u0, gl.v0, gl.u1, gl.v1)
+          aUv.needsUpdate = true
+        }
+        if (aAlpha.getX(n) !== l.alpha) {
+          aAlpha.setX(n, l.alpha)
+          aAlpha.needsUpdate = true
+        }
         n++
       }
       geo.instanceCount = n
-      aRect.needsUpdate = aUv.needsUpdate = aAlpha.needsUpdate = true
       if (dirty) {
         texture.needsUpdate = true
         dirty = false

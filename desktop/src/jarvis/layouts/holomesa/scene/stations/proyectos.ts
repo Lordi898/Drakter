@@ -28,6 +28,8 @@ export function proyectos(M: Materials, pos: THREE.Vector3): Station {
   let builds: THREE.InstancedMesh | null = null
   let picked = -1
   let ang = 0
+  /** Las maquetas ya están levantadas: sus matrices no cambian (gira el grupo, no las instancias). */
+  let settled = false
 
   const s: Station = {
     ...stationState(b),
@@ -75,12 +77,15 @@ export function proyectos(M: Materials, pos: THREE.Vector3): Station {
         snap.projects.load !== 'ready' ? (snap.projects.load === 'error' ? 'sin datos' : 'cargando…')
           : lead ? `${snap.projects.items.length} activos · ${lead.name} al ${Math.round(lead.progress * 100)} %` : 'sin proyectos activos'
       picked = -1
+      settled = false
     },
     update(_t, dt, c) {
       b.apply(s)
       if (!spin || !builds) return
       ang += dt * (c.reduced ? 0 : 0.12 * (1 - s.focus * 0.6) * (picked >= 0 ? 0.15 : 1))
       spin.rotation.y = ang
+      if (settled && s.build >= 1) return
+      settled = s.build >= 1
       bl.forEach((x, i) => {
         const g = ease(clamp01(s.build * 1.8 - i * 0.03)), hh = x.h * g + 0.001
         tmpM.compose(tmpP.set(x.x, 0.12 + hh / 2, x.z), tmpQ.identity(), tmpS.set(0.17, hh, 0.17))
