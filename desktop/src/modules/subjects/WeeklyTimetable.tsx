@@ -1,11 +1,10 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { errorText } from '@/modules/calendar/workspaceApi'
-import { getTimetable } from './api'
 import { Field, TextInput } from './fields'
 import { hhmm, minutesOf, todayIso, WEEKDAYS } from './format'
 import { colorOf } from './palette'
 import type { TimetableEntry } from './types'
+import { useTimetable } from './useSubjects'
 
 const PX_PER_HOUR = 56
 
@@ -49,25 +48,7 @@ function place(entries: readonly TimetableEntry[]): Placed[] {
 
 export function WeeklyTimetable({ reloadKey, onOpenSubject }: Props) {
   const [on, setOn] = useState(todayIso())
-  const [entries, setEntries] = useState<readonly TimetableEntry[] | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const [attempt, setAttempt] = useState(0)
-
-  useEffect(() => {
-    let cancelled = false
-    setError(null)
-    getTimetable(on).then(
-      (timetable) => {
-        if (!cancelled) setEntries(timetable.entries)
-      },
-      (e: unknown) => {
-        if (!cancelled) setError(errorText(e))
-      }
-    )
-    return () => {
-      cancelled = true
-    }
-  }, [on, reloadKey, attempt])
+  const { entries, error, reload } = useTimetable(on, reloadKey)
 
   const { startHour, endHour } = useMemo(() => {
     const all = entries ?? []
@@ -99,7 +80,7 @@ export function WeeklyTimetable({ reloadKey, onOpenSubject }: Props) {
       {error ? (
         <div role="alert" className="flex items-center gap-3 text-sm text-destructive">
           {error}
-          <Button size="sm" variant="outline" onClick={() => setAttempt((n) => n + 1)}>
+          <Button size="sm" variant="outline" onClick={reload}>
             Reintentar
           </Button>
         </div>

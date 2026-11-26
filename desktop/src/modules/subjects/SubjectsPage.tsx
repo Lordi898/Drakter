@@ -1,5 +1,5 @@
 import { CalendarDays, List, Plus } from 'lucide-react'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useState } from 'react'
 import { EmptyState } from '@/components/EmptyState'
 import { PageHeader } from '@/components/PageHeader'
 import { Badge } from '@/components/ui/badge'
@@ -7,50 +7,31 @@ import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { cn } from '@/lib/utils'
 import { errorText, isBackendUnavailable } from '@/modules/calendar/workspaceApi'
-import { archiveSubject, deleteSubject, listSubjects, unarchiveSubject } from './api'
+import { archiveSubject, deleteSubject, unarchiveSubject } from './api'
 import { colorOf } from './palette'
 import { SubjectDetail } from './SubjectDetail'
 import { SubjectDialog } from './SubjectDialog'
 import { SubjectsDrawing } from './SubjectsDrawing'
 import type { Subject } from './types'
 import { useDeletion } from './useDeletion'
+import { useSubjects } from './useSubjects'
 import { WeeklyTimetable } from './WeeklyTimetable'
 
 type View = 'list' | 'timetable'
-type Load =
-  | { readonly status: 'loading' }
-  | { readonly status: 'error'; readonly error: unknown }
-  | { readonly status: 'ready'; readonly subjects: readonly Subject[] }
 
 export function SubjectsPage() {
-  const [load, setLoad] = useState<Load>({ status: 'loading' })
   const [includeArchived, setIncludeArchived] = useState(false)
+  const { load, reload: retry } = useSubjects(includeArchived)
   const [view, setView] = useState<View>('list')
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [dialog, setDialog] = useState<Subject | 'new' | null>(null)
-  const [attempt, setAttempt] = useState(0)
   const [reloadKey, setReloadKey] = useState(0)
   const [actionError, setActionError] = useState<string | null>(null)
 
-  useEffect(() => {
-    let cancelled = false
-    listSubjects(includeArchived).then(
-      (page) => {
-        if (!cancelled) setLoad({ status: 'ready', subjects: page.items })
-      },
-      (error: unknown) => {
-        if (!cancelled) setLoad({ status: 'error', error })
-      }
-    )
-    return () => {
-      cancelled = true
-    }
-  }, [includeArchived, attempt])
-
   const refresh = useCallback(() => {
-    setAttempt((n) => n + 1)
+    retry()
     setReloadKey((n) => n + 1)
-  }, [])
+  }, [retry])
 
   const subjects = load.status === 'ready' ? load.subjects : []
   const selected = subjects.find((s) => s.id === selectedId) ?? subjects[0] ?? null
@@ -99,7 +80,7 @@ export function SubjectsPage() {
           description={unavailable ? 'Las asignaturas se guardan en el espacio de trabajo, que todavía no está conectado. No se muestra nada hasta que lo esté.' : errorText(load.error)}
           drawing={<SubjectsDrawing />}
         />
-        <Button className="mt-4" variant="outline" onClick={() => setAttempt((n) => n + 1)}>
+        <Button className="mt-4" variant="outline" onClick={retry}>
           Reintentar
         </Button>
       </>
