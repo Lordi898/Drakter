@@ -88,7 +88,8 @@ export function buildScene(gl: THREE.WebGLRenderer, geos: Geos, view: View = {},
     /** Compila los programas sin bloquear (KHR_parallel_shader_compile cuando existe). */
     compile: () => gl.compileAsync(scene, cam),
     resize(w: number, h: number, dpr: number): void {
-      W = w; H = h; gl.setPixelRatio(dpr); gl.setSize(w, h, false); cam.aspect = w / h;
+      // Solo cámara y uniformes: el tamaño del renderer es de su dueño (createAvatar o el Stage de Jarvis).
+      W = w; H = h; cam.aspect = w / h;
       cam.fov = (w / h < 0.82 ? FOV * (0.82 / (w / h)) ** 0.75 : FOV) / (view.zoom ?? 1); cam.updateProjectionMatrix();
       const sc = (h * dpr) / (2 * Math.tan((cam.fov * Math.PI) / 360));
       mEmber.uniforms.uScale!.value = sc; mSmoke.uniforms.uScale!.value = sc;
