@@ -2,7 +2,7 @@
 // solo le pone alrededor un renderer, un bucle (30 fps) y la entrada de ratón.
 // Construye la escena en varias etapas (ningún bloqueo largo del hilo principal) y compila los shaders en asíncrono.
 import * as THREE from 'three';
-import type { AvatarLayer, AvatarOptions, AvatarViewport } from '../types';
+import type { AvatarLayer, AvatarOptions, AvatarTheme, AvatarViewport } from '../types';
 import { Brain, HALO, type Pose, type Zone } from './brain';
 import type { Viseme } from './voice';
 import {
@@ -12,11 +12,7 @@ import { lux, glassMat, BASE, G } from './lux';
 import { FACE_GLSL, faceDeformJS, type FaceU } from './face';
 import { nightSky, glowPoints, backdrop } from './mats';
 
-export type AvatarTheme = 'dark' | 'light';
-export interface RelojeroOptions extends AvatarOptions {
-  /** Con `transparent`, el tema sobre el que flota: 'light' baja la ganancia de los destellos aditivos. */
-  readonly theme?: AvatarTheme;
-}
+export type RelojeroOptions = AvatarOptions;
 /** La capa más lo que el envoltorio necesita para la entrada de ratón. */
 export interface RelojeroLayer extends AvatarLayer {
   readonly ready: Promise<void>;

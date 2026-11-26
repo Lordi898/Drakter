@@ -27,6 +27,7 @@ import type {
   Page,
   TypedEvent
 } from '../../../contracts/ts'
+import { AVATAR_CHOICES, JARVIS_LAYOUT_CHOICES } from '@/stores/preferences'
 
 export type { AgentState, ConfirmationOut, ConfirmationTicket, MessageOut, Page }
 export type ChatSessionInfo = Pick<ChatSession, 'id'>
@@ -98,6 +99,7 @@ export type EventType = Extract<
   | 'job.progress'
   | 'job.finished'
   | 'ui.mode'
+  | 'ui.appearance'
 >
 
 /** Unión discriminada generada: `switch (event.type)` estrecha `payload`. */
@@ -151,6 +153,8 @@ const PLAYBACK_STATES = new Set(['started', 'sentence_done', 'finished', 'interr
 const TURN_OUTCOMES = new Set(['completed', 'failed', 'cancelled', 'interrupted'])
 const UI_MODES = new Set(['jarvis', 'drakter'])
 const UI_MODE_SOURCES = new Set(['voice', 'agent'])
+const isOptionalChoice = (choices: readonly string[]) => (v: unknown): boolean =>
+  v === undefined || v === null || choices.includes(v as string)
 
 export function isPendingConfirmation(value: unknown): value is PendingConfirmation {
   return isRecord(value) && has(value, CONFIRMATION)
@@ -277,7 +281,15 @@ const PAYLOAD_CHECKS: { readonly [T in EventType]: (payload: Json) => boolean } 
       mode: (v) => UI_MODES.has(v as string),
       source: (v) => UI_MODE_SOURCES.has(v as string),
       utt_id: isOptionalString
-    })
+    }),
+  'ui.appearance': (p) =>
+    has(p, {
+      avatar: isOptionalChoice(AVATAR_CHOICES),
+      layout: isOptionalChoice(JARVIS_LAYOUT_CHOICES),
+      source: (v) => UI_MODE_SOURCES.has(v as string),
+      utt_id: isOptionalString
+    }) &&
+    ((p['avatar'] ?? null) !== null || (p['layout'] ?? null) !== null)
 }
 
 /** Tipos del catálogo v1 que esta capa no consume: se ignoran sin avisar. */

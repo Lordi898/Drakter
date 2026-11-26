@@ -3,6 +3,23 @@ import type { CharacterState } from '../types'
 /** Avisos de contexto que entiende cualquier avatar 3D. */
 export type AvatarEvent = 'userTyping' | 'focus' | 'blur'
 
+/** Tema de la interfaz que hay DEBAJO del avatar (un holograma aditivo no se ve sobre fondo claro). */
+export type AvatarTheme = 'dark' | 'light'
+
+/** Ficha de un avatar para elegirlo (Ajustes, selector de Jarvis, voz). No carga Three ni el avatar. */
+export interface AvatarMeta {
+  /** Id estable en minúsculas con guiones (`holo-orbe`); es el valor de la preferencia `avatarId`. */
+  readonly id: string
+  /** Nombre visible. */
+  readonly name: string
+  /** Una línea para Ajustes. */
+  readonly description: string
+  /** URL de la miniatura (asset de Vite con `?url`, cuadrada, ~192 px). */
+  readonly thumbnail: string
+  /** Palabras con las que el usuario lo pide por voz, en minúsculas y sin artículos. */
+  readonly voiceAliases: readonly string[]
+}
+
 export interface AvatarOptions {
   readonly reducedMotion?: boolean
   readonly pixelRatio?: number
@@ -11,6 +28,8 @@ export interface AvatarOptions {
    * Solo se pide a los avatares que lo declaran en `registry.ts`.
    */
   readonly transparent?: boolean
+  /** Tema inicial de la interfaz de debajo (por defecto `dark`). Ver `setTheme`. */
+  readonly theme?: AvatarTheme
 }
 
 /**
@@ -29,6 +48,8 @@ export interface Avatar3D {
   lookAt(x: number, y: number): void
   notify(event: AvatarEvent): void
   setReducedMotion(on: boolean): void
+  /** Cambia en vivo al tema de la interfaz de debajo. Opcional: sin él, el avatar se ve igual en los dos. */
+  setTheme?(theme: AvatarTheme): void
   /** Tamaño CSS del lienzo en px. */
   resize(width: number, height: number): void
   /** Libera geometrías, materiales, listeners y el bucle. */

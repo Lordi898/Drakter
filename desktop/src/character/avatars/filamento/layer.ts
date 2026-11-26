@@ -1,16 +1,12 @@
 // Filamento (dorado) como capa de un renderer ajeno (AvatarLayer). Es el núcleo único: createAvatar (index.ts)
 // solo le pone alrededor un renderer, un bucle y la entrada de ratón.
 import * as THREE from 'three';
-import type { AvatarLayer, AvatarOptions, AvatarViewport } from '../types';
+import type { AvatarLayer, AvatarOptions, AvatarTheme, AvatarViewport } from '../types';
 import { Brain, type Vowel } from './brain';
 import { createRenderer, type AvatarRenderer } from './render';
 
-export type AvatarTheme = 'dark' | 'light';
 
-export interface FilamentoOptions extends AvatarOptions {
-  /** Tema bajo el avatar con `transparent`: 'light' pone una tarjeta oscura propia (la luz aditiva no se ve sobre claro). */
-  readonly theme?: AvatarTheme;
-}
+export type FilamentoOptions = AvatarOptions;
 
 /** La capa más lo que el envoltorio necesita para la entrada de ratón. */
 export interface FilamentoLayer extends AvatarLayer {

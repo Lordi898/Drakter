@@ -2,10 +2,10 @@
 // la capa (layer.ts): pone el renderer, el bucle (30 fps con limitador por calendario) y la entrada de ratón.
 import * as THREE from 'three';
 import type { Avatar3D } from '../types';
-import { createFilamentoLayer, type AvatarTheme, type FilamentoOptions } from './layer';
+import { createFilamentoLayer, type FilamentoOptions } from './layer';
 
-export type { AvatarTheme, FilamentoOptions };
-export type Filamento = Avatar3D & { setTheme(theme: AvatarTheme): void; readonly ready: Promise<void> };
+export type { FilamentoOptions };
+export type Filamento = Avatar3D & { readonly ready: Promise<void> };
 
 export function createAvatar(canvas: HTMLCanvasElement, opts: FilamentoOptions = {}): Filamento {
   const gl = new THREE.WebGLRenderer({ canvas, antialias: false, alpha: opts.transparent === true, premultipliedAlpha: true, depth: false, stencil: false, powerPreference: 'default' });

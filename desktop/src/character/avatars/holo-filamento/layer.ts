@@ -1,16 +1,12 @@
 // Holo-Filamento como capa de un renderer ajeno (AvatarLayer). Es el núcleo único: createAvatar (index.ts)
 // solo le pone alrededor un renderer, un bucle y la entrada de ratón.
 import * as THREE from 'three';
-import type { AvatarLayer, AvatarOptions, AvatarViewport } from '../types';
+import type { AvatarLayer, AvatarOptions, AvatarTheme, AvatarViewport } from '../types';
 import { Brain, type Vowel } from './brain';
 import { createRenderer, type AvatarRenderer } from './render';
 
-export type AvatarTheme = 'dark' | 'light';
 
-export interface HoloFilamentoOptions extends AvatarOptions {
-  /** Tema bajo el avatar con `transparent`: 'light' pasa a tinta cobalto lo que flota fuera del busto. */
-  readonly theme?: AvatarTheme;
-}
+export type HoloFilamentoOptions = AvatarOptions;
 
 /** La capa más lo que el envoltorio necesita para la entrada de ratón. */
 export interface HoloFilamentoLayer extends AvatarLayer {

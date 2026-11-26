@@ -3,7 +3,7 @@
  * compartido dentro de un recuadro que decide el HUD. No sabe qué avatar es: recibe su `loadLayer`.
  */
 import type { AvatarControls } from '@/character/avatars/wiring'
-import type { AvatarLayer, AvatarViewport, CreateAvatarLayer } from '@/character/avatars/types'
+import type { AvatarLayer, AvatarTheme, AvatarViewport, CreateAvatarLayer } from '@/character/avatars/types'
 import type { CharacterState } from '@/character/types'
 import type { StageAnchor, StageFrame, StageLayer } from '../types'
 
@@ -16,6 +16,8 @@ export interface AvatarStageLayerOptions {
   readonly order?: number
   /** Sin fondo propio (por defecto sí: el fondo es el del Stage). */
   readonly transparent?: boolean
+  /** Tema de lo que hay debajo (por defecto `dark`: Jarvis fuerza el tema oscuro). */
+  readonly theme?: AvatarTheme
 }
 
 export interface AvatarStageLayer extends StageLayer {
@@ -72,7 +74,8 @@ export function createAvatarStageLayer(options: AvatarStageLayerOptions): Avatar
         const created = create(frame.renderer, {
           reducedMotion: frame.reducedMotion,
           pixelRatio: frame.renderScale,
-          transparent: options.transparent ?? true
+          transparent: options.transparent ?? true,
+          theme: options.theme ?? 'dark'
         })
         layer = created
         reduced = frame.reducedMotion

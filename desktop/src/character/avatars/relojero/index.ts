@@ -2,10 +2,10 @@
 // la capa (layer.ts): pone el renderer, el bucle (30 fps con limitador por calendario) y la entrada de ratón.
 import * as THREE from 'three';
 import type { Avatar3D } from '../types';
-import { createRelojeroLayer, type AvatarTheme, type RelojeroOptions } from './layer';
+import { createRelojeroLayer, type RelojeroOptions } from './layer';
 
-export type { AvatarTheme, RelojeroOptions };
-export type Relojero = Avatar3D & { setTheme(theme: AvatarTheme): void; readonly ready: Promise<void> };
+export type { RelojeroOptions };
+export type Relojero = Avatar3D & { readonly ready: Promise<void> };
 
 export function createAvatar(canvas: HTMLCanvasElement, opts: RelojeroOptions = {}): Relojero {
   const gl = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'low-power', alpha: opts.transparent === true, premultipliedAlpha: true, stencil: false });
