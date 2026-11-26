@@ -17,6 +17,18 @@ export interface AvatarEntry {
  * `create: CreateAvatar` y, para el Stage de Jarvis, `createLayer: CreateAvatarLayer`).
  */
 const AVATARS = {
+  // Por defecto. Holograma de contornos; `theme: 'light'` lo pasa a grabado en tinta (setTheme en caliente).
+  'holo-contorno': {
+    load: () => import('./holo-contorno/entry').then((module) => module.create),
+    loadLayer: () => import('./holo-contorno/entry').then((module) => module.createLayer),
+    transparent: true
+  },
+  // Variante de Holo-Contorno (mismo rig) con trama de filamentos.
+  'holo-hilo': {
+    load: () => import('./holo-hilo/entry').then((module) => module.create),
+    loadLayer: () => import('./holo-hilo/entry').then((module) => module.createLayer),
+    transparent: true
+  },
   // Provisional. Soporta `transparent`, pero su diseño cuenta con su halo de fondo.
   ascuario: {
     load: () => import('./ascuario/entry').then((module) => module.create),
@@ -31,6 +43,6 @@ export type AvatarId = keyof typeof AVATARS
  * Avatar activo. Cambiar de avatar es cambiar esta línea (p. ej. `'ascuario'`).
  * `null` = sin avatar 3D: el personaje de siempre (.riv si existe, si no el SVG) y Three.js no se descarga.
  */
-export const ACTIVE_AVATAR: AvatarId | null = null
+export const ACTIVE_AVATAR: AvatarId | null = 'holo-contorno'
 
 export const activeAvatar: AvatarEntry | null = ACTIVE_AVATAR === null ? null : AVATARS[ACTIVE_AVATAR]

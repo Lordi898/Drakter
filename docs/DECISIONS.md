@@ -1524,3 +1524,25 @@ Decisiones técnicas, cambios de tecnología y motivos.
     - Al quitar las capas quedan 0 geometrías, 0 texturas y 0 programas, y no hay fotogramas tras `dispose()`. Después de una restauración, Three avisa de que «object does not belong to this context» al liberar, y es inocuo.
     - En SwiftShader detecta software, pasa a Ahorro sin partículas y «reducir movimiento» deja la escena quieta.
   - ⚠️ Se midió en Chrome y no en Electron, para no tocar la app de desarrollo del usuario; es el mismo Chromium y la misma ruta ANGLE. Playwright emula páginas siempre visibles, así que `hidden` se probó forzando `document.hidden` y `visibilitychange`, que es la misma ruta que sigue Electron al minimizar. Arnés y datos: `~/.local/share/drakter/research/jarvis-hud/w3-stage/`.
+
+## [2026-11-26] Port de Holo-Contorno (avatar por defecto) y de Holo-Hilo como variante
+- **Contexto:** el plan de selección de avatares deja `holo-contorno` por defecto y pide portar `holo-hilo`. Los prototipos (drakter-92 y drakter-91) crean su propio `WebGLRenderer` y guardan los uniformes en un objeto global del módulo. Holo-Hilo copiaba casi todo Holo-Contorno, además con una versión anterior que animaba el polvo en la CPU.
+- **Decisión:**
+  - `avatars/holo-contorno/` se separa en `layer.ts` (núcleo `AvatarLayer`, sin renderer ni bucle) e `index.ts` (envoltorio con lienzo propio), igual que en Ascuario. `entry.ts` exporta `create` y `createLayer`.
+  - Los uniformes pasan a ser por instancia (`holoUniforms()`, `threadUniforms()`), porque Drakter y el Stage pueden tener dos avatares vivos a la vez.
+  - `holo-hilo/` es una `HoloVariant`: solo aporta `threads.ts` y sus modismos (`variant.ts`). El shader de contornos recibe `uLineK`/`uVol` para cubrir las dos estéticas con un único programa. El polvo de Holo-Hilo pasa a animarse en la GPU, como en la v2 de Holo-Contorno.
+  - En la capa no se usa `forceContextLoss` ni se libera el renderer. El dibujo usa `NoToneMapping` y `LinearSRGBColorSpace`, `autoClear` se fuerza a falso y todo se restaura al terminar.
+  - `ACTIVE_AVATAR = 'holo-contorno'` hasta que A1 (drakter-95) lo sustituya por la preferencia `avatarId`. El tema (`theme`/`setTheme`) ya lo aceptan los dos avatares, pero lo cablea A1 en el anfitrión.
+- **Alternativas descartadas:** copiar Holo-Hilo entero, porque duplica unas 1.500 líneas que se desincronizarían. Mantener los uniformes globales, porque dos instancias se pisarían.
+- **Motivo:** una sola implementación por avatar, válida en los dos modos, con la CPU de la referencia.
+- **Impacto:**
+  - Código: `desktop/src/character/avatars/{holo-contorno,holo-hilo}/**` y `registry.ts`.
+  - Medido en la UHD 620 (Chrome, 500×600, DPR 1, 30 fps, con el lock de medición y carga media de 7 a 13), en A/B alternado frente a las páginas del prototipo:
+    - CPU del renderer en reposo: 7,9-9,1 % en el port de Holo-Contorno frente a 7,9-11,6 % en la referencia, y 7,6-7,9 % en el port de Holo-Hilo frente a 8,1-8,5 %.
+    - Hablando: 9,3-9,4 % frente a 9,4-10,3 %.
+    - Draw calls: 12 y 14.
+    - Arranque de Holo-Contorno: 2,5-2,9 s frente a 2,3-2,8 s.
+    - Capa en el Stage real (`createStage` + `createAvatarStageLayer`): 30 fps, 11 y 13 draw calls.
+    - `dispose()`: 0 fotogramas después y ninguna traza en consola.
+  - ⚠️ Se comprobó en Chrome y no en Electron, para no tocar la app del usuario; es el mismo Chromium. Arnés: `~/.local/share/drakter/research/avatar3d/port-105/`.
+
