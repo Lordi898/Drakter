@@ -43,7 +43,14 @@ export function createAscuarioLayer(gl: THREE.WebGLRenderer, opts: AscuarioLayer
     if (disposed) return;
     sc = buildScene(gl, geos, opts.view, opts.transparent ?? false);
     sc.resize(size.w, size.h, size.dpr);
-    await sc.compile();
+    // El tone mapping entra en la clave del programa: se compila con el de render() para no recompilar al aparecer.
+    // compileAsync crea los programas de forma síncrona; solo se espera a que el driver termine, así que el
+    // estado global vuelve enseguida y no afecta a otras capas que dibujen mientras tanto.
+    let compiled: Promise<unknown>;
+    const prevTone = gl.toneMapping, prevExposure = gl.toneMappingExposure;
+    try { gl.toneMapping = TONE_MAPPING; gl.toneMappingExposure = EXPOSURE; compiled = sc.compile(); }
+    finally { gl.toneMapping = prevTone; gl.toneMappingExposure = prevExposure; }
+    await compiled;
   })();
 
   return {
@@ -65,12 +72,15 @@ export function createAscuarioLayer(gl: THREE.WebGLRenderer, opts: AscuarioLayer
       gl.getSize(canvasSize); gl.getViewport(prevViewport); gl.getScissor(prevScissor);
       const prevScissorTest = gl.getScissorTest(), prevTone = gl.toneMapping, prevExposure = gl.toneMappingExposure;
       const y = canvasSize.y - vp.y - vp.height;
-      gl.setViewport(vp.x, y, vp.width, vp.height); gl.setScissor(vp.x, y, vp.width, vp.height); gl.setScissorTest(true);
-      gl.toneMapping = TONE_MAPPING; gl.toneMappingExposure = EXPOSURE;
-      gl.clearDepth(); // solo dentro del recuadro: las capas de debajo no tapan al avatar; el color no se toca
-      sc.render(pose, Math.min(dt, 0.05));
-      gl.toneMapping = prevTone; gl.toneMappingExposure = prevExposure;
-      gl.setViewport(prevViewport); gl.setScissor(prevScissor); gl.setScissorTest(prevScissorTest);
+      try {
+        gl.setViewport(vp.x, y, vp.width, vp.height); gl.setScissor(vp.x, y, vp.width, vp.height); gl.setScissorTest(true);
+        gl.toneMapping = TONE_MAPPING; gl.toneMappingExposure = EXPOSURE;
+        gl.clearDepth(); // solo dentro del recuadro: las capas de debajo no tapan al avatar; el color no se toca
+        sc.render(pose, Math.min(dt, 0.05));
+      } finally { // el renderer es compartido: aunque este fotograma falle, las demás capas lo reciben intacto
+        gl.toneMapping = prevTone; gl.toneMappingExposure = prevExposure;
+        gl.setViewport(prevViewport); gl.setScissor(prevScissor); gl.setScissorTest(prevScissorTest);
+      }
     },
     dispose: () => { disposed = true; sc?.dispose(); sc = null; },
   };
