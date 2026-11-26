@@ -24,7 +24,7 @@ const OVERVIEW: AppSection = 'home'
 const isTyping = (t: EventTarget | null): boolean =>
   t instanceof HTMLElement && (t.isContentEditable || t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT')
 
-export default function Holomesa({ stage, avatar, reducedMotion, section, navigate, onReady, exit }: JarvisLayoutProps) {
+export default function Holomesa({ stage, avatar, reducedMotion, section, navigate, onReady, exit, setExitTransition }: JarvisLayoutProps) {
   const [scene] = useState(() => createHolomesaScene(reducedMotion))
   useEffect(() => {
     scene.revive()
@@ -107,6 +107,19 @@ export default function Holomesa({ stage, avatar, reducedMotion, section, naviga
     return () => cancelAnimationFrame(raf)
     // Una sola vez al montar.
   }, [scene])
+
+  // ── salida: el HUD se pliega y la mesa se apaga (tope del anfitrión: 1,5 s). Con «reducir movimiento», ninguna.
+  useEffect(() => {
+    if (reducedMotion || !stage) {
+      setExitTransition(null)
+      return
+    }
+    setExitTransition(async () => {
+      setBooted(false)
+      await scene.unboot()
+    })
+    return () => setExitTransition(null)
+  }, [setExitTransition, reducedMotion, stage, scene])
 
   // ── sección ↔ navegación común
   const go = useCallback(
