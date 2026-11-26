@@ -25,7 +25,14 @@ export interface Preferences {
   readonly lastUiMode: UiMode
   /** Nivel de calidad del modo Jarvis; `auto` lo elige según la GPU. */
   readonly jarvisQuality: JarvisQuality
+  /**
+   * Avatar 3D elegido (`character/avatars/registry.ts`): un id como `holo-orbe`, o `none` para el
+   * personaje clásico. Aquí solo se valida la forma; un id desconocido o no portado se resuelve a «ninguno».
+   */
+  readonly avatarId: string
 }
+
+const AVATAR_ID = /^[a-z0-9-]{1,40}$/
 
 const STORAGE_KEY = 'drakter.preferences.v1'
 const DEFAULTS: Preferences = {
@@ -37,7 +44,8 @@ const DEFAULTS: Preferences = {
   outputDeviceId: '',
   jarvisStartup: 'drakter',
   lastUiMode: 'drakter',
-  jarvisQuality: 'auto'
+  jarvisQuality: 'auto',
+  avatarId: 'holo-contorno'
 }
 
 function load(): Preferences {
@@ -56,7 +64,9 @@ function load(): Preferences {
       lastUiMode: parsed.lastUiMode === 'jarvis' ? 'jarvis' : 'drakter',
       jarvisQuality: JARVIS_QUALITIES.includes(parsed.jarvisQuality as JarvisQuality)
         ? (parsed.jarvisQuality as JarvisQuality)
-        : 'auto'
+        : 'auto',
+      avatarId:
+        typeof parsed.avatarId === 'string' && AVATAR_ID.test(parsed.avatarId) ? parsed.avatarId : DEFAULTS.avatarId
     }
   } catch {
     return DEFAULTS

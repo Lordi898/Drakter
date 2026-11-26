@@ -10,6 +10,7 @@ import { fetchSettingsStatus } from '@/pages/today/requests'
 import { notify } from '@/services/notify'
 import { updatePreferences, usePreferences, type ThemePreference } from '@/stores/preferences'
 import { AgentStatusSection, DevModeBanner, isDevActive } from './AgentStatusSection'
+import { AvatarSection } from './AvatarSection'
 import { BackupsSection } from './BackupsSection'
 import { JarvisSection } from './JarvisSection'
 import { Rows, Section, SettingRow, useLoad } from './settingsUi'
@@ -150,6 +151,8 @@ export function SettingsPage() {
           </SettingRow>
         </Rows>
       </Section>
+
+      <AvatarSection />
 
       <JarvisSection />
 
