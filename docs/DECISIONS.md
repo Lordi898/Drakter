@@ -1564,3 +1564,4 @@ Decisiones técnicas, cambios de tecnología y motivos.
     - Como capa de un renderer compartido: lista en 28 ms y, tras 90 fotogramas, el estado global intacto (tone mapping 0, sin scissor, viewport y color de borrado sin cambios). Sin recompilar (5 programas antes y después).
     - Al hablar abre la boca y mira donde se le indica.
     - Sin errores en consola.
+  - CPU en reposo en la pantalla Drakter (UHD 620, a 60 rAF/s, con el bucle del avatar limitado a 30 fps, dentro de `flock`): renderer 5,8 % y 4,7 %, proceso GPU 6,2 % y 4,8 %. Hubo una primera medida de 25,3 % que coincidió con una recarga de la página: el avatar volvió a tejer y a compilar. No cuenta como reposo.
