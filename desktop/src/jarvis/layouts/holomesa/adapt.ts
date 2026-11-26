@@ -1,17 +1,16 @@
 /**
- * Instantáneas reales del Workspace (`jarvis/data` y hooks de `modules/*`) → modelo de vista de la
- * Holomesa. Funciones puras, sin red. Lo que no ha llegado queda en `loading`; lo que falló sin dato
- * previo, en `error`. Nada se inventa: una sección sin datos se dibuja vacía y lo dice.
+ * Instantáneas reales del Workspace (`jarvis/data`, D1) → modelo de vista de la Holomesa. Funciones
+ * puras, sin red. Lo que no ha llegado queda en `loading`; lo que falló sin dato previo, en `error`.
+ * Nada se inventa: una sección sin datos se dibuja vacía y lo dice.
  */
-import { addDays, daysBetween, formatDate, parseDate, shortDayLabel, todayIn, weekdayShort } from '@/modules/calendar/dateUtils'
+import type { JarvisData, Snapshot } from '@/jarvis/data'
+import { addDays, daysBetween, shortDayLabel, todayIn, weekdayShort } from '@/modules/calendar/dateUtils'
 import type { AgendaItem } from '@/modules/calendar/types'
-import type { Habit, HabitHistory, HabitStatistics } from '@/modules/habits/types'
+import type { Habit, HabitHistoryDay } from '@/modules/habits/types'
 import type { Project } from '@/modules/projects/types'
-import type { EntityType, RelationshipOut } from '@/modules/relationships/types'
 import { ENTITY_TYPE_LABEL } from '@/modules/relationships/types'
-import type { ResourceSummary } from '@/modules/storage/types'
 import type { Task } from '@/modules/tasks/types'
-import type { TodayAgendaEntry, TodayResponse } from '@/pages/today/contract'
+import type { TodayAgendaEntry } from '@/pages/today/contract'
 import {
   parseColor,
   type HmColumn,
@@ -27,36 +26,15 @@ import {
   type Load
 } from './model'
 
-/** Forma mínima de una instantánea (`jarvis/data` `Snapshot<T>` la cumple). */
-export interface Topic<T> {
-  readonly status: 'loading' | 'ready' | 'offline' | 'error'
-  readonly data: T | null
-}
+/** Temas de `jarvis/data` que usa la Holomesa (constante de módulo: lista estable entre renders). */
+export const HOLO_TOPICS = ['today', 'tasks', 'projects', 'habits', 'habitHistory', 'agenda', 'relationships', 'resources', 'folders', 'subjects', 'entityNames'] as const
+export type HoloTopics = Pick<JarvisData, (typeof HOLO_TOPICS)[number]>
 
-export interface HabitStatsEntry {
-  readonly history: HabitHistory | null
-  readonly stats: HabitStatistics | null
-}
-
-export interface AdaptInput {
-  readonly now: Date
-  readonly timezone: string
-  readonly today: Topic<TodayResponse>
-  readonly tasks: Topic<readonly Task[]>
-  readonly projects: Topic<readonly Project[]>
-  readonly habits: Topic<readonly Habit[]>
-  readonly habitStats: ReadonlyMap<string, HabitStatsEntry>
-  readonly agenda: Topic<readonly AgendaItem[]>
-  readonly relationships: Topic<readonly RelationshipOut[]>
-  readonly resources: Topic<readonly ResourceSummary[]>
-  readonly folderNames: ReadonlyMap<string, string>
-}
-
-/** Días que cubre la torre del calendario (la agenda de `jarvis/data` va de hoy a +7). */
-export const CALENDAR_DAYS = 8
+/** Días que cubre la torre del calendario (la agenda de D1 va de hoy a +7). */
+export const CALENDAR_DAYS = 7
 export const HABIT_DAYS = 28
 
-const loadOf = (t: Topic<unknown>): Load => (t.data !== null ? 'ready' : t.status === 'loading' ? 'loading' : 'error')
+const loadOf = (t: Snapshot<unknown>): Load => (t.data !== null ? 'ready' : t.status === 'loading' ? 'loading' : 'error')
 
 /** Hora local decimal de un «AAAA-MM-DDTHH:MM[:SS]». */
 const hoursOf = (local: string): number => {
@@ -71,19 +49,24 @@ export function nowHoursIn(now: Date, timeZone: string): number {
   return (get('hour') % 24) + get('minute') / 60 + get('second') / 3600
 }
 
+const dateIn = (iso: string, tz: string): string =>
+  new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(iso))
+
 function kindOf(sourceType: string, kind: string): HmEventKind {
   if (sourceType === 'class_session') return 'clase'
   if (sourceType === 'time_block') return 'bloque'
   return kind === 'reminder' ? 'recordatorio' : 'evento'
 }
 
-function eventFrom(
-  e: Pick<AgendaItem, 'occurrence_id' | 'title' | 'all_day' | 'display_start' | 'display_end' | 'start_date' | 'color' | 'room' | 'source_id' | 'kind'> & { readonly source_type: string; readonly location?: string | null },
-  today: string
-): HmEvent | null {
+type EventSource = Pick<AgendaItem, 'occurrence_id' | 'title' | 'all_day' | 'display_start' | 'display_end' | 'start_date' | 'color' | 'room' | 'source_id' | 'kind'> & {
+  readonly source_type: string
+  readonly location?: string | null
+  readonly subject_id?: string | null
+}
+
+function eventFrom(e: EventSource, today: string, subjectColor: ReadonlyMap<string, number | null>): HmEvent | null {
   const startDate = e.display_start?.slice(0, 10) ?? e.start_date
   if (!startDate) return null
-  const day = daysBetween(today, startDate)
   const endDate = e.display_end?.slice(0, 10) ?? startDate
   const start = e.all_day || !e.display_start ? 0 : hoursOf(e.display_start)
   const end = e.all_day || !e.display_end ? 24 : endDate > startDate ? 24 : hoursOf(e.display_end)
@@ -91,12 +74,12 @@ function eventFrom(
   return {
     id: e.occurrence_id,
     title: e.title,
-    day,
+    day: daysBetween(today, startDate),
     start,
-    end: Math.max(start, end),
+    end: Math.max(start + 0.05, end),
     allDay: e.all_day,
     kind: kindOf(st, e.kind),
-    color: parseColor(e.color),
+    color: parseColor(e.color) ?? (e.subject_id ? (subjectColor.get(e.subject_id) ?? null) : null),
     place: e.room ?? e.location ?? null,
     sourceType: st === 'class_session' || st === 'time_block' ? st : 'calendar_event',
     sourceId: e.source_id
@@ -113,23 +96,13 @@ function dueLabel(date: string, today: string): string {
   return shortDayLabel(date).replace('.', '')
 }
 
-const dueDateOf = (t: Pick<Task, 'due_date' | 'due_at'>, tz: string): string | null => {
-  if (t.due_date) return t.due_date
-  if (!t.due_at) return null
-  return new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(t.due_at))
-}
-
-const COLUMN: Record<Task['status'], HmColumn | null> = { pending: 0, on_hold: 0, in_progress: 1, completed: 2, cancelled: null }
+const COLUMN: Record<Task['status'], HmColumn | null> = { pending: 0, in_progress: 1, on_hold: 2, completed: null, cancelled: null }
 
 function adaptTasks(tasks: readonly Task[], projects: ReadonlyMap<string, string>, today: string, tz: string): HmTask[] {
-  const weekAgo = addDays(today, -7)
   return tasks.flatMap((t) => {
     const column = COLUMN[t.status]
     if (column === null || t.archived_at) return []
-    // Las hechas solo cuentan si son de la última semana (la pila no crece sin fin).
-    if (column === 2 && (!t.completed_at || formatDate(new Date(t.completed_at)) < weekAgo)) return []
-    const due = dueDateOf(t, tz)
-    const open = column !== 2
+    const due = t.due_date ?? (t.due_at ? dateIn(t.due_at, tz) : null)
     return [{
       id: t.id,
       title: t.title,
@@ -138,8 +111,8 @@ function adaptTasks(tasks: readonly Task[], projects: ReadonlyMap<string, string
       priority: t.priority,
       project: t.project_id ? (projects.get(t.project_id) ?? null) : null,
       due: due ? dueLabel(due, today) : null,
-      overdue: open && due !== null && due < today,
-      dueSoon: open && due !== null && due >= today && daysBetween(today, due) <= 2,
+      overdue: due !== null && due < today,
+      dueSoon: due !== null && due >= today && daysBetween(today, due) <= 2,
       estimatedMin: t.estimated_minutes,
       revision: t.revision
     }]
@@ -149,7 +122,7 @@ function adaptTasks(tasks: readonly Task[], projects: ReadonlyMap<string, string
 function adaptProjects(projects: readonly Project[], today: string): HmProject[] {
   const rank = { urgent: 0, high: 1, medium: 2, low: 3 } as const
   return projects
-    .filter((p) => !p.archived_at && (p.status === 'active' || p.status === 'planned' || p.status === 'paused'))
+    .filter((p) => !p.archived_at && p.status !== 'completed' && p.status !== 'cancelled')
     .sort((a, b) => Number(b.status === 'active') - Number(a.status === 'active') || rank[a.priority] - rank[b.priority] || a.name.localeCompare(b.name))
     .map((p) => {
       const pct = p.progress.percent
@@ -165,26 +138,44 @@ function adaptProjects(projects: readonly Project[], today: string): HmProject[]
     })
 }
 
-function adaptHabits(habits: readonly Habit[], stats: ReadonlyMap<string, HabitStatsEntry>, today: string): HmHabit[] {
+/** Racha actual (días que tocaban, seguidos y cumplidos; hoy sin marcar no la rompe) y mejor racha de la ventana. */
+function streaks(days: readonly HmHabitDay[]): { current: number; best: number } {
+  let best = 0, run = 0
+  for (const d of days) {
+    if (d === null) continue
+    if (d === 'done') best = Math.max(best, ++run)
+    else if (d !== 'open') run = 0
+  }
+  let current = 0
+  for (let i = days.length - 1; i >= 0; i--) {
+    const d = days[i]
+    if (d === null || (d === 'open' && i === days.length - 1)) continue
+    if (d === 'done') current++
+    else break
+  }
+  return { current, best }
+}
+
+function adaptHabits(habits: readonly Habit[], history: Readonly<Record<string, readonly HabitHistoryDay[]>>, today: string): HmHabit[] {
   const from = addDays(today, -(HABIT_DAYS - 1))
   return habits
     .filter((h) => !h.archived_at && h.status === 'active')
     .map((h) => {
-      const entry = stats.get(h.id)
-      const byDate = new Map(entry?.history?.days.map((d) => [d.date, d]) ?? [])
+      const byDate = new Map((history[h.id] ?? []).map((d) => [d.date, d]))
       const days: HmHabitDay[] = Array.from({ length: HABIT_DAYS }, (_, i) => {
         const date = addDays(from, i)
         const d = byDate.get(date)
-        if (date === today) return h.today_scheduled ? (h.today_status === 'done' ? 'done' : h.today_status ?? 'open') : d?.status ?? null
+        if (date === today) return h.today_scheduled ? (h.today_status ?? 'open') : null
         if (!d || !d.scheduled) return d?.status ?? null
         return d.status ?? 'missed'
       })
+      const { current, best } = streaks(days)
       return {
         id: h.id,
         name: h.name,
         days,
-        streak: entry?.stats?.current_streak ?? 0,
-        best: entry?.stats?.best_streak ?? 0,
+        streak: current,
+        best,
         goal: h.goal_note,
         todayScheduled: h.today_scheduled,
         todayDone: h.today_status === 'done',
@@ -193,95 +184,66 @@ function adaptHabits(habits: readonly Habit[], stats: ReadonlyMap<string, HabitS
     })
 }
 
-function adaptFiles(resources: readonly ResourceSummary[], folders: ReadonlyMap<string, string>): HmFile[] {
-  return resources
-    .filter((r) => !r.archived_at)
-    .map((r) => ({
-      id: r.id,
-      title: r.title,
-      type: r.resource_type,
-      sizeBytes: r.size_bytes,
-      folder: r.folder_id ? (folders.get(r.folder_id) ?? 'carpeta') : null,
-      index: r.index_status
-    }))
-}
+export function buildSnapshot(d: HoloTopics, now: Date): HoloSnapshot {
+  const todayData = d.today.data
+  const tz = todayData?.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone
+  const today = todayData?.date ?? todayIn(tz)
+  const projectsRaw = d.projects.data ?? []
+  const projectNames = new Map(projectsRaw.map((p) => [p.id, p.name]))
+  for (const p of todayData?.projects.items ?? []) if (!projectNames.has(p.id)) projectNames.set(p.id, p.name)
+  const subjectsRaw = (d.subjects.data ?? []).filter((s) => !s.archived_at)
+  const subjectColor = new Map(subjectsRaw.map((s) => [s.id, parseColor(s.color)]))
 
-function adaptGraph(rels: readonly RelationshipOut[], titles: ReadonlyMap<string, string>): { nodes: HmNode[]; edges: [string, string][] } {
+  // Agenda: la de D1 (hoy … +7) y, si aún no llegó, la de `/today` para el dial.
+  const agendaEvents = (d.agenda.data ?? []).flatMap((e) => eventFrom(e, today, subjectColor) ?? []).filter((e) => e.day >= 0 && e.day < CALENDAR_DAYS)
+  const todayAgenda: readonly TodayAgendaEntry[] = todayData?.agenda.items ?? []
+  const todayEvents =
+    d.agenda.data !== null
+      ? agendaEvents.filter((e) => e.day === 0)
+      : todayAgenda.flatMap((e) => eventFrom({ ...e, start_date: today, room: e.room }, today, subjectColor) ?? []).filter((e) => e.day === 0)
+
+  const habitsToday = todayData?.habits.items ?? []
+  const names = d.entityNames.data
+  const folderNames = new Map((d.folders.data ?? []).map((f) => [f.id, f.name]))
+  const files: HmFile[] = (d.resources.data ?? [])
+    .filter((r) => !r.archived_at)
+    .map((r) => ({ id: r.id, title: r.title, type: r.resource_type, sizeBytes: r.size_bytes, folder: r.folder_id ? (folderNames.get(r.folder_id) ?? 'subcarpeta') : null, index: r.index_status }))
+
   const nodes = new Map<string, HmNode>()
-  const add = (id: string, kind: EntityType): void => {
-    if (!nodes.has(id)) nodes.set(id, { id, kind, label: titles.get(id) ?? ENTITY_TYPE_LABEL[kind] })
-  }
   const edges: [string, string][] = []
-  for (const r of rels) {
-    add(r.source_id, r.source_type)
-    add(r.target_id, r.target_type)
+  for (const r of d.relationships.data ?? []) {
+    for (const [id, type] of [[r.source_id, r.source_type], [r.target_id, r.target_type]] as const)
+      if (!nodes.has(id)) nodes.set(id, { id, kind: type, label: names?.get(id)?.name ?? folderNames.get(id) ?? ENTITY_TYPE_LABEL[type] })
     edges.push([r.source_id, r.target_id])
   }
-  return { nodes: [...nodes.values()], edges }
-}
 
-export function buildSnapshot(input: AdaptInput): HoloSnapshot {
-  const tz = input.timezone
-  const today = input.today.data?.date ?? todayIn(tz)
-  const nowHours = nowHoursIn(input.now, tz)
-  const projectsRaw = input.projects.data ?? []
-  const projectNames = new Map(projectsRaw.map((p) => [p.id, p.name]))
-  for (const p of input.today.data?.projects.items ?? []) if (!projectNames.has(p.id)) projectNames.set(p.id, p.name)
-
-  // Agenda: la del calendario (hoy … +7) y, si aún no llegó, la de `/today` para el dial.
-  const agendaEvents = (input.agenda.data ?? []).flatMap((e) => eventFrom(e, today) ?? []).filter((e) => e.day >= 0 && e.day < CALENDAR_DAYS && e.end > e.start - 0.001)
-  const todayAgenda: readonly TodayAgendaEntry[] = input.today.data?.agenda.items ?? []
-  const todayEvents =
-    input.agenda.data !== null
-      ? agendaEvents.filter((e) => e.day === 0)
-      : todayAgenda.flatMap((e) => eventFrom({ ...e, start_date: today }, today) ?? []).filter((e) => e.day === 0)
-
-  const tasks = adaptTasks(input.tasks.data ?? [], projectNames, today, tz)
-  const doneToday = tasks.filter((t) => t.column === 2).length > 0
-    ? (input.tasks.data ?? []).filter((t) => t.status === 'completed' && t.completed_at && formatDate(new Date(t.completed_at)) === today).length
-    : 0
-  const dueToday = (input.today.data?.due_today.total ?? tasks.filter((t) => t.due === 'hoy' && t.column !== 2).length) + doneToday
-
-  const subjects = new Map<string, { id: string; name: string; color: number | null }>()
-  for (const e of input.agenda.data ?? [])
-    if (e.subject_id && e.source_type === 'class_session' && !subjects.has(e.subject_id)) subjects.set(e.subject_id, { id: e.subject_id, name: e.title, color: parseColor(e.color) })
-
-  const titles = new Map<string, string>()
-  for (const t of input.tasks.data ?? []) titles.set(t.id, t.title)
-  for (const p of projectsRaw) titles.set(p.id, p.name)
-  for (const h of input.habits.data ?? []) titles.set(h.id, h.name)
-  for (const r of input.resources.data ?? []) titles.set(r.id, r.title)
-  for (const s of subjects.values()) titles.set(s.id, s.name)
-  for (const e of input.agenda.data ?? []) if (!titles.has(e.source_id)) titles.set(e.source_id, e.title)
-  for (const [id, name] of input.folderNames) titles.set(id, name)
-
-  const files = adaptFiles(input.resources.data ?? [], input.folderNames)
-  const startLabel = parseDate(today)
   return {
-    now: input.now,
+    now,
     timezone: tz,
-    nowHours,
+    nowHours: nowHoursIn(now, tz),
     today: {
-      load: input.today.data !== null || input.agenda.data !== null ? 'ready' : loadOf(input.today),
+      load: todayData !== null || d.agenda.data !== null ? 'ready' : loadOf(d.today),
       events: todayEvents,
-      dueToday,
-      doneToday,
-      label: new Intl.DateTimeFormat('es-ES', { weekday: 'long', day: 'numeric', month: 'long' }).format(startLabel)
+      tasksToday: todayData?.due_today.total ?? 0,
+      overdue: todayData?.overdue.total ?? 0,
+      habitsDue: habitsToday.length,
+      habitsDone: habitsToday.filter((h) => h.today_status === 'done').length,
+      label: new Intl.DateTimeFormat('es-ES', { weekday: 'long', day: 'numeric', month: 'long', timeZone: tz }).format(now)
     },
     calendar: {
-      load: loadOf(input.agenda),
+      load: loadOf(d.agenda),
       days: Array.from({ length: CALENDAR_DAYS }, (_, i) => {
-        const d = addDays(today, i)
-        return `${weekdayShort(d).toLowerCase()} ${Number(d.slice(8, 10))}`
+        const day = addDays(today, i)
+        return `${weekdayShort(day).toLowerCase()} ${Number(day.slice(8, 10))}`
       }),
       todayIndex: 0,
       events: agendaEvents,
-      subjects: [...subjects.values()]
+      subjects: subjectsRaw.map((s) => ({ id: s.id, name: s.name, color: parseColor(s.color) }))
     },
-    tasks: { load: loadOf(input.tasks), items: tasks },
-    projects: { load: loadOf(input.projects), items: adaptProjects(projectsRaw, today) },
-    habits: { load: loadOf(input.habits), items: adaptHabits(input.habits.data ?? [], input.habitStats, today) },
-    graph: { load: loadOf(input.relationships), ...adaptGraph(input.relationships.data ?? [], titles) },
-    files: { load: loadOf(input.resources), items: files, total: files.length, pending: files.filter((f) => f.index === 'pending' || f.index === 'failed').length }
+    tasks: { load: loadOf(d.tasks), items: adaptTasks(d.tasks.data ?? [], projectNames, today, tz) },
+    projects: { load: loadOf(d.projects), items: adaptProjects(projectsRaw, today) },
+    habits: { load: loadOf(d.habits), items: adaptHabits(d.habits.data ?? [], d.habitHistory.data ?? {}, today) },
+    graph: { load: loadOf(d.relationships), nodes: [...nodes.values()], edges },
+    files: { load: loadOf(d.resources), items: files, total: files.length, pending: files.filter((f) => f.index === 'pending' || f.index === 'failed').length }
   }
 }

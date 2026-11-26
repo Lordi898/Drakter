@@ -109,7 +109,7 @@ export function detailFor(id: SectionId, s: HoloSnapshot): DetailContent {
       const left = s.today.events.filter((e) => e.end > s.nowHours)
       return {
         no: '01', title: 'Hoy', sub: s.today.label,
-        kpis: [[String(left.length), 'eventos por delante'], [String(s.today.dueToday - s.today.doneToday), 'tareas para hoy'], [String(s.today.doneToday), 'hechas hoy']],
+        kpis: [[String(left.length), 'eventos por delante'], [String(s.today.tasksToday), 'tareas para hoy'], [s.today.habitsDue ? `${s.today.habitsDone}/${s.today.habitsDue}` : '—', 'hábitos de hoy']],
         chart: <DayLine events={s.today.events} now={s.nowHours} />,
         rows: s.today.events.map((e) => ({ key: e.id, label: e.title, meta: e.allDay ? 'todo el día' : `${hhmm(e.start)}–${hhmm(e.end)}`, color: hex(e.color, '#6cf2d6'), pick: evPick('hoy:', e, '') })),
         state: loadState(s.today.load, s.today.events.length === 0, 'Hoy no hay nada en la agenda.')
@@ -128,13 +128,13 @@ export function detailFor(id: SectionId, s: HoloSnapshot): DetailContent {
     }
     case 'tareas': {
       const items = s.tasks.items
-      const open = items.filter((t) => t.column !== 2)
+      const open = items
       const rank = { urgent: 0, high: 1, medium: 2, low: 3 } as const
       const sorted = [...open].sort((a, b) => Number(b.overdue) - Number(a.overdue) || rank[a.priority] - rank[b.priority])
       const by = (pr: keyof typeof rank): number => open.filter((t) => t.priority === pr).length
       return {
         no: '03', title: 'Tareas', sub: 'apiladas por estado · altura = estimación',
-        kpis: [[String(items.filter((t) => t.column === 0).length), 'pendientes'], [String(items.filter((t) => t.column === 1).length), 'en curso'], [String(open.filter((t) => t.overdue).length), 'vencidas']],
+        kpis: [[String(items.filter((t) => t.column === 0).length), 'pendientes'], [String(items.filter((t) => t.column === 1).length), 'en curso'], [String(s.today.overdue || open.filter((t) => t.overdue).length), 'vencidas']],
         chart: <HBars rows={[{ l: 'Urgente', v: by('urgent'), max: Math.max(6, open.length), c: PRIO_COLOR.urgent }, { l: 'Alta', v: by('high'), max: Math.max(6, open.length), c: PRIO_COLOR.high }, { l: 'Media', v: by('medium'), max: Math.max(6, open.length), c: PRIO_COLOR.medium }, { l: 'Baja', v: by('low'), max: Math.max(6, open.length), c: PRIO_COLOR.low }]} />,
         rows: sorted.slice(0, MAX_ROWS).map((t) => ({ key: t.id, label: t.title, meta: [t.project, t.due].filter(Boolean).join(' · ') || '—', color: t.overdue ? '#ff7a5c' : PRIO_COLOR[t.priority], pick: { key: 'task:' + t.id, title: t.title, sub: t.project ?? 'sin proyecto', lines: t.due ? [`vence ${t.due}`] : [], ref: { kind: 'task', id: t.id } } })),
         state: loadState(s.tasks.load, open.length === 0, 'No hay tareas abiertas.')

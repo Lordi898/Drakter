@@ -75,9 +75,9 @@ export function hoy(M: Materials): Station {
       const spire = new THREE.Mesh(new THREE.BoxGeometry(0.03, Y - 0.1, 0.03), b.reg(M.holoMat({ color: 0x9be8ff, fill: 1.0, edge: 0.3 })))
       spire.position.y = (Y - 0.1) / 2 + 0.05
       root.add(spire)
-      // Columna de 10 anillos: fracción de las tareas de hoy ya hechas.
-      const { dueToday, doneToday } = snap.today
-      const lit = dueToday > 0 ? Math.round((doneToday / dueToday) * 10) : 0
+      // Columna de 10 anillos: fracción de los hábitos de hoy ya cumplidos.
+      const { habitsDue, habitsDone, tasksToday } = snap.today
+      const lit = habitsDue > 0 ? Math.round((habitsDone / habitsDue) * 10) : 0
       const column = instanced(arcSlab(0.1, 0.13, 0, Math.PI * 2, 0, 0.012, 24), b.reg(M.holoMat({ color: C.ice, fill: 0.5 })), 10)
       for (let i = 0; i < 10; i++) {
         tmpM.makeTranslation(0, 0.1 + i * 0.075, 0)
@@ -85,9 +85,9 @@ export function hoy(M: Materials): Station {
         column.setColorAt(i, new THREE.Color(i < lit ? 0x9be8ff : 0x123552))
       }
       root.add(column)
-      doneLabel = dueToday > 0 ? `hechas ${doneToday}/${dueToday}` : ''
+      doneLabel = habitsDue > 0 ? `hábitos ${habitsDone}/${habitsDue}` : ''
       const left = events.filter((e) => e.end > nowH).length
-      s.metric = snap.today.load === 'ready' ? `${left} eventos por delante · ${Math.max(0, dueToday - doneToday)} tareas de hoy` : snap.today.load === 'error' ? 'sin datos' : 'cargando…'
+      s.metric = snap.today.load === 'ready' ? `${left} eventos por delante · ${tasksToday} tareas para hoy` : snap.today.load === 'error' ? 'sin datos' : 'cargando…'
       pickEv = null
       lastNowKey = -1
     },

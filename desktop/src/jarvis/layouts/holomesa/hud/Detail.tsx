@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react'
 import { todayIn } from '@/modules/calendar/dateUtils'
 import { registerRecord } from '@/modules/habits/api'
-import { completeTask, reopenTask } from '@/modules/tasks/api'
+import { completeTask } from '@/modules/tasks/api'
 import type { SectionId as AppSection } from '@/navigation/sections'
 import { describeError } from '@/services/api'
 import type { HoloSnapshot, PickInfo, PickRef, SectionId } from '../model'
@@ -24,10 +24,8 @@ function actionsFor(pick: PickInfo, snap: HoloSnapshot, reload: (t: ReloadTopic)
   const out: Action[] = []
   if (ref.kind === 'task') {
     const task = snap.tasks.items.find((t) => t.id === ref.id)
-    if (task && task.column !== 2)
+    if (task)
       out.push({ label: 'Completar', run: async () => { await completeTask(task.id, task.revision); reload('tasks'); reload('today'); return 'Tarea completada.' } })
-    if (task && task.column === 2)
-      out.push({ label: 'Reabrir', run: async () => { await reopenTask(task.id, task.revision); reload('tasks'); reload('today'); return 'Tarea reabierta.' } })
   }
   if (ref.kind === 'habit' && ref.day === 0) {
     const habit = snap.habits.items.find((h) => h.id === ref.id)

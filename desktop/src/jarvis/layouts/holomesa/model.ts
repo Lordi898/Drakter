@@ -43,7 +43,7 @@ export interface HmEvent {
   readonly sourceId: string
 }
 
-/** Columna de la pila de tareas: 0 pendiente (y en espera), 1 en curso, 2 hecha. */
+/** Columna de la pila de tareas (solo abiertas): 0 pendiente, 1 en curso, 2 en espera. */
 export type HmColumn = 0 | 1 | 2
 
 export interface HmTask {
@@ -108,7 +108,17 @@ export interface HoloSnapshot {
   readonly timezone: string
   /** Hora local decimal de `now` en `timezone`. */
   readonly nowHours: number
-  readonly today: { readonly load: Load; readonly events: readonly HmEvent[]; readonly dueToday: number; readonly doneToday: number; readonly label: string }
+  readonly today: {
+    readonly load: Load
+    readonly events: readonly HmEvent[]
+    /** Tareas abiertas que vencen hoy y vencidas (de `/today`). */
+    readonly tasksToday: number
+    readonly overdue: number
+    /** Hábitos que tocan hoy y cuántos están hechos. */
+    readonly habitsDue: number
+    readonly habitsDone: number
+    readonly label: string
+  }
   readonly calendar: { readonly load: Load; readonly days: readonly string[]; readonly todayIndex: number; readonly events: readonly HmEvent[]; readonly subjects: readonly { readonly id: string; readonly name: string; readonly color: number | null }[] }
   readonly tasks: { readonly load: Load; readonly items: readonly HmTask[] }
   readonly projects: { readonly load: Load; readonly items: readonly HmProject[] }

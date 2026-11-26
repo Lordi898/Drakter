@@ -1,4 +1,4 @@
-/** TAREAS: bloques apilados por estado (pendiente, en curso, hecha); caen en cascada al construirse. */
+/** TAREAS: bloques apilados por estado (pendiente, en curso, en espera); caen en cascada al construirse. */
 import * as THREE from 'three'
 import type { HmColumn, HmTask, HoloSnapshot, PickInfo } from '../../model'
 import { PRIORITY_LABELS, TASK_STATUS_LABELS } from '@/modules/tasks/types'
@@ -8,11 +8,11 @@ import { base, C, clamp01, clearInstancedPick, ease, instanced, pickInstanced, s
 
 const PER_COLUMN = 24
 const MAX_STACK = 2.9
-const COL_NAMES = ['pendiente', 'en curso', 'hecha'] as const
+const COL_NAMES = ['pendiente', 'en curso', 'en espera'] as const
 const PRIO_RANK = { urgent: 0, high: 1, medium: 2, low: 3 } as const
 
 const colorOf = (t: HmTask): number =>
-  t.column === 2 ? C.past : t.priority === 'urgent' || t.priority === 'high' ? C.amber : t.priority === 'medium' ? 0x58c8ff : 0x2f86c8
+  t.overdue ? 0xff7a5c : t.column === 2 ? C.past : t.priority === 'urgent' || t.priority === 'high' ? C.amber : t.priority === 'medium' ? 0x58c8ff : 0x2f86c8
 
 export function tareas(M: Materials, pos: THREE.Vector3): Station {
   const b = base(M, 'tareas', 'Tareas', '3', pos, 1.45, 3.2)
@@ -54,10 +54,11 @@ export function tareas(M: Materials, pos: THREE.Vector3): Station {
       }
       root.add(plates)
       const all = counts[0]! + counts[1]! + counts[2]!
-      const doneFrac = all ? counts[2]! / all : 0
-      if (doneFrac > 0)
-        root.add(new THREE.Mesh(arcSlab(1.62, 1.7, -Math.PI / 2, -Math.PI / 2 + doneFrac * Math.PI * 2, 0.02, 0.06, 48), b.reg(M.holoMat({ color: C.white, fill: 0.5 }))))
-      s.metric = snap.tasks.load !== 'ready' ? (snap.tasks.load === 'error' ? 'sin datos' : 'cargando…') : `${counts[0]! + counts[1]!} abiertas · ${counts[1]} en curso`
+      // Anillo de la base: parte de lo abierto que ya está en curso.
+      const liveFrac = all ? counts[1]! / all : 0
+      if (liveFrac > 0)
+        root.add(new THREE.Mesh(arcSlab(1.62, 1.7, -Math.PI / 2, -Math.PI / 2 + liveFrac * Math.PI * 2, 0.02, 0.06, 48), b.reg(M.holoMat({ color: C.white, fill: 0.5 }))))
+      s.metric = snap.tasks.load !== 'ready' ? (snap.tasks.load === 'error' ? 'sin datos' : 'cargando…') : `${all} abiertas · ${counts[1]} en curso`
       picked = -1
     },
     update(t, _dt, c) {
