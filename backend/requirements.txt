@@ -11,7 +11,7 @@
 # Alternativa recomendada, equivalente: cd backend && uv sync --frozen
 -e ../contracts/python
     # via drakter-backend
-annotated-doc==0.0.5
+annotated-doc==0.0.7
     # via fastapi
 annotated-types==0.8.0
     # via pydantic
@@ -27,17 +27,17 @@ attrs==26.1.0
     # via
     #   jsonschema
     #   referencing
-certifi==2026.10.23
+certifi==2026.11.20
     # via
     #   httpcore
     #   httpx
 cffi==2.1.1 ; platform_python_implementation != 'PyPy'
     # via cryptography
-click==8.5.0
+click==8.5.1
     # via uvicorn
 cryptography==50.0.2
     # via pyjwt
-fastapi==0.163.2
+fastapi==0.165.0
     # via drakter-backend
 h11==0.16.0
     # via
@@ -71,11 +71,11 @@ opentelemetry-api==1.45.2
     # via
     #   fastapi
     #   mcp
-platformdirs==4.14.6
+platformdirs==4.14.8
     # via drakter-backend
 pycparser==3.12 ; implementation_name != 'PyPy' and platform_python_implementation != 'PyPy'
     # via cffi
-pydantic==2.14.3
+pydantic==2.14.4
     # via
     #   drakter-backend
     #   drakter-contracts
@@ -83,17 +83,17 @@ pydantic==2.14.3
     #   mcp
     #   mcp-types
     #   pydantic-settings
-pydantic-core==2.50.4
+pydantic-core==2.50.5
     # via pydantic
 pydantic-settings==2.16.3
     # via drakter-backend
 pyjwt==2.15.1
     # via mcp
-pypdf==7.1.0
+pypdf==7.1.1
     # via drakter-backend
 python-dotenv==1.2.4
     # via pydantic-settings
-python-multipart==0.0.33
+python-multipart==0.0.34
     # via mcp
 pywin32==312 ; sys_platform == 'win32'
     # via mcp
@@ -105,7 +105,7 @@ rpds-py==2026.9.1
     # via
     #   jsonschema
     #   referencing
-sse-starlette==3.6.0
+sse-starlette==3.7.1
     # via mcp
 starlette==1.10.0
     # via
