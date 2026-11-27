@@ -1,14 +1,13 @@
 """Puertos del DrawRunner hacia B3 (pantalla y manos) y V1 (voz), detrás de sus firmas congeladas
 (docs/floating/CONTRACT.md §8.1 bis, §9.2 y §10).
 
-Mientras B3 o V1 no estén fusionados, se usan dobles: la resolución pone las marcas donde dicen sus `x/y`
-(o en una rejilla fija si solo traen `text`/`id`), y la voz responde `voiced=False` (el overlay usa su reloj
-local). En cuanto existan `app.integrations.hands.resolve` y `VoiceOrchestrator.speak_beat`, se usan ellos.
+B3: `app.integrations.hands.resolve.resolve_marks`, `records.invalidate_turn_views` y el `HandsClient` del
+proceso (`client.current_client()` para escuchar eventos, `client.ensure_client()` para mandar `open`).
+V1: `VoiceOrchestrator.reserve_speech_id` y `speak_beat`, que llegan como `state.voice`.
 """
 
 from __future__ import annotations
 
-import importlib
 import itertools
 import logging
 from collections.abc import Callable
@@ -16,11 +15,17 @@ from dataclasses import dataclass, field
 from typing import Any
 from uuid import UUID
 
-from drakter_contracts.floating import MissingTarget
+from drakter_contracts.floating import FLOATING_TOOL_ERRORS, MissingTarget
+
+from app.integrations.hands import client as hands
+from app.integrations.hands import records
+from app.integrations.hands import resolve as hands_resolve
+from app.tools.spec import ToolError
 
 logger = logging.getLogger("drakter.floating.ports")
 
-_PLACES = ("at", "to", "tie")
+# Códigos del helper que `draw` declara; el resto se informa como `companion_unavailable`.
+_DRAW_HANDS_ERRORS = ("companion_unavailable", "stale_screenshot", "stale_read")
 
 
 @dataclass
@@ -33,89 +38,22 @@ class Seg:
     busy: list[list[float]] = field(default_factory=list)
 
 
-def _module(name: str) -> Any | None:
-    try:
-        return importlib.import_module(name)
-    except ModuleNotFoundError as exc:
-        if exc.name and f"{name}.".startswith(f"{exc.name}."):
-            return None
-        raise
-
-
-def _get(obj: Any, key: str, default: Any = None) -> Any:
-    if isinstance(obj, dict):
-        return obj.get(key, default)
-    return getattr(obj, key, default)
-
-
-def _as_missing(item: Any) -> MissingTarget:
-    return item if isinstance(item, MissingTarget) else MissingTarget.model_validate(
-        item if isinstance(item, dict) else item.model_dump()
-    )
-
-
-def _simulated(beats: list[dict[str, Any]]) -> Seg:
-    """Doble de B3: px de captura = px lógicos (escala 1, origen 0)."""
-    out = []
-    for b in beats:
-        marks = []
-        for j, m in enumerate(b.get("marks") or []):
-            o = dict(m)
-            for k in _PLACES:
-                t = m.get(k)
-                if not isinstance(t, dict):
-                    continue
-                if t.get("x") is not None and t.get("y") is not None:
-                    w, h = t.get("w") or 28, t.get("h") or 28
-                    rect = [t["x"] - w / 2, t["y"] - h / 2, w, h]
-                else:
-                    rect = [120 + 90 * j, 120, 80, 28]
-                o[k] = {"rect": [round(v) for v in rect], "src": t}
-            if isinstance(m.get("points"), list):
-                o["points"] = [list(p) for p in m["points"]]
-            marks.append(o)
-        out.append({**b, "marks": marks})
-    return Seg(beats=out)
-
-
 async def resolve_marks(beats: list[dict[str, Any]], *, target: str, turn_id: UUID, after_wait: bool) -> Seg:
-    mod = _module("app.integrations.hands.resolve")
-    fn = getattr(mod, "resolve_marks", None) if mod else None
-    if fn is None:
-        return _simulated(beats)
-    res = await fn(beats, target=target, turn_id=turn_id, after_wait=after_wait)
-    return Seg(
-        beats=list(_get(res, "beats") or []),
-        missing=[_as_missing(x) for x in (_get(res, "missing") or [])],
-        win=_get(res, "win"),
-        busy=list(_get(res, "busy") or []),
-    )
+    try:
+        res = await hands_resolve.resolve_marks(beats, target=target, turn_id=turn_id, after_wait=after_wait)
+    except hands.HandsError as exc:
+        code = exc.code if exc.code in _DRAW_HANDS_ERRORS else "companion_unavailable"
+        raise ToolError(code, FLOATING_TOOL_ERRORS[code]) from None
+    return Seg(beats=list(res.beats), missing=list(res.missing), win=res.win, busy=list(res.busy))
 
 
 def invalidate_turn_views(turn_id: UUID) -> None:
-    mod = _module("app.integrations.hands.records")
-    fn = getattr(mod, "invalidate_turn_views", None) if mod else None
-    if fn is not None:
-        fn(turn_id)
+    records.invalidate_turn_views(turn_id)
 
 
-def hands_client() -> Any | None:
-    """El `HandsClient` del proceso (B3). Su acceso no está congelado: se prueban los nombres razonables."""
-    mod = _module("app.integrations.hands.client")
-    if mod is None:
-        return None
-    for name in ("get_hands_client", "get_client", "hands_client", "client", "CLIENT"):
-        value = getattr(mod, name, None)
-        if value is None:
-            continue
-        if callable(value) and not hasattr(value, "on_event"):
-            try:
-                value = value()
-            except Exception:  # noqa: BLE001
-                continue
-        if value is not None and hasattr(value, "on_event"):
-            return value
-    return None
+def hands_client() -> hands.HandsClient | None:
+    """El `HandsClient` del proceso si ya arrancó (lo arranca `ensure_client()` en el primer uso)."""
+    return hands.current_client()
 
 
 def on_hands_event(type: str, cb: Callable[[Any], None]) -> Callable[[], None] | None:
@@ -127,13 +65,15 @@ def on_hands_event(type: str, cb: Callable[[Any], None]) -> Callable[[], None] |
 
 async def open_url(url: str) -> bool:
     """`open` del helper para un botón `open` pulsado por el usuario. La URL ya pasó `check_url`."""
-    client = hands_client()
-    if client is None:
-        logger.info("hands helper unavailable: url not opened", extra={"event": "floating_open_unavailable"})
-        return False
     from drakter_contracts.hands_ipc import HOpen
 
-    await client.call("open", HOpen(url=url))
+    try:
+        client = await hands.ensure_client()
+        await client.call("open", HOpen(url=url))
+    except hands.HandsError as exc:
+        logger.info("hands helper unavailable: url not opened",
+                    extra={"event": "floating_open_unavailable", "code": exc.code})
+        return False
     return True
 
 

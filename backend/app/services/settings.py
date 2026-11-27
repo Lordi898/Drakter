@@ -33,8 +33,13 @@ from app.services.settings_status import agent_config_status
 logger = logging.getLogger(__name__)
 
 _BACKUP_NAME: Final = re.compile(r"^drakter-(\d{8}T\d{12}Z)-([a-z0-9-]+)\.db$")
-_BOOL_KEYS: Final = frozenset({"voice_tts_enabled", "voice_wake_enabled"})
-_ENUM_KEYS: Final[dict[str, frozenset[str]]] = {"voice_expression": frozenset({"off", "llm"})}
+_BOOL_KEYS: Final = frozenset({
+    "voice_tts_enabled", "voice_wake_enabled", "floating_hands_enabled", "floating_sound",
+})
+_ENUM_KEYS: Final[dict[str, frozenset[str]]] = {
+    "voice_expression": frozenset({"off", "llm"}),
+    "floating_avatar_size": frozenset({"default", "small", "cursor"}),
+}
 
 SettingListener = Callable[[str, str], None]
 # Called after COMMIT, from whatever thread wrote the setting (REST runs sync routes in a

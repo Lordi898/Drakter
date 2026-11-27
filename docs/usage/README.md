@@ -20,6 +20,7 @@ Algunas guías de módulo abren con una cabecera de estado escrita en el cierre 
 - [Personaje: avatares 3D, boca sincronizada y archivo Rive](personaje.md)
 - [Autoconsciencia y contexto](consciencia.md): qué sabe Drakter de sí mismo, del ordenador en el que corre (y cómo nota un cambio de equipo) y de vuestras conversaciones
 - [Modo Jarvis](modo-jarvis.md): la interfaz holográfica, sus tres interfaces (Núcleo, Holomesa, Visor) y cómo cambiar de avatar e interfaz, también por voz
+- [Modo flotante](modo-flotante.md): Drakter sobre tus apps, que señala, dibuja y guía en pantalla y, si lo activas, usa tus apps con sus manos; requiere la extensión de GNOME
 - [Trabajos en segundo plano](trabajos.md)
 - [Voz](voz.md): Super+J, «Hey Jarvis», micrófono y salida, auriculares, Deepgram, Fish y Kokoro, caché de frases
 - [Perfiles de voz](voces.md): los IDs de Fish Audio, cómo cambiarlos y cambiar de voz

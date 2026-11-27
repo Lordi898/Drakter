@@ -12,7 +12,6 @@ import os
 import sqlite3
 import stat
 from contextlib import closing
-from dataclasses import fields
 from typing import Any, Final
 from urllib.parse import urlsplit
 from uuid import UUID, uuid4
@@ -68,7 +67,7 @@ def _err(code: str, message: str | None = None, **kw: Any) -> ToolError:
 
 def _ctx_confirmed(ctx: ToolContext) -> bool:
     """`ToolContext.confirmed` (B1): True only when the handler runs from an approval."""
-    return getattr(ctx, "confirmed", False) is True
+    return ctx.confirmed is True
 
 
 def hands_enabled(ctx: ToolContext) -> bool:
@@ -339,18 +338,8 @@ async def open_target(ctx: ToolContext, args: OpenTargetArgs) -> OpenTargetResul
     return OpenTargetResult(opened=True, kind=kind, display=display[:120])  # type: ignore[arg-type]
 
 
-# `confirm_if` arrives with B1; until then the specs are valid without it.
-_HAS_CONFIRM_IF: Final = "confirm_if" in {f.name for f in fields(ToolSpec)}
-
-
-def _spec(**kw: Any) -> ToolSpec:
-    if not _HAS_CONFIRM_IF:
-        kw.pop("confirm_if", None)
-    return ToolSpec(**kw)
-
-
 TOOLS = (
-    _spec(
+    ToolSpec(
         name="act_in_app",
         description=(
             "Usa otra aplicación como lo haría el usuario: un plan de 1 a 40 pasos (clic por texto o id, "
@@ -365,7 +354,7 @@ TOOLS = (
         # steps hold typed text: hashed, never logged
         audit={"window_id": "log", "read_id": "log", "shot_id": "log", "confirm": "log", "steps": "hash"},
     ),
-    _spec(
+    ToolSpec(
         name="open_target",
         description=(
             "Abre una web (http, https o mailto), una aplicación instalada por su id o un archivo del almacén de "

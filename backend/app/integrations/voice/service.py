@@ -512,11 +512,9 @@ class VoiceOrchestrator:
 
 
 def _current_presence() -> Any:
-    """Última `FloatingPresence` (B2, `app.floating.presence`). Sin ese módulo, `None`."""
-    try:
-        from app.floating.presence import current_presence
-    except ImportError:
-        return None
+    """Última `FloatingPresence` (B2, `app.floating.presence`); `None` si nunca llegó o caducó."""
+    from app.floating.presence import current_presence
+
     try:
         return current_presence()
     except Exception:  # noqa: BLE001 - la presencia nunca rompe la voz
@@ -524,28 +522,15 @@ def _current_presence() -> Any:
 
 
 def _request_ui_floating(hub: Any, **kwargs: Any) -> str:
-    """`request_ui_floating` de B2 (`app.services.ui_mode`). Mientras no exista, un doble que publica
-    `ui.floating` con la misma interfaz (sin límite de ritmo). Nunca lanza."""
-    try:
-        from app.services.ui_mode import request_ui_floating  # type: ignore[attr-defined]
-    except ImportError:
-        request_ui_floating = _ui_floating_double
+    """`request_ui_floating` de B2 (`app.services.ui_mode`, §8.1 bis): `ok`, `rate_limited` o `unavailable`.
+    Nunca lanza."""
+    from app.services.ui_mode import request_ui_floating
+
     try:
         return request_ui_floating(hub, **kwargs)
     except Exception:  # noqa: BLE001
         logger.warning("ui.floating request failed", extra={"event": "voice_ui_floating_failed"})
         return "unavailable"
-
-
-def _ui_floating_double(hub: Any, *, action: Any, size: Any, pin: Any, source: Any,
-                        utt_id: str | None = None, correlation_id: str | None = None) -> str:
-    from drakter_contracts.floating import UiFloatingRequested
-
-    if hub is None:
-        return "unavailable"
-    payload = UiFloatingRequested(action=action, size=size, pin=pin, source=source, utt_id=utt_id)
-    hub.publish("ui.floating", payload, correlation_id=correlation_id)
-    return "ok"
 
 
 def _uuid(value: str | None) -> UUID | None:
