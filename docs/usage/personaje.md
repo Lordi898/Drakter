@@ -1,6 +1,42 @@
-# Personaje: boca sincronizada y archivo Rive
+# Personaje: avatares 3D, boca sincronizada y archivo Rive
 
-Drakter dibuja su personaje con un SVG provisional. Si existe tu archivo `.riv`, lo usa en su lugar sin tocar nada más.
+## Avatares 3D
+
+El personaje de Drakter es, por defecto, un **avatar 3D** (Three.js, en la propia ventana). Hay 8, y se ve el mismo en Drakter y en el [modo Jarvis](modo-jarvis.md):
+
+| Avatar | Cómo es |
+|---|---|
+| **Holo-Contorno** (por defecto) | Caballero maduro como holograma de curvas de nivel, con cintas de luz en los rasgos |
+| Holo-Hilo | El holograma de Holo-Contorno tejido con miles de filamentos de luz que reaccionan a cada estado |
+| Holo-Busto | Busto de caballero maduro esculpido en luz, con hebras de pelo y núcleo en el pecho |
+| Holo-Orbe | Busto holográfico de filamentos que nace de un orbe y vuelve a él al pensar |
+| Holo-Filamento | Un busto holográfico tejido con hebras de luz azul sobre un cuerpo oscuro |
+| Ascuario | Dragón de escamas negras y vetas de fuego, con monóculo |
+| El Relojero | Autómata de relojería de latón y laca, con un mecanismo a la vista |
+| Filamento (dorado) | Un busto tejido con hebras de luz ámbar que se deshacen y se vuelven a tejer |
+
+**Cambiar de avatar:**
+
+- **Ajustes:** Configuración → **Avatar**, con miniaturas y una vista previa en vivo.
+- **En Jarvis:** el selector «Apariencia» (`Ctrl+Shift+A`).
+- **Búsqueda:** `Ctrl+K` («avatar orbe», «dragón»).
+- **Voz:** «pon el avatar dragón», «usa el orbe», «quita el avatar».
+- **Chat:** pidiéndoselo al agente.
+
+Lista completa de frases: [modo-jarvis.md](modo-jarvis.md#avatares).
+
+**Orden de respaldo:**
+
+- **Con un avatar 3D elegido:** si tu gráfica no tiene WebGL2 o el avatar falla al cargar, se ve el SVG, sin dejar el hueco vacío.
+- **Con «Ninguno» (personaje clásico):** se usa tu archivo `.riv` si existe y, si no, el SVG.
+
+Los 9 estados (`idle`, `listening`, `thinking`, `speaking`, `executing`, `success`, `error`, `interrupted`, `offline`) y la boca sincronizada funcionan igual en todos.
+
+Para quien toca el código: `desktop/src/character/avatars/` (un avatar por carpeta, con su ficha en `register.ts` y su `README.md`; cómo añadir uno en `avatars/README.md`).
+
+## El personaje clásico (SVG o `.riv`)
+
+Con el avatar en «Ninguno», Drakter dibuja su personaje clásico en SVG. Si existe tu archivo `.riv`, lo usa en su lugar sin tocar nada más.
 
 ## Boca sincronizada
 

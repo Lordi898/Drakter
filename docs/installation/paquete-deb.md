@@ -1,6 +1,6 @@
 # Paquete .deb de Drakter
 
-> **Estado:** construido en esta máquina el 2026-11-13 desde `drakter/integracion` (`7fd30e1`; guía revisada sobre `2e05ba6`) con los pasos de abajo: salen `drakter-desktop_0.1.0_amd64.deb` y `Drakter-0.1.0.AppImage`, y el backend empaquetado responde. NO COMPROBADO: instalar el `.deb` (requiere sudo) y abrir la ventana instalada. Detalle de las comprobaciones: `desktop/electron-builder.README.md`.
+> **Estado:** construido en esta máquina el 2026-11-13 desde la integración de la v1 (`7fd30e1`, hoy en `main`; guía revisada sobre `2e05ba6`) con los pasos de abajo: salen `drakter-desktop_0.1.0_amd64.deb` y `Drakter-0.1.0.AppImage`, y el backend empaquetado responde. NO COMPROBADO: instalar el `.deb` (requiere sudo) y abrir la ventana instalada. Detalle de las comprobaciones: `desktop/electron-builder.README.md`.
 
 Sirve para instalar Drakter como aplicación de escritorio en Ubuntu en vez de lanzarla desde el repositorio. Para el modo desarrollo: [instalar.md](instalar.md).
 

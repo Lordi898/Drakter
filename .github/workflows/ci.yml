@@ -38,6 +38,8 @@ jobs:
         run: |
           echo "TMPDIR=$RUNNER_TEMP/drakter" >> "$GITHUB_ENV"
           mkdir -p "$RUNNER_TEMP/drakter"
+      - name: requirements.txt al día con uv.lock
+        run: ../scripts/export-requirements.sh --check
       - name: Migraciones, copia y restauración
         run: .venv/bin/python migrations/check_migrations.py
       - name: Confirmaciones de acciones destructivas

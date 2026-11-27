@@ -1840,3 +1840,18 @@ Decisiones técnicas, cambios de tecnología y motivos.
   - voz real con micrófono, y PCM de las frases nuevas;
   - `document.hidden` al minimizar en este gestor de ventanas;
   - detalles visuales de las interfaces, avisados a sus dueños: la cinta del Visor asoma bajo la esquina reservada, y Núcleo y Visor duplican controles del anfitrión (calidad, «Volver a Drakter»).
+
+## [2026-11-27] `backend/requirements.txt` generado desde `uv.lock`, y documentación de instalación completa
+- **Contexto:** el usuario pide una guía de instalación completa con `requirements.txt`, creación y activación del venv, guía del `.env` y documentación al día. El backend se instalaba solo con `uv sync` (`pyproject.toml` + `uv.lock`). Además, `.env.example` arrastraba 14 variables de la voz v1 que ya no lee nada.
+- **Decisión:**
+  - `backend/requirements.txt` se **genera** con `scripts/export-requirements.sh` (`uv export --frozen --no-dev --no-hashes`). Tiene las mismas versiones fijadas que `uv.lock` y los contratos como `-e ../contracts/python`, así que se instala desde `backend/`.
+  - La fuente de verdad siguen siendo `pyproject.toml` y `uv.lock`. El CI ejecuta `scripts/export-requirements.sh --check` y falla si no coinciden.
+  - La guía documenta las dos vías: `python3.12 -m venv` + `pip`, y `uv sync`.
+  - `.env.example` solo lista variables vigentes, contrastadas con las clases de configuración y con la lista blanca del supervisor de voz. La guía `docs/installation/configuracion-env.md` describe todas.
+  - Guía de uso nueva del modo Jarvis. Las cabeceras de estado que citaban la rama ya inexistente `drakter/integracion` dicen ahora que ese código está en `main`, sin tocar su contenido.
+- **Alternativas descartadas:**
+  - Un `requirements.txt` mantenido a mano: se desfasaría de `uv.lock`.
+  - Exportar con hashes: `pip` exigiría `--require-hashes` y el `-e` de los contratos no lo admite.
+  - Cambiar el backend a `pip` como vía principal: los scripts y el CI usan uv.
+- **Motivo:** que cualquiera pueda instalar con las herramientas estándar sin que el archivo mienta.
+- **Impacto:** `backend/requirements.txt`, `scripts/export-requirements.sh`, `.github/workflows/ci.yml`, `.env.example`, `backend/.env.example`, `README.md`, `CHANGELOG.md`, `docs/installation/*` y `docs/usage/{README,modo-jarvis,personaje,voz}.md`, más las cabeceras de estado de las guías de módulo. Comprobado en una carpeta de trabajo con `python3.12 -m venv` + `pip install -r requirements.txt`: instala, el backend importa y pasan las comprobaciones de migraciones, confirmaciones (con `PYTHONPATH=.`) y seguridad.

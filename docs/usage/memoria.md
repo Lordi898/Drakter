@@ -1,6 +1,6 @@
 # Memoria
 
-> **Estado:** integrado en `drakter/integracion` (`2e05ba6`): el backend monta el router de memoria (`backend/app/integrations/memory/router.py`) y el agente recibe el servicio. No hay pantalla de memoria en `desktop/src`. Las notas «Pendiente» del cuerpo se escribieron sobre `drakter/build` (`2da8bef`) y alguna puede estar ya resuelta. NO COMPROBADO en la app real (ver «Estado de la integración» en [README](README.md)).
+> **Estado:** integrado en la integración de la v1 (`2e05ba6`, hoy en `main`): el backend monta el router de memoria (`backend/app/integrations/memory/router.py`) y el agente recibe el servicio. No hay pantalla de memoria en `desktop/src`. Las notas «Pendiente» del cuerpo se escribieron sobre `drakter/build` (`2da8bef`) y alguna puede estar ya resuelta. NO COMPROBADO en la app real (ver «Estado de la integración» en [README](README.md)).
 
 La memoria guarda cosas estables sobre ti (preferencias, datos, decisiones) para que Drakter no te las pida dos veces. Tú decides qué se queda.
 

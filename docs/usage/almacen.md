@@ -1,6 +1,6 @@
 # Almacén
 
-> **Estado:** integrado en `drakter/integracion` (`2e05ba6`): pantalla **Almacén** en la navegación y API `storage` montada. El selector de carpetas (`pickDirectory`) sigue sin existir en el puente de Electron. Las notas «Pendiente» del cuerpo se escribieron sobre `drakter/build` (`2da8bef`) y alguna puede estar ya resuelta. NO COMPROBADO en la app real (ver «Estado de la integración» en [README](README.md)).
+> **Estado:** integrado en la integración de la v1 (`2e05ba6`, hoy en `main`): pantalla **Almacén** en la navegación y API `storage` montada. El selector de carpetas (`pickDirectory`) sigue sin existir en el puente de Electron. Las notas «Pendiente» del cuerpo se escribieron sobre `drakter/build` (`2da8bef`) y alguna puede estar ya resuelta. NO COMPROBADO en la app real (ver «Estado de la integración» en [README](README.md)).
 
 El Almacén es un catálogo de tus archivos, enlaces y notas. Drakter puede buscarlos y abrirlos cuando se lo pides. Catalogar no copia ni mueve nada: el archivo original se queda donde está.
 

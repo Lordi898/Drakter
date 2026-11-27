@@ -1,6 +1,6 @@
 # Hermes y OpenViking
 
-> **Estado:** contrastada con `drakter/integracion` (`2e05ba6`): `backend/app/integrations/hermes/` está integrado entero (`settings.py`, `home.py`, `supervisor.py`, `preflight.py`, `runtime.py`), junto a `tools/dev-llm-stub/`. La memoria v1 usa SQLite + FTS5 y OpenViking está desactivado (DECISIONS «Memoria v1 en SQLite + FTS5»). Sin clave de API no se ha probado con el modelo real.
+> **Estado:** revisada contra `main` el 2026-11-27. `backend/app/integrations/hermes/` está integrado entero (`settings.py`, `home.py`, `supervisor.py`, `preflight.py`, `runtime.py`), junto a `tools/dev-llm-stub/`. Hermes v0.22.7 funciona con Claude Haiku 5.5 real. La memoria v1 usa SQLite + FTS5 y OpenViking está desactivado (DECISIONS «Memoria v1 en SQLite + FTS5»).
 
 Hermes es el agente que razona y llama a las herramientas. Corre como proceso aparte, con su propio entorno de Python. OpenViking es el proveedor de memoria externo. Esta guía cubre solo la parte de Hermes que existe en las ramas. Lee antes [instalar.md](instalar.md) (backend y app) y [clave-api.md](clave-api.md) (clave del modelo).
 
@@ -68,7 +68,7 @@ Se prohíbe en producción: con `DRAKTER_ENV=production`, `dev_stub` hace fallar
 
 ## OpenViking
 
-Estado real en `drakter/integracion` (`backend/app/integrations/memory/openviking.py`): **no está integrado**. `OpenVikingAdapter` (`openviking.py`) es un hueco cerrado: `status()` dice "OpenViking no esta configurado" y el resto de operaciones lanzan `MemoryBackendUnavailable`. No hay rutas ni cargas útiles de su API.
+Estado real en `main` (`backend/app/integrations/memory/openviking.py`): **no está integrado**. `OpenVikingAdapter` (`openviking.py`) es un hueco cerrado: `status()` dice "OpenViking no esta configurado" y el resto de operaciones lanzan `MemoryBackendUnavailable`. No hay rutas ni cargas útiles de su API.
 
 Lo único decidido (`DECISIONS.md`): entorno propio, Python 3.12 o 3.13, separado del backend y de Hermes.
 
