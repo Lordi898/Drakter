@@ -1,7 +1,8 @@
 """`act`: runs a plan the backend already validated, behind the helper's own barrier (CONTRACT §5).
 
 The barrier does not trust the backend: Drakter windows, HANDS_OFF apps, RISKY steps without `confirmed`
-and password fields are refused here too. Progress events carry positions only, never what is typed.
+and password fields are refused here too. `confirmed` only counts for a plan of one step: the backend sends
+each risky step the user approved on its own, so a confirmation never covers a step nobody saw. Progress events carry positions only, never what is typed.
 """
 
 from __future__ import annotations
@@ -11,7 +12,7 @@ from typing import Any, Callable
 
 import tree
 from inject import Injector, InputError
-from lists import fold, hands_off_name, is_risky_combo, is_risky_text
+from lists import fold, hands_off_name, is_enter_combo, is_risky_combo, is_risky_text, sends_on_enter
 
 
 class Refused(Exception):
@@ -49,6 +50,13 @@ class Hands:
             if w["window_id"] == str(window_id):
                 return w
         return None
+
+    def ids_of(self, w: dict[str, Any]) -> list[Any]:
+        return [*(w.get("_ids") or [w.get("app_id"), w.get("wm_class")]), _exe(w.get("pid"))]
+
+    def sends_on_enter(self, w: dict[str, Any]) -> bool:
+        """Browsers and chats, where Return sends (review M7)."""
+        return sends_on_enter(*self.ids_of(w))
 
     def refusal_for(self, w: dict[str, Any]) -> str | None:
         if w.get("_floating") or int(w.get("pid", 0)) in self.drakter_pids:
@@ -96,8 +104,8 @@ class Hands:
     # ── plan ─────────────────────────────────────────────────────────────────
     def act(self, p: dict[str, Any]) -> dict[str, Any]:
         act_id = str(p["act_id"])
-        confirmed = p.get("confirmed") is True
         steps = list(p.get("steps") or [])
+        confirmed = p.get("confirmed") is True and len(steps) == 1
         controls = {int(c["id"]): c for c in p.get("controls") or [] if "id" in c}
         target = self.window_by_id(p["window_id"])
         if target is None:
@@ -251,10 +259,14 @@ class Hands:
             text = str(s.get("text") if do == "fill" else s.get("value"))
             if ctl.get("secret") or tree.is_secret(acc):
                 raise Refused("secret_field")
+            if not confirmed and _has_newline(text) and self.sends_on_enter(target):
+                raise Refused("risky_step")
             self._write(target, acc, rect, text, layout)
             return rect
 
         if do == "type":
+            if not confirmed and _has_newline(s.get("text")) and self.sends_on_enter(target):
+                raise Refused("risky_step")
             self.activate(target)
             acc = tree.focused(target)
             if acc is None or not (tree.is_editable(acc) or tree.role_of(acc) in tree.EDITABLE_ROLES):
@@ -268,7 +280,8 @@ class Hands:
 
         if do == "key":
             combo = str(s["combo"])
-            if not confirmed and is_risky_combo(combo):
+            # RISKY_KEYS and the system shortcuts (super, alt+F1..F12, ctrl+alt+*, alt+tab, Print), review I6
+            if not confirmed and (is_risky_combo(combo) or (is_enter_combo(combo) and self.sends_on_enter(target))):
                 raise Refused("risky_step")
             self.activate(target)
             self._progress(act_id, i, None)
@@ -418,6 +431,10 @@ class Hands:
             raise
         except Exception:  # noqa: BLE001
             raise StepFailed() from None
+
+
+def _has_newline(text: Any) -> bool:
+    return isinstance(text, str) and ("\n" in text or "\r" in text)
 
 
 def _exe(pid: Any) -> str | None:

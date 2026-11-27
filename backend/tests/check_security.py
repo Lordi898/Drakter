@@ -609,7 +609,47 @@ def log_cases(be: Backend, tokens: list[str]) -> None:
 
 
 # ---------------------------------------------------------------- principal
+def lane_cases() -> None:
+    """C1 (revision de seguridad del PR #76): un carril de tarea no ve la pantalla ni usa las manos.
+
+    En proceso, sin servidor ni helper: el rechazo por `job_id` va antes que cualquier otra cosa.
+    """
+    from types import SimpleNamespace
+
+    if str(BACKEND) not in sys.path:
+        sys.path.insert(0, str(BACKEND))
+    from app.integrations.hermes.lanes import EXCLUDED_DOMAINS, lane_specs
+    from app.tools.registry import ToolRegistry, load_builtin_tools
+    from app.tools.spec import ToolContext, ToolError
+
+    everything = ToolRegistry()
+    load_builtin_tools(everything)
+    lane = {s.name: s.domain for s in lane_specs(everything.catalog())}
+    forbidden = {"screen", "hands", "overlay"}
+    check("C1: el registro de un carril no tiene herramientas de screen, hands ni overlay",
+          forbidden <= EXCLUDED_DOMAINS and not forbidden & set(lane.values()) and "look_screen" not in lane
+          and "act_in_app" not in lane, repr(sorted(n for n, d in lane.items() if d in forbidden)))
+    ctx = ToolContext(turn_id=uuid.uuid4(), session_id=uuid.uuid4(), call_id="c1", principal="agent",
+                      state=SimpleNamespace(), job_id=uuid.uuid4())
+    calls = {
+        "look_screen": {"target": "screen"},
+        "act_in_app": {"window_id": "1", "steps": [{"do": "key", "combo": "ctrl+s"}]},
+    }
+    for name, raw in calls.items():
+        spec = everything.get(name)
+        code = None
+        try:
+            asyncio.run(spec.handler(ctx, spec.args_model.model_validate(raw)))  # type: ignore[union-attr]
+        except ToolError as e:
+            code = e.code
+        except Exception as e:  # noqa: BLE001
+            code = type(e).__name__
+        check(f"C1: {name} desde un carril de tarea (ctx.job_id) se rechaza con job_lane_forbidden",
+              code == "job_lane_forbidden", str(code))
+
+
 def run(root: Path) -> None:
+    lane_cases()
     creds = {"ui": secrets.token_urlsafe(32), "approver": secrets.token_urlsafe(32)}
     agent = secrets.token_urlsafe(32)
     tokens = [creds["ui"], creds["approver"], agent]

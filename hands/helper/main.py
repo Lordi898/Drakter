@@ -27,6 +27,7 @@ gi.require_version("Gio", "2.0")
 from gi.repository import Gio, GLib  # noqa: E402
 
 import apps  # noqa: E402
+import lists  # noqa: E402
 import tree  # noqa: E402
 from act import Hands, Refused, StepFailed  # noqa: E402
 from companion import Companion, CompanionError, public_window  # noqa: E402
@@ -185,8 +186,10 @@ class Helper:
             write({"kind": "err", "id": mid, "type": typ,
                    "payload": {"code": "validation_error", "message": type(e).__name__}})
         except Exception as e:  # noqa: BLE001 - one bad command must not kill the helper
-            log(f"{typ} failed: {type(e).__name__}")
-            traceback.print_exc(limit=3, file=sys.stderr)
+            # Only where it failed, never a traceback: a repr of an AT-SPI name is screen content (review M2).
+            frames = traceback.extract_tb(e.__traceback__)
+            where = f" at {os.path.basename(frames[-1].filename)}:{frames[-1].lineno}" if frames else ""
+            log(f"{typ} failed: {type(e).__name__}{where}")
             write({"kind": "err", "id": mid, "type": typ,
                    "payload": {"code": "internal_error", "message": type(e).__name__}})
         if self.companion.status in ("missing", "denied") and self.helloed:
@@ -244,11 +247,32 @@ class Helper:
             raise HelperError("window_not_found")
         return {}
 
+    def _secret_app(self, w: dict[str, Any]) -> bool:
+        return lists.secret_app_name(*self.hands.ids_of(w)) is not None
+
+    def _refuse_secret_in(self, area: dict[str, int] | None) -> None:
+        """Password managers, the keyring, polkit and gnome-shell are never captured (review I3)."""
+        for w in self._visible():
+            if w.get("minimized") or not self._secret_app(w):
+                continue
+            f = w["frame"]
+            if area is None or (f["x"] < area["x"] + area["w"] and area["x"] < f["x"] + f["w"]
+                                and f["y"] < area["y"] + area["h"] and area["y"] < f["y"] + f["h"]):
+                raise HelperError("secret_window")
+
+    def _monitor_area(self, index: int) -> dict[str, int] | None:
+        for m in self.companion.monitors():
+            if int(m.get("index", -1)) == index:
+                return m["geometry"]
+        return None
+
     def cmd_screenshot(self, p: dict[str, Any]) -> dict[str, Any]:
         opts: dict[str, Any] = {"dir": shots_dir(), "cursor": bool(p.get("cursor", False)),
                                 "hide_floating": bool(p.get("hide_floating", True))}
         if p.get("window_id") is not None:
             w = self._window(p["window_id"])
+            if self._secret_app(w):
+                raise HelperError("secret_window")
             if "window" in self.companion.capabilities or (self.companion.version or 0) >= 2:
                 opts["window_id"] = w["window_id"]
             else:
@@ -256,8 +280,12 @@ class Helper:
         elif p.get("area") is not None:
             a = p["area"]
             opts["area"] = {k: int(a[k]) for k in ("x", "y", "w", "h")}
+            self._refuse_secret_in(opts["area"])
         elif p.get("monitor") is not None:
             opts["monitor"] = int(p["monitor"])
+            self._refuse_secret_in(self._monitor_area(opts["monitor"]))
+        else:
+            self._refuse_secret_in(None)
         try:
             path, geo, scale = self.companion.screenshot(opts)
         except CompanionError as e:
@@ -272,6 +300,9 @@ class Helper:
 
     def cmd_atspi_read(self, p: dict[str, Any]) -> dict[str, Any]:
         w = self._window(p["window_id"])
+        ids = self.hands.ids_of(w)
+        if lists.secret_app_name(*ids) is not None or lists.terminal_name(*ids) is not None:
+            raise HelperError("secret_window")  # review I3: never read secrets or terminals
         return tree.read(w, min(int(p.get("max_controls", 260)), 260), bool(p.get("include_text", True)),
                          min(int(p.get("max_text", 5000)), 5000))
 

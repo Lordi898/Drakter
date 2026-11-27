@@ -33,6 +33,7 @@ from drakter_contracts.speech_markup import strip_tags
 from app.floating import drawjs, ports, presence
 from app.floating.parts import InkState
 from app.floating.safety import BLOCK, check_url
+from app.integrations.hands.safety import check_url_dns
 from app.tools.spec import ToolError
 
 logger = logging.getLogger("drakter.floating.runner")
@@ -470,7 +471,9 @@ class DrawRunner:
         if do == "copy":
             self._publish("overlay.clipboard", OverlayClipboard(part=part, text=value[:600]))
         elif do == "open":
-            if check_url(value).level == BLOCK:
+            # check_url_dns too: a public name may resolve to this machine, and one that does not
+            # resolve is blocked (security review M1).
+            if check_url(value).level == BLOCK or await asyncio.to_thread(check_url_dns, value) is not None:
                 logger.warning("button url blocked", extra={"event": "floating_button_url_blocked"})
                 return True
             await ports.open_url(value)

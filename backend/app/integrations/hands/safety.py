@@ -27,14 +27,31 @@ from drakter_contracts.floating import (
 )
 from drakter_contracts.hands_ipc import AtspiControl
 
-from app.integrations.hands.lists import is_risky_combo, is_risky_text, risky_kind
+from app.integrations.hands.lists import (
+    RISKY_KEYS,
+    SYSTEM_SHORTCUT,
+    is_enter_combo,
+    is_risky_combo,
+    is_risky_text,
+    normalize_combo,
+    risky_kind,
+    sends_on_enter,
+)
 
 # ── RISKY ────────────────────────────────────────────────────────────────────
 
 
-def step_risk(step: Any, controls: dict[int, AtspiControl] | None = None) -> str | None:
-    """The risky word (or key) of a step, or None. `controls`: the turn's read, to name `id` targets."""
+ENTER_SENDS: Final = "Intro envía en esta app"
+
+
+def step_risk(step: Any, controls: dict[int, AtspiControl] | None = None,
+              app: tuple[str | None, ...] = ()) -> str | None:
+    """The risky word (or key) of a step, or None. `controls`: the turn's read, to name `id` targets.
+
+    `app`: ids of the target window (app id, wm_class), for Return in browsers and chats (review M7).
+    """
     controls = controls or {}
+    enter_sends = sends_on_enter(*app)
     texts: list[str | None] = []
     if isinstance(step, StepClickText):
         texts = [step.text, step.near]
@@ -48,17 +65,24 @@ def step_risk(step: Any, controls: dict[int, AtspiControl] | None = None) -> str
         c = controls.get(step.id)
         texts = [c.name if c else None]
     elif isinstance(step, StepKey):
-        return step.combo if is_risky_combo(step.combo) else None
+        if normalize_combo(step.combo) in RISKY_KEYS:
+            return step.combo
+        if is_risky_combo(step.combo):
+            return SYSTEM_SHORTCUT
+        return ENTER_SENDS if enter_sends and is_enter_combo(step.combo) else None
+    elif isinstance(step, (StepType, StepFill)):
+        if enter_sends and ("\n" in step.text or "\r" in step.text):
+            return ENTER_SENDS
     for t in texts:
         if is_risky_text(t):
             return risky_kind(t)
     return None
 
 
-def args_risk(args: Any) -> str | None:
+def args_risk(args: Any, app: tuple[str | None, ...] = ()) -> str | None:
     """For `confirm_if`: risky by the text or the combo the model wrote (ids are checked in the handler)."""
     for i, step in enumerate(getattr(args, "steps", []) or []):
-        if (kind := step_risk(step)) is not None:
+        if (kind := step_risk(step, None, app)) is not None:
             return f"Paso {i + 1} arriesgado: {kind}."
     return None
 
@@ -208,7 +232,7 @@ def check_url_dns(url: str) -> str | None:
     try:
         infos = socket.getaddrinfo(u.hostname or "", None)
     except (OSError, UnicodeError):
-        return None  # does not resolve: the browser will fail on its own
+        return "no se pudo comprobar a dónde apunta el servidor"  # review M1: unresolved blocks
     if any(is_private_address(str(info[4][0])) for info in infos):
         return "apunta a este equipo o a la red local"
     return None

@@ -305,8 +305,11 @@ class HandsClient:
             line = await proc.stderr.readline()
             if not line:
                 return
-            logger.info("hands helper: %s", line.decode("utf-8", "replace").rstrip()[:300],
-                        extra={"event": "hands_stderr"})
+            text = line.decode("utf-8", "replace").rstrip()
+            # Only the helper's own `hands:` lines: anything else (a traceback, a library warning)
+            # may carry screen content (security review M2).
+            if text.startswith("hands: "):
+                logger.info("hands helper: %s", text[7:307], extra={"event": "hands_stderr"})
 
 
 # ── one client per process ───────────────────────────────────────────────────
