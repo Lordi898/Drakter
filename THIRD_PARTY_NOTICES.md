@@ -47,6 +47,7 @@ Propio del proyecto (no es de terceros): `.claude/CLAUDE.md`, `.claude/agents/{c
 | `desktop/floating/` (carpeta aún por crear) | [KenKaiii/Roamies](https://github.com/KenKaiii/Roamies) commit `8f0adaa` | AGPL-3.0, © Ken Kai (KenKaiii) | Se incorporan y adaptan partes de su avatar JARVIS, dibujo en pantalla y guía; ver `desktop/floating/`. Es la razón de que Drakter pase a AGPL-3.0-only. |
 | `desktop/floating/` (fuentes, aún por copiar) | Roamies `8f0adaa`: Doto, Martian Mono, Readex Pro | SIL OFL 1.1 (cada fuente con su titular) | Se copiarán con sus textos de licencia OFL; las fuentes conservan la OFL. |
 | `desktop/src/components/ui/*.tsx` | Componentes generados con [shadcn/ui](https://github.com/shadcn-ui/ui) y adaptados | MIT, © 2023 shadcn | [docs/third-party-licenses/shadcn-ui.txt](docs/third-party-licenses/shadcn-ui.txt) |
+| `desktop/electron/main/floating/draw/` (`draw.mjs`, `safety.mjs`, `countries.mjs`) | Roamies `8f0adaa`, `showcase/tauri/sidecar/` | AGPL-3.0, © Ken Kai (KenKaiii); `countries.mjs` deriva de Natural Earth (dominio público) | Copia literal byte a byte (sha256 de `draw.mjs` = `x-drakter-source` de `contracts/floating/draw_args.schema.json`); solo se añaden `draw.d.mts` y `safety.d.mts` (tipos, `// Drakter:`). Electron main los usa para la segunda validación del dibujo (CONTRACT §9.5). |
 
 ## 3. Dependencias (se instalan aparte, no se versionan)
 

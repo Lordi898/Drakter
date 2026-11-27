@@ -86,6 +86,12 @@ linux:
         - "!tests/**"
         - "!**/__pycache__/**"
         - "!**/.env*"
+    # Página flotante (copia de Roamies, AGPL-3.0): la sirve app://floating desde resources/floating.
+    - from: floating
+      to: floating
+      filter:
+        - "**/*"
+        - "!dev/**"
 
 deb:
   packageCategory: utils

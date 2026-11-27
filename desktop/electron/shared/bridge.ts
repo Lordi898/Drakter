@@ -12,9 +12,11 @@ import type {
   VoiceState,
   VoiceStatusOut
 } from '../../../contracts/ts'
+import type { FloatingAction, FloatingState } from './floating'
 import type { HttpMethod } from './operations'
 
 export type { HttpMethod } from './operations'
+export type { CompanionStatus, FloatingAction, FloatingState } from './floating'
 
 export const IPC_CHANNELS = {
   getAppInfo: 'drakter:app-info',
@@ -148,6 +150,29 @@ export interface UiApi {
   onModeToggle(callback: () => void): () => void
 }
 
+/** Canales de `window.api.floating` (CONTRACT §4.4). Aquí y no en `floating.ts`: cada preload va en un solo archivo. */
+export const FLOATING_CHANNELS = {
+  getState: 'floating:get-state',
+  set: 'floating:set',
+  state: 'floating:state',
+  levelsDemand: 'floating:levels-demand',
+  levels: 'floating:levels'
+} as const
+
+/** `window.api.floating`: modo flotante (docs/floating/CONTRACT.md §4.4). */
+export interface FloatingApi {
+  /** invoke `floating:get-state`. */
+  getState(): Promise<FloatingState>
+  /** invoke `floating:set` `{action, source:'ui'}`. */
+  set(action: FloatingAction): Promise<FloatingState>
+  /** on `floating:state`. Devuelve la baja. */
+  onState(cb: (s: FloatingState) => void): () => void
+  /** on `floating:levels-demand`: enviar niveles (~30 Hz) solo mientras sea `true`. Devuelve la baja. */
+  onLevelsDemand(cb: (on: boolean) => void): () => void
+  /** send `floating:levels` `{out, in}`, los dos en 0..1. */
+  reportLevels(out: number, input: number): void
+}
+
 /**
  * `window.api`: ÚNICA interfaz del renderer con el backend (D-14). El renderer no
  * tiene token, puerto ni red. Main valida método y ruta contra `ALLOWED_ROUTES` y
@@ -168,6 +193,7 @@ export interface DrakterApi {
   readonly voice: VoiceApi
   readonly jobs: JobsApi
   readonly ui: UiApi
+  readonly floating: FloatingApi
 }
 
 /** `window.drakter`: solo servicios de escritorio, sin relación con el backend. */
