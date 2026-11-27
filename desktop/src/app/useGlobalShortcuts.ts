@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { requestFloating } from '@/floating/store'
 import { navigateTo } from '@/navigation/route'
 import { SECTIONS } from '@/navigation/sections'
 import { requestUiMode } from '@/stores/uiMode'
@@ -9,7 +10,7 @@ export const UI_MODE_SHORTCUT_LABEL = 'Ctrl+Shift+J'
 
 /**
  * Atajos comunes a los dos modos: Ctrl+0…Ctrl+9 cambian de sección (la sección se comparte entre
- * Drakter y Jarvis) y Ctrl+Shift+J alterna el modo. `code` cubre cualquier distribución de teclado.
+ * Drakter y Jarvis), Ctrl+Shift+J alterna el modo y Ctrl+Shift+F activa el modo flotante. `code` cubre cualquier distribución de teclado.
  * Los propios de Drakter (Ctrl+\, Ctrl+K) siguen en su shell.
  */
 export function useGlobalShortcuts(): void {
@@ -18,6 +19,11 @@ export function useGlobalShortcuts(): void {
       if (!event.ctrlKey || event.metaKey || event.altKey || event.repeat) return
 
       if (event.shiftKey) {
+        if (event.code === 'KeyF') {
+          event.preventDefault()
+          requestFloating('on')
+          return
+        }
         if (event.code !== 'KeyJ') return
         event.preventDefault()
         requestUiMode('toggle', 'shortcut')

@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, type ComponentType } from 'react'
 import { useGlobalShortcuts } from '@/app/useGlobalShortcuts'
+import { FloatingHost } from '@/floating'
 import { startNotificationFeed } from '@/modules/notifications'
 import { subscribeServerEvents } from '@/services/ws'
 import { requestAppearance } from '@/stores/appearance'
@@ -41,17 +42,22 @@ function useUiModeRequests(): void {
 
 /**
  * Lo que vive mientras la app está abierta, sea cual sea el modo de interfaz: la voz (desmontarla
- * cortaría WebRTC), el feed de notificaciones, los atajos comunes y las peticiones de cambio de modo.
- * No pinta nada.
+ * cortaría WebRTC), el feed de notificaciones, los atajos comunes, las peticiones de cambio de modo y
+ * el modo flotante (estado, niveles de voz y su ayuda de instalación, lo único que pinta).
  */
 export function SessionHosts() {
   useGlobalShortcuts()
   useUiModeRequests()
   useEffect(() => startNotificationFeed(), [])
 
-  return VoiceHost ? (
-    <Suspense fallback={null}>
-      <VoiceHost />
-    </Suspense>
-  ) : null
+  return (
+    <>
+      <FloatingHost />
+      {VoiceHost ? (
+        <Suspense fallback={null}>
+          <VoiceHost />
+        </Suspense>
+      ) : null}
+    </>
+  )
 }

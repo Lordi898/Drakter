@@ -7,6 +7,7 @@ import { listAvatars, NO_AVATAR, useActiveAvatar, type AvatarEntry } from '@/cha
 import type { AvatarViewport } from '@/character/avatars/types'
 import { useAvatarWiring } from '@/character/avatars/wiring'
 import { CHARACTER_STATE_LABELS } from '@/character/labels'
+import { FloatingButton } from '@/floating'
 import { navigateTo, useCurrentSection } from '@/navigation/route'
 import { SECTIONS } from '@/navigation/sections'
 import { useDrakterState } from '@/stores/agent'
@@ -302,6 +303,7 @@ export default function JarvisShell() {
 
       {/* Común a todas las interfaces: esquina superior derecha reservada. */}
       <div className="absolute top-4 right-4 z-10 flex items-center gap-2">
+        <FloatingButton variant="jarvis" />
         <AppearancePicker layoutId={layoutId} />
         <button
           type="button"
