@@ -2,7 +2,7 @@
 name = "drakter-voice"
 version = "0.2.0"
 description = "Proceso de voz de Drakter sobre Pipecat (venv propio, supervisado por el backend)"
-license = "Apache-2.0"
+license = "AGPL-3.0-only"
 requires-python = ">=3.12,<3.13"
 # Versiones fijadas por docs/DECISIONS.md (voz v2). El lock completo está en
 # voice/requirements.lock y lo aplica scripts/install-voice.sh.

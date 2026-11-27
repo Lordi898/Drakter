@@ -2,7 +2,7 @@
 name = "drakter-backend"
 version = "0.1.0"
 description = "Backend local de Drakter"
-license = "Apache-2.0"
+license = "AGPL-3.0-only"
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "fastapi",

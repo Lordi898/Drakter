@@ -1,7 +1,17 @@
 Drakter
 Copyright 2026 Lordi898 and the Drakter contributors
 
-This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+This product is licensed under the GNU Affero General Public License,
+version 3 only (AGPL-3.0-only; see LICENSE).
+
+It incorporates code from Roamies (https://github.com/KenKaiii/Roamies,
+commit 8f0adaa), Copyright Ken Kai (KenKaiii), licensed under AGPL-3.0.
+See THIRD_PARTY_NOTICES.md.
+
+Trademark notice (separate from the license): the license does not grant
+permission to use the name "Drakter", its logos or its character as a
+trademark, except as reasonably needed to describe the origin of the
+software. If you publish a modified version, use a different name.
 
 This repository also contains third-party material distributed under its
 own licenses; see THIRD_PARTY_NOTICES.md for sources, commits and license
