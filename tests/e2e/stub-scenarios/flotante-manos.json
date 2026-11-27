@@ -1,9 +1,13 @@
 {
-  "description": "Modo flotante: act_in_app pulsa «7» en la ventana activa (gnome-calculator). Tras look_screen la sesión está contaminada, así que debe quedar pendiente de confirmación.",
+  "description": "Modo flotante: list_windows y act_in_app pulsa «7» en la ventana de delante (gnome-calculator), con su window_id. Tras look_screen la sesión está contaminada: debe quedar pendiente de confirmación, nombrando la app y el título.",
   "steps": [
     {
+      "text": "Busco la calculadora.",
+      "tool_calls": [{"name": "drakter__list_windows", "input": {}}]
+    },
+    {
       "text": "Pulso el 7 en la calculadora.",
-      "tool_calls": [{"name": "drakter__act_in_app", "input": {"steps": [{"do": "click_text", "text": "7"}]}}]
+      "tool_calls": [{"name": "drakter__act_in_app", "input": {"window_id": "{{result_front_window_id}}", "steps": [{"do": "click_text", "text": "7"}]}}]
     },
     {
       "text": "FALLO: act_in_app no pidió confirmación en una sesión contaminada. {{tool_result}}",

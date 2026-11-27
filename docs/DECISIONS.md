@@ -1929,3 +1929,27 @@ Decisiones técnicas, cambios de tecnología y motivos.
 - **Alternativas descartadas:** reproducir el PCM en la página, como Roamies (duplicaría la salida de audio); un `flush` antes del texto final (cortaría el beat en curso).
 - **Motivo:** una sola salida de voz, cortable, con el orden que espera la guía.
 - **Impacto:** `voice/{bridge,session}.py`, `voice/conversation/layer0.*`, `backend/app/integrations/voice/{bridge,service,policy}.py`, `contracts/python/drakter_contracts/voice_ipc.py` (3 `PhraseKey`), `contracts/ts/index.ts` y `agent/identity/voice_phrases.es.toml`. Falta generar la caché PCM de las 3 frases nuevas (`python -m voice phrases`).
+
+## [2026-11-28] Arreglos de la revisión de seguridad del modo flotante
+- **Contexto:** la revisión de seguridad del PR #76 (drakter-111, `revision-seguridad-pr76.md`) encontró un fallo crítico, 8 importantes y 8 menores en el modo flotante. Los frentes S1, S2 y S3 los arreglaron y el integrador cerró los cabos entre ellos.
+- **Decisión:**
+  - **C1:** los carriles de tareas en segundo plano no registran los dominios `screen`, `hands` ni `overlay` (`lanes.EXCLUDED_DOMAINS`), y esas herramientas rechazan cualquier llamada con `job_id` (`job_lane_forbidden`). El carril queda en 89 herramientas, frente a las 103 del registro.
+  - **I1:** `act_in_app` exige siempre `window_id` (contrato `ActInAppArgs`). El resumen nombra la app y el título, y todos los pasos arriesgados. Al aprobar, la ventana tiene que ser la misma app (si no, `stale_window`), solo pasan los pasos arriesgados que se nombraron, y cada uno va solo al helper con `confirmed`. El helper solo respeta `confirmed` en planes de un paso.
+  - **I2:** el resumen de `open_target` muestra la URL completa, saneada y recortada, y avisa de query, fragmento o un `mailto` con datos.
+  - **I3:** `look_screen` y `read_window` dan `secret_window` con gestores de contraseñas, llavero, polkit o gnome-shell a la vista, y `read_window` también con terminales. Lo comprueban las dos barreras. La pantalla queda **apagada por defecto**, con el interruptor `floating_screen_enabled` («Dejar que Drakter vea mi pantalla») en Ajustes; apagada, devuelve `screen_disabled`.
+  - **I4:** la pantalla solo se puede leer con el modo flotante activo y fuera de tareas, y la descripción dice que se use solo cuando el usuario lo pida.
+  - **I5:** migración `0016`. Al cerrarse una confirmación de herramientas transitorias (`hands`, `screen` o `returns_untrusted`), sus argumentos se redactan como en la auditoría y el resultado se guarda compacto. Las filas antiguas se redactan al arrancar.
+  - **I6:** los atajos del sistema (`super`, `alt+F*`, `ctrl+alt+*`, `alt+tab`, `Print`…) son arriesgados.
+  - **I7:** `Hello` de la extensión solo acepta al Electron principal de Drakter y a su helper de manos, comprobados por `/proc` con las credenciales del bus. Como mucho entra uno de cada.
+  - **I8:** mientras haya un diálogo nativo de confirmación abierto, main oculta la flotante con `SetFloatingHidden` (nuevo, capacidad `hide`) y además la trae al frente. Si falla, oculta la ventana.
+  - **M1:** un DNS que no resuelve bloquea la URL, y los botones `open` del dibujo también pasan por `check_url_dns`.
+  - **M2:** del stderr del helper solo se registran las líneas con el prefijo `hands:`, sin tracebacks.
+  - **M3:** la instalación normal de la extensión quita la interfaz `Debug`.
+  - **M4:** en sesión contaminada, `draw` no admite botones `copy` ni `open`, y un `copy` siempre muestra lo que copia.
+  - **M5:** el REST del overlay exige un principal; ya no lo da por supuesto.
+  - **M6:** comprobado que Hermes no guarda las capturas en base64 en su historial (las cambia por `MEDIA:` o `[screenshot]`). No hace falta código.
+  - **M7:** `Return` o `\n` en navegadores y clientes de mensajería son arriesgados.
+  - **M8:** `DRAKTER_FLOATING_ROOT` solo se lee sin empaquetar, como ya documenta `desktop/floating/README.md`.
+- **Alternativas descartadas:** dejar que la puerta rechace solo los `act_in_app` sin `window_id` elevados por contaminación (no distingue el motivo antes del handler: es más simple y más claro exigirlo siempre); aceptar en la extensión a cualquier descendiente de Electron (el runner de Hermes y sus herramientas también lo son); dibujar el aviso de aprobación en la flotante (nunca aprueba: D-13).
+- **Motivo:** cerrar la fuga de pantalla y manos a tareas sin usuario, que la aprobación cubra exactamente lo que el usuario vio y que el diálogo de aprobación no se pueda tapar ni imitar.
+- **Impacto:** `contracts/python/drakter_contracts/{floating,hands_ipc}.py`, `contracts/ts/index.ts`, `contracts/tools/catalog.json`, `docs/floating/CONTRACT.md` (§3.1, §3.5, §8.2 y la tabla de herramientas), `backend/app/tools/{hands,screen,overlay}.py`, `backend/app/integrations/{hands,hermes}/`, `backend/app/services/{actions,settings}.py`, `backend/migrations/0016_confirmation_retention.sql`, `hands/helper/`, la extensión, `desktop/electron/main/{approvals.ts,floating/}`, `desktop/src/floating/FloatingSection.tsx`, `scripts/install-gnome-extension.sh` y `backend/tests/check_floating_safety.py` (nuevo).

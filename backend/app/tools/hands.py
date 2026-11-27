@@ -46,7 +46,7 @@ from drakter_contracts.hands_ipc import (
     HOpen,
     HStepResult,
 )
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel
 
 from app.integrations.hands import desktop, records
 from app.integrations.hands.client import HandsError
@@ -74,8 +74,6 @@ _STEP_MSG: Final = {
     "step_failed": "No se pudo hacer este paso.",
     "input_unavailable": "No hay inyector de entrada.",
 }
-NEED_WINDOW: Final = ("Un plan que pide confirmación necesita window_id (de list_windows, read_window o "
-                      "look_screen): ponlo para que el usuario sepa en qué ventana se actúa.")
 SUMMARY_SHOWN: Final = 12
 URL_SHOWN: Final = 200
 
@@ -108,20 +106,6 @@ def _publish(hub: Any, type: str, payload: BaseModel, turn: UUID) -> None:
 
 
 # ── act_in_app ───────────────────────────────────────────────────────────────
-class ActInAppToolArgs(ActInAppArgs):
-    """`ActInAppArgs` plus I1: a plan that asks for confirmation by itself must name its window.
-
-    A plan raised only by a tainted session cannot be told apart here: its summary says it will not run
-    and the handler refuses it on approval.
-    """
-
-    @model_validator(mode="after")
-    def _window_when_confirmed(self) -> ActInAppToolArgs:
-        if self.window_id is None and (self.confirm or args_risk(self) is not None):
-            raise ValueError(NEED_WINDOW)
-        return self
-
-
 def _named_controls(args: ActInAppArgs) -> dict | None:
     """Controls of the read the steps point at, to name `id` targets in the confirmation.
 
@@ -148,9 +132,7 @@ def _app_ids(w: HelperWindow | None) -> tuple[str | None, ...]:
 _summarized: dict[str, tuple[str | None, ...]] = {}
 
 
-def _summary_app(window_id: str | None) -> tuple[str | None, ...]:
-    if window_id is None:
-        return ()
+def _summary_app(window_id: str) -> tuple[str | None, ...]:
     if (seen := _summarized.get(str(window_id))) is not None:
         return seen
     return _app_ids(desktop.known_window(window_id))
@@ -171,9 +153,7 @@ def approved_steps(args: ActInAppArgs) -> dict[int, str]:
     return out
 
 
-def _window_phrase(window_id: str | None) -> str:
-    if window_id is None:
-        return "la ventana activa (sin identificar: esta aprobación no se ejecutará)"
+def _window_phrase(window_id: str) -> str:
     w = desktop.known_window(window_id)
     if w is None:
         return "una ventana que Drakter no ha podido identificar (no se ejecutará)"
@@ -184,7 +164,7 @@ def _window_phrase(window_id: str | None) -> str:
 def _summary(args: BaseModel) -> str:
     """Built by the backend for the confirmation. Typed text: only its length."""
     assert isinstance(args, ActInAppArgs)
-    if args.window_id is not None and (w := desktop.known_window(args.window_id)) is not None:
+    if (w := desktop.known_window(args.window_id)) is not None:
         _summarized[str(args.window_id)] = _app_ids(w)
     controls = _named_controls(args)
     where = _window_phrase(args.window_id)
@@ -245,8 +225,6 @@ async def act_in_app(ctx: ToolContext, args: ActInAppArgs) -> ActInAppResult:
     confirmed = _ctx_confirmed(ctx)
     if not hands_enabled(ctx):
         raise _err("hands_disabled")
-    if confirmed and args.window_id is None:
-        raise _err("validation_error", NEED_WINDOW)
     # Before the window list below refreshes what the summary named.
     approved = approved_steps(args) if confirmed else {}
     expected = _summarized.get(str(args.window_id)) if confirmed else None
@@ -507,14 +485,15 @@ TOOLS = (
         name="act_in_app",
         description=(
             "Usa otra aplicación como lo haría el usuario: un plan de 1 a 40 pasos (clic por texto o id, "
-            "rellenar, elegir, escribir, teclas, desplazar, pasar el ratón, esperar) sobre una ventana. Nunca en "
+            "rellenar, elegir, escribir, teclas, desplazar, pasar el ratón, esperar) sobre la ventana window_id "
+            "(sácalo de list_windows o read_window). Nunca en "
             "terminales, gestores de contraseñas, ajustes del sistema ni ventanas de Drakter, ni escribe en "
             "campos de contraseña. Si un paso es arriesgado (borrar, pagar, enviar, cerrar sesión, atajos del "
-            "sistema, Intro en un navegador o un chat…) pon confirm=true y window_id: el usuario lo aprueba "
+            "sistema, Intro en un navegador o un chat…) pon confirm=true: el usuario lo aprueba "
             "antes, y solo se ejecutan los pasos arriesgados que vio nombrados. Necesita que el usuario haya "
             "activado las manos."
         ),
-        domain="hands", args_model=ActInAppToolArgs, result_model=ActInAppResult, permission="hands.write",
+        domain="hands", args_model=ActInAppArgs, result_model=ActInAppResult, permission="hands.write",
         risk=RiskClass.WRITE, handler=act_in_app, errors=ACT_ERRORS, idempotent=False, timeout_s=90.0,
         returns_untrusted=True, summarize=_summary, confirm_if=_confirm_if_act,
         # steps hold typed text: hashed, never logged

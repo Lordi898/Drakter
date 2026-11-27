@@ -498,8 +498,9 @@ HandsStep = Annotated[
 
 
 class ActInAppArgs(ContractModel):
-    window_id: WindowId | None = None
-    """Por defecto, la ventana activa (que no sea de Drakter)."""
+    window_id: Annotated[WindowId, Field(description=(
+        "Ventana donde se actúa: su id sale de list_windows o de read_window. Obligatorio: la confirmación "
+        "nombra esa app y su título, y la aprobación solo vale para ella."))]
     steps: Annotated[list[HandsStep], Field(min_length=1, max_length=40)]
     read_id: Id | None = None
     """Lectura (`read_window`) a la que se refieren los `id` de los pasos."""
@@ -601,4 +602,7 @@ FLOATING_TOOL_ERRORS: Final[dict[str, str]] = {
     "target_not_allowed": "URL, app o archivo no permitido.",
     "app_not_found": "No existe esa aplicación.",
     "ui_unavailable": "No se pudo avisar a la interfaz de escritorio.",
+    "stale_window": "La ventana aprobada ya no existe o es de otra app: no se ejecuta.",
+    "screen_disabled": "El usuario no ha activado la pantalla (ajuste floating_screen_enabled).",
+    "job_lane_forbidden": "Una tarea en segundo plano no puede ver la pantalla ni usar las manos.",
 }

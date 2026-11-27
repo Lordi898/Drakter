@@ -85,7 +85,7 @@ Bus de sesión. Nombre `org.drakter.Companion`, objeto `/org/drakter/Companion`,
 
 | Método | Firma | Quién lo usa | Semántica |
 |---|---|---|---|
-| `Hello` | `s token → a{sv} info` | main, helper | Autentica la conexión. Comprueba `GetConnectionUnixUser(sender) == uid` y el token de `$XDG_RUNTIME_DIR/drakter-companion/token` (0600 en un directorio 0700, regenerado en cada enable). `info`: `version u`, `shell_version s`, `session s`, `poll_ms u`, `capabilities as` ⊇ `pointer, buttons, gestures, windows, screenshot, input-region, focus, passthrough, activate` |
+| `Hello` | `s token → a{sv} info` | main, helper | Autentica la conexión. Comprueba `GetConnectionUnixUser(sender) == uid` y el token de `$XDG_RUNTIME_DIR/drakter-companion/token` (0600 en un directorio 0700, regenerado en cada enable). `info`: `version u`, `shell_version s`, `session s`, `poll_ms u`, `capabilities as` ⊇ `pointer, buttons, gestures, windows, screenshot, input-region, focus, passthrough, activate, hide`. **Revisión de seguridad (I7):** además, el proceso del llamante (por `GetConnectionCredentials` y `/proc`) tiene que ser el Electron principal de Drakter o su helper de manos (`/usr/bin/python3 -I …/hands/helper/main.py` descendiente de ese Electron), sin `LD_PRELOAD`, `LD_AUDIT` ni `ELECTRON_RUN_AS_NODE`; como mucho un main y un helper a la vez. Si no, `AccessDenied` |
 | `GetPointer` | `→ i x, i y, u mods, x t_us` | main | `mods` = `Clutter.ModifierType` (Shift 1<<0, Ctrl 1<<2, Alt 1<<3, botones 1<<8/9/10, Super 1<<26) |
 | `Subscribe` | `a{sv} options` | main, helper | `pointer b`, `pointer_min_ms u` (8), `buttons b`, `gestures b`, `windows b`. Una llamada nueva sustituye a la anterior |
 | `Unsubscribe` | — | main, helper | |
@@ -99,6 +99,7 @@ Bus de sesión. Nombre `org.drakter.Companion`, objeto `/org/drakter/Companion`,
 | **nuevo** `SetFloatingFocus` | `b on → b ok` | main | `true`: activa la flotante para que reciba el teclado (barra de pregunta). `false`: reactiva la ventana que tenía el foco antes, si sigue existiendo |
 | **nuevo** `ActivateWindow` | `t id → b ok` | helper | Activa una ventana cliente (antes de teclear). `false` si no existe o es la flotante |
 | **nuevo** `ForcePassthrough` | `b on` | helper | Mientras alguna conexión lo tenga en `true`, la flotante deja pasar todos los clics, digan lo que digan los rects. Se suelta al cerrarse la conexión. Lo usan las manos durante cada `act` |
+| **nuevo (revisión I8)** `SetFloatingHidden` | `b hidden → b ok` | main | Solo el dueño de la flotante (capacidad `hide`). `true`: la flotante se pinta con opacidad 0 y deja pasar todos los clics, digan lo que digan los rects; vale también para ventanas que floten después y tras una captura con `hide_floating`. `false`: vuelve a la normalidad. Se suelta al liberar la flotante. `ok = false` si no hay regla de flotante. Main la pone mientras haya un diálogo nativo de confirmación abierto, para que nada dibujado lo tape |
 
 ### 3.2 Señales (unicast, solo a conexiones autenticadas y suscritas)
 
@@ -126,6 +127,8 @@ Bus de sesión. Nombre `org.drakter.Companion`, objeto `/org/drakter/Companion`,
 - **Nuevo:** un indicador en el panel (icono de Drakter) mientras haya al menos un cliente autenticado, que parpadea en cada captura. Así el usuario siempre ve que el puntero global y las capturas están abiertos.
 - Límite de 4 capturas por segundo y conexión. Las capturas solo se guardan en directorios propios, no compartidos, con archivos 0600.
 - No inyecta entrada (no hay dispositivo virtual en la interfaz pública). La inyección de las manos va por Mutter RemoteDesktop, dentro del helper.
+- **Revisión de seguridad (I7, M3):** `Hello` solo acepta al Electron principal de Drakter y a su helper de manos (ver `Hello` en §3.1), como mucho uno de cada a la vez. La instalación normal (`scripts/install-gnome-extension.sh`) quita los bloques `@debug-begin … @debug-end` (la interfaz `Debug` y la confianza en ejecutables de prueba). Solo `--dev` los conserva, y únicamente la usan los arneses headless.
+- **Revisión de seguridad (I8):** mientras hay un diálogo nativo de confirmación abierto, main oculta la flotante con `SetFloatingHidden(true)` (si falla, oculta la ventana), así nada dibujado puede tapar ni imitar el diálogo.
 - Límite conocido: un proceso no confinado del mismo usuario puede leer el token. En el escritorio Linux el mismo uid no es una frontera, y se acepta así.
 
 ## 4. Electron main
@@ -321,11 +324,11 @@ Están en `contracts/tools/catalog.json` y sus modelos en `floating.py`. Se regi
 |---|---|---|---|---|---|---|---|
 | `draw` | overlay | `overlay.read` | read | no | 90 s | `DrawToolArgs` → `DrawToolResult` | validation_error, draw_invalid, draw_action_forbidden, floating_inactive, overlay_unavailable, companion_unavailable, stale_screenshot, stale_read, part_not_found, guide_busy, interrupted |
 | `guide_wait` | overlay | `overlay.read` | read | no | 115 s | `GuideWaitArgs` → `GuideWaitResult` | guide_not_found, floating_inactive, overlay_unavailable, interrupted |
-| `look_screen` | screen | `screen.read` | read | **sí** | 15 s | `LookScreenArgs` → `LookScreenResult` (+1 imagen) | companion_unavailable, window_not_found, shot_not_found, capture_failed, rate_limited, secret_window |
-| `read_window` | screen | `screen.read` | read | **sí** | 20 s | `ReadWindowArgs` → `ReadWindowResult` | companion_unavailable, window_not_found, accessibility_unavailable, drakter_window |
-| `list_windows` | screen | `screen.read` | read | **sí** | 5 s | `ListWindowsArgs` → `ListWindowsResult` | companion_unavailable |
-| `act_in_app` | hands | `hands.write` | write (+`confirm_if`) | **sí** | 90 s | `ActInAppArgs` → `ActInAppResult` | validation_error, hands_disabled, hands_off_app, drakter_window, risky_step, secret_field, window_not_found, window_changed, stale_read, stale_screenshot, step_failed, input_unavailable, companion_unavailable |
-| `open_target` | hands | `hands.write` | write (+`confirm_if`) | no | 10 s | `OpenTargetArgs` → `OpenTargetResult` | validation_error, hands_disabled, target_not_allowed, app_not_found, path_not_allowed, not_found, companion_unavailable |
+| `look_screen` | screen | `screen.read` | read | **sí** | 15 s | `LookScreenArgs` → `LookScreenResult` (+1 imagen) | companion_unavailable, window_not_found, shot_not_found, capture_failed, rate_limited, secret_window, job_lane_forbidden, screen_disabled, floating_inactive |
+| `read_window` | screen | `screen.read` | read | **sí** | 20 s | `ReadWindowArgs` → `ReadWindowResult` | companion_unavailable, window_not_found, accessibility_unavailable, drakter_window, secret_window, job_lane_forbidden, screen_disabled, floating_inactive |
+| `list_windows` | screen | `screen.read` | read | **sí** | 5 s | `ListWindowsArgs` → `ListWindowsResult` | companion_unavailable, job_lane_forbidden |
+| `act_in_app` | hands | `hands.write` | write (+`confirm_if`) | **sí** | 90 s | `ActInAppArgs` → `ActInAppResult` | validation_error, hands_disabled, hands_off_app, drakter_window, risky_step, secret_field, window_not_found, window_changed, stale_read, stale_screenshot, stale_window, step_failed, input_unavailable, companion_unavailable, job_lane_forbidden |
+| `open_target` | hands | `hands.write` | write (+`confirm_if`) | no | 10 s | `OpenTargetArgs` → `OpenTargetResult` | validation_error, hands_disabled, target_not_allowed, app_not_found, path_not_allowed, not_found, companion_unavailable, job_lane_forbidden |
 | `ui_set_floating` | ui | `ui.write` | write | no | 3 s | `SetFloatingArgs` → `SetFloatingResult` | ui_unavailable, floating_unavailable |
 
 Los textos de los errores para el modelo están en `FLOATING_TOOL_ERRORS` (`floating.py`). Los errores previsibles van como `ToolFailed` con `isError:false` (regla del puente MCP).
@@ -434,17 +437,17 @@ En el sobre, una línea por control: `#12 button «Guardar»`, `#13 entry «Nomb
 **`act_in_app`.** Pasos del handler:
 
 1. Comprueba `floating_hands_enabled`; si está apagado, `hands_disabled`.
-2. Comprueba que el helper esté listo y elige la ventana (por defecto, la activa que no sea de Drakter).
+2. Comprueba que el helper esté listo y busca la ventana `window_id`, que es obligatorio (sale de `list_windows` o `read_window`). Con `ctx.confirmed`, tiene que seguir siendo la misma app que nombró el resumen; si no, `stale_window`.
 3. Rechaza HANDS_OFF y ventanas de Drakter.
 4. Resuelve los `id` de los pasos con el `read_id` del turno (si no casa, `stale_read`) y los `click_at` con el `shot_id` (si no casa, `stale_screenshot`).
 5. Clasifica cada paso según su objetivo resuelto. Si alguno es RISKY y `ctx.confirmed` es falso, devuelve `risky_step` con el índice. Si `args.confirm` es `true`, la puerta ya habrá pedido la confirmación antes de llegar aquí.
-6. Publica `overlay.hands{on:true}` y `overlay.trail`, y lanza `act` en el helper (`confirmed = ctx.confirmed`). Por cada `act.progress` publica `overlay.hands{step}` y actualiza `overlay.trail`.
+6. Publica `overlay.hands{on:true}` y `overlay.trail`, y lanza `act` en el helper. Con `ctx.confirmed`, cada paso arriesgado que nombró el resumen va solo y con `confirmed`, y el resto va sin él (revisión I1). Por cada `act.progress` publica `overlay.hands{step}` y actualiza `overlay.trail`.
 7. Al acabar, `overlay.hands{on:false}`. El resultado lleva una lectura nueva (`read_id`) en el sobre.
 
-En la confirmación: `resolve_targets` devuelve `{window_id, pid, app_id, frame}` y, si cambian antes de aprobar, `conflict`. El `summary` lo calcula el backend: «Vas a usar «{app}»: 1. clic en «Archivo»; 2. escribir 24 caracteres; 3. pulsar ctrl+s. {motivo}». El texto tecleado nunca aparece, solo su longitud.
+En la confirmación: `resolve_targets` devuelve `{window_id, pid, app_id, frame}` y, si cambian antes de aprobar, `conflict`. El `summary` lo calcula el backend y siempre nombra la app y el título de la ventana: «Vas a usar «{app}», ventana «{título}»: 1. clic en «Archivo»; 2. escribir 24 caracteres; 3. pulsar ctrl+s. {motivo}». El texto tecleado nunca aparece, solo su longitud.
 
 ```json
-{"steps":[{"do":"click_text","text":"Archivo"},{"do":"click_text","text":"Exportar como PDF"},{"do":"key","combo":"Return"}],"confirm":false}
+{"window_id":"2147483712","steps":[{"do":"click_text","text":"Archivo"},{"do":"click_text","text":"Exportar como PDF"},{"do":"key","combo":"Return"}],"confirm":false}
 → data: {"act_id":"e41b…","status":"done","steps":[{"index":0,"do":"click_text","status":"ok"},{"index":1,"do":"click_text","status":"ok"},
           {"index":2,"do":"key","status":"ok"}],"window":{…},"read_id":"b802…","envelope":{…}}
 // con un paso arriesgado y confirm=false

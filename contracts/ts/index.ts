@@ -90,7 +90,7 @@ export type TimeBlockStatus = "planned" | "in_progress" | "done" | "skipped" | "
 export type TurnStatus = "queued" | "running" | "completed" | "failed" | "cancelled" | "interrupted";
 
 export interface ActInAppArgs {
-  window_id?: string | null;
+  window_id: string;
   steps: (StepClickText | StepClick | StepClickAt | StepFill | StepChoose | StepType | StepKey | StepScroll | StepHover | StepFocus | StepSet | StepWait)[];
   read_id?: string | null;
   shot_id?: string | null;

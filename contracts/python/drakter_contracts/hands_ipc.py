@@ -139,8 +139,9 @@ class HAtspiFindResult(BaseModel):
 class HAct(ContractModel):
     """Plan ya validado por el backend. `click_at` llega convertido a px lógicos (`x`, `y` globales).
 
-    `confirmed`: el usuario aprobó este plan (pipeline de confirmación). Sin él, el helper rechaza los pasos
-    RISKY por su cuenta (`risky_step`). Siempre rechaza HANDS_OFF, ventanas de Drakter y campos secretos.
+    `confirmed`: el usuario aprobó este paso (pipeline de confirmación). Solo vale en planes de un paso: el
+    backend manda cada paso aprobado solo. Sin él, el helper rechaza los pasos RISKY por su cuenta
+    (`risky_step`). Siempre rechaza HANDS_OFF, ventanas de Drakter y campos secretos.
     """
 
     act_id: str
@@ -242,7 +243,7 @@ HELPER_EVTS: Final[dict[str, type[BaseModel]]] = {
 HELPER_ERROR_CODES: Final = (
     "companion_unavailable", "accessibility_unavailable", "input_unavailable", "window_not_found",
     "window_changed", "hands_off_app", "drakter_window", "risky_step", "secret_field", "step_failed",
-    "capture_failed", "rate_limited", "validation_error", "internal_error",
+    "capture_failed", "rate_limited", "validation_error", "internal_error", "secret_window",
 )
 
 
