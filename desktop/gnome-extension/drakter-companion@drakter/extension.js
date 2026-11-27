@@ -803,7 +803,14 @@ export default class DrakterCompanion extends Extension {
         this._floating.add(w);
         w.make_above();
         w.stick();
-        w.notify('skip-taskbar'); // the overview drops it (workspace.js listens to this)
+        // NEVER w.notify('skip-taskbar') here: ShellApp (C) counts its
+        // "interesting" windows on every notify::skip-taskbar, assuming the
+        // value really changed. A fake notify (the C value does not change)
+        // corrupts the count; when the window closes the app stays RUNNING
+        // with no running_state and gnome-shell 50.1 segfaults in
+        // shell_app_compare() <- shell_window_tracker_get_app_from_pid().
+        // Cost: an overview that is already open keeps showing the window
+        // until it is reopened.
         this._placeFloating(w);
         // The first map may override the placement: apply it again then.
         w._drakterShownId = w.connect('shown', () => this._placeFloating(w));
@@ -849,8 +856,7 @@ export default class DrakterCompanion extends Extension {
                     w.disconnect(w._drakterShownId);
                 delete w._drakterShownId;
                 w.unmake_above();
-                w.unstick();
-                w.notify('skip-taskbar');
+                w.unstick(); // no notify('skip-taskbar'): see _maybeFloat
             } catch {}
         }
         for (const [actor, reactive] of this._reactiveSaved) {
