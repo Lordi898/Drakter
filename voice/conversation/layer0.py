@@ -2,7 +2,8 @@
 
 `classify` es puro (firma congelada en voice/ports.py §4.7). Lo usan `DrakterStartStrategy`
 (barge-in con el bot hablando) y el puente de WP1 (cada turno final). `classify_ui` (modo Jarvis,
-W5) va aparte para no tocar esa firma: también es puro y lo usa solo el puente.
+W5) y `classify_floating` (modo flotante) van aparte para no tocar esa firma: también son puros y los
+usa solo el puente.
 """
 
 from __future__ import annotations
@@ -16,6 +17,7 @@ from typing import Any, Literal
 
 Command = Literal["stop_speech", "rest", "close", "backchannel"]
 UiCommand = Literal["ui_jarvis", "ui_drakter"]
+FloatingCommand = Literal["ui_floating_on", "ui_floating_off"]
 AppearanceKind = Literal["avatar", "layout"]
 
 _TOML = Path(__file__).with_name("layer0.es.toml")
@@ -62,6 +64,8 @@ def _lists() -> dict[str, object]:
         "ui_canon": canon,
         "ui_jarvis": ui_phrases("ui_jarvis"),
         "ui_drakter": ui_phrases("ui_drakter"),
+        "ui_floating_on": phrases(raw.get("ui_floating_on", {}).get("phrases", [])),
+        "ui_floating_off": phrases(raw.get("ui_floating_off", {}).get("phrases", [])),
         "appearance": _appearance_lists(raw.get("ui_appearance", {}), phrases),
     }
 
@@ -154,6 +158,24 @@ def classify_ui(text: str) -> UiCommand | None:
         return "ui_jarvis"
     if _only_phrase(tokens, lists["ui_drakter"], fillers):  # type: ignore[arg-type]
         return "ui_drakter"
+    return None
+
+
+def classify_floating(text: str) -> FloatingCommand | None:
+    """Orden local del modo flotante (`[ui_floating_on]`/`[ui_floating_off]`), o `None`.
+
+    Como `classify_ui`: solo la frase entera más muletillas. «¿Qué es el modo flotante?» va al agente.
+    Se mira antes el apagado: «quita el modo flotante» contiene «modo flotante».
+    """
+    lists = _lists()
+    tokens = normalize(text)
+    if not tokens:
+        return None
+    fillers: frozenset[str] = lists["fillers"]  # type: ignore[assignment]
+    if _only_phrase(tokens, lists["ui_floating_off"], fillers):  # type: ignore[arg-type]
+        return "ui_floating_off"
+    if _only_phrase(tokens, lists["ui_floating_on"], fillers):  # type: ignore[arg-type]
+        return "ui_floating_on"
     return None
 
 

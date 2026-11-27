@@ -85,6 +85,9 @@ ErrorFn = Callable[[str], None]
 UiModeFn = Callable[[Literal["jarvis", "drakter"], str], str]
 # (avatar, layout, utt_id) → resultado de publicar `ui.appearance` (`request_ui_appearance`).
 UiAppearanceFn = Callable[[str | None, str | None, str], str]
+# (acción, utt_id) → resultado de pedir el modo flotante (`request_ui_floating`, docs/floating/CONTRACT.md §10):
+# `ok`, `rate_limited`, `unavailable` o `no_companion` (la última presencia dice que la extensión no está lista).
+UiFloatingFn = Callable[[Literal["on", "off"], str], str]
 
 
 class VoicePolicy:
@@ -99,6 +102,7 @@ class VoicePolicy:
         min_words: int,
         ui_mode: UiModeFn | None = None,
         ui_appearance: UiAppearanceFn | None = None,
+        ui_floating: UiFloatingFn | None = None,
     ) -> None:
         self._runtime = runtime
         self._speech = speech
@@ -108,6 +112,7 @@ class VoicePolicy:
         self._min_words = min_words
         self._ui_mode = ui_mode
         self._ui_appearance = ui_appearance
+        self._ui_floating = ui_floating
         self._queued: list[str] = []
         self._pending_confirmations: set[str] = set()
         self._reminded: set[str] = set()  # recordado ya en un turno de voz: una vez por acción
@@ -158,6 +163,15 @@ class VoicePolicy:
             meta["ui"] = (
                 self._ui_appearance(evt.avatar, evt.layout, evt.utt_id) if self._ui_appearance else "unavailable"
             )
+        elif evt.command in ("ui_floating_on", "ui_floating_off"):
+            # La voz no dice nada por su cuenta: la frase depende de si se pudo publicar.
+            action: Literal["on", "off"] = "on" if evt.command == "ui_floating_on" else "off"
+            result = self._ui_floating(action, evt.utt_id) if self._ui_floating else "unavailable"
+            meta["ui"] = result
+            if result == "ok":
+                self._speech.phrase(evt.command)
+            elif result in ("unavailable", "no_companion"):
+                self._speech.phrase("floating_unavailable")
         await self._audit("voice.local_command", meta)
 
     async def turn_ended(self) -> None:

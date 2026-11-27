@@ -29,6 +29,7 @@ PhraseKey = Literal[
     "ack_1", "ack_2", "ack_3", "wait_1", "wait_2", "wait_3", "tool_generic", "confirm_on_screen",
     "rest_on_screen", "busy", "job_started", "job_done", "job_failed", "tts_fallback", "offline",
     "idle_nudge", "goodbye", "ui_jarvis", "ui_drakter", "ui_avatar", "ui_layout",
+    "ui_floating_on", "ui_floating_off", "floating_unavailable",
 ]
 PHRASE_KEYS: Final[tuple[str, ...]] = get_args(PhraseKey)
 

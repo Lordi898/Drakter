@@ -50,3 +50,12 @@ ui_jarvis = ["Modo Jarvis activado, señor.", "Interfaz holográfica en pantalla
 ui_drakter = ["De vuelta en Drakter, señor.", "Vuelvo a la interfaz de siempre, señor Imanol.", "Modo Drakter, señor Magaña."]
 ui_avatar = ["Avatar cambiado, señor.", "Ahí tiene su nuevo avatar, señor Imanol.", "Cambio de avatar hecho, señor Magaña."]
 ui_layout = ["Interfaz cambiada, señor.", "Le pongo esa interfaz, señor Imanol.", "Cambio de interfaz hecho, señor Magaña."]
+
+# Modo flotante (capa 0 de la voz, docs/floating/CONTRACT.md §10): las dice el backend tras publicar
+# `ui.floating`, o `floating_unavailable` si la extensión de GNOME no está lista.
+ui_floating_on = ["Modo flotante activado, señor.", "Le acompaño por la pantalla, señor Imanol.", "Paso al modo flotante, señor Magaña."]
+ui_floating_off = ["Vuelvo a la ventana, señor.", "Modo flotante desactivado, señor Imanol.", "De vuelta en la ventana, señor Magaña."]
+floating_unavailable = [
+    "Señor, el modo flotante no está disponible: falta la extensión de GNOME.",
+    "No puedo flotar ahora mismo, señor Imanol: la extensión de GNOME no responde.",
+]

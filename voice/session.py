@@ -7,6 +7,7 @@ modo (`set_mode`) y de `connected`, y despacha los comandos IPC de `voice_ipc` (
 
 from __future__ import annotations
 
+import asyncio
 import dataclasses
 import logging
 import threading
@@ -99,6 +100,7 @@ class Session:
         self._mixer: Any = None
         self._voice_pending = False
         self._errors_sent: dict[str, float] = {}  # código → último aviso (report_error)
+        self._tasks: set[asyncio.Task[None]] = set()
 
     # ── pipeline activo ─────────────────────────────────────────────────────
     def new_mixer(self) -> Any:
@@ -127,6 +129,13 @@ class Session:
             self._publish(type, payload)
         except (ValueError, ValidationError) as exc:
             log.error("event_rejected", extra={"data": {"type": type, "error": type_name(exc)}})
+        if type == "voice.playback" and payload.get("state") == "finished" and self._parts is not None:
+            # FIFO de beats: el siguiente tramo arranca cuando el tracker termine de cerrar este.
+            task = asyncio.get_running_loop().create_task(
+                self._parts.bridge.on_playback_done(int(payload.get("speech_id", -1)))
+            )
+            self._tasks.add(task)
+            task.add_done_callback(self._tasks.discard)
 
     async def report_error(self, code: str, stage: str, recoverable: bool) -> None:
         """`voice.error` con su texto corto, una vez por código cada `REPEAT_S`. Nunca lanza."""
@@ -283,6 +292,10 @@ class Session:
                 await bridge.speak_flush(payload.speech_id)
             case ipc.CmdSpeakClose() if bridge:
                 await bridge.speak_close(payload.speech_id)
+            case ipc.CmdSpeakBeat():
+                # Sin conexión no hay quien lo diga: el overlay usa su reloj local.
+                ignored = bridge is None or await bridge.speak_beat(payload.turn_id, payload.speech_id, payload.text)
+                return {"ignored": ignored}
             case ipc.CmdSpeakStop() if bridge:
                 await bridge.speak_stop(payload.speech_id, payload.reason)
             case ipc.CmdSpeakPhrase():
@@ -291,7 +304,8 @@ class Session:
                 self.state.turn_id, self.state.turn_phase = payload.turn_id, payload.phase
                 if bridge:
                     await bridge.turn_phase(payload.phase)
-                if payload.phase == "executing":
+                # `draw` y `guide_wait` hablan con sus beats: sin «un momento» entre medias.
+                if payload.phase == "executing" and payload.tool not in ("draw", "guide_wait"):
                     await self.on_tool(payload.turn_id)
             case ipc.CmdVoiceConfig():
                 await self.apply_config(payload)

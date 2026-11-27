@@ -29,6 +29,16 @@ _QUEUE_SIZE: Final = 4096
 _SENTENCE_END: Final = re.compile(r"[.!?…](?=\s|$)|\n")
 # monotonic per backend process (plan §4.2)
 _speech_ids: Final = itertools.count(1)
+# Herramientas del modo flotante que hablan con `speak.beat` (docs/floating/CONTRACT.md §10): al empezar,
+# el tramo del turno se cierra en vez de partirse con `speak.flush`, y lo que diga el modelo después va
+# en un tramo nuevo, detrás de los beats (FIFO por turno en la voz).
+_BEAT_TOOLS: Final = frozenset({"draw", "guide_wait"})
+_BEAT_TIMEOUT_S: Final = 5.0
+
+
+def reserve_speech_id() -> int:
+    """Un `speech_id` del mismo contador monótono que los tramos de respuesta."""
+    return next(_speech_ids)
 
 
 class TapObserver(Protocol):
@@ -53,6 +63,7 @@ class _Turn:
     source: Source
     speech: _Speech | None = None
     got_delta: bool = False
+    reopen: bool = False  # tras un `draw`/`guide_wait`: el siguiente delta abre un tramo nuevo
 
 
 class VoiceBridge:
@@ -122,6 +133,23 @@ class VoiceBridge:
         """Any other fire-and-forget command (`voice.config`)."""
         self._put("raw", type, dict(payload))
 
+    async def beat(self, turn_id: str, speech_id: int, guide_id: str, beat: int, text: str) -> bool:
+        """`speak.beat` por la misma cola (respeta el orden con el resto de `speak.*`).
+
+        `True` si la voz lo aceptó (`ignored:false`). Nunca lanza: sin voz, `False`.
+        """
+        if not self._tts_enabled():
+            return False
+        future: asyncio.Future[bool] = asyncio.get_running_loop().create_future()
+        payload = {"turn_id": turn_id, "speech_id": speech_id, "guide_id": guide_id, "beat": beat, "text": text}
+        self._put("beat", payload, future)
+        try:
+            return await asyncio.wait_for(asyncio.shield(future), _BEAT_TIMEOUT_S)
+        except (TimeoutError, asyncio.CancelledError):
+            if not future.done():
+                future.cancel()
+            return False
+
     def session_of(self, turn_id: UUID) -> UUID | None:
         turn = self._turns.get(turn_id)
         return turn.session_id if turn else self._ended.get(turn_id)
@@ -190,6 +218,9 @@ class VoiceBridge:
         if not turn.got_delta:
             turn.got_delta = True
             self._observer.first_delta(turn_id)
+        if turn.reopen:
+            turn.reopen = False
+            await self._open(turn_id, turn)
         speech = turn.speech
         if speech is None or not speech.open:
             return
@@ -225,7 +256,12 @@ class VoiceBridge:
         turn = self._turns.get(turn_id)
         if turn is None:
             return
-        if turn.speech is not None and turn.speech.open:
+        if tool in _BEAT_TOOLS:
+            # Sin flush: el tramo de antes se cierra y lo que venga después suena tras los beats.
+            if turn.speech is not None and turn.speech.open:
+                await self._close(turn, "completed")
+                turn.reopen = True
+        elif turn.speech is not None and turn.speech.open:
             await self._send("speak.flush", {"speech_id": turn.speech.speech_id})
         await self._send(
             "turn.phase", {"turn_id": str(turn_id), "phase": "executing", "tool": tool[:64]}
@@ -271,6 +307,16 @@ class VoiceBridge:
         for turn in self._turns.values():
             if turn.speech is not None and turn.speech.speech_id == speech_id:
                 turn.speech.open = False
+
+    async def _do_beat(self, payload: dict[str, Any], future: asyncio.Future[bool]) -> None:
+        accepted = False
+        try:
+            if self._tts_enabled():
+                result = await self._send("speak.beat", payload)
+                accepted = result.get("ignored") is False
+        finally:
+            if not future.done():
+                future.set_result(accepted)
 
     async def _do_raw(self, type: str, payload: dict[str, Any]) -> None:
         await self._send(type, payload)
