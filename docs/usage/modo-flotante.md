@@ -1,6 +1,6 @@
 # Modo flotante
 
-> **Estado:** en construcción (2026-11-27). La interfaz de la ventana principal (botones, atajo, ayuda y ajustes) está hecha; la ventana flotante, la extensión de GNOME y las herramientas de dibujo y de manos llegan con la integración del modo. Esta guía describe el comportamiento previsto en `docs/floating/CONTRACT.md`.
+> **Estado:** integrado en `main` (PRs #76 y #77, 2026-11-28). Comprobado de punta a punta en un GNOME Shell 50 aislado, con la extensión, la ventana flotante, el dibujo, la guía, la visión, las manos y las confirmaciones. «Dejar que Drakter vea mi pantalla» y «Dejar que Drakter use mis apps» vienen **apagados** y solo se encienden en Ajustes. Pendiente: la prueba en una sesión real, después de instalar la extensión y volver a entrar.
 
 En el modo flotante Drakter sale de su ventana: **JARVIS** se convierte en un avatar pequeño que flota encima de todas tus apps, sigue al cursor y te habla. Puede mirar la pantalla cuando se lo pides, señalarte dónde pulsar, guiarte paso a paso esperando tu clic y, si tú lo permites, usar otras apps por ti.
 
@@ -56,7 +56,7 @@ Al activarlo, la ventana principal se esconde en la bandeja: el avatar ya hace s
 
 ## Qué hace JARVIS mientras flota
 
-- **Sigue al cursor** por toda la pantalla sin robarte el foco: escribes y pulsas en tus apps como siempre. Solo es clicable donde dibuja algo.
+- **Aparece junto al cursor** cuando le hablas o te responde, como en Roamies. En reposo no te sigue: se queda donde estaba, y después de dibujar se aparca en un borde. Nunca te roba el foco: escribes y pulsas en tus apps como siempre. Solo es clicable donde dibuja algo.
 - **Te escucha y te habla:** la esfera se mueve con su voz y la píldora de escucha con tu micrófono.
 - **Mira la pantalla** cuando se lo pides («¿cómo exporto esto a PDF?»), señala dónde pulsar y espera a que lo hagas antes de pasar al siguiente paso.
 - **Dibuja tarjetas y esquemas** en una zona libre («hazme un esquema de la fotosíntesis»). `Esc` los borra.
