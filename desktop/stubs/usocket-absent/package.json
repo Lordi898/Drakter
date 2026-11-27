@@ -1,0 +1,8 @@
+{
+  "name": "usocket",
+  "version": "0.0.0-drakter-absent",
+  "private": true,
+  "description": "Stub de Drakter: sustituye la dependencia opcional usocket de dbus-next (ver docs/DECISIONS.md). dbus-next cae a net.createConnection con unix:path=.",
+  "license": "AGPL-3.0-only",
+  "main": "index.js"
+}
