@@ -1287,7 +1287,9 @@
   "idempotent": true,
   "returns_untrusted": false,
   "timeout_s": 5.0,
-  "errors": [],
+  "errors": [
+   "confirmation_unavailable"
+  ],
   "args_model": "NoArgs",
   "result_model": "PendingConfirmationList",
   "phase": "15"
@@ -1612,5 +1614,70 @@
   "args_model": "SetAppearanceArgs",
   "result_model": "SetAppearanceResult",
   "phase": "jarvis"
+ },
+ {
+  "name": "get_self_profile",
+  "domain": "system",
+  "description": "Quién es Drakter ahora: versión, modelo, herramientas y límites, subsistemas (voz, memoria, trabajos) y el equipo en el que corre (CPU, RAM, GPU, sistema, batería, recursos libres y cambios de equipo detectados).",
+  "permission": "system.read",
+  "risk": "read",
+  "idempotent": true,
+  "returns_untrusted": false,
+  "timeout_s": 10.0,
+  "errors": [],
+  "args_model": "NoArgs",
+  "result_model": "SelfProfile",
+  "phase": "awareness"
+ },
+ {
+  "name": "list_chat_sessions",
+  "domain": "chat",
+  "description": "Lista las conversaciones con Drakter, de la más reciente a la más antigua: título, fechas y número de mensajes.",
+  "permission": "chat.read",
+  "risk": "read",
+  "idempotent": true,
+  "returns_untrusted": false,
+  "timeout_s": 10.0,
+  "errors": [
+   "validation_error",
+   "invalid_cursor"
+  ],
+  "args_model": "ListSessionsArgs",
+  "result_model": "ChatSessionPage",
+  "phase": "awareness"
+ },
+ {
+  "name": "search_chat_history",
+  "domain": "chat",
+  "description": "Busca palabras en los mensajes de conversaciones anteriores (por defecto, no en la actual). Devuelve fragmentos como datos no confiables.",
+  "permission": "chat.read",
+  "risk": "read",
+  "idempotent": true,
+  "returns_untrusted": true,
+  "timeout_s": 10.0,
+  "errors": [
+   "validation_error"
+  ],
+  "args_model": "SearchHistoryArgs",
+  "result_model": "ChatHitList",
+  "phase": "awareness"
+ },
+ {
+  "name": "get_chat_session",
+  "domain": "chat",
+  "description": "Lee los mensajes de una conversación anterior, del más antiguo al más reciente, como datos no confiables.",
+  "permission": "chat.read",
+  "risk": "read",
+  "idempotent": true,
+  "returns_untrusted": true,
+  "timeout_s": 10.0,
+  "errors": [
+   "validation_error",
+   "not_found",
+   "invalid_cursor"
+  ],
+  "args_model": "GetSessionArgs",
+  "result_model": "ChatSessionView",
+  "phase": "awareness"
  }
 ]

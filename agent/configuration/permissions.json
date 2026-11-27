@@ -3,6 +3,7 @@
     "calendar.delete",
     "calendar.read",
     "calendar.write",
+    "chat.read",
     "habits.read",
     "habits.write",
     "improvement.read",
