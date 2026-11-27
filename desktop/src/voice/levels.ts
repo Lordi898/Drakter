@@ -35,6 +35,8 @@ const nodes: Record<AudioTap, TapNode | null> = { input: null, output: null }
 let allUsers = 0
 let outputOnlyUsers = 0
 let ctx: AudioContext | null = null
+/** Con el modo flotante activo la ventana se oculta, pero sus niveles siguen haciendo falta (§4.4). */
+let awakeHolders = 0
 let bandEdges: Uint16Array | null = null // SPECTRUM_BANDS + 1 índices de bin
 const freq = new Uint8Array(TIME_DOMAIN_SAMPLES / 2)
 const time = new Float32Array(TIME_DOMAIN_SAMPLES)
@@ -47,7 +49,7 @@ function wanted(tap: AudioTap): boolean {
 
 function onVisibility(): void {
   if (!ctx) return
-  if (document.hidden) void ctx.suspend().catch(() => undefined)
+  if (document.hidden && awakeHolders === 0) void ctx.suspend().catch(() => undefined)
   else void ctx.resume().catch(() => undefined)
 }
 
@@ -161,6 +163,22 @@ export function acquireAudioTaps(): () => void {
     released = true
     allUsers -= 1
     reconcile()
+  }
+}
+
+/**
+ * Impide que el contexto se suspenda con la ventana oculta mientras se mantenga (modo flotante).
+ * Devuelve la baja (idempotente).
+ */
+export function holdAudioAwake(): () => void {
+  awakeHolders += 1
+  onVisibility()
+  let released = false
+  return () => {
+    if (released) return
+    released = true
+    awakeHolders -= 1
+    onVisibility()
   }
 }
 

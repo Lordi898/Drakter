@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { PageHeader } from '@/components/PageHeader'
 import { ErrorBoundary } from '@/components/errors/ErrorBoundary'
 import { ErrorProbe } from '@/components/errors/ErrorProbe'
+import { FloatingSection } from '@/floating/FloatingSection'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
@@ -155,6 +156,8 @@ export function SettingsPage() {
       <AvatarSection />
 
       <JarvisSection />
+
+      <FloatingSection />
 
       <Section title="Notificaciones">
         <RemindersNotice />

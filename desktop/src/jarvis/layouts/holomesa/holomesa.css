@@ -51,7 +51,7 @@
 .hm-btn.warn { border-color: rgba(255, 176, 80, 0.6) !important; color: #ffd9a8 !important; }
 
 /* Barra superior (la esquina derecha la reserva el anfitrión: selector de interfaz y «Volver a Drakter»). */
-.hm-top { position: absolute; top: 18px; left: 26px; right: 360px; height: 52px; display: flex; align-items: center; gap: 18px; }
+.hm-top { position: absolute; top: 18px; left: 26px; right: 400px; height: 52px; display: flex; align-items: center; gap: 18px; }
 .hm-top > * { pointer-events: auto; }
 .hm-mark { display: flex; align-items: center; gap: 11px; }
 .hm-mark svg { width: 32px; height: 32px; }

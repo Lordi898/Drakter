@@ -1,6 +1,7 @@
 import { Suspense, useEffect, useLayoutEffect, useRef, useSyncExternalStore } from 'react'
 import { PanelRightClose, PanelRightOpen } from 'lucide-react'
 import { JarvisModeButton } from '@/app/JarvisModeButton'
+import { FloatingButton } from '@/floating'
 import { toggleContextPanel, useAppShortcuts } from '@/app/useAppShortcuts'
 import { ChatDock } from '@/chat/ChatDock'
 import { ContextPanel } from '@/components/context/ContextPanel'
@@ -86,6 +87,7 @@ export function AppShell() {
         )}
       >
         <header className="flex shrink-0 items-center justify-end gap-1 px-3 pt-2.5">
+          <FloatingButton variant="drakter" />
           <JarvisModeButton />
           <NotificationCenter />
           {wide && <ContextPanelToggle expanded={contextPanelOpen} />}
