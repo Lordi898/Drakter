@@ -15,7 +15,7 @@ import {
 } from '../../shared/floating'
 import { FLOATING_CHANNELS } from '../../shared/bridge'
 import { callNamedOperation } from '../apiProxy'
-import { requestApproval } from '../approvals'
+import { APPROVAL_TITLE, requestApproval } from '../approvals'
 import type { BackendHost } from '../host-types'
 import { describeError, logError } from '../log'
 import { activateVoice } from '../tray'
@@ -101,7 +101,7 @@ export class FloatingController {
       followPointer: () => void this.followPointer(),
       followRect: (x, y) => void this.followAt(x, y),
       uiFloating: (request) => this.onUiFloating(request),
-      approve: (actionId) => void requestApproval(this.backend, actionId),
+      approve: (actionId) => this.approve(actionId),
       copy: (text) => clipboard.writeText(text),
       drawDiscarded: (guideId) => void postOverlayEvent(this.backend, { type: 'draw_done', guide_id: guideId })
     })
@@ -283,6 +283,33 @@ export class FloatingController {
       this.reason = 'No se ha podido mostrar a Drakter en modo flotante. Inténtalo de nuevo.'
       this.publish()
       notify('Modo flotante', this.reason)
+    }
+  }
+
+  /**
+   * Diálogo nativo de confirmación con la principal oculta (D-13). Sin padre ni foco, GNOME no lo trae al
+   * frente (solo avisa con «"Confirmar acción" está preparado»): la extensión lo activa en cuanto aparece.
+   */
+  private approve(actionId: string): void {
+    void requestApproval(this.backend, actionId)
+    void this.raiseApproval()
+  }
+
+  private async raiseApproval(): Promise<void> {
+    for (let i = 0; i < 30; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 100))
+      try {
+        const dialog = (await this.companion.listWindows()).find(
+          (w) => !w.floating && w.pid === process.pid && w.title === APPROVAL_TITLE && w.id !== null
+        )
+        if (dialog?.id) {
+          await this.companion.activateWindow(dialog.id)
+          return
+        }
+      } catch (error) {
+        logError(SCOPE, 'No se pudo traer al frente la confirmación', describeError(error))
+        return
+      }
     }
   }
 

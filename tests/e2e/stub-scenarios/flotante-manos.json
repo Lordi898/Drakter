@@ -1,0 +1,16 @@
+{
+  "description": "Modo flotante: act_in_app pulsa «7» en la ventana activa (gnome-calculator). Tras look_screen la sesión está contaminada, así que debe quedar pendiente de confirmación.",
+  "steps": [
+    {
+      "text": "Pulso el 7 en la calculadora.",
+      "tool_calls": [{"name": "drakter__act_in_app", "input": {"steps": [{"do": "click_text", "text": "7"}]}}]
+    },
+    {
+      "text": "FALLO: act_in_app no pidió confirmación en una sesión contaminada. {{tool_result}}",
+      "branches": [
+        {"contains": "confirmation_required", "text": "Pendiente de tu confirmación. {{tool_result}}"},
+        {"contains": "hands_disabled", "text": "FALLO: las manos están apagadas. {{tool_result}}"}
+      ]
+    }
+  ]
+}

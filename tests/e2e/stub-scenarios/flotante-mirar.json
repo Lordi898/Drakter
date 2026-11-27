@@ -1,0 +1,10 @@
+{
+  "description": "Modo flotante: look_screen de toda la pantalla. La captura vuelve como ImageContent y Hermes la pasa al modelo como bloque image (image_input_mode native); la sesión queda contaminada.",
+  "steps": [
+    {
+      "text": "Miro tu pantalla.",
+      "tool_calls": [{"name": "drakter__look_screen", "input": {"target": "screen"}}]
+    },
+    {"text": "Pantalla vista. {{tool_result}}"}
+  ]
+}

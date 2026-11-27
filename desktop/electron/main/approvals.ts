@@ -9,6 +9,9 @@ import type { BackendHost } from './host-types'
 import { describeError, logError } from './log'
 import { getMainWindow } from './window'
 
+/** Título del diálogo nativo: el modo flotante lo busca por él para traerlo al frente. */
+export const APPROVAL_TITLE = 'Confirmar acción'
+
 export const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const READY_TIMEOUT_MS = 10_000
 const DETAIL_TIMEOUT_MS = 15_000
@@ -88,7 +91,7 @@ async function runApproval(host: BackendHost, id: string): Promise<ApprovalOutco
     if (risk) lines.push(`Riesgo: ${risk}`)
     const options = {
       type: 'warning' as const,
-      title: 'Confirmar acción',
+      title: APPROVAL_TITLE,
       message,
       detail: lines.join('\n'),
       buttons: ['Cancelar', 'Aprobar'],

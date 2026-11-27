@@ -1,0 +1,18 @@
+{
+  "description": "Modo flotante: draw con un ring sobre el botón «Siguiente» de la ventana activa y wait:'click', luego guide_wait con el guide_id devuelto y un segundo beat sobre «Terminar».",
+  "steps": [
+    {
+      "text": "Te lo enseño en pantalla.",
+      "tool_calls": [{"name": "drakter__draw", "input": {"target": "front", "beats": [
+        {"say": "Primero, pulsa aquí en Siguiente.", "wait": "click", "marks": [{"kind": "ring", "at": {"text": "Siguiente"}}]},
+        {"say": "Y aquí terminas.", "marks": [{"kind": "target", "at": {"text": "Terminar"}}]}
+      ]}}]
+    },
+    {
+      "text": "Espero a que pulses.",
+      "tool_calls": [{"name": "drakter__guide_wait", "input": {"guide_id": "{{result_guide_id}}"}}],
+      "branches": [{"contains": "\"status\":\"done\"", "text": "FALLO: draw no esperó el clic. {{tool_result}}"}]
+    },
+    {"text": "Guía terminada. {{tool_result}}"}
+  ]
+}

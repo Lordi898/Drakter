@@ -1,0 +1,13 @@
+{
+  "description": "Modo flotante: draw con una tarjeta mindmap sin objetivo en pantalla; el overlay la coloca en zona libre.",
+  "steps": [
+    {
+      "text": "Te lo resumo en un mapa.",
+      "tool_calls": [{"name": "drakter__draw", "input": {"beats": [
+        {"say": "Así se organiza la fotosíntesis.", "marks": [{"kind": "mindmap", "title": "Fotosíntesis",
+          "branches": [{"text": "Luz"}, {"text": "Agua"}, {"text": "Dióxido de carbono"}]}]}
+      ]}}]
+    },
+    {"text": "Mapa dibujado. {{tool_result}}"}
+  ]
+}

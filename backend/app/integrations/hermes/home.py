@@ -207,7 +207,10 @@ def _normalize_tool_names(tool_names: Sequence[str]) -> list[str]:
 def _render_model(s: AgentSettings) -> dict[str, Any]:
     model: dict[str, Any] = {"default": s.model_name, "context_length": CONTEXT_LENGTH}
     if s.model_provider == "dev_stub":
-        return {**model, "provider": "custom", "api_mode": "anthropic_messages", "base_url": s.dev_stub_url}
+        # `supports_vision`: a custom provider is not in Hermes' catalog, so without it MCP images stay
+        # `MEDIA:<path>` text. Declared so the stub runs the same native image lane as Haiku (floating §8.1.2).
+        return {**model, "provider": "custom", "api_mode": "anthropic_messages", "base_url": s.dev_stub_url,
+                "supports_vision": True}
     return {**model, "provider": "anthropic"}
 
 

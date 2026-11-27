@@ -19,7 +19,10 @@ const STOP_GRACE_MS = 5000
 const STOP_TERM_MS = 2000
 const ENV_ALLOWLIST = [
   'PATH', 'HOME', 'USER', 'LANG', 'LC_ALL', 'TZ',
-  'XDG_DATA_HOME', 'XDG_CONFIG_HOME', 'XDG_RUNTIME_DIR', 'DRAKTER_DATA_DIR'
+  'XDG_DATA_HOME', 'XDG_CONFIG_HOME', 'XDG_RUNTIME_DIR', 'DRAKTER_DATA_DIR',
+  // Modo flotante: el helper de manos (lo lanza el backend) habla con la extensión, Mutter y AT-SPI
+  // por el bus de sesión; sin esto solo funciona si el bus está en $XDG_RUNTIME_DIR/bus.
+  'DBUS_SESSION_BUS_ADDRESS', 'XDG_SESSION_TYPE', 'XDG_CURRENT_DESKTOP'
 ] as const
 
 /** Solo en desarrollo: elegir el stub sin tocar ~/.config/drakter/.env. El backend rechaza dev_stub en producción. */

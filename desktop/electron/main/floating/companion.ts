@@ -32,6 +32,7 @@ export interface CompanionWindow {
   readonly frame: Rect | null
   readonly monitor: number | null
   readonly pid: number | null
+  readonly title: string | null
   /** Es la ventana flotante (regla de `SetFloatingWindow`). */
   readonly floating: boolean
 }
@@ -132,6 +133,7 @@ export function parseWindow(raw: unknown): CompanionWindow {
     frame: rect(d['frame']),
     monitor: Number.isFinite(num(d['monitor'])) ? num(d['monitor']) : null,
     pid: Number.isFinite(num(d['pid'])) ? num(d['pid']) : null,
+    title: typeof d['title'] === 'string' ? d['title'] : null,
     floating: d['floating'] === true
   }
 }
@@ -479,6 +481,12 @@ export class CompanionClient {
 
   async setEscapeGrab(enabled: boolean): Promise<void> {
     await this.call('SetEscapeGrab', 'b', [enabled])
+  }
+
+  /** Activa una ventana cliente por su `id` (`false` si no existe o es la flotante). */
+  async activateWindow(id: string): Promise<boolean> {
+    const [ok] = await this.call('ActivateWindow', 't', [BigInt(id)])
+    return ok === true
   }
 
   async setFloatingFocus(on: boolean): Promise<boolean> {
