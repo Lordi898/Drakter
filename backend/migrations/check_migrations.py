@@ -27,6 +27,7 @@ REQUIRED_TRIGGERS = {
     "trg_audit_no_update", "trg_audit_no_delete", "trg_audit_no_replace",
     "trg_pc_transition", "trg_pc_immutable", "trg_pc_no_delete", "trg_pc_no_replace",
     "trg_pc_identity", "trg_pc_born_pending", "trg_pc_closed", "trg_pc_decided_once",
+    "trg_pc_args", "trg_pc_redacted_once", "trg_pc_born_unredacted",
     "trg_search_ai", "trg_search_ad", "trg_search_au",
     "trg_memory_records_ai", "trg_memory_records_au", "trg_memory_records_ad",
     *(f"improvement_proposals_{t}" for t in ("insert_guard", "immutable", "approval_fields", "transitions", "no_delete")),
@@ -186,6 +187,12 @@ def run(root: Path) -> None:
         conn.execute("UPDATE pending_confirmations SET status = 'executed' WHERE id = ?", (cid,))
         rejected(conn, "resuelta no reabre", "UPDATE pending_confirmations SET status = 'approved' WHERE id = ?", (cid,))
         rejected(conn, "confirmacion no se borra", "DELETE FROM pending_confirmations WHERE id = ?", (cid,))
+        rejected(conn, "args sin marca de redaccion", "UPDATE pending_confirmations SET args_json = '{}' WHERE id = ?", (cid,))
+        rejected(conn, "redaccion no cambia el estado", "UPDATE pending_confirmations SET args_json = '{}', redacted_at = ?, error_code = 'x' WHERE id = ?", (NOW, cid))
+        conn.execute("UPDATE pending_confirmations SET args_json = '{\"steps\":\"sha256:0\"}', result_json = '{}', redacted_at = ? WHERE id = ?", (NOW, cid))
+        ok("cerrada se redacta una vez", conn.execute("SELECT redacted_at FROM pending_confirmations WHERE id = ?", (cid,)).fetchone()[0] == NOW)
+        rejected(conn, "redaccion unica", "UPDATE pending_confirmations SET args_json = '{}', redacted_at = 'otra' WHERE id = ?", (cid,))
+        rejected(conn, "no nace redactada", "INSERT INTO pending_confirmations (id, tool_name, actor_type, origin, correlation_id, args_json, args_hash, summary, risk, created_at, expires_at, redacted_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)", (new_id(), "t", "agent", "mcp", "c", "{}", "h", "s", "confirm", NOW, NOW, NOW))
 
         rid = entity(conn, "resource")
         rejected(conn, "traversal en ruta relativa", "INSERT INTO resources (id, title, resource_type, location_id, relative_path) VALUES (?, 'r', 'text', ?, ?)", (rid, new_id(), "a/../b"))
