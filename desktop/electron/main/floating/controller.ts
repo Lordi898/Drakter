@@ -15,7 +15,7 @@ import {
 } from '../../shared/floating'
 import { FLOATING_CHANNELS } from '../../shared/bridge'
 import { callNamedOperation } from '../apiProxy'
-import { APPROVAL_TITLE, requestApproval } from '../approvals'
+import { APPROVAL_TITLE, requestApproval, setApprovalGuard } from '../approvals'
 import type { BackendHost } from '../host-types'
 import { describeError, logError } from '../log'
 import { activateVoice } from '../tray'
@@ -89,6 +89,11 @@ export class FloatingController {
   private lastRectsAt = 0
   private clientRegionLogged = false
   private levelStamps: number[] = []
+  /** Diálogos nativos de aprobación abiertos (de la flotante o de la principal). */
+  private approvalsOpen = 0
+  /** Cómo está oculta la capa mientras hay una aprobación: por la extensión o, si falla, ocultando la ventana. */
+  private hiddenVia: 'extension' | 'window' | null = null
+  private hideQueue: Promise<unknown> = Promise.resolve()
   private stateListeners = new Set<(state: FloatingState) => void>()
 
   constructor(private readonly backend: BackendHost) {
@@ -106,6 +111,7 @@ export class FloatingController {
       drawDiscarded: (guideId) => void postOverlayEvent(this.backend, { type: 'draw_done', guide_id: guideId })
     })
     installFakeCompanion(this.companion, { focusFloating: (on) => this.fakeFocus(on) })
+    setApprovalGuard((open) => this.onApprovalDialog(open))
     this.companion.setBaseSubscription(BASE_SUBSCRIPTION)
     this.companion.on('status', (status) => this.onCompanionStatus(status))
     this.companion.on('shortcut', (name, phase) => this.onShortcut(name, phase))
@@ -250,6 +256,8 @@ export class FloatingController {
         monitor: monitor.index,
         cover: true
       })
+      // Con una aprobación ya abierta, la capa nace oculta (antes de mostrarse por primera vez).
+      if (this.approvalsOpen > 0) await this.setHidden(true)
       win.showInactive()
       if (!found) await deadline(seen, FLOATING_WAIT_MS, 'FloatingWindowChanged')
       this.floatingWaiter = null
@@ -298,6 +306,57 @@ export class FloatingController {
       if (this.live) this.toPage({ kind: 'drakter_dodge', rect: null })
     })
     void this.raiseApproval(() => open)
+  }
+
+  /**
+   * I8: mientras haya un diálogo nativo de aprobación abierto, la capa flotante entera se oculta
+   * (opacidad 0 y todos los clics pasan, en la extensión): ninguna marca ni tarjeta del modelo puede
+   * quedar encima del texto del diálogo. Se restaura al cerrarse el último.
+   */
+  private onApprovalDialog(open: boolean): Promise<void> {
+    this.approvalsOpen = Math.max(0, this.approvalsOpen + (open ? 1 : -1))
+    return this.setHidden(this.approvalsOpen > 0)
+  }
+
+  private setHidden(hidden: boolean): Promise<void> {
+    const run = this.hideQueue.then(() => this.applyHidden(hidden))
+    this.hideQueue = run.catch(() => undefined)
+    return run
+  }
+
+  private async applyHidden(hidden: boolean): Promise<void> {
+    const win = this.win
+    if (!win || win.isDestroyed()) {
+      this.hiddenVia = null
+      return
+    }
+    if (hidden === (this.hiddenVia !== null)) return
+    if (hidden) {
+      let ok = false
+      if (this.companion.status === 'ok') {
+        try {
+          ok = await this.companion.setFloatingHidden(true)
+        } catch (error) {
+          logError(SCOPE, 'SetFloatingHidden fallido: se oculta la ventana', describeError(error))
+        }
+      }
+      if (ok) {
+        this.hiddenVia = 'extension'
+      } else {
+        win.hide()
+        this.hiddenVia = 'window'
+      }
+      return
+    }
+    const via = this.hiddenVia
+    this.hiddenVia = null
+    if (via === 'window') {
+      win.showInactive()
+      return
+    }
+    await this.companion.setFloatingHidden(false).catch((error: unknown) => {
+      logError(SCOPE, 'SetFloatingHidden(false) fallido', describeError(error))
+    })
   }
 
   private async raiseApproval(isOpen: () => boolean): Promise<void> {
@@ -354,6 +413,7 @@ export class FloatingController {
     const win = this.win
     this.win = null
     this.frame = null
+    this.hiddenVia = null // la extensión lo suelta al liberar la ventana
     const ignore = (what: string) => (error: unknown) => logError(SCOPE, `${what} al desactivar`, describeError(error))
     const connected = this.companion.status === 'ok'
     if (connected) {

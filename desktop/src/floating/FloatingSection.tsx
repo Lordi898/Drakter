@@ -13,6 +13,7 @@ import { requestFloating, setFloatingHelpOpen, useFloating } from './store'
 const SIZE_KEY = 'floating_avatar_size'
 const SOUND_KEY = 'floating_sound'
 const HANDS_KEY = 'floating_hands_enabled'
+const SCREEN_KEY = 'floating_screen_enabled'
 
 type AvatarSize = 'default' | 'small' | 'cursor'
 const SIZE_OPTIONS: readonly { readonly value: AvatarSize; readonly label: string }[] = [
@@ -26,18 +27,21 @@ interface FloatingSettings {
   readonly size: AvatarSize
   readonly sound: boolean
   readonly hands: boolean
+  readonly screen: boolean
 }
-const DEFAULTS: FloatingSettings = { size: 'default', sound: true, hands: false }
+const DEFAULTS: FloatingSettings = { size: 'default', sound: true, hands: false, screen: false }
 
 function parse(items: readonly { readonly key: string; readonly value: string | null }[]): FloatingSettings {
   const get = (key: string): string | null => items.find((item) => item.key === key)?.value ?? null
   const size = get(SIZE_KEY)
   const sound = get(SOUND_KEY)
   const hands = get(HANDS_KEY)
+  const screen = get(SCREEN_KEY)
   return {
     size: size !== null && isSize(size) ? size : DEFAULTS.size,
     sound: sound === null ? DEFAULTS.sound : sound === 'true',
-    hands: hands === null ? DEFAULTS.hands : hands === 'true'
+    hands: hands === null ? DEFAULTS.hands : hands === 'true',
+    screen: screen === null ? DEFAULTS.screen : screen === 'true'
   }
 }
 
@@ -65,7 +69,7 @@ function StatusRow() {
   )
 }
 
-/** Sección «Modo flotante» de Ajustes. Los tres ajustes viven en el backend; main los lee al activar. */
+/** Sección «Modo flotante» de Ajustes. Los ajustes viven en el backend; main los lee al activar. */
 export function FloatingSection() {
   const [settings, setSettings] = useState<FloatingSettings | null>(null)
 
@@ -141,6 +145,21 @@ export function FloatingSection() {
               disabled={disabled}
               checked={current.sound}
               onCheckedChange={(checked) => save(SOUND_KEY, String(checked), { ...current, sound: checked })}
+            />
+          )}
+        </SettingRow>
+        <SettingRow
+          title="Dejar que Drakter vea mi pantalla"
+          description="Con esto activado, Drakter puede hacer capturas de tu pantalla y leer el texto de tus ventanas, pero solo con el modo flotante activo y cuando la conversación lo pide (por ejemplo, «¿dónde pulso para exportar?»). Las capturas se envían al modelo de IA para que te responda y no se guardan en tu equipo."
+          labelFor="setting-floating-screen"
+        >
+          {(describedBy) => (
+            <Switch
+              id="setting-floating-screen"
+              aria-describedby={describedBy}
+              disabled={disabled}
+              checked={current.screen}
+              onCheckedChange={(checked) => save(SCREEN_KEY, String(checked), { ...current, screen: checked })}
             />
           )}
         </SettingRow>

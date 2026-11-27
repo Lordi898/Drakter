@@ -30,6 +30,37 @@ interface ConfirmationDetail {
 const inFlight = new Map<string, Promise<ApprovalOutcome>>()
 let queueTail: Promise<unknown> = Promise.resolve()
 
+/**
+ * Se avisa antes de abrir cada diálogo (`true`, y se espera como mucho `GUARD_WAIT_MS`) y al cerrarse
+ * (`false`). El modo flotante lo usa para ocultar su capa entera: nada pintado puede quedar encima del
+ * único control humano (revisión de seguridad del PR #76, I8).
+ */
+export type ApprovalGuard = (open: boolean) => Promise<void>
+const GUARD_WAIT_MS = 1500
+let guard: ApprovalGuard | null = null
+
+export function setApprovalGuard(next: ApprovalGuard | null): void {
+  guard = next
+}
+
+async function runGuard(open: boolean): Promise<void> {
+  const current = guard
+  if (!current) return
+  let timer: NodeJS.Timeout | undefined
+  try {
+    await Promise.race([
+      current(open),
+      new Promise<void>((resolve) => {
+        timer = setTimeout(resolve, GUARD_WAIT_MS)
+      })
+    ])
+  } catch (error) {
+    logError('approvals', 'Fallo al preparar la pantalla para la confirmación', describeError(error))
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
 /** El texto viene del backend (dato no confiable): sin control, una línea, recortado. */
 export function sanitize(text: string, max: number): string {
   return text
@@ -102,10 +133,16 @@ async function runApproval(host: BackendHost, id: string): Promise<ApprovalOutco
     const parent = getMainWindow()
     // Siempre como propiedad: el arnés e2e sustituye `dialog.showMessageBox`.
     // Con la principal oculta (modo flotante, CONTRACT §4.2) el diálogo se abre sin padre.
-    const result =
-      parent && !parent.isDestroyed() && parent.isVisible()
-        ? await dialog.showMessageBox(parent, options)
-        : await dialog.showMessageBox(options)
+    await runGuard(true)
+    let result: Electron.MessageBoxReturnValue
+    try {
+      result =
+        parent && !parent.isDestroyed() && parent.isVisible()
+          ? await dialog.showMessageBox(parent, options)
+          : await dialog.showMessageBox(options)
+    } finally {
+      await runGuard(false)
+    }
 
     // El backend pudo reiniciarse mientras el diálogo estaba abierto.
     const endpoint = host.getEndpoint()

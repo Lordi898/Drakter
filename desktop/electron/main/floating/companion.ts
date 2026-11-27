@@ -489,6 +489,12 @@ export class CompanionClient {
     return ok === true
   }
 
+  /** Solo el dueño: con `true` la flotante no se pinta (opacidad 0) y deja pasar todos los clics. */
+  async setFloatingHidden(hidden: boolean): Promise<boolean> {
+    const [ok] = await this.call('SetFloatingHidden', 'b', [hidden])
+    return ok === true
+  }
+
   async setFloatingFocus(on: boolean): Promise<boolean> {
     if (this.shim?.setFloatingFocus) return this.shim.setFloatingFocus(on)
     const [ok] = await this.call('SetFloatingFocus', 'b', [on])

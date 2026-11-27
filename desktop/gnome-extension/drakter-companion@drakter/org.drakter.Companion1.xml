@@ -12,6 +12,7 @@
   Signals are UNICAST to authenticated, subscribed connections only (never broadcast).
 
   Errors: org.drakter.Companion1.Error.AccessDenied (no Hello, bad token, other uid,
+          a caller process that is not Drakter, a second Drakter client of the same role,
           or not the owner of the floating window), .InvalidArgs, .NotFound (window or
           monitor), .RateLimited, .Failed.
 -->
@@ -21,7 +22,12 @@
     <property name="Version" type="u" access="read"/>
 
     <!-- token = contents of $XDG_RUNTIME_DIR/drakter-companion/token (0600 in a 0700
-         directory, regenerated on every enable). The sender's uid must be the shell's.
+         directory, regenerated on every enable). The sender's uid must be the shell's,
+         and its process (GetConnectionCredentials ProcessID, read from /proc) must be
+         Drakter: the Electron main process (packaged `drakter` next to resources/app.asar,
+         or the dev Electron of a `drakter-desktop` checkout) or the hands helper
+         (/usr/bin/python3 -I .../hands/helper/main.py) descending from that Electron.
+         At most one main and one helper connection are authenticated at a time.
          info: version u, shell_version s, session s, poll_ms u,
                capabilities as ⊇ pointer, buttons, gestures, windows, screenshot,
                input-region, focus, passthrough, activate -->
@@ -142,6 +148,16 @@
          during every act. -->
     <method name="ForcePassthrough">
       <arg name="on" type="b" direction="in"/>
+    </method>
+
+    <!-- Owner only (capability "hide"). true: the floating window is painted with
+         opacity 0 and lets every click through, whatever the rects say (used while a
+         native approval dialog is open, so nothing drawn can cover it). false: back
+         to normal. Reset when the floating window is released. ok = false if there is
+         no floating rule. -->
+    <method name="SetFloatingHidden">
+      <arg name="hidden" type="b" direction="in"/>
+      <arg name="ok" type="b" direction="out"/>
     </method>
 
     <signal name="PointerMoved">
