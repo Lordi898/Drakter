@@ -1,13 +1,14 @@
 import { app, BrowserWindow, Menu, type WebContents } from 'electron'
 import { createBackendHost } from './backendProcess'
 import { createEventsBridge } from './eventsBridge'
+import { isFloatingEventType, registerFloating, type FloatingController } from './floating'
 import { registerIpcHandlers } from './ipc'
 import { describeError, logError } from './log'
 import { applyPermissionPolicy } from './permissions'
 import { isTrustedRendererUrl, RENDERER_URL } from './renderer-url'
 import { registerRendererProtocol, registerRendererScheme } from './rendererProtocol'
 import { applySandboxPolicy } from './sandbox'
-import { activateVoice, createTray } from './tray'
+import { activateVoice, createTray, setTrayFloating } from './tray'
 import { createMainWindow, focusMainWindow, markQuitting } from './window'
 
 process.on('uncaughtException', (error) => {
@@ -70,12 +71,18 @@ function start(): void {
     if (argv.includes(ACTIVATE_ARG)) void activateVoice(backend, 'hotkey')
     else focusMainWindow()
   })
+  // Modo flotante (CONTRACT §4.2): se crea tras `ready`; hasta entonces no hay eventos que darle.
+  let floating: FloatingController | null = null
   // Las confirmaciones nunca se hacen por voz (V-34): se enfoca la ventana para decidir en pantalla.
-  const events = createEventsBridge(backend, (type) => {
-    if (type === 'confirmation.requested') focusMainWindow()
+  // Con el modo flotante activo, main abre él mismo el diálogo nativo sin padre (la principal sigue oculta).
+  const events = createEventsBridge(backend, (envelope) => {
+    const floatingActive = floating?.getState().active === true
+    if (envelope.type === 'confirmation.requested' && !floatingActive) focusMainWindow()
+    if (floating && isFloatingEventType(envelope.type)) floating.onEvent(envelope)
   })
   stopBackendBeforeQuit(async () => {
     events.dispose()
+    floating?.dispose()
     await backend.stop()
   })
 
@@ -83,11 +90,16 @@ function start(): void {
     // Empaquetada no hay menú por defecto: daría acceso a recargar y a DevTools.
     if (app.isPackaged) Menu.setApplicationMenu(null)
     applyPermissionPolicy()
-    if (RENDERER_URL.startsWith('app:')) registerRendererProtocol()
+    registerRendererProtocol(RENDERER_URL.startsWith('app:'))
     registerIpcHandlers(backend, events)
     backend.start()
     createMainWindow()
     createTray(backend)
+    const controller = registerFloating(backend)
+    floating = controller
+    const toggleFloating = (): void => void controller.set('toggle', 'tray')
+    setTrayFloating(toggleFloating, false)
+    controller.onState((state) => setTrayFloating(toggleFloating, state.active))
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) createMainWindow()
     })

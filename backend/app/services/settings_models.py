@@ -21,17 +21,29 @@ SETTING_KEYS: Final = frozenset({
     "voice_tts_enabled",  # "true" | "false"; defecto "true". Punto único de silencio (V-29)
     "voice_wake_enabled",  # "true" | "false"; defecto "true"
     "voice_expression",  # "off" | "llm"; defecto "llm"
+    "floating_hands_enabled",  # "true" | "false"; defecto "false". Solo desde la interfaz, sin herramienta
+    "floating_screen_enabled",  # "true" | "false"; defecto "false". Solo desde la interfaz, sin herramienta
+    "floating_avatar_size",  # "default" | "small" | "cursor"; defecto "default"
+    "floating_sound",  # "true" | "false"; defecto "true"
 })
 SETTING_DEFAULTS: Final[dict[str, str]] = {
     "voice_profile": "natural",
     "voice_tts_enabled": "true",
     "voice_wake_enabled": "true",
     "voice_expression": "llm",
+    "floating_hands_enabled": "false",
+    "floating_screen_enabled": "false",
+    "floating_avatar_size": "default",
+    "floating_sound": "true",
 }
 SETTING_CHOICES: Final[dict[str, frozenset[str]]] = {
     "voice_tts_enabled": frozenset({"true", "false"}),
     "voice_wake_enabled": frozenset({"true", "false"}),
     "voice_expression": frozenset({"off", "llm"}),
+    "floating_hands_enabled": frozenset({"true", "false"}),
+    "floating_screen_enabled": frozenset({"true", "false"}),
+    "floating_avatar_size": frozenset({"default", "small", "cursor"}),
+    "floating_sound": frozenset({"true", "false"}),
 }
 
 KeyState = Literal["configured", "missing", "unknown"]

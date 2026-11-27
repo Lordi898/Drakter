@@ -252,6 +252,15 @@ Modelos en `drakter_contracts/jobs.py`. Cancelar es `write` sin confirmación pr
 | GET | `/api/v1/jobs` | - | `JobList` `{items: JobOut[]}`; op `jobs.list` | construida | read | jobs (WP7) |
 | POST | `/api/v1/jobs/{job_id}/cancel` | sin cuerpo | `JobOut`; 404 `job_not_found`, 409 `job_not_running`; op `jobs.cancel` | construida | write | jobs (WP7) |
 
+## Modo flotante (overlay)
+
+Modelos en `drakter_contracts/floating.py`; contrato completo en `docs/floating/CONTRACT.md` §7. Las llama **solo Electron main** con el token `ui`: no entran en `desktop/electron/shared/operations.ts`, así que el renderer no puede usarlas. El dibujo baja por `WS /api/v1/events` (`overlay.*`, `ui.floating`).
+
+| Método | Ruta | Entrada | Respuesta | Estado | Riesgo | Dueño |
+|---|---|---|---|---|---|---|
+| POST | `/api/v1/overlay/presence` | `FloatingPresence` `{active, ready, companion, monitor?, bridge_version}` | 204; caduca a los 75 s sin renovar | sin construir | write | flotante (B2) |
+| POST | `/api/v1/overlay/events` | `OverlayClientEvent` (unión por `type`: `draw_started`, `draw_done`, `draw_wait_done`, `ink_closed`, `ink_cleared`, `ink_pinned`, `ink_action`) | 204; 404 `not_found` si la guía ya no existe (main lo ignora); 422 `validation_error` | sin construir | write | flotante (B2) |
+
 ## Automejora
 
 `backend/app/services/improvement_api.py`, montado por `backend/app/api/improvement.py` (DECISIONS «Esquema de automejora: manda el del servicio», migración 0012). Drakter propone; aplicar exige una propuesta aprobada. Aprobar y revertir pasan por `ActionService` (`services/improvement_actions.py`): `approval-request` y `revert-request` responden 409 y el approver decide en `/confirmations/{id}/approve`. Nada cambia producción, permisos, confirmaciones ni auditoría sin aprobación.

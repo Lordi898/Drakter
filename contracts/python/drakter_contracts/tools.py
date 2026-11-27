@@ -26,7 +26,7 @@ AuditPolicy = Literal["log", "hash", "omit"]
 TOOL_DOMAINS: Final = (
     "tasks", "projects", "habits", "calendar", "subjects", "storage", "relationships",
     "tags", "search", "memory", "system", "config", "improvement", "voice",
-    "jobs", "ui",
+    "jobs", "ui", "overlay", "screen", "hands",
 )
 
 
@@ -37,9 +37,25 @@ class ToolErrorBody(BaseModel):
     details: list[dict[str, Any]] = []
 
 
+class ImageAttachment(BaseModel):
+    """Imagen que acompaña a un resultado (modo flotante, docs/floating/CONTRACT.md §8.1).
+
+    Nunca entra en `data` ni en la auditoría: el puente MCP la añade como `ImageContent` detrás del
+    texto (que lleva el sobre no confiable). Máximo 1 por resultado en v1; lado largo ≤ 1568 px.
+    """
+
+    mime_type: Literal["image/png", "image/jpeg"]
+    data_b64: str = Field(max_length=7_000_000)
+    width: int = Field(ge=1, le=1568)
+    height: int = Field(ge=1, le=1568)
+    sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
 class ToolOk(BaseModel):
     status: Literal["ok"] = "ok"
     data: dict[str, Any]
+    # Excluido del JSON: el registro lo saca del campo `attachments` (exclude=True) del result_model.
+    attachments: list[ImageAttachment] = Field(default_factory=list, exclude=True, max_length=1)
 
 
 class ToolFailed(BaseModel):

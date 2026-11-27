@@ -31,8 +31,9 @@ from app.tools.turns import TurnBusyError, TurnTracker
 logger = logging.getLogger("drakter.agent.lanes")
 
 REPO_ROOT: Final = Path(__file__).resolve().parents[4]
-# A worker never starts or steers jobs, nor switches the desktop UI under the user.
-EXCLUDED_DOMAINS: Final = frozenset({"jobs", "ui"})
+# A worker never starts or steers jobs, nor switches the desktop UI under the user. Nor does it look at
+# the screen, act in other apps or draw over them: it runs with nobody in front (security review C1).
+EXCLUDED_DOMAINS: Final = frozenset({"jobs", "ui", "screen", "hands", "overlay"})
 
 
 class LaneBusy(RuntimeError):
@@ -58,6 +59,11 @@ class LaneRegistry(ToolRegistry):
         if job_id is not None and ctx.job_id is None:
             ctx = replace(ctx, job_id=job_id)
         return await super().dispatch(name, raw_args, ctx, observer=observer)
+
+
+def lane_specs(catalog: Any) -> list[Any]:
+    """The tools a job lane registers: everything outside `EXCLUDED_DOMAINS`."""
+    return [spec for spec in catalog if spec.domain not in EXCLUDED_DOMAINS]
 
 
 def _accepts(callable_: Any, *names: str) -> bool:
@@ -98,9 +104,8 @@ class Lane:
         everything = ToolRegistry(self.turns, **wiring)
         load_builtin_tools(everything)
         registry = LaneRegistry(self.turns, **wiring, job_of=lambda: self.current_job_id)
-        for spec in everything.catalog():
-            if spec.domain not in EXCLUDED_DOMAINS:
-                registry.register(spec)
+        for spec in lane_specs(everything.catalog()):
+            registry.register(spec)
         self.registry = registry
         settings = runtime.agent_settings.model_copy(update={"turn_timeout_s": self.turn_timeout_s})
         if settings.agent_provider == "fake":

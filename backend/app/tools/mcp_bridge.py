@@ -18,7 +18,7 @@ from uuid import UUID, uuid4
 
 import uvicorn
 from drakter_contracts.errors import ErrorCode
-from drakter_contracts.tools import ToolOutcome
+from drakter_contracts.tools import ToolOk, ToolOutcome
 from mcp import types
 from mcp.server.lowlevel import Server
 from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
@@ -68,11 +68,23 @@ def _call_result(outcome: ToolOutcome) -> types.CallToolResult:
     ``is_error`` stays False: Hermes counts every ``isError`` as a circuit breaker strike and
     after 3 in a row (``_CIRCUIT_BREAKER_THRESHOLD``) blocks the whole server for 60 s, so a
     model that insists on bad arguments would lose all its tools.
+
+    Images (``ToolOk.attachments``, excluded from the JSON) go after the text, which comes
+    first and carries the untrusted envelope. Hermes turns them into ``image`` blocks when
+    ``agent.image_input_mode`` is ``native``.
     """
     payload = outcome.model_dump(mode="json")
     text = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+    content: list[types.TextContent | types.ImageContent] = [
+        types.TextContent(type="text", text=text)
+    ]
+    if isinstance(outcome, ToolOk):
+        content.extend(
+            types.ImageContent(type="image", data=a.data_b64, mime_type=a.mime_type)
+            for a in outcome.attachments
+        )
     return types.CallToolResult(
-        content=[types.TextContent(type="text", text=text)],
+        content=content,
         structured_content=payload,
         is_error=False,
     )

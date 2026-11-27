@@ -6,6 +6,9 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y l
 
 ## [Sin publicar]
 
+### Licencia (2026-11-27)
+- **Licencia:** de Apache-2.0 a AGPL-3.0-only por incorporar código de Roamies (© Ken Kai, AGPL-3.0). `LICENSE`, `NOTICE`, campo `license` de `package.json` y `pyproject.toml`, `README.md`, `CONTRIBUTING.md` y `THIRD_PARTY_NOTICES.md` actualizados. El código anterior sigue disponible bajo Apache-2.0 en el historial.
+
 ### Autoconsciencia y contexto (2026-11-27)
 - **Las 4 herramientas del catálogo que faltaban:** `get_voice_status`, `get_workspace_summary`, `get_activity_log` y `get_pending_confirmations`.
 - **`get_self_profile`:** versión, modelo, herramientas, límites, subsistemas y el equipo en el que corre.

@@ -29,6 +29,8 @@ MARKER = "[DEV-STUB]"
 DEV_HEADER = "X-Drakter-Dev-Stub"
 SCENARIO_RE = re.compile(r"\[stub:([a-z0-9-]+)\]")
 TEMPLATE_RE = re.compile(r"\{\{([a-z_]+)\}\}")
+# Tool results may arrive JSON-encoded inside a string (`\"key\": \"value\"`): the backslashes are optional.
+RESULT_FIELD_RE = re.compile(r'\\?"([a-z_]{1,40})\\?"\s*:\s*\\?"([^"\\]{1,200})\\?"')
 MAX_BODY_BYTES = 64 * 1024 * 1024
 CHUNK_CHARS = 12
 PRODUCTION_VALUES = {"production", "prod"}
@@ -208,6 +210,9 @@ def build_reply(
             break
 
     context = {**variables, "tool_result": latest_result[:2000]}
+    # `{{result_<key>}}`: the first `"<key>": "<value>"` of the latest result (e.g. a `guide_id`).
+    for key, value in RESULT_FIELD_RE.findall(latest_result):
+        context.setdefault(f"result_{key}", value)
     content: list[dict[str, Any]] = []
     if "text" in step:
         content.append({"type": "text", "text": f"{MARKER} {render(step['text'], context)}"})

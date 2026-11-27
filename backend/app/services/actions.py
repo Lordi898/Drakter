@@ -74,6 +74,11 @@ _COLUMNS: Final = (
     "targets_json, summary, affected_count, risk, status, created_at, expires_at, "
     "decided_at, decided_via, executed_at, result_json, error_code"
 )
+_SELECTED: Final = f"{_COLUMNS}, redacted_at"
+# Keys that may carry third-party or typed text in a stored result (I5).
+_THIRD_PARTY_KEYS: Final = frozenset(
+    {"envelope", "attachments", "content", "text", "title", "value", "display", "snippet"}
+)
 
 logger = logging.getLogger("drakter.actions")
 
@@ -124,6 +129,19 @@ def _as_data(outcome: Any) -> dict[str, Any]:
     if isinstance(outcome, Mapping):
         return dict(outcome)
     return {} if outcome is None else {"result": str(outcome)}
+
+
+def compact_result(value: Any) -> Any:
+    """A stored result without third-party text: statuses, steps and ids only (I5)."""
+    if isinstance(value, Mapping):
+        return {
+            key: compact_result(item)
+            for key, item in value.items()
+            if key not in _THIRD_PARTY_KEYS
+        }
+    if isinstance(value, list):
+        return [compact_result(item) for item in value]
+    return value
 
 
 def _displayable(text: str) -> str:
@@ -485,6 +503,7 @@ class ActionService:
                 (format_instant(self._clock()), canonical_json(data), row["id"]),
             )
             write(conn, ctx, self._row_event(row, row["tool_name"], "success"))
+            self._scrub(conn, row)
             conn.execute("COMMIT")
         except AppError as exc:
             # Only the call that won the row may close it: a loser must not touch it.
@@ -555,6 +574,7 @@ class ActionService:
                 )
             write(conn, ctx, self._row_event(row, "confirmation.rejected", "denied",
                                              "confirmation_rejected"))
+            self._scrub(conn, row)
             conn.execute("COMMIT")
         except BaseException:
             if conn.in_transaction:
@@ -639,6 +659,13 @@ class ActionService:
                 )
                 write(conn, ctx, self._row_event(row, "confirmation.reconciled", "failed",
                                                  _UNCERTAIN))
+                self._scrub(conn, row)
+            # Rows closed before this retention rule, or by an older process.
+            for row in self._select(
+                conn, "status IN ('executed', 'failed', 'rejected', 'expired') "
+                "AND redacted_at IS NULL", (),
+            ):
+                self._scrub(conn, row)
             conn.execute("COMMIT")
         except BaseException:
             if conn.in_transaction:
@@ -802,6 +829,7 @@ class ActionService:
                 (code, row["id"]),
             )
             write(conn, ctx, self._row_event(row, "confirmation.failed", "failed", code))
+            self._scrub(conn, row)
             conn.execute("COMMIT")
         except BaseException:
             if conn.in_transaction:
@@ -819,6 +847,50 @@ class ActionService:
             )
             write(conn, ctx, self._row_event(row, "confirmation.expired", "denied",
                                              ErrorCode.CONFIRMATION_EXPIRED.value))
+            self._scrub(conn, row)
+
+    def transient(self, tool_name: str) -> bool:
+        """Its arguments or result may hold typed or third-party text (`tool_gate`)."""
+        spec = self.registry.get(tool_name)
+        return spec is not None and getattr(spec.handler, "transient", False) is True
+
+    def _scrub(self, conn: sqlite3.Connection, row: Mapping[str, Any]) -> None:
+        """Once closed, keep of a transient action only what the audit keeps (I5).
+
+        Runs after the row reached its final state, inside the caller's transaction:
+        approval has already checked `args_hash` against the full arguments.
+        `args_hash` stays, so the audit still points at the row.
+        """
+        if row.get("redacted_at") is not None or not self.transient(row["tool_name"]):
+            return
+        spec = self.registry.get(row["tool_name"])
+        assert spec is not None
+        conn.execute(
+            "UPDATE pending_confirmations SET args_json = ?, "
+            "result_json = CASE WHEN result_json IS NULL THEN NULL ELSE ? END, "
+            "redacted_at = ? WHERE id = ? AND redacted_at IS NULL "
+            "AND status IN ('executed', 'failed', 'rejected', 'expired')",
+            (
+                canonical_json(filter_params(json.loads(row["args_json"]), spec.audit)),
+                self._compact_stored(conn, row["id"]),
+                format_instant(self._clock()),
+                row["id"],
+            ),
+        )
+
+    @staticmethod
+    def _compact_stored(conn: sqlite3.Connection, action_id: str) -> str:
+        stored = conn.execute(
+            "SELECT result_json FROM pending_confirmations WHERE id = ?", (action_id,)
+        ).fetchone()
+        return canonical_json(compact_result(json.loads(stored[0]) if stored[0] else {}))
+
+    def _stored_args(self, row: Mapping[str, Any], spec: ActionSpec | None) -> dict[str, Any]:
+        """Arguments as shown or audited. A redacted row already holds only those."""
+        args = json.loads(row["args_json"])
+        if row.get("redacted_at") is not None:
+            return args
+        return filter_params(args, spec.audit) if spec else {}
 
     def _refuse(
         self,
@@ -898,14 +970,13 @@ class ActionService:
         self, row: Mapping[str, Any], action: str, result: str, code: str | None = None
     ) -> AuditEvent:
         spec = self.registry.get(row["tool_name"])
-        args = json.loads(row["args_json"])
         return AuditEvent(
             action=action,
             result=result,
             tool_name=row["tool_name"],
             entity_type=spec.entity_type if spec else None,
             affected_count=row["affected_count"],
-            params=filter_params(args, spec.audit) if spec else None,
+            params=self._stored_args(row, spec) if spec else None,
             params_hash=row["args_hash"],
             error_code=code,
             confirmation_id=row["id"],
@@ -945,7 +1016,7 @@ class ActionService:
         conn: sqlite3.Connection, where: str, arguments: tuple[Any, ...]
     ) -> list[dict[str, Any]]:
         cursor = conn.execute(
-            f"SELECT {_COLUMNS} FROM pending_confirmations WHERE {where}", arguments
+            f"SELECT {_SELECTED} FROM pending_confirmations WHERE {where}", arguments
         )
         names = [description[0] for description in cursor.description]
         return [dict(zip(names, row, strict=True)) for row in cursor.fetchall()]
@@ -956,7 +1027,7 @@ class ActionService:
         `args` goes through the audit allow-list: a secret argument never reaches the GUI.
         """
         spec = self.registry.get(row["tool_name"])
-        args = filter_params(json.loads(row["args_json"]), spec.audit) if spec else {}
+        args = self._stored_args(row, spec)
         return {
             "id": row["id"],
             "tool_name": row["tool_name"],

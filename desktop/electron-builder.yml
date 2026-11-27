@@ -86,6 +86,21 @@ linux:
         - "!tests/**"
         - "!**/__pycache__/**"
         - "!**/.env*"
+    # Manos del modo flotante: el backend lanza /usr/bin/python3 -I hands/helper/main.py desde su
+    # REPO_ROOT (resources/backend). hands/ocr es el paquete que instala hands/ocr/install.sh en su venv.
+    - from: ../hands
+      to: backend/hands
+      filter:
+        - "helper/**"
+        - "ocr/**"
+        - "!**/__pycache__/**"
+        - "!**/*.egg-info/**"
+    # Página flotante (copia de Roamies, AGPL-3.0): la sirve app://floating desde resources/floating.
+    - from: floating
+      to: floating
+      filter:
+        - "**/*"
+        - "!dev/**"
 
 deb:
   packageCategory: utils

@@ -11,9 +11,11 @@ from __future__ import annotations
 from typing import Any, Final, Literal
 
 from drakter_contracts.events import AvatarChoice, JarvisLayoutChoice
+from drakter_contracts.floating import SetFloatingArgs, SetFloatingResult
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from app.services.ui_mode import request_ui_appearance, request_ui_mode
+from app.floating.presence import current_presence
+from app.services.ui_mode import request_ui_appearance, request_ui_floating, request_ui_mode
 from app.tools.spec import RiskClass, ToolContext, ToolError, ToolSpec
 
 _ERRORS: Final = ("ui_unavailable",)
@@ -105,6 +107,42 @@ async def _set_appearance(ctx: ToolContext, args: SetAppearanceArgs) -> SetAppea
     return SetAppearanceResult(avatar=args.avatar, layout=args.layout, delivered=True, note=note)
 
 
+_INSTALL_HINT: Final = (
+    "Falta la extensión de GNOME drakter-companion: instálala con scripts/install-gnome-extension.sh "
+    "y cierra la sesión una vez."
+)
+
+
+async def _set_floating(ctx: ToolContext, args: SetFloatingArgs) -> SetFloatingResult:
+    """docs/floating/CONTRACT.md §8.2: publica `ui.floating`; `available`/`active` salen de la presencia."""
+    presence = current_presence()
+    available = bool(presence and presence.companion == "ok")
+    active = bool(presence and presence.active)
+    if args.on is True and presence is not None and presence.companion != "ok":
+        raise ToolError("floating_unavailable", _INSTALL_HINT)
+    hub: Any = getattr(getattr(ctx.state, "agent_runtime", None), "hub", None)
+    action: Literal["on", "off"] | None = None if args.on is None else ("on" if args.on else "off")
+    outcome = request_ui_floating(
+        hub, action=action, size=args.size, pin=args.pin, source="agent", correlation_id=str(ctx.turn_id)
+    )
+    if outcome == "unavailable":
+        raise ToolError("ui_unavailable", "No se pudo avisar a la interfaz de escritorio.", retryable=True)
+    if outcome == "rate_limited":
+        return SetFloatingResult(
+            delivered=False, available=available, active=active,
+            note="El modo flotante acaba de cambiar; no se ha vuelto a pedir.",
+        )
+    if args.on is True:
+        note = "Petición enviada: Drakter pasa a modo flotante."
+    elif args.on is False:
+        note = "Petición enviada: Drakter vuelve a su ventana."
+    else:
+        note = "Petición enviada: cambia el avatar flotante."
+    if presence is None:
+        note += " La app no ha informado aún de la extensión de GNOME: puede que no esté disponible."
+    return SetFloatingResult(delivered=True, available=available, active=active, note=note)
+
+
 TOOLS: tuple[ToolSpec, ...] = (
     ToolSpec(
         name="ui_set_mode",
@@ -141,5 +179,24 @@ TOOLS: tuple[ToolSpec, ...] = (
         idempotent=True,
         timeout_s=3.0,
         audit={"avatar": "log", "layout": "log"},
+    ),
+    ToolSpec(
+        name="ui_set_floating",
+        description=(
+            "Activa o desactiva el modo flotante (Drakter sale de su ventana y te acompaña por toda la "
+            "pantalla), o cambia el tamaño del avatar flotante (default, small, cursor) o lo fija en una "
+            "esquina. Solo cambia la interfaz. Úsala cuando el usuario lo pida o antes de dibujar si no "
+            "está activo."
+        ),
+        domain="ui",
+        args_model=SetFloatingArgs,
+        result_model=SetFloatingResult,
+        permission="ui.write",
+        risk=RiskClass.WRITE,
+        handler=_set_floating,
+        errors=("ui_unavailable", "floating_unavailable"),
+        idempotent=True,
+        timeout_s=3.0,
+        audit={"on": "log", "size": "log", "pin": "log"},
     ),
 )

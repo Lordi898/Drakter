@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 import pkgutil
 from collections.abc import AsyncIterator, Callable, Iterator
@@ -179,6 +180,13 @@ def create_app(
                     if reminders:
                         await reminders.stop()
             finally:
+                # Floating mode: the hands helper starts on first use (`ensure_client`) and stops here.
+                from app.integrations.hands.client import shutdown_client
+
+                try:
+                    await shutdown_client()
+                except Exception:  # noqa: BLE001 - the rest of the shutdown must still run
+                    logging.getLogger("drakter").exception("hands helper stop failed")
                 if voice:
                     await voice.stop()
                 if jobs:

@@ -34,6 +34,7 @@ from app.integrations.hermes.events import (
     TurnFailed,
     turn_failed,
 )
+from app.integrations.hermes.home import purge_image_cache
 from app.integrations.hermes.provider import ProviderStatus, TurnRequest
 from app.integrations.memory.context.builder import build_context
 from app.integrations.memory.models import PriorityLevel
@@ -61,6 +62,11 @@ _RUNNER_CODES: Final = frozenset(
     }
 )
 _END_OF_STREAM: Final = object()
+# Drakter tools that wait on a person (floating CONTRACT §8.1.5): their `ToolSpec.timeout_s`.
+# While one runs, the turn deadline moves to now + timeout + margin, under a per-turn ceiling.
+EXTENDING_TOOLS_S: Final = {"draw": 90.0, "guide_wait": 115.0}
+EXTENSION_MARGIN_S: Final = 5.0
+EXTENDED_TURN_MAX_S: Final = 30 * 60.0
 # Voice turns skip thinking: measured, the first delta of a tool turn drops from ~1.7-2.8 s to
 # ~0.45-0.7 s and the evals hold (LAT-1). Text keeps the home's effort ("low"); job lanes "medium".
 VOICE_REASONING_EFFORT: Final = "none"
@@ -94,6 +100,7 @@ class _Turn:
     turn_id: UUID
     turn_deadline: float
     idle_deadline: float
+    started_at: float = field(default_factory=time.monotonic)
     text: list[str] = field(default_factory=list)
     cancel_requested: bool = False
     cancel_deadline: float | None = None
@@ -245,6 +252,7 @@ class HermesProvider:
             yield turn_failed(ErrorCode.PROVIDER_ERROR)
         finally:
             self._turns.pop(request.turn_id, None)
+            self._purge_image_cache()
             if started and not turn.finished:
                 # The consumer left mid-turn (shutdown): the runner must not keep working.
                 self._spawn(self._stop_quietly(request.turn_id))
@@ -396,11 +404,14 @@ class HermesProvider:
             turn.text.append(text)
             return MessageDelta(text=text)
         if name == "tool_started":
-            return ToolStarted(
+            started = ToolStarted(
                 tool=_clean_tool_name(data.get("tool")),
                 call_id=_clean_call_id(data.get("call_id")),
                 source=_tool_source(data.get("tool")),
             )
+            if started.source == "drakter":
+                self._extend_deadline(turn, started.tool)
+            return started
         if name == "tool_completed":
             return ToolCompleted(
                 tool=_clean_tool_name(data.get("tool")),
@@ -430,6 +441,33 @@ class HermesProvider:
         label = name if isinstance(name, str) and _NAME.match(name) else "invalid"
         logger.info("runner event ignored", extra={"event": "runner_unknown", "runner_ev": label})
         return None
+
+    @staticmethod
+    def _extend_deadline(turn: _Turn, tool: str) -> None:
+        """A human wait (`draw`, `guide_wait`) postpones the turn deadline, never shortens it."""
+        timeout = EXTENDING_TOOLS_S.get(tool)
+        if timeout is None:
+            return
+        wanted = time.monotonic() + timeout + EXTENSION_MARGIN_S
+        ceiling = turn.started_at + EXTENDED_TURN_MAX_S
+        turn.turn_deadline = max(turn.turn_deadline, min(wanted, ceiling))
+        turn.idle_deadline = max(turn.idle_deadline, min(wanted, ceiling))
+
+    def _purge_image_cache(self) -> None:
+        manifest = getattr(self._supervisor, "manifest", None)
+        if manifest is None:
+            return
+        self._spawn(asyncio.to_thread(self._purge_quietly, manifest.paths.root))
+
+    @staticmethod
+    def _purge_quietly(root: Path) -> None:
+        try:
+            purge_image_cache(root)
+        except Exception as exc:  # noqa: BLE001 - a stale image must not fail the turn
+            logger.warning(
+                "image cache purge failed",
+                extra={"event": "image_cache_purge_failed", "kind": type(exc).__name__},
+            )
 
     async def _stop_quietly(self, turn_id: UUID) -> None:
         if self._supervisor is None:

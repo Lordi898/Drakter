@@ -2,7 +2,7 @@
 
 `catalog.json` es una lista de `ToolManifest` (`contracts/python/drakter_contracts/tools.py`). Es la única lista de lo que Hermes puede llamar; se sirve por MCP en puerto propio. Hermes no toca la BD. Formato de `ToolSpec`: `backend/app/integrations/hermes/CONTRACT.md` §1 (drakter-16).
 
-84 herramientas en el catálogo: 38 `read`, 37 `write`, 9 `confirm`. 80 construidas, 4 sin construir. Comprobado el 2026-11-13 contra el registro real (`TOOLS` de `backend/app/tools/*.py` en `drakter/integracion`): en las 80 coinciden `domain`, `permission`, `risk` y `returns_untrusted` (corregido `get_related_items`, que el código marca `returns_untrusted`). Las 4 de automejora están en el catálogo desde la decisión de cierre (ver «Automejora»), así que `registry._warn_catalog_drift` no emite ningún aviso `tool_catalog_drift`.
+84 herramientas en el catálogo: 38 `read`, 37 `write`, 9 `confirm`. 80 construidas, 4 sin construir. (Cifras del 2026-11-13; después entraron voz v2, Jarvis, autoconsciencia y las 8 del modo flotante, sin construir: 103 en total.) Comprobado el 2026-11-13 contra el registro real (`TOOLS` de `backend/app/tools/*.py` en `drakter/integracion`): en las 80 coinciden `domain`, `permission`, `risk` y `returns_untrusted` (corregido `get_related_items`, que el código marca `returns_untrusted`). Las 4 de automejora están en el catálogo desde la decisión de cierre (ver «Automejora»), así que `registry._warn_catalog_drift` no emite ningún aviso `tool_catalog_drift`.
 
 ## Reglas aplicadas
 
@@ -30,6 +30,15 @@
 `ui_set_mode` (`ui.write`, `write`, sin confirmación): pide al escritorio pasar al modo Jarvis o volver a Drakter publicando `ui.mode`. Es solo estética, reversible y sin datos; en una sesión contaminada la puerta la sube a `confirm` como a cualquier WRITE. Límite común de un cambio por segundo con la capa 0 de la voz (`app/services/ui_mode.py`). El dominio `ui` no está en los carriles de trabajos de fondo (`lanes.EXCLUDED_DOMAINS`).
 
 `ui_set_appearance` (`ui.write`, `write`, sin confirmación): pide cambiar el avatar (lista cerrada del contrato, `none` = personaje clásico) y/o la interfaz Jarvis publicando `ui.appearance`; elegir interfaz también abre Jarvis. Mismas reglas que `ui_set_mode`, con su propio límite de 1/s.
+
+## Modo flotante (fase `floating`)
+
+Ocho herramientas sin construir, contrato en `docs/floating/CONTRACT.md` §8 y modelos en `drakter_contracts/floating.py`. Dominios nuevos en `TOOL_DOMAINS`: `overlay`, `screen` y `hands`. Permisos que hay que conceder en `agent/configuration/permissions.json`: `overlay.read`, `screen.read` y `hands.write` (`ui.write` ya está).
+
+- `draw` y `guide_wait` (`overlay.read`, `read`): dibujar es una forma de responder, sin efectos fuera del overlay, así que no suben a `confirm` en una sesión contaminada. Las marcas que actúan (`type`, `copy`, `open`, `handoff`) se rechazan con `draw_action_forbidden`.
+- `look_screen`, `read_window`, `list_windows` (`screen.read`, `read`, `returns_untrusted`): contaminan la sesión. `look_screen` devuelve la imagen como `ImageContent` MCP (`ToolOk.attachments`).
+- `act_in_app` y `open_target` (`hands.write`, `write`): en sesión contaminada suben a `confirm` (un plan, una confirmación). Fuera de ella, `confirm=true` también pide confirmación, y es obligatorio si algún paso es arriesgado (`confirm_if`, CONTRACT §8.3). Hacen falta el ajuste `floating_hands_enabled` y la extensión de GNOME.
+- `ui_set_floating` (`ui.write`, `write`): publica `ui.floating`, con el mismo límite de 1/s que `ui_set_mode`.
 
 ## Sin construir (4)
 

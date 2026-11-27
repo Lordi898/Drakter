@@ -2,7 +2,7 @@
 
 Este documento recoge el código y el contenido de terceros que **se distribuye dentro de este repositorio** y las licencias de las dependencias que se instalan aparte. Auditoría del 2026-11-13 sobre `main` (`eff16d1`).
 
-Drakter se distribuye bajo [Apache-2.0](LICENSE) (ver también [NOTICE](NOTICE)). Nada de lo que hay aquí cambia la licencia de cada componente de terceros: cada uno conserva la suya.
+Drakter se distribuye bajo [AGPL-3.0-only](LICENSE) (ver también [NOTICE](NOTICE)). Nada de lo que hay aquí cambia la licencia de cada componente de terceros: cada uno conserva la suya.
 
 **Cómo se ha verificado el origen:** comparando el hash de cada blob versionado con el árbol del repositorio de origen en el commit indicado (API de GitHub). «Idéntico» significa que todos los archivos coinciden byte a byte, salvo los que se indican como adaptados.
 
@@ -44,21 +44,31 @@ Propio del proyecto (no es de terceros): `.claude/CLAUDE.md`, `.claude/agents/{c
 
 | Ruta | Origen | Licencia | Texto |
 |---|---|---|---|
+| `desktop/floating/roamies/*.js`, `desktop/floating/index.html`, `boot.js`, `boot-fonts.js` | [KenKaiii/Roamies](https://github.com/KenKaiii/Roamies) commit `8f0adaa` (`showcase/roamies/` y `showcase/desktop.html`) | AGPL-3.0, © Ken Kai (KenKaiii) | 18 archivos copiados byte a byte con su avatar JARVIS, dibujo en pantalla y guía; los cambios (traducción y dos regex) llevan `// Drakter:` y están listados en [desktop/floating/README.md](desktop/floating/README.md). Es la razón de que Drakter pase a AGPL-3.0-only. |
+| `desktop/floating/fonts/*.woff2` | Roamies `8f0adaa` (`showcase/onboarding/fonts/`): Doto (© 2024 The Doto Project Authors), Martian Mono (© 2021 The Martian Mono Project Authors) y Readex Pro (© 2019 The Readex Pro Project Authors) | SIL OFL 1.1 | Sin cambios; cada una con su texto en `desktop/floating/fonts/OFL-*.txt`. |
+| `backend/app/floating/drawjs.py`, `safety.py`, `parts.py`, `runner.py`, `validate.py` | Roamies `8f0adaa` (`showcase/tauri/sidecar/draw.mjs`, `safety.mjs`, `tools.mjs`, `lean.mjs`) | AGPL-3.0, © Ken Kai (KenKaiii) | Port a Python de la validación, el ordenado y el estado del dibujo y la guía; cada bloque cita su línea original (`# draw.mjs:N`). Los mensajes al modelo siguen en inglés, como en Roamies. |
+| `contracts/floating/draw_args.schema.json` | Generado desde el esquema zod de `draw.mjs` de Roamies `8f0adaa` (`contracts/scripts/gen_draw_schema.mjs`) | AGPL-3.0, © Ken Kai (KenKaiii) | Esquema JSON derivado; `$id` y `x-drakter-source` fijan el origen. |
+| `backend/app/floating/countries.json` | Roamies `8f0adaa` (`countries.mjs`), con datos de [Natural Earth](https://www.naturalearthdata.com/) 110m admin-0 | Datos de Natural Earth: dominio público. Selección y formato de Roamies: AGPL-3.0 | En el mismo orden que el original. |
+| `hands/helper/lists.py` (HANDS_OFF, RISKY, RISKY_KEYS), `backend/app/integrations/hands/safety.py` (`checkUrl`, `isPrivateAddress`, RUNNABLE, redacción) | Roamies `8f0adaa` (`showcase/tauri/src-tauri/hands-linux/roamies-hands`, `showcase/tauri/sidecar/safety.mjs`) | AGPL-3.0, © Ken Kai (KenKaiii) | Port; Drakter añade los ids de GNOME y la redacción en español de las acciones arriesgadas, marcadas con `# Drakter:`. |
 | `desktop/src/components/ui/*.tsx` | Componentes generados con [shadcn/ui](https://github.com/shadcn-ui/ui) y adaptados | MIT, © 2023 shadcn | [docs/third-party-licenses/shadcn-ui.txt](docs/third-party-licenses/shadcn-ui.txt) |
+| `desktop/electron/main/floating/draw/` (`draw.mjs`, `safety.mjs`, `countries.mjs`) | Roamies `8f0adaa`, `showcase/tauri/sidecar/` | AGPL-3.0, © Ken Kai (KenKaiii); `countries.mjs` deriva de Natural Earth (dominio público) | Copia literal byte a byte (sha256 de `draw.mjs` = `x-drakter-source` de `contracts/floating/draw_args.schema.json`); solo se añaden `draw.d.mts` y `safety.d.mts` (tipos, `// Drakter:`). Electron main los usa para la segunda validación del dibujo (CONTRACT §9.5). |
 
 ## 3. Dependencias (se instalan aparte, no se versionan)
 
 ### Escritorio (`desktop/package-lock.json`)
 
-Paquetes que acaban en la aplicación (dependencias de producción, 87 en total):
+Paquetes que acaban en la aplicación (dependencias de producción, 106 en total):
 
 | Licencia | Paquetes |
 |---|---|
-| MIT | 83 (entre ellos `react`, `react-dom`, `radix-ui`, `sonner`, `clsx`, `tailwind-merge`) |
+| MIT | 98 (entre ellos `react`, `react-dom`, `radix-ui`, `sonner`, `clsx`, `tailwind-merge`) |
 | MIT (añadido 2026-11-20) | `@rive-app/canvas` 2.53.0 (runtime de Rive para el personaje; ya cuenta dentro de los MIT) |
 | MIT (añadido 2026-11-26) | `three` 0.180.0 (avatar 3D del personaje; ya cuenta dentro de los MIT). `@types/three` 0.180.0 solo es de desarrollo. La malla y los shaders del avatar son código propio, sin modelos ni texturas de terceros |
+| MIT (añadido 2026-11-27, modo flotante) | `dbus-next` 0.10.2 (cliente D-Bus de la extensión de GNOME) y `zod` 4.6.7 (segunda validación del dibujo en main), con las transitivas de `dbus-next` que entran en `out/main/index.js`: `xml2js`, `xmlbuilder`, `safe-buffer`, `event-stream`, `hexy`, `@nornagon/put` (MIT/X11), `through`, `duplexer`, `from`, `map-stream`, `split` y `stream-combiner`. Ya cuentan dentro de los MIT. `usocket` (opcional, con `node-gyp`) no se instala ni se empaqueta |
 | ISC | `lucide-react` |
-| Apache-2.0 | `class-variance-authority` |
+| Apache-2.0 | `class-variance-authority`; `long` 4.0.0 y `jsbi` 2.0.5 (transitivas de `dbus-next`, añadidas 2026-11-27) |
+| MIT o Apache-2.0 | `pause-stream` 0.0.11 (transitiva de `dbus-next`) |
+| BlueOak-1.0.0 | `sax` 1.6.1 (transitiva de `dbus-next`, vía `xml2js`) |
 | 0BSD | `tslib` |
 | OFL-1.1 | `@fontsource-variable/recursive` (fuente Recursive) |
 
@@ -67,6 +77,16 @@ Herramientas de build y desarrollo (no se empaquetan en el renderer): MIT, ISC, 
 ### Backend (`backend/uv.lock`)
 
 Todas permisivas: MIT, BSD-3-Clause, Apache-2.0, PSF-2.0 y MIT-0 (`fastapi`, `starlette`, `uvicorn`, `pydantic`, `httpx`, `mcp`, `pypdf`, `python-dotenv`, `platformdirs`, `websockets`, `cryptography`…), más **MPL-2.0** en `certifi` (se usa sin modificar).
+
+Modo flotante (añadido 2026-11-27): `jsonschema` (MIT) valida los argumentos de `draw`, y `pillow` (MIT-CMU/HPND) recodifica las capturas de `look_screen`.
+
+### OCR del modo flotante (`hands/ocr/`, venv propio en `~/.local/share/drakter/venvs/ocr`)
+
+| Componente | Licencia | Cómo se usa |
+|---|---|---|
+| [RapidOCR](https://github.com/RapidAI/RapidOCR) `rapidocr==3.10.0` | Apache-2.0 | OCR local en CPU para ventanas sin árbol de accesibilidad; el backend lo lanza como proceso |
+| `onnxruntime==1.32.0` | MIT | Motor de inferencia de RapidOCR |
+| Modelos PP-OCRv5 mobile (det, rec latin, cls) de [PaddleOCR](https://github.com/PaddlePaddle/PaddleOCR), en ONNX por RapidAI | Apache-2.0 | `hands/ocr/install.sh` los descarga una vez (URL y SHA256 fijados de `default_models.yaml` de rapidocr 3.10.0) a `~/.local/share/drakter/models/ocr/`; no se versionan |
 
 ### Agente y servicios opcionales
 

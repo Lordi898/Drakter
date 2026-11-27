@@ -44,7 +44,7 @@ from drakter_contracts.voice_ipc import (
 )
 from pydantic import BaseModel, ValidationError
 
-from app.integrations.voice.bridge import Source, VoiceBridge
+from app.integrations.voice.bridge import Source, VoiceBridge, reserve_speech_id
 from app.integrations.voice.client import VoiceClient, VoiceUnavailableError, shutdown_stale
 from app.integrations.voice.heard import HeardNotes
 from app.integrations.voice.policy import RuntimePort, VoicePolicy
@@ -127,6 +127,7 @@ class VoiceOrchestrator:
             ui_appearance=lambda avatar, layout, utt_id: request_ui_appearance(
                 getattr(runtime, "hub", None), "voice", avatar=avatar, layout=layout, utt_id=utt_id  # type: ignore[arg-type]
             ),
+            ui_floating=self._ui_floating,
         )
         self.heard = HeardNotes()
         # snapshot published as `voice.state`
@@ -234,6 +235,29 @@ class VoiceOrchestrator:
         if self._loop is None:
             return
         self._bridge.phrase(key, when)
+
+    # ── modo flotante (docs/floating/CONTRACT.md §10) ──────────────────────
+    def reserve_speech_id(self) -> int:
+        """`speech_id` para un beat del DrawRunner, del mismo contador que las respuestas."""
+        return reserve_speech_id()
+
+    async def speak_beat(self, turn_id: str, speech_id: int, guide_id: str, beat: int, text: str) -> bool:
+        """Dice un beat del dibujo (`speak.beat`). `True` si la voz lo aceptó; si no, el overlay usa su
+        reloj local. Nunca lanza."""
+        if self._loop is None or not text.strip():
+            return False
+        return await self._bridge.beat(turn_id, speech_id, guide_id, beat, text[:240])
+
+    def _ui_floating(self, action: Literal["on", "off"], utt_id: str) -> str:
+        """Capa 0 «modo flotante»: publica `ui.floating` salvo que la presencia diga que la extensión no
+        está lista (`no_companion`; sin presencia, decide Electron main)."""
+        presence = _current_presence()
+        if presence is not None and presence.companion != "ok":
+            return "no_companion"
+        return _request_ui_floating(
+            getattr(self._runtime, "hub", None), action=action, size=None, pin=None, source="voice",
+            utt_id=utt_id[:64] if utt_id else None,
+        )
 
     async def status(self) -> VoiceStatusOut:
         base = self.snapshot().model_dump()
@@ -485,6 +509,28 @@ class VoiceOrchestrator:
         task = asyncio.create_task(coro)
         self._tasks.add(task)
         task.add_done_callback(self._tasks.discard)
+
+
+def _current_presence() -> Any:
+    """Última `FloatingPresence` (B2, `app.floating.presence`); `None` si nunca llegó o caducó."""
+    from app.floating.presence import current_presence
+
+    try:
+        return current_presence()
+    except Exception:  # noqa: BLE001 - la presencia nunca rompe la voz
+        return None
+
+
+def _request_ui_floating(hub: Any, **kwargs: Any) -> str:
+    """`request_ui_floating` de B2 (`app.services.ui_mode`, §8.1 bis): `ok`, `rate_limited` o `unavailable`.
+    Nunca lanza."""
+    from app.services.ui_mode import request_ui_floating
+
+    try:
+        return request_ui_floating(hub, **kwargs)
+    except Exception:  # noqa: BLE001
+        logger.warning("ui.floating request failed", extra={"event": "voice_ui_floating_failed"})
+        return "unavailable"
 
 
 def _uuid(value: str | None) -> UUID | None:

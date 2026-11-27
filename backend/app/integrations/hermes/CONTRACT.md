@@ -14,6 +14,8 @@ AuditPolicy = Literal["log", "hash", "omit"]
 @dataclass(frozen=True, slots=True)
 class ToolContext:
     turn_id: UUID; session_id: UUID; call_id: str; principal: Literal["agent"]; state: Any  # app.state
+    job_id: UUID | None = None
+    confirmed: bool = False       # True solo si el handler corre desde la aprobación (tool_action_spec.handler)
 
 @dataclass(frozen=True, slots=True)
 class ToolSpec:
@@ -31,6 +33,7 @@ class ToolSpec:
     returns_untrusted: bool = False  # documentos, memoria: contamina el turno
     audit: Mapping[str, AuditPolicy] = {}  # por argumento; lo no listado se trata como "hash"
     summarize: Callable[[BaseModel], str] | None = None  # resumen para la confirmación; sin él, CONFIRM falla al registrar
+    confirm_if: Callable[[BaseModel], str | None] | None = None  # solo WRITE: un motivo sube esta llamada a CONFIRM
 
 class ToolError(Exception):  # code estable, message seguro, retryable=False, details=None
 ```
@@ -61,8 +64,10 @@ class AuditSink(Protocol):
 {"status":"confirmation_required","action_id":"<uuid>","summary":"...","expires_at":"<ISO UTC>"}
 ```
 
-Orden de `dispatch`, sin excepciones: herramienta registrada → turno activo y `call_id` → validar args (extra prohibido, jamás `input` en el error) → permiso → riesgo efectivo (WRITE pasa a CONFIRM si el turno está contaminado) → `ToolGate.authorize` → `AuditSink.record(attempt)` → handler con `timeout_s` → validar resultado con `result_model` → marcar contaminación si `returns_untrusted` → `AuditSink.record(result)`. Los rechazos también se auditan.
+Orden de `dispatch`, sin excepciones: herramienta registrada → turno activo y `call_id` → validar args (extra prohibido, jamás `input` en el error) → permiso → riesgo efectivo (WRITE pasa a CONFIRM si el turno está contaminado o si `confirm_if(args)` da un motivo; si `confirm_if` lanza, también) → `ToolGate.authorize` → `AuditSink.record(attempt)` → handler con `timeout_s` → validar resultado con `result_model` → marcar contaminación si `returns_untrusted` → `AuditSink.record(result)`. Los rechazos también se auditan.
 
+- `confirm_if` (modo flotante, `docs/floating/CONTRACT.md` §8.1): `BackendToolGate` pide la confirmación con una copia CONFIRM de la acción registrada y el motivo va al principio del `summary`. Al aprobar, el handler recibe `ctx.confirmed=True`; en una llamada directa del agente siempre es `False`.
+- Imágenes: si `result_model` tiene un campo `attachments: list[ImageAttachment]` con `exclude=True`, el registro lo pasa a `ToolOk.attachments` (máx. 1) y el JSON no cambia. La auditoría guarda de cada imagen solo `sha256`, `width` y `height`.
 - Sin `ToolGate` real (`DefaultToolGate`): READ y WRITE pasan, CONFIRM se deniega con `confirmation_unavailable`. Lo que no esté registrado se deniega.
 - Identidad de sesión y turno: nunca sale de argumentos del modelo. `TurnTracker` (`turns.py`) admite **un turno activo** a la vez; toda llamada MCP se atribuye a él y sin turno activo se rechaza con `no_active_turn` (F19). La contaminación es por sesión y no caduca.
 - Permisos del agente: `agent/configuration/permissions.json`, lista `granted` con comodín `"<dominio>.*"`. Lo no concedido se deniega con `permission_denied`.
@@ -70,7 +75,7 @@ Orden de `dispatch`, sin excepciones: herramienta registrada → turno activo y 
 
 ### Puente MCP: `app/tools/mcp_bridge.py`
 
-Servidor ASGI **propio**, en un listener de loopback con **puerto efímero** (`bind 127.0.0.1:0`, ni fijo ni configurable), con SDK `mcp` 2.x de bajo nivel, HTTP transmisible, sin estado. Autenticación `Authorization: Bearer <agent_tool_token>`, un token aleatorio por arranque distinto del de la GUI; ningún token `ui` ni `approver` vale aquí. `Host` debe ser exactamente `127.0.0.1:<puerto real>`. Así Hermes no alcanza **ninguna** ruta de la GUI ni de confirmaciones: la separación es de red y credencial, no de buena conducta. Sin recursos, prompts, sampling ni elicitation. `readOnlyHint` solo en READ. El nombre visto por Hermes es `mcp__drakter__<tool>`.
+Servidor ASGI **propio**, en un listener de loopback con **puerto efímero** (`bind 127.0.0.1:0`, ni fijo ni configurable), con SDK `mcp` 2.x de bajo nivel, HTTP transmisible, sin estado. Autenticación `Authorization: Bearer <agent_tool_token>`, un token aleatorio por arranque distinto del de la GUI; ningún token `ui` ni `approver` vale aquí. `Host` debe ser exactamente `127.0.0.1:<puerto real>`. Así Hermes no alcanza **ninguna** ruta de la GUI ni de confirmaciones: la separación es de red y credencial, no de buena conducta. Sin recursos, prompts, sampling ni elicitation. `readOnlyHint` solo en READ. El nombre visto por Hermes es `mcp__drakter__<tool>`. `CallToolResult.content` es `[TextContent(json del ToolOutcome)]` más un `ImageContent` por cada `ToolOk.attachments`, siempre detrás del texto (que lleva el sobre no confiable).
 
 ```python
 def build_agent_tools_app(registry, turns, token: SessionToken-like, state) -> ASGIApp
@@ -91,6 +96,8 @@ class AgentSettings:
     hermes_python: Path                              # python del venv de Hermes; sin shell
     agent_max_turns: int = 12
     turn_timeout_s: float = 300; idle_timeout_s: float = 120
+    # Prórroga (modo flotante): mientras corre `draw` (90 s) o `guide_wait` (115 s), HermesProvider
+    # aplaza turn_deadline e idle_deadline a ahora + timeout + 5 s, con techo de 30 min por turno.
     anthropic_api_key: SecretStr | None   # alias ANTHROPIC_API_KEY, sin prefijo
 ```
 
@@ -100,7 +107,8 @@ class AgentSettings:
 # home.py
 @dataclass HomePaths: root, config, soul, plugins, cwd   # data_dir/"hermes", cwd vacío absoluto
 def render_config(s: AgentSettings, tool_names: Sequence[str]) -> dict     # puro y determinista
-def materialize_home(s, data_dir, tool_names, repo_root) -> HomeManifest   # escribe y devuelve hashes
+def materialize_home(s, data_dir, tool_names, repo_root) -> HomeManifest   # escribe y devuelve hashes; purga cache/images
+def purge_image_cache(root: Path, max_age_s=3600) -> int  # borra las imágenes de herramientas de más de 1 h
 # supervisor.py
 class HermesSupervisor:
     def __init__(self, settings, data_dir, tool_names, agent_tool_token, agent_tools_url, repo_root, on_state)  # sin API HTTP
@@ -111,7 +119,7 @@ class HermesSupervisor:
 # preflight.py: python -m app.integrations.hermes.preflight  (salida 0 solo si todo pasa)
 ```
 
-`render_config` (JSON válido como YAML, sin dependencia nueva) fija: `agent.disabled_toolsets` con terminal, file, web, browser, code_execution, delegation, skills, cronjob, memory y demás; `approvals.mode: manual`; `tools.tool_search.enabled: "off"`; `auth.adopt_external_logins: false`; `auxiliary.background_review.enabled: false`; `curator.enabled: false`; `updates.check: false`; `plugins.auto_update_check_hours: 0`; `plugins.load_timeout_seconds: 0`; `terminal.cwd` absoluto y vacío; `memory.memory_enabled: false`, `memory.user_profile_enabled: false`, sin `memory.provider` (F18 pendiente); `model.context_length: 1000000`; `compression.threshold_tokens: 80000`; `auxiliary.*` en el mismo modelo; `mcp_servers.drakter` con `url` y token por `${DRAKTER_MCP_URL}` y `${DRAKTER_MCP_TOKEN}` (el puerto es efímero: nunca entra en la config ni en su hash), `tools.include` nativo, `resources: false`, `prompts: false`, `sampling.enabled: false`. Toda clave se contrasta con el código del tag.
+`render_config` (JSON válido como YAML, sin dependencia nueva) fija: `agent.disabled_toolsets` con terminal, file, web, browser, code_execution, delegation, skills, cronjob, memory y demás; `agent.image_input_mode: native` (sin ella, `auxiliary.vision` explícito deja al modelo solo con `MEDIA:<ruta>`; spike 04 del modo flotante); `approvals.mode: manual`; `tools.tool_search.enabled: "off"`; `auth.adopt_external_logins: false`; `auxiliary.background_review.enabled: false`; `curator.enabled: false`; `updates.check: false`; `plugins.auto_update_check_hours: 0`; `plugins.load_timeout_seconds: 0`; `terminal.cwd` absoluto y vacío; `memory.memory_enabled: false`, `memory.user_profile_enabled: false`, sin `memory.provider` (F18 pendiente); `model.context_length: 1000000`; `compression.threshold_tokens: 80000`; `auxiliary.*` en el mismo modelo; `mcp_servers.drakter` con `url` y token por `${DRAKTER_MCP_URL}` y `${DRAKTER_MCP_TOKEN}` (el puerto es efímero: nunca entra en la config ni en su hash), `tools.include` nativo, `resources: false`, `prompts: false`, `sampling.enabled: false`. Toda clave se contrasta con el código del tag.
 
 ### 2bis. Runner: `backend/app/integrations/hermes/runner/drakter_runner.py`
 

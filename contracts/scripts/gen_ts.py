@@ -18,7 +18,7 @@ sys.path.insert(0, str(HERE.parent / "python"))
 
 from pydantic import BaseModel, TypeAdapter  # noqa: E402
 
-from drakter_contracts import common, errors, events, jobs, models, tools, voice_ipc  # noqa: E402
+from drakter_contracts import common, errors, events, floating, jobs, models, tools, voice_ipc  # noqa: E402
 from drakter_contracts.common import ContractModel  # noqa: E402
 
 SKIP = {"Page", "ContractModel", "OutModel"}
@@ -28,7 +28,7 @@ IDENT = re.compile(r"^[A-Za-z_$][A-Za-z0-9_$]*$")
 def public_types() -> tuple[dict[str, type[BaseModel]], dict[str, type[enum.Enum]]]:
     classes: dict[str, type[BaseModel]] = {}
     enums: dict[str, type[enum.Enum]] = {}
-    for mod in (common, errors, tools, events, jobs, voice_ipc, *models.MODULES, models._base):
+    for mod in (common, errors, tools, events, floating, jobs, voice_ipc, *models.MODULES, models._base):
         for name, obj in vars(mod).items():
             if name.startswith("_") or not inspect.isclass(obj) or obj.__module__ != mod.__name__:
                 continue

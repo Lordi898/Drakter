@@ -17,12 +17,24 @@ function contentSecurityPolicy(): Plugin {
 
 export default defineConfig({
   main: {
-    plugins: [externalizeDepsPlugin()],
-    build: { rollupOptions: { input: resolve(__dirname, 'electron/main/index.ts') } }
+    // dbus-next y zod (modo flotante) van dentro del bundle: electron-builder no empaqueta node_modules.
+    // `usocket` y `x11` son requires opcionales de dbus-next que Drakter no usa (sockets abstractos, X11).
+    plugins: [externalizeDepsPlugin({ exclude: ['dbus-next', 'zod'] })],
+    build: {
+      rollupOptions: { input: resolve(__dirname, 'electron/main/index.ts'), external: ['usocket', 'x11'] }
+    }
   },
   preload: {
     plugins: [externalizeDepsPlugin()],
-    build: { rollupOptions: { input: resolve(__dirname, 'electron/preload/index.ts') } }
+    build: {
+      rollupOptions: {
+        input: {
+          index: resolve(__dirname, 'electron/preload/index.ts'),
+          // Página flotante (CONTRACT §4.3): `window.drakterFloat`.
+          floating: resolve(__dirname, 'electron/preload/floating.ts')
+        }
+      }
+    }
   },
   renderer: {
     root: '.',

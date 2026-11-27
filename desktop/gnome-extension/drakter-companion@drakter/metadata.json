@@ -1,0 +1,9 @@
+{
+  "uuid": "drakter-companion@drakter",
+  "name": "Drakter Companion",
+  "description": "Servicio D-Bus de sesión para el modo flotante de Drakter: puntero, ventanas, capturas sin diálogo, ventana flotante siempre encima con región de entrada y atajos globales. Muestra un indicador en el panel mientras Drakter está conectado.",
+  "shell-version": ["50"],
+  "settings-schema": "org.gnome.shell.extensions.drakter-companion",
+  "version": 2,
+  "url": "https://github.com/Lordi898/drakter"
+}

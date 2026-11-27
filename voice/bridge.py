@@ -9,13 +9,14 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections import deque
 import time
 import unicodedata
 import uuid
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
-from drakter_contracts.speech_markup import IncrementalStripper
+from drakter_contracts.speech_markup import IncrementalStripper, strip_tags
 from pipecat.frames.frames import (
     BotStoppedSpeakingFrame,
     CancelFrame,
@@ -128,6 +129,15 @@ def _classify_ui(text: str) -> str | None:
     return classify_ui(text)
 
 
+def _classify_floating(text: str) -> str | None:
+    """Capa 0 del modo flotante: `ui_floating_on`, `ui_floating_off` o `None`."""
+    try:
+        from voice.conversation.layer0 import classify_floating
+    except ImportError:
+        return None
+    return classify_floating(text)
+
+
 def _classify_appearance(text: str) -> tuple[str, str] | None:
     """Capa 0 de la apariencia (V1): `("avatar"|"layout", id)` o `None`."""
     try:
@@ -149,6 +159,22 @@ class _Utterance:
     eot_ms: int = 0
 
 
+@dataclass
+class _Pending:
+    """Tramo en cola detrás del que suena (modo flotante, docs/floating/CONTRACT.md §10).
+
+    `beat`: un `speak.beat` (texto entero, ya cerrado). `open`: un `speak.open` del mismo turno que
+    llegó con beats sonando o en cola; guarda sus deltas y su cierre hasta que le toque.
+    """
+
+    turn_id: str
+    speech_id: int
+    kind: str  # "beat" | "open"
+    deltas: list[str] = field(default_factory=list)
+    seq: int | None = None
+    closed: bool = False
+
+
 class BackendBridgeProcessor(FrameProcessor):
     def __init__(self, session: Session, cfg: VoiceConfig, **kwargs) -> None:
         super().__init__(**kwargs)
@@ -168,6 +194,9 @@ class BackendBridgeProcessor(FrameProcessor):
         self._cut = False  # lo cortó una interrupción: sus deltas se ignoran
         self._seq: int | None = None
         self._stripper = IncrementalStripper()
+        # FIFO por turno (speak.beat): lo que espera detrás del tramo activo, en orden de llegada.
+        self._queue: deque[_Pending] = deque()
+        self._active_kind = "open"
 
     # ── frames del pipeline ─────────────────────────────────────────────────
     async def process_frame(self, frame: Frame, direction: FrameDirection) -> None:
@@ -273,7 +302,9 @@ class BackendBridgeProcessor(FrameProcessor):
         rest = strip_wake_word(text)
         # En reposo, «activa el modo Jarvis» despierta por la palabra del FINAL: no empieza por ella,
         # pero es una orden local válida. Se atiende y se vuelve a reposo, como si no hubiera turno.
-        wake_inside = trigger == "wake" and rest is None and _classify_ui(text) is not None
+        wake_inside = trigger == "wake" and rest is None and (
+            _classify_ui(text) is not None or _classify_floating(text) is not None
+        )
         if trigger == "wake" and rest is None and not wake_inside:
             await session.set_mode("standby", "wake")  # falso positivo: sin sonido
             return
@@ -287,6 +318,15 @@ class BackendBridgeProcessor(FrameProcessor):
         if ui is not None:
             await session.emit("voice.local_command", {"command": ui, "utt_id": utt.utt_id})
             await session.play_phrase(ui)
+            if wake_inside:
+                await session.set_mode("standby", trigger)
+            return
+
+        # Modo flotante: frase cerrada, sin agente ni turno. El backend publica `ui.floating` y dice la
+        # frase (`ui_floating_on|off`, o `floating_unavailable` si la extensión no está lista).
+        floating = _classify_floating(text)
+        if floating is not None:
+            await session.emit("voice.local_command", {"command": floating, "utt_id": utt.utt_id})
             if wake_inside:
                 await session.set_mode("standby", trigger)
             return
@@ -333,25 +373,92 @@ class BackendBridgeProcessor(FrameProcessor):
         session.arm_filler()
 
     # ── habla: comandos speak.* del backend ─────────────────────────────────
-    async def speak_open(self, turn_id: str, speech_id: int) -> None:
-        # Nunca dos respuestas a la vez: si la anterior sigue abierta o sonando, se corta antes.
-        # Si no, Fish mezcla los dos textos en el mismo WebSocket (el audio va al contexto activo).
+    def _alive(self) -> bool:
+        """El tramo activo sigue abierto o sonando (no cortado)."""
         session = self._session
-        previous_alive = self._speech_id is not None and not self._cut and (
+        return self._speech_id is not None and not self._cut and (
             self._open or session.speech_open or session.speech_playing
         )
-        if previous_alive and speech_id != self._speech_id:
+
+    def _busy_with(self, turn_id: str) -> bool:
+        """Hay beats o tramos de `turn_id` sonando o en cola: lo nuevo del mismo turno va detrás."""
+        if self._queue:
+            return self._queue[-1].turn_id == turn_id
+        return self._alive() and self._session.state.turn_id == turn_id
+
+    async def speak_open(self, turn_id: str, speech_id: int) -> None:
+        if self._busy_with(turn_id) and speech_id != self._speech_id:
+            self._queue.append(_Pending(turn_id, speech_id, "open"))
+            return
+        # Nunca dos respuestas a la vez: si la anterior sigue abierta o sonando, se corta antes.
+        # Si no, Fish mezcla los dos textos en el mismo WebSocket (el audio va al contexto activo).
+        if self._alive() and speech_id != self._speech_id:
             await self.interrupt("new_turn")
+        self._queue.clear()
+        self._start(turn_id, speech_id, "open")
+
+    def _start(self, turn_id: str, speech_id: int, kind: str) -> None:
         self._ctx = False
         state = self._session.state
         state.turn_id, state.speech_id = turn_id, speech_id
         self._speech_id, self._open, self._cut, self._seq = speech_id, True, False, None
+        self._active_kind = kind
         self._stripper = IncrementalStripper()
         self._session.speech_text = ""
         self._session.speech_open = True
 
+    async def speak_beat(self, turn_id: str, speech_id: int, text: str) -> bool:
+        """`speak.beat`: open + delta + close(completed) en un tramo propio, en FIFO por turno.
+
+        Devuelve `True` si se ignora: voz silenciada, `speech_id` ya usado o texto sin nada que decir.
+        Un beat de otro turno corta lo de antes, como un `speak.open` nuevo.
+        """
+        if not self._session.state.tts_enabled or not strip_tags(text).strip():
+            return True
+        if speech_id == self._speech_id or any(p.speech_id == speech_id for p in self._queue):
+            return True
+        if self._busy_with(turn_id):
+            self._queue.append(_Pending(turn_id, speech_id, "beat", deltas=[text], seq=0, closed=True))
+            return False
+        if self._alive():
+            await self.interrupt("new_turn")
+        self._queue.clear()
+        await self._play(_Pending(turn_id, speech_id, "beat", deltas=[text], seq=0, closed=True))
+        return False
+
+    async def _play(self, item: _Pending) -> None:
+        """Pone `item` como tramo activo y le pasa lo que ya tenga (deltas y cierre)."""
+        self._start(item.turn_id, item.speech_id, item.kind)
+        for seq, text in enumerate(item.deltas):
+            await self.speak_delta(item.speech_id, seq, text)
+        if item.seq is not None:
+            self._seq = item.seq
+        if item.closed:
+            await self.speak_close(item.speech_id)
+
+    async def on_playback_done(self, speech_id: int) -> None:
+        """El PlaybackTracker cerró un tramo (`finished`): suena el siguiente de la cola."""
+        if speech_id == self._speech_id and not self._open:
+            self._session.speech_open = False
+            self._session.speech_playing = False
+            await self._advance()
+
+    async def _advance(self) -> None:
+        while self._queue and not self._alive():
+            await self._play(self._queue.popleft())
+
+    def _queued(self, speech_id: int) -> _Pending | None:
+        return next((p for p in self._queue if p.speech_id == speech_id), None)
+
     async def speak_delta(self, speech_id: int, seq: int, text: str) -> bool:
         """Devuelve `True` si se ignora: speech desconocido, cortado, cerrado o `seq` repetido."""
+        pending = self._queued(speech_id)
+        if pending is not None:
+            if pending.closed or (pending.seq is not None and seq <= pending.seq):
+                return True
+            pending.seq = seq
+            pending.deltas.append(text)
+            return False
         if speech_id != self._speech_id or not self._open or self._cut:
             return True
         if self._seq is not None and seq <= self._seq:
@@ -375,18 +482,29 @@ class BackendBridgeProcessor(FrameProcessor):
                 await self.push_frame(LLMFullResponseEndFrame())
 
     async def speak_close(self, speech_id: int) -> None:
+        pending = self._queued(speech_id)
+        if pending is not None:
+            pending.closed = True
+            return
         if speech_id != self._speech_id or not self._open:
             return
         self._open = False
-        if not self._session.speech_text.strip() and not self._ctx:
+        silent = not self._session.speech_text.strip() and not self._ctx
+        if silent:
             self._session.speech_open = False  # tramo sin texto: no va a sonar nada
         if not self._cut:
             self._session.speech_text += self._stripper.flush()
             if self._ctx:
                 self._ctx = False
                 await self.push_frame(LLMFullResponseEndFrame())
+        if silent and not self._session.speech_playing:
+            await self._advance()  # no habrá `finished` de este tramo: pasa el siguiente
 
     async def speak_stop(self, speech_id: int | None, reason: str) -> None:
+        pending = self._queued(speech_id) if speech_id is not None else None
+        if pending is not None:
+            self._queue.remove(pending)  # aún no sonaba: basta con quitarlo de la cola
+            return
         if speech_id is None or speech_id == self._speech_id:
             await self.interrupt(reason)
 
@@ -399,9 +517,10 @@ class BackendBridgeProcessor(FrameProcessor):
         await self.broadcast_interruption()
 
     def _mark_cut(self) -> None:
-        """Regla de corte: cualquier interrupción corta el speech abierto."""
+        """Regla de corte: cualquier interrupción corta el speech abierto y vacía la cola de beats."""
         if self._open:
             self._cut = True
+        self._queue.clear()
         self._ctx = False  # la interrupción descarta el contexto aguas abajo
         self._session.speech_open = False
 

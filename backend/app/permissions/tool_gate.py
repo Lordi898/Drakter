@@ -7,33 +7,53 @@ The `Protocol`s and dataclasses live in `app/tools/gate.py`. `decision` receives
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import inspect
 import sqlite3
 from collections.abc import Callable, Mapping
 from typing import Any
 
 from drakter_contracts.common import Origin, format_instant
-from drakter_contracts.tools import ToolConfirmationRequired, ToolFailed
+from drakter_contracts.tools import RiskClass, ToolConfirmationRequired, ToolFailed
 from pydantic import BaseModel
 
 from app.audit.writer import AuditEvent, filter_params, write
 from app.permissions.canonical import canonical_json
 from app.permissions.models import ActionSpec, ActorContext, Principal, Verdict
-from app.services.actions import ActionService
+from app.services.actions import ActionService, compact_result
+from app.tools.gate import confirm_reason
+
+
+def _confirmed(ctx: Any) -> Any:
+    """The same context, marked as coming from the user's approval (floating CONTRACT §8.1.4)."""
+    if dataclasses.is_dataclass(ctx) and any(
+        f.name == "confirmed" for f in dataclasses.fields(ctx)
+    ):
+        return dataclasses.replace(ctx, confirmed=True)
+    return ctx
 
 
 def tool_action_spec(tool: Any, make_context: Callable[[], Any]) -> ActionSpec:
-    """Adapt a `ToolSpec`. Its handler opens its own connections, so it is `external`."""
+    """Adapt a `ToolSpec`. Its handler opens its own connections, so it is `external`.
+
+    The handler runs only on the user's approval, so its context has `confirmed=True`.
+    A transient tool (third-party text in its result, or typed text and URLs in its
+    arguments) stores only a compact result, and its row is redacted once closed (I5).
+    """
+    transient = _transient(tool)
 
     def handler(_conn: sqlite3.Connection, params: BaseModel) -> Mapping[str, Any]:
-        result = tool.handler(make_context(), params)
+        result = tool.handler(_confirmed(make_context()), params)
         if inspect.isawaitable(result):
             # Approval runs in a worker thread, which has no running event loop.
             async def waited() -> Any:
                 return await result
 
             result = asyncio.run(waited())
-        return result.model_dump(mode="json")
+        data = result.model_dump(mode="json")
+        return compact_result(data) if transient else data
+
+    handler.transient = transient  # type: ignore[attr-defined]  # read by ActionService
 
     return ActionSpec(
         name=tool.name,
@@ -43,12 +63,30 @@ def tool_action_spec(tool: Any, make_context: Callable[[], Any]) -> ActionSpec:
         handler=handler,
         # WRITE tools only reach a confirmation through the bulk or taint rules; the
         # registry already demands a summary for CONFIRM tools.
-        summarize=tool.summarize or _default_summary(tool.name),
+        summarize=_with_reason(tool, tool.summarize or _default_summary(tool.name)),
         audit=tool.audit,
         resolve_targets=getattr(tool, "resolve_targets", None),
         count_affected=getattr(tool, "count_affected", None),
         external=True,
     )
+
+
+def _transient(tool: Any) -> bool:
+    """Screen, hands and untrusted results: nothing of them stays in SQLite past its use."""
+    return bool(getattr(tool, "returns_untrusted", False)) or tool.domain in ("hands", "screen")
+
+
+def _with_reason(tool: Any, summarize: Callable[[BaseModel], str]) -> Callable[[BaseModel], str]:
+    """The `confirm_if` reason, if any, heads the summary the approver reads."""
+    if getattr(tool, "confirm_if", None) is None:
+        return summarize
+
+    def summary(params: BaseModel) -> str:
+        reason = confirm_reason(tool, params)
+        base = summarize(params)
+        return f"{reason} {base}" if reason else base
+
+    return summary
 
 
 def _default_summary(name: str) -> Callable[[BaseModel], str]:
@@ -99,6 +137,10 @@ class BackendToolGate:
         action = self._actions.registry.get(spec.name)
         if action is None:
             return self._decision(kind="deny", code="permission_denied", message="Unknown tool")
+        if action.risk is RiskClass.WRITE and confirm_reason(spec, args) is not None:
+            # `confirm_if` raises this call only: a CONFIRM copy of the registered action.
+            # Approval runs the registered action, with the same handler and arguments.
+            action = dataclasses.replace(action, risk=RiskClass.CONFIRM)
         verdict, outcome = await asyncio.to_thread(
             self._actions.authorize, _actor(ctx, tainted), action, args
         )
@@ -149,7 +191,7 @@ class BackendAuditSink:
                     action=tool,
                     result=result,
                     tool_name=tool,
-                    params=filter_params(args, spec.audit) if spec else None,
+                    params=_params(args, spec, getattr(event, "attachments", ())),
                     error_code=getattr(event, "code", None),
                     duration_ms=(
                         round(event.duration_ms) if getattr(event, "duration_ms", None) else None
@@ -158,3 +200,15 @@ class BackendAuditSink:
             )
         finally:
             conn.close()
+
+
+def _params(args: Mapping[str, Any], spec: Any, attachments: Any) -> dict[str, Any] | None:
+    """Allow-listed arguments, plus the result's images as sha256 and size only, never pixels."""
+    params = filter_params(args, spec.audit) if spec else None
+    if attachments:
+        params = dict(params or {})
+        params["attachments"] = [
+            {"sha256": a["sha256"], "width": a["width"], "height": a["height"]}
+            for a in attachments
+        ]
+    return params

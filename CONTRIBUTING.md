@@ -2,7 +2,7 @@
 
 Gracias por el interés. Drakter es un proyecto personal en pre-release, mantenido por una persona; las contribuciones son bienvenidas, pero conviene hablarlo antes en un issue si el cambio es grande.
 
-> **Licencia de las contribuciones.** Drakter se publica bajo [Apache-2.0](LICENSE). Según su §5, toda contribución que envíes (issue con código, PR, parche) se acepta bajo esa misma licencia, sin condiciones adicionales. No hay CLA. Opcionalmente puedes firmar tus commits con el [Developer Certificate of Origin](https://developercertificate.org/) (`git commit -s`, que añade `Signed-off-by:`).
+> **Licencia de las contribuciones.** Drakter se publica bajo [AGPL-3.0-only](LICENSE). Toda contribución que envíes (issue con código, PR, parche) se acepta bajo esa misma licencia (inbound = outbound), sin condiciones adicionales. No hay CLA. Opcionalmente puedes firmar tus commits con el [Developer Certificate of Origin](https://developercertificate.org/) (`git commit -s`, que añade `Signed-off-by:`).
 
 ## Antes de empezar
 

@@ -65,7 +65,7 @@ Cada `scenarios/<nombre>.json` lleva `description` y `steps`. El paso se elige p
 - Cada paso necesita `text` o `tool_calls`. Las ramas admiten lo mismo.
 - `allow_missing: true` emite la llamada aunque Hermes no ofrezca esa herramienta.
 - Sin `allow_missing`, una herramienta no ofrecida produce un aviso de escenario no aplicable, no un falso bloqueo.
-- Variables: `{{fixtures}}`, `{{tool_result}}` y las de `--var`.
+- Variables: `{{fixtures}}`, `{{tool_result}}`, `{{result_<clave>}}` (el primer `"clave": "valor"` del último resultado, por ejemplo `{{result_guide_id}}`) y las de `--var`.
 - Las peticiones sin herramientas, como las de título de sesión, reciben una respuesta auxiliar y no avanzan el guion.
 
 ## Comprobación con Hermes real

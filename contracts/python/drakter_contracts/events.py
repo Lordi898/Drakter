@@ -4,7 +4,8 @@
 `voice.*` es experimental hasta que el frente de voz mida latencia. Voz v2 (Pipecat) usa `voice.state`,
 `voice.playback`, `voice.error` y `voice.profile_changed`. `ui.mode` pide al escritorio cambiar de modo
 de interfaz (Drakter o Jarvis) y `ui.appearance`, de avatar o de interfaz Jarvis: son solo estética y el
-backend no guarda nada.
+backend no guarda nada. `ui.floating` y `overlay.*` son del modo flotante (docs/floating/CONTRACT.md §6):
+los consume Electron main, no el renderer principal.
 """
 
 from __future__ import annotations
@@ -15,6 +16,15 @@ from typing import Annotated, Any, Final, Literal
 from pydantic import BaseModel, Field, model_validator
 
 from .common import ActorType, EntityType, Id, Instant
+from .floating import (
+    OverlayClipboard,
+    OverlayDraw,
+    OverlayHands,
+    OverlayInkClear,
+    OverlayInkStale,
+    OverlayTrail,
+    UiFloatingRequested,
+)
 
 
 class AgentState(StrEnum):
@@ -307,5 +317,12 @@ EVENTS: Final[dict[str, type[BaseModel]]] = {
     "voice.profile_changed": VoiceProfileChanged,
     "ui.mode": UiModeRequested,
     "ui.appearance": UiAppearanceRequested,
+    "ui.floating": UiFloatingRequested,
+    "overlay.draw": OverlayDraw,
+    "overlay.ink_clear": OverlayInkClear,
+    "overlay.ink_stale": OverlayInkStale,
+    "overlay.hands": OverlayHands,
+    "overlay.trail": OverlayTrail,
+    "overlay.clipboard": OverlayClipboard,
 }
 EXPERIMENTAL_PREFIXES: Final = ("voice.",)

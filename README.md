@@ -1,6 +1,6 @@
 # Drakter
 
-> **English summary.** Drakter is a local-first personal AI agent with its own desktop app, built for a single user on Linux. An Electron + React desktop talks to a local FastAPI + SQLite backend, which drives a [Hermes Agent](https://github.com/NousResearch/hermes-agent) runtime backed by Claude Haiku 5.5. The agent manages tasks, projects, habits, calendar, subjects, a file storage with full-text search, relations between items and its own memory, always through validated backend tools with explicit confirmation for destructive actions. Status: v0.1.0 pre-release — the v1 scope is integrated and verified module by module; voice v2 (Pipecat + WebRTC loopback) is integrated; the character is one of eight selectable 3D avatars (Three.js); and an optional holographic "Jarvis mode" UI (three layouts) can be switched on from the UI, by voice or by the agent. The self-improvement screen is still in progress. Documentation is in Spanish. License: [Apache-2.0](LICENSE); the license does not grant rights to the Drakter name.
+> **English summary.** Drakter is a local-first personal AI agent with its own desktop app, built for a single user on Linux. An Electron + React desktop talks to a local FastAPI + SQLite backend, which drives a [Hermes Agent](https://github.com/NousResearch/hermes-agent) runtime backed by Claude Haiku 5.5. The agent manages tasks, projects, habits, calendar, subjects, a file storage with full-text search, relations between items and its own memory, always through validated backend tools with explicit confirmation for destructive actions. Status: v0.1.0 pre-release — the v1 scope is integrated and verified module by module; voice v2 (Pipecat + WebRTC loopback) is integrated; the character is one of eight selectable 3D avatars (Three.js); and an optional holographic "Jarvis mode" UI (three layouts) can be switched on from the UI, by voice or by the agent. The self-improvement screen is still in progress. Documentation is in Spanish. License: [AGPL-3.0-only](LICENSE) (it incorporates code from Roamies); the license does not grant rights to the Drakter name.
 
 Agente personal de IA con aplicación de escritorio propia. Local-first, para un solo usuario, en Linux primero.
 
@@ -231,8 +231,8 @@ Más en [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
 ## Licencia
 
-Drakter se distribuye bajo la [Licencia Apache 2.0](LICENSE) (SPDX: `Apache-2.0`). Ver también [NOTICE](NOTICE).
+Drakter se distribuye bajo la [GNU Affero General Public License v3.0](LICENSE) (SPDX: `AGPL-3.0-only`), porque incorpora código de [Roamies](https://github.com/KenKaiii/Roamies) (© Ken Kai, AGPL-3.0). Ver también [NOTICE](NOTICE). El código anterior a este cambio sigue disponible bajo Apache-2.0 en el historial de Git.
 
-La licencia no concede permiso para usar el nombre «Drakter», sus logotipos ni el personaje como marca (Apache-2.0, §6), salvo lo razonable para describir el origen del software. Si publicas una versión modificada, usa otro nombre.
+La licencia no concede permiso para usar el nombre «Drakter», sus logotipos ni el personaje como marca (aviso aparte de la licencia, ver [NOTICE](NOTICE)), salvo lo razonable para describir el origen del software. Si publicas una versión modificada, usa otro nombre.
 
 El contenido de terceros conserva su propia licencia: ver [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
