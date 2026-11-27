@@ -23,6 +23,9 @@ class ToolContext:
     # Set by the job lane (`integrations/hermes/lanes.py`), never by the model: a call made
     # from a background job. It travels to `confirmation.requested.job_id`.
     job_id: UUID | None = None
+    # True only when the handler runs from the user's approval (`tool_action_spec.handler`),
+    # never on a direct agent call. The hands pass `confirmed=true` to the helper only then.
+    confirmed: bool = False
 
 
 ToolHandler = Callable[[ToolContext, Any], "BaseModel | Awaitable[BaseModel]"]
@@ -44,6 +47,9 @@ class ToolSpec:
     returns_untrusted: bool = False  # documents, memory: taints the session
     audit: Mapping[str, AuditPolicy] = field(default_factory=dict)  # unlisted means "hash"
     summarize: Callable[[BaseModel], str] | None = None  # required for CONFIRM
+    # WRITE only: a non-empty reason raises this call to CONFIRM (floating CONTRACT §8.1.3).
+    # It runs on validated arguments, must be pure and fast, and its reason heads the summary.
+    confirm_if: Callable[[BaseModel], str | None] | None = None
 
 
 class ToolError(Exception):
