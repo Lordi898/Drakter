@@ -25,6 +25,11 @@ updates:
       # Python 3.12 (el venv de voz lo fija Pipecat). Ver DECISIONS «DEP-OWW».
       - dependency-name: "openwakeword"
         versions: [">=0.5"]
+      # voice/requirements.lock e install-voice.sh fijan pipecat 1.16.0 y
+      # voice/tests/check_pipeline.py falla con 1.17 (voice.ready/voice.state
+      # inicial). Quitar esta regla solo al migrar a propósito.
+      - dependency-name: "pipecat-ai"
+        versions: [">=1.17"]
 
   - package-ecosystem: npm
     directory: /desktop
@@ -39,6 +44,12 @@ updates:
       # Subir este límite cuando el proyecto cambie de versión de Node.
       - dependency-name: "@types/node"
         versions: [">=25"]
+      # Los 8 avatares y el Stage dependen de three 0.180.x. Se admiten los
+      # parches 0.180.x; cualquier 0.181+ queda ignorado hasta migrar a propósito.
+      - dependency-name: "three"
+        versions: [">=0.181"]
+      - dependency-name: "@types/three"
+        versions: [">=0.181"]
 
   - package-ecosystem: github-actions
     directory: /
