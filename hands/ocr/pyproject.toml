@@ -1,0 +1,17 @@
+[project]
+name = "drakter-ocr"
+version = "0.1.0"
+description = "OCR de Drakter (RapidOCR, CPU) para ventanas sin árbol de accesibilidad"
+license = "AGPL-3.0-only"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "rapidocr==3.10.0",
+    "onnxruntime==1.32.0",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["drakter_ocr"]
