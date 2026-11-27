@@ -449,9 +449,19 @@ async function main() {
     const noPoll = await measure();
     print(`  gnome-shell CPU, idle: 8 ms button poll ${withPoll.toFixed(2)} %, nothing ${noPoll.toFixed(2)} % of one core`);
 
-    // The test windows stay open (they die with the private session): killing the
-    // focused test client crashes gnome-shell 50.1 in shell_app_compare() from the
-    // shell's own focus-app handler (spike 02 §6.7), not from the extension.
+    // Closing the windows that floated (released or not) used to crash gnome-shell
+    // 50.1 in shell_app_compare(): the extension sent fake notify::skip-taskbar.
+    for (const p of [late, floatW, target]) {
+        p.proc.force_exit();
+        await sleep(600);
+    }
+    let shellUp = true;
+    try {
+        await call('GetPointer');
+    } catch {
+        shellUp = false;
+    }
+    ok('closing the windows that floated does not crash the shell', shellUp);
     const failed = results.filter(x => !x[1]);
     print(`\nSUMMARY ${results.length - failed.length}/${results.length} passed${failed.length ? `; failed: ${failed.map(f => f[0]).join('; ')}` : ''}`);
     return failed.length ? 1 : 0;
