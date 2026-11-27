@@ -19,6 +19,7 @@ export default defineConfig({
   main: {
     // dbus-next y zod (modo flotante) van dentro del bundle: electron-builder no empaqueta node_modules.
     // `usocket` y `x11` son requires opcionales de dbus-next que Drakter no usa (sockets abstractos, X11).
+    // `usocket` es además un stub local (stubs/usocket-absent, por overrides) que lanza: dbus-next cae a net.
     plugins: [externalizeDepsPlugin({ exclude: ['dbus-next', 'zod'] })],
     build: {
       rollupOptions: { input: resolve(__dirname, 'electron/main/index.ts'), external: ['usocket', 'x11'] }
