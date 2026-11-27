@@ -1,11 +1,13 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import {
+  FLOATING_CHANNELS,
   IPC_CHANNELS,
   type ApiTopic,
   type BackendConnection,
   type DrakterApi,
   type DrakterBridge
 } from '../shared/bridge'
+import type { FloatingState } from '../shared/floating'
 import type { OperationName } from '../shared/operations'
 
 type Listener = (event: unknown) => void
@@ -77,6 +79,22 @@ function onModeToggle(callback: () => void): () => void {
   }
 }
 
+function onFloatingState(callback: (state: FloatingState) => void): () => void {
+  const listener = (_event: unknown, state: FloatingState): void => callback(state)
+  ipcRenderer.on(FLOATING_CHANNELS.state, listener)
+  return () => {
+    ipcRenderer.removeListener(FLOATING_CHANNELS.state, listener)
+  }
+}
+
+function onLevelsDemand(callback: (on: boolean) => void): () => void {
+  const listener = (_event: unknown, on: unknown): void => callback(on === true)
+  ipcRenderer.on(FLOATING_CHANNELS.levelsDemand, listener)
+  return () => {
+    ipcRenderer.removeListener(FLOATING_CHANNELS.levelsDemand, listener)
+  }
+}
+
 /** Operación con nombre de `OPERATIONS`: main resuelve método y ruta y valida `params`. */
 const op = (name: OperationName, body?: unknown, params?: Record<string, string>) =>
   ipcRenderer.invoke(IPC_CHANNELS.apiCall, { op: name, params, body })
@@ -104,7 +122,14 @@ const api: DrakterApi = {
     list: () => op('jobs.list'),
     cancel: (jobId) => op('jobs.cancel', undefined, { job_id: jobId })
   },
-  ui: { onModeToggle }
+  ui: { onModeToggle },
+  floating: {
+    getState: () => ipcRenderer.invoke(FLOATING_CHANNELS.getState),
+    set: (action) => ipcRenderer.invoke(FLOATING_CHANNELS.set, { action, source: 'ui' }),
+    onState: onFloatingState,
+    onLevelsDemand,
+    reportLevels: (out, input) => ipcRenderer.send(FLOATING_CHANNELS.levels, { out, in: input })
+  }
 }
 
 const bridge: DrakterBridge = {

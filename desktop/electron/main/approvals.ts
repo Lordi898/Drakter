@@ -98,8 +98,9 @@ async function runApproval(host: BackendHost, id: string): Promise<ApprovalOutco
     }
     const parent = getMainWindow()
     // Siempre como propiedad: el arnés e2e sustituye `dialog.showMessageBox`.
+    // Con la principal oculta (modo flotante, CONTRACT §4.2) el diálogo se abre sin padre.
     const result =
-      parent && !parent.isDestroyed()
+      parent && !parent.isDestroyed() && parent.isVisible()
         ? await dialog.showMessageBox(parent, options)
         : await dialog.showMessageBox(options)
 

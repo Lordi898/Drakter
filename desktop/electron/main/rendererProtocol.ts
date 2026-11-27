@@ -2,12 +2,15 @@ import { homedir } from 'node:os'
 import { realpath } from 'node:fs/promises'
 import { extname, join, resolve, sep } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { net, protocol } from 'electron'
+import { app, net, protocol } from 'electron'
 import { RENDERER_HEADER_CSP } from '../shared/csp'
+import { FLOATING_HEADER_CSP } from '../shared/floating'
 import { describeError, logError } from './log'
 
 const SCHEME = 'app'
 const HOST = 'drakter'
+/** Página flotante (CONTRACT §4.1): origen propio, CSP propia (§11.6). */
+const FLOATING_HOST = 'floating'
 
 const MIME: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',
@@ -64,18 +67,35 @@ function characterRivPath(): string {
   return join(data, 'drakter', 'character', 'drakter.riv')
 }
 
-/** Tras `ready`. */
-export function registerRendererProtocol(): void {
+/** `desktop/floating/` en desarrollo; `resources/floating/` empaquetado. */
+function floatingRoot(): string {
+  if (app.isPackaged) return join(process.resourcesPath, 'floating')
+  // Solo en desarrollo: probar con una página doble (p. ej. la del arnés headless de D2).
+  const override = process.env['DRAKTER_FLOATING_ROOT']
+  return override ? resolve(override) : join(__dirname, '../../floating')
+}
+
+/**
+ * Tras `ready`. `serveRenderer`: el host `drakter` solo se sirve si la ventana principal
+ * carga de `app://` (en desarrollo viene del servidor de Vite); `floating` siempre.
+ */
+export function registerRendererProtocol(serveRenderer = true): void {
   const rootPromise = realpath(join(__dirname, '../renderer'))
+  // Sin la carpeta (p. ej. aún no copiada) la raíz no existe y todo da 404.
+  const floatingPromise = realpath(floatingRoot()).catch(() => null)
 
   protocol.handle(SCHEME, async (request) => {
     try {
       const url = new URL(request.url)
-      if (url.host !== HOST) return plain(403, 'Forbidden')
+      const floating = url.host === FLOATING_HOST
+      if (!(floating || (serveRenderer && url.host === HOST))) return plain(403, 'Forbidden')
       if (request.method !== 'GET' && request.method !== 'HEAD') return plain(403, 'Forbidden')
 
       let file: string | null
-      if (url.pathname === CHARACTER_PATH) {
+      if (floating) {
+        const root = await floatingPromise
+        file = root === null ? null : await resolveInside(root, url.pathname)
+      } else if (url.pathname === CHARACTER_PATH) {
         // Ruta fija y no controlada por la petición: solo ese archivo, y solo si es un .riv.
         file = await realpath(characterRivPath()).catch(() => null)
         if (file !== null && extname(file).toLowerCase() !== '.riv') file = null
@@ -96,7 +116,7 @@ export function registerRendererProtocol(): void {
       })
       const length = upstream.headers.get('Content-Length')
       if (length) headers.set('Content-Length', length)
-      if (ext === '.html') headers.set('Content-Security-Policy', RENDERER_HEADER_CSP)
+      if (ext === '.html') headers.set('Content-Security-Policy', floating ? FLOATING_HEADER_CSP : RENDERER_HEADER_CSP)
       return new Response(request.method === 'HEAD' ? null : upstream.body, { status: 200, headers })
     } catch (reason) {
       logError('protocol', 'Fallo sirviendo el renderer', describeError(reason))

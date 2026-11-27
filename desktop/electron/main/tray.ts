@@ -39,6 +39,9 @@ export function activateVoice(backend: BackendHost, trigger: 'hotkey' | 'ui'): P
 /** Lo informa el renderer (`voice:mic-state`); hasta entonces se supone abierto. */
 let micOpen = true
 let trayBackend: BackendHost | null = null
+/** Modo flotante (CONTRACT §4.4): casilla «Modo flotante» → `set('toggle','tray')`. */
+let floatingToggle: (() => void) | null = null
+let floatingActive = false
 
 function buildMenu(backend: BackendHost): Menu {
   return Menu.buildFromTemplate([
@@ -50,6 +53,9 @@ function buildMenu(backend: BackendHost): Menu {
     },
     // Alterna Drakter/Jarvis en el renderer (`ui:mode-toggle`); se muestra la ventana para verlo.
     { label: 'Alternar modo Jarvis', click: () => toggleUiMode() },
+    ...(floatingToggle
+      ? [{ label: 'Modo flotante', type: 'checkbox' as const, checked: floatingActive, click: () => floatingToggle?.() }]
+      : []),
     { type: 'separator' },
     {
       label: 'Salir',
@@ -69,6 +75,13 @@ function toggleUiMode(): void {
 export function setTrayMicOpen(open: boolean): void {
   if (open === micOpen) return
   micOpen = open
+  if (tray && trayBackend) tray.setContextMenu(buildMenu(trayBackend))
+}
+
+export function setTrayFloating(toggle: () => void, active: boolean): void {
+  if (floatingToggle === toggle && floatingActive === active) return
+  floatingToggle = toggle
+  floatingActive = active
   if (tray && trayBackend) tray.setContextMenu(buildMenu(trayBackend))
 }
 

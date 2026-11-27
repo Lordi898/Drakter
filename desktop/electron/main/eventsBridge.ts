@@ -9,8 +9,17 @@ const RETRY_MIN_MS = 500
 const RETRY_MAX_MS = 30_000
 const WS_SUBPROTOCOL = 'drakter.v1'
 
-/** `onEventType`: aviso del tipo de cada evento (p. ej. enfocar ante una confirmación). */
-export function createEventsBridge(host: BackendHost, onEventType?: (type: string) => void): EventsBridge {
+/** Sobre ya parseado y SIN validar (solo `type` es cadena y `payload` objeto). */
+export interface ParsedEnvelope {
+  readonly type: string
+  readonly payload: Record<string, unknown>
+}
+
+/**
+ * `onEvent`: segundo consumidor en main (p. ej. enfocar ante una confirmación o el modo
+ * flotante, CONTRACT §4.5). El reenvío al renderer no cambia.
+ */
+export function createEventsBridge(host: BackendHost, onEvent?: (envelope: ParsedEnvelope) => void): EventsBridge {
   let socket: WebSocket | null = null
   let port: Electron.MessagePortMain | null = null
   let retryTimer: NodeJS.Timeout | null = null
@@ -68,11 +77,19 @@ export function createEventsBridge(host: BackendHost, onEventType?: (type: strin
     forward(data)
   }
 
-  /** Solo lee `seq`, `boot_id` y `type`; el renderer sigue validando el evento. */
+  /** Lee `seq`, `boot_id`, `type` y `payload`; el renderer sigue validando el evento. */
   function rememberPosition(text: string): void {
     try {
-      const envelope = JSON.parse(text) as { seq?: unknown; boot_id?: unknown; type?: unknown }
-      if (onEventType && typeof envelope.type === 'string') onEventType(envelope.type)
+      const envelope = JSON.parse(text) as { seq?: unknown; boot_id?: unknown; type?: unknown; payload?: unknown }
+      if (onEvent && typeof envelope.type === 'string') {
+        const payload = envelope.payload
+        const record = typeof payload === 'object' && payload !== null && !Array.isArray(payload) ? (payload as Record<string, unknown>) : {}
+        try {
+          onEvent({ type: envelope.type, payload: record })
+        } catch (error) {
+          logError(SCOPE, `Consumidor de ${envelope.type} fallido`, describeError(error))
+        }
+      }
       if (typeof envelope.boot_id !== 'string' || !Number.isSafeInteger(envelope.seq)) return
       lastSeq = envelope.seq as number
       lastBootId = envelope.boot_id

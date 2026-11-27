@@ -51,6 +51,7 @@ Propio del proyecto (no es de terceros): `.claude/CLAUDE.md`, `.claude/agents/{c
 | `backend/app/floating/countries.json` | Roamies `8f0adaa` (`countries.mjs`), con datos de [Natural Earth](https://www.naturalearthdata.com/) 110m admin-0 | Datos de Natural Earth: dominio público. Selección y formato de Roamies: AGPL-3.0 | En el mismo orden que el original. |
 | `hands/helper/lists.py` (HANDS_OFF, RISKY, RISKY_KEYS), `backend/app/integrations/hands/safety.py` (`checkUrl`, `isPrivateAddress`, RUNNABLE, redacción) | Roamies `8f0adaa` (`showcase/tauri/src-tauri/hands-linux/roamies-hands`, `showcase/tauri/sidecar/safety.mjs`) | AGPL-3.0, © Ken Kai (KenKaiii) | Port; Drakter añade los ids de GNOME y la redacción en español de las acciones arriesgadas, marcadas con `# Drakter:`. |
 | `desktop/src/components/ui/*.tsx` | Componentes generados con [shadcn/ui](https://github.com/shadcn-ui/ui) y adaptados | MIT, © 2023 shadcn | [docs/third-party-licenses/shadcn-ui.txt](docs/third-party-licenses/shadcn-ui.txt) |
+| `desktop/electron/main/floating/draw/` (`draw.mjs`, `safety.mjs`, `countries.mjs`) | Roamies `8f0adaa`, `showcase/tauri/sidecar/` | AGPL-3.0, © Ken Kai (KenKaiii); `countries.mjs` deriva de Natural Earth (dominio público) | Copia literal byte a byte (sha256 de `draw.mjs` = `x-drakter-source` de `contracts/floating/draw_args.schema.json`); solo se añaden `draw.d.mts` y `safety.d.mts` (tipos, `// Drakter:`). Electron main los usa para la segunda validación del dibujo (CONTRACT §9.5). |
 
 ## 3. Dependencias (se instalan aparte, no se versionan)
 
