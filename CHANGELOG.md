@@ -6,6 +6,28 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y l
 
 ## [Sin publicar]
 
+### Documentación e instalación (2026-11-27)
+- **Guía de instalación completa** (`docs/installation/instalar.md`), paso a paso:
+  - uv, Python 3.12 (con o sin sudo) y Node 24;
+  - venv del backend con `python3.12 -m venv`, activación y `pip install -r requirements.txt`, o con `uv sync`;
+  - Hermes, voz y `.env`;
+  - comprobación, arranque, actualización, desinstalación y problemas frecuentes.
+- **`backend/requirements.txt`**, generado desde `backend/uv.lock` con `scripts/export-requirements.sh`. El CI comprueba que coincide.
+- **`.env.example` al día:**
+  - fuera las 14 variables de la voz v1 que ya no lee nada;
+  - dentro `DEEPGRAM_API_KEY`, `GROQ_API_KEY`, los límites del agente y los ajustes `DRAKTER_VOICE_*` útiles;
+  - nueva guía con todas las variables: `docs/installation/configuracion-env.md`.
+- **Guías nuevas o puestas al día:** `docs/usage/modo-jarvis.md` (nueva), `docs/usage/personaje.md` (8 avatares 3D), `docs/usage/voz.md` (órdenes de modo, avatar e interfaz) y README (estado, instalación, configuración y enlaces).
+
+### Avatares 3D y modo Jarvis (2026-11-26)
+- **8 avatares 3D** elegibles (Three.js): Holo-Contorno (por defecto), Holo-Hilo, Holo-Busto, Holo-Orbe, Holo-Filamento, Ascuario, El Relojero y Filamento. También el personaje clásico (SVG o `.riv`). Se eligen en Ajustes → Avatar.
+- **Modo Jarvis:** segunda interfaz holográfica sobre los mismos datos, con un único lienzo WebGL, niveles de calidad y movimiento reducido. Tiene tres interfaces: Núcleo, Holomesa y Visor.
+  - Se activa con un botón, `Ctrl+Shift+J`, `Ctrl+K`, Ajustes, la bandeja, la voz (capa 0 local) y el agente (`ui_set_mode`).
+  - El avatar y la interfaz se cambian desde Ajustes, el selector «Apariencia» (`Ctrl+Shift+A`), `Ctrl+K`, la voz y el agente (`ui_set_appearance`).
+  - Drakter sigue siendo siempre la interfaz de inicio.
+- **Confirmaciones siempre a la vista:** el aviso común queda por encima de cualquier interfaz y lanzar una confirmación le da el foco (#58).
+- Prueba de conjunto en Electron real con la UHD 620: `docs/IMPLEMENTATION_STATUS.md`, sección «Modo Jarvis».
+
 ### Lanzamiento (2026-11-20)
 - **Instalador sin sudo:** `scripts/package.sh [appimage|deb|all]` construye backend congelado, escritorio y paquetes; `scripts/install-appimage.sh [--runtimes]` extrae el AppImage en `~/.local/opt/drakter`, crea `drakter-app` y la entrada de menú, y comprueba o instala Hermes, el venv de voz, los modelos, el `.env` y el perfil AppArmor del sandbox.
 - **Backend empaquetado autosuficiente:** el paquete lleva `agent/`, `voice/`, `tools/catalog.json`, el runner de Hermes y `pyproject.toml`; un runtime hook de PyInstaller atiende `drakter-backend -m <módulo>`, así que el lector aislado del almacén y la CLI de copias funcionan en la app instalada. Antes, Hermes, la identidad y la voz no tenían sus archivos dentro del paquete.

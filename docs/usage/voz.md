@@ -55,6 +55,23 @@ Se guardan en las preferencias del escritorio y no cambian nada del sistema.
 
 La voz la elige el perfil activo de `~/.config/drakter/voces.toml` (por defecto `natural`). Puedes pedírselo en el chat o por voz: «cambia tu voz a la neutral». Cómo crear perfiles y poner los IDs de Fish: [Perfiles de voz](voces.md).
 
+## Modo Jarvis, avatar e interfaz por voz
+
+Algunas órdenes cortas se atienden al instante, sin pasar por el modelo:
+
+| Para | Di, por ejemplo |
+|---|---|
+| Entrar en el modo Jarvis | «Modo Jarvis», «Activa el modo Jarvis» |
+| Volver a Drakter | «Vuelve a Drakter», «Modo normal» |
+| Cambiar de avatar | «Pon el avatar dragón», «Usa el orbe», «Quita el avatar» |
+| Cambiar de interfaz Jarvis | «Cambia a la interfaz visor», «Interfaz núcleo» |
+
+- **Respuesta:** Drakter confirma con una frase corta («Avatar cambiado, señor»).
+- **Desde reposo:** «Activa el modo Jarvis» funciona también, porque la palabra «Jarvis» lo despierta.
+- **Otras formas de decirlo:** si lo mezclas con otra petición, lo resuelve el agente.
+
+Todas las frases: [modo-jarvis.md](modo-jarvis.md).
+
 ## Confirmaciones: nunca por voz
 
 Las acciones destructivas o masivas se confirman **solo en pantalla**. Decir «sí» no vale. Drakter te avisa («Necesito su confirmación en pantalla») y trae la ventana al frente.
@@ -70,6 +87,8 @@ Los avisos cortos («Entendido», «Un momento», «Sigo con ello»…) suenan d
 ```bash
 ~/.local/share/drakter/venvs/voice/bin/python -m voice phrases
 ```
+
+Las frases del modo Jarvis y de los avatares («Modo Jarvis activado», «Avatar cambiado»…) se añadieron después de la caché inicial: hasta que la regeneres, suenan con la voz en vivo, con algo más de retraso.
 
 Opciones: `--profile <nombre>`, `--only fish|kokoro`, `--force` (regenera aunque exista). Necesita `FISH_API_KEY` y red para la parte de Fish; la de Kokoro es local. Pasada la fecha, Fish ya no se usa y solo se necesita la de Kokoro.
 

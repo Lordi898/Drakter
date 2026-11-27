@@ -1,6 +1,6 @@
 # Hoy y Configuración
 
-> **Estado:** integrado en `drakter/integracion` (`2e05ba6`): **Hoy** es la pantalla inicial y **Configuración** está en la navegación; las APIs `today` y `settings` se montan solas. `GET /api/v1/today` está en la lista de rutas permitidas de Electron. Las notas «Pendiente» del cuerpo se escribieron sobre `drakter/build` (`2da8bef`) y alguna puede estar ya resuelta. NO COMPROBADO en la app real (ver «Estado de la integración» en [README](README.md)).
+> **Estado:** integrado en la integración de la v1 (`2e05ba6`, hoy en `main`): **Hoy** es la pantalla inicial y **Configuración** está en la navegación; las APIs `today` y `settings` se montan solas. `GET /api/v1/today` está en la lista de rutas permitidas de Electron. Las notas «Pendiente» del cuerpo se escribieron sobre `drakter/build` (`2da8bef`) y alguna puede estar ya resuelta. NO COMPROBADO en la app real (ver «Estado de la integración» en [README](README.md)).
 
 ## Para qué sirve
 
