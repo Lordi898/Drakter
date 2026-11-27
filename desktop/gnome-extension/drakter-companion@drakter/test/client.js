@@ -103,6 +103,68 @@ const keys = async (...codes) => {
         await dbg('keyup', 0, 0, c);
 };
 
+// Runs argv and returns its stdout lines (the process must exit by itself).
+function runLines(argv) {
+    const proc = Gio.Subprocess.new(argv, Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_SILENCE);
+    const [, out] = proc.communicate_utf8(null, null);
+    return (out ?? '').trim().split('\n');
+}
+
+// I7: the token alone does not authenticate; the calling process must be Drakter.
+async function callerChecks(token) {
+    const fake = `${ROOT}/fake`;
+    const electron = `${fake}/desktop/node_modules/electron/dist/electron`;
+    const helper = `${fake}/hands/helper/main.py`;
+    GLib.mkdir_with_parents(GLib.path_get_dirname(electron), 0o755);
+    GLib.mkdir_with_parents(GLib.path_get_dirname(helper), 0o755);
+    GLib.file_set_contents(`${fake}/desktop/package.json`, '{"name": "drakter-desktop"}');
+    Gio.File.new_for_path(`${HERE}/fake_hello.py`).copy(Gio.File.new_for_path(helper), Gio.FileCopyFlags.OVERWRITE, null, null);
+    // A copy of gjs-console placed where the dev Electron of a drakter-desktop checkout lives.
+    Gio.File.new_for_path('/usr/bin/gjs-console').copy(Gio.File.new_for_path(electron), Gio.FileCopyFlags.OVERWRITE, null, null);
+    GLib.spawn_command_line_sync(`chmod 755 ${electron}`);
+
+    let out = runLines(['/usr/bin/python3', '-I', '-c', 'import runpy, sys; sys.argv = sys.argv[1:]; runpy.run_path(sys.argv[0])', helper, token]);
+    ok('any python3 process with the right token -> AccessDenied', out[0] === `${ERR}AccessDenied`, out.join('|'));
+    out = runLines(['/usr/bin/python3', '-I', helper, token]);
+    ok('a "hands helper" that does not descend from Drakter -> AccessDenied', out[0] === `${ERR}AccessDenied`, out.join('|'));
+    out = runLines(['/usr/bin/gdbus', 'call', '--session', '--dest', NAME, '--object-path', PATH,
+        '--method', `${IFACE}.Hello`, token]);
+    ok('gdbus with the right token -> denied', !out.join(' ').includes('version'), out.join('|'));
+    // The renamed binary without a drakter-desktop package.json next to it is not Drakter either.
+    GLib.file_set_contents(`${fake}/desktop/package.json`, '{"name": "other-app"}');
+    out = runLines([electron, '-m', `${HERE}/fake-drakter.js`, token]);
+    ok('an Electron of another app -> AccessDenied', out[0] === `MAIN ${ERR}AccessDenied`, out.join('|'));
+    GLib.file_set_contents(`${fake}/desktop/package.json`, '{"name": "drakter-desktop"}');
+
+    // The legitimate pair: Drakter's Electron main and the helper it (indirectly) starts.
+    const main = Gio.Subprocess.new([electron, '-m', `${HERE}/fake-drakter.js`, token, helper],
+        Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_SILENCE);
+    const lines = [];
+    const stream = new Gio.DataInputStream({base_stream: main.get_stdout_pipe()});
+    const read = () => stream.read_line_async(GLib.PRIORITY_DEFAULT, null, (s, res) => {
+        const [line] = s.read_line_finish_utf8(res);
+        if (line !== null) {
+            lines.push(line);
+            read();
+        }
+    });
+    read();
+    for (let i = 0; i < 100 && !lines.some(l => l.startsWith('HELPER')); i++)
+        await sleep(50);
+    ok('Drakter main (dev layout) is accepted', lines.includes('MAIN OK'), lines.join('|'));
+    ok('the hands helper started by Drakter main is accepted', lines.includes('HELPER OK'), lines.join('|'));
+    const probe = await probeNow();
+    ok('one main among the authenticated clients (the helper has left)',
+        probe.roles.split(',').filter(r => r !== 'test').join() === 'main', probe.roles);
+    out = runLines([electron, '-m', `${HERE}/fake-drakter.js`, token]);
+    ok('a second Drakter main while one is connected -> AccessDenied', out[0] === `MAIN ${ERR}AccessDenied`, out.join('|'));
+    main.force_exit();
+    main.wait(null);
+    await sleep(300);
+    out = runLines([electron, '-m', `${HERE}/fake-drakter.js`, token]);
+    ok('after the first main is gone a new one is accepted', out[0] === 'MAIN OK', out.join('|'));
+}
+
 async function main() {
     // 1. Security: no Hello / bad token / good token; Version 2; named errors.
     const other = Gio.DBusConnection.new_for_address_sync(GLib.getenv('DBUS_SESSION_BUS_ADDRESS'),
@@ -129,6 +191,7 @@ async function main() {
     ok('Hello: version 2 and capabilities', info.version === 2 && need.every(c => info.capabilities.includes(c)), JSON.stringify(info));
     let probe = await probeNow();
     ok('panel indicator visible with an authenticated client', probe.indicator);
+    await callerChecks(token);
 
     // 2. Pointer polling cost.
     await dbg('motion', 10, 10); // first absolute event of a new virtual device
@@ -259,6 +322,29 @@ async function main() {
         floatW.lines.length = 0; target.lines.length = 0;
         await clickAt(...cold);
         ok('ForcePassthrough(false): the floating window takes it again', clicked(floatW) && !clicked(target));
+
+        // SetFloatingHidden (I8: the approval dialog is never under the layer).
+        let eh = await errName('SetFloatingHidden', '(b)', [true], IFACE, other);
+        ok('SetFloatingHidden from a non-owner -> AccessDenied', eh === `${ERR}AccessDenied`, eh);
+        const [hidOk] = await call('SetFloatingHidden', '(b)', [true]);
+        floatW.lines.length = 0; target.lines.length = 0;
+        await clickAt(...cold);
+        ok('SetFloatingHidden(true): clicks pass through despite "all"', hidOk && clicked(target) && !clicked(floatW),
+            `float=${floatW.lines} target=${target.lines}`);
+        const hshots = `${ROOT}/rt/shots`;
+        GLib.mkdir_with_parents(hshots, 0o700);
+        const [hshot] = await call('Screenshot', '(a{sv})', [{dir: new GLib.Variant('s', hshots), hide_floating: B(false)}]);
+        const hp = pixel(hshot, ...cold);
+        const hprobe = await probeNow();
+        ok('SetFloatingHidden(true): nothing of the floating window is painted', hp.rgb[2] > 200 && hp.rgb[0] < 50 &&
+            hprobe.hidden && hprobe.opacity === 0, `rgb=${hp.rgb} opacity=${hprobe.opacity}`);
+        await call('SetFloatingHidden', '(b)', [false]);
+        floatW.lines.length = 0; target.lines.length = 0;
+        await clickAt(...cold);
+        const hprobe2 = await probeNow();
+        ok('SetFloatingHidden(false): painted and clickable again', clicked(floatW) && hprobe2.opacity === 255,
+            `opacity=${hprobe2.opacity}`);
+        await sleep(1100); // the screenshot above must not count against the rate limit below
         await call('SetInputRegion', '(sa(iiii))', ['none', []]);
         floatW.lines.length = 0; target.lines.length = 0;
         await clickAt(...inside);

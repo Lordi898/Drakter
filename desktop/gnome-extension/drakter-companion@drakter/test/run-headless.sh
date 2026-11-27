@@ -32,9 +32,19 @@ env -i HOME="$HOME" USER="$USER" PATH=/usr/bin:/bin LANG=C.UTF-8 \
     DEST="$ROOT/data/gnome-shell/extensions/$UUID"
     gsettings set org.gnome.shell disable-user-extensions false
     gsettings set org.gnome.desktop.interface enable-animations false
-    bash "$REPO/scripts/install-gnome-extension.sh" || { echo "FAIL  install script"; exit 1; }
+    # The normal install must not carry the debug interface nor test/ (M3).
+    XDG_DATA_HOME="$ROOT/plain" bash "$REPO/scripts/install-gnome-extension.sh" --no-enable >/dev/null || { echo "FAIL  plain install"; exit 1; }
+    PLAIN="$ROOT/plain/gnome-shell/extensions/$UUID"
+    if [ -s "$PLAIN/extension.js" ] && ! grep -q "DebugApi\|DRAKTER_COMPANION_DEBUG\|DRAKTER_COMPANION_TRUST\|Inject" "$PLAIN/extension.js" && [ ! -e "$PLAIN/test" ]; then
+      echo "PASS  plain install has no DebugApi, no test trust and no test/"
+    else
+      echo "FAIL  plain install still has debug code or test/"; exit 1
+    fi
+    # The headless test needs DebugApi: install the source tree as is.
+    bash "$REPO/scripts/install-gnome-extension.sh" --dev || { echo "FAIL  install script"; exit 1; }
     echo "enabled-extensions: $(gsettings get org.gnome.shell enabled-extensions)"
-    DRAKTER_COMPANION_DEBUG=1 ${GDB:+gdb -batch -ex run -ex bt --args} gnome-shell --headless --wayland ${X11:---no-x11} \
+    # Test drivers trusted without being Drakter: only gjs (client.js). python3 must pass the real check.
+    DRAKTER_COMPANION_DEBUG=1 DRAKTER_COMPANION_TRUST_EXE=/usr/bin/gjs ${GDB:+gdb -batch -ex run -ex bt --args} gnome-shell --headless --wayland ${X11:---no-x11} \
       --virtual-monitor 1280x800 --wayland-display drk-wl >"$ROOT/shell.log" 2>&1 &
     SHELL_PID=$!
     gdbus wait --session --timeout 40 org.drakter.Companion || { echo "NO BUS NAME"; tail -50 "$ROOT/shell.log"; kill $SHELL_PID; exit 1; }

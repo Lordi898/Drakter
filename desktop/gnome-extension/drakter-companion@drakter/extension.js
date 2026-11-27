@@ -25,19 +25,97 @@ Gio._promisify(Shell.Screenshot, 'composite_to_stream');
 const BUS_NAME = 'org.drakter.Companion';
 const OBJ_PATH = '/org/drakter/Companion';
 const IFACE = 'org.drakter.Companion1';
-const DEBUG_IFACE = 'org.drakter.Companion1.Debug';
 const ERROR_PREFIX = 'org.drakter.Companion1.Error.';
 const VERSION = 2;
 const CAPABILITIES = ['pointer', 'buttons', 'gestures', 'windows', 'screenshot', 'floating',
-    'input-region', 'shortcuts', 'escape', 'focus', 'passthrough', 'activate'];
+    'input-region', 'shortcuts', 'escape', 'focus', 'passthrough', 'activate', 'hide'];
 const MAX_RECTS = 256;
 const SHOTS_PER_SECOND = 4;
 
+// @debug-begin  (scripts/install-gnome-extension.sh removes every block like this one)
+const DEBUG_IFACE = 'org.drakter.Companion1.Debug';
 const DEBUG_XML = `<node><interface name="${DEBUG_IFACE}">
   <method name="Inject"><arg name="kind" type="s" direction="in"/>
     <arg name="x" type="i" direction="in"/><arg name="y" type="i" direction="in"/>
     <arg name="code" type="u" direction="in"/></method>
   <method name="Probe"><arg name="info" type="a{sv}" direction="out"/></method></interface></node>`;
+// @debug-end
+
+// ---------- who is calling (CONTRACT §3.5) ----------
+// The token alone is not enough: any process of the user can read it. Hello also
+// checks the calling process through /proc. The same uid is not a hard boundary on
+// the Linux desktop (docs/usage/modo-flotante.md), but a process that only read the
+// token is turned away.
+const DEV_ELECTRON = '/node_modules/electron/dist/electron';
+const HELPER_SCRIPT = '/hands/helper/main.py';
+const SYSTEM_PYTHON = /^\/usr\/bin\/python3(\.\d+)?$/;
+const BAD_ENV = ['LD_PRELOAD=', 'LD_AUDIT=', 'ELECTRON_RUN_AS_NODE='];
+const MAX_HOPS = 32;
+
+function readText(path) {
+    try {
+        const [ok, bytes] = GLib.file_get_contents(path);
+        return ok ? new TextDecoder().decode(bytes) : null;
+    } catch {
+        return null;
+    }
+}
+
+function procExe(pid) {
+    try {
+        return GLib.file_read_link(`/proc/${pid}/exe`).replace(/ \(deleted\)$/, '');
+    } catch {
+        return null;
+    }
+}
+
+const procArgv = pid => (readText(`/proc/${pid}/cmdline`) ?? '').split('\0').filter(Boolean);
+
+function procPpid(pid) {
+    const m = /^PPid:\s+(\d+)$/m.exec(readText(`/proc/${pid}/status`) ?? '');
+    return m ? Number(m[1]) : 0;
+}
+
+// Code loaded into the process (LD_PRELOAD, Electron run as plain node) is not Drakter, whatever the binary.
+const cleanEnv = pid => !(readText(`/proc/${pid}/environ`) ?? '').split('\0')
+    .some(e => BAD_ENV.some(b => e.startsWith(b)));
+
+// The Electron main process of Drakter (not a Chromium child: those carry --type=).
+//  - packaged: the `drakter` executable with resources/app.asar next to it (the
+//    electron-builder fuses make it run only that asar: no RunAsNode, no NODE_OPTIONS);
+//  - dev: <desktop>/node_modules/electron/dist/electron, where <desktop>/package.json
+//    is named drakter-desktop (npm run dev, npm start and the headless harnesses).
+function isDrakterMain(pid) {
+    const exe = procExe(pid);
+    if (!exe || procArgv(pid).some(a => a.startsWith('--type=')) || !cleanEnv(pid))
+        return false;
+    if (GLib.path_get_basename(exe) === 'drakter') {
+        return GLib.file_test(GLib.build_filenamev([GLib.path_get_dirname(exe), 'resources', 'app.asar']),
+            GLib.FileTest.IS_REGULAR);
+    }
+    if (!exe.endsWith(DEV_ELECTRON))
+        return false;
+    try {
+        return JSON.parse(readText(`${exe.slice(0, -DEV_ELECTRON.length)}/package.json`)).name === 'drakter-desktop';
+    } catch {
+        return false;
+    }
+}
+
+// The hands helper: `/usr/bin/python3 -I <...>/hands/helper/main.py`, started by the
+// backend, which Electron starts. One of its ancestors must be Drakter's main.
+function isHandsHelper(pid) {
+    const exe = procExe(pid);
+    const argv = procArgv(pid);
+    if (!exe || !SYSTEM_PYTHON.test(exe) || argv[1] !== '-I' || !GLib.path_is_absolute(argv[2] ?? '') ||
+        !argv[2].endsWith(HELPER_SCRIPT) || !cleanEnv(pid))
+        return false;
+    for (let p = procPpid(pid), hops = 0; p > 1 && hops < MAX_HOPS; p = procPpid(p), hops++) {
+        if (isDrakterMain(p))
+            return true;
+    }
+    return false;
+}
 
 const M = Clutter.ModifierType;
 const BUTTON_MASKS = [[1, M.BUTTON1_MASK], [2, M.BUTTON2_MASK], [3, M.BUTTON3_MASK]];
@@ -88,6 +166,7 @@ export default class DrakterCompanion extends Extension {
         this._inputMode = 'none';
         this._inputRects = [];
         this._floatFocusOn = false; // SetFloatingFocus(true) in force
+        this._floatHidden = false; // SetFloatingHidden(true) in force
         this._prevFocus = null; // last focused window that is not the floating one
         this._focusLater = 0;
         this._timeouts = new Set();
@@ -103,7 +182,20 @@ export default class DrakterCompanion extends Extension {
             this.dir.get_child('org.drakter.Companion1.xml').load_contents(null)[1]);
         this._impl = Gio.DBusExportedObject.wrapJSObject(xml, this);
         this._impl.export(Gio.DBus.session, OBJ_PATH);
+        // @debug-begin
         if (GLib.getenv('DRAKTER_COMPANION_DEBUG') === '1') {
+            // Test drivers may authenticate without being Drakter: exe paths separated
+            // by ':' (default: gjs and python3). Only in the source tree, never in the installed copy.
+            const trust = GLib.getenv('DRAKTER_COMPANION_TRUST_EXE') ?? '/usr/bin/gjs:/usr/bin/python3';
+            this._debugTrust = new Set(trust.split(':').filter(Boolean)
+                .map(p => GLib.canonicalize_filename(p, null))
+                .map(p => {
+                    try {
+                        return GLib.canonicalize_filename(GLib.file_read_link(p), GLib.path_get_dirname(p));
+                    } catch {
+                        return p; // not a symlink
+                    }
+                }));
             this._debugImpl = Gio.DBusExportedObject.wrapJSObject(DEBUG_XML, new DebugApi(this));
             this._debugImpl.export(Gio.DBus.session, OBJ_PATH);
             this._keymapChanges = 0;
@@ -116,6 +208,7 @@ export default class DrakterCompanion extends Extension {
                 return Clutter.EVENT_PROPAGATE;
             }, this);
         }
+        // @debug-end
         this._ownerId = Gio.bus_own_name_on_connection(Gio.DBus.session, BUS_NAME,
             Gio.BusNameOwnerFlags.NONE, null, null);
 
@@ -184,8 +277,10 @@ export default class DrakterCompanion extends Extension {
         this._focusWin = null;
         this._prevFocus = null;
         this._impl.unexport();
+        // @debug-begin
         this._debugImpl?.unexport();
         this._debugImpl = null;
+        // @debug-end
         Gio.bus_unown_name(this._ownerId);
         try {
             Gio.File.new_for_path(this._tokenPath).delete(null);
@@ -218,11 +313,28 @@ export default class DrakterCompanion extends Extension {
         out.close(null);
     }
 
-    async _senderUid(sender) {
+    // {uid, pid} of a connection, as the bus daemon saw them (not what the caller says).
+    async _senderCreds(sender) {
         const reply = await Gio.DBus.session.call('org.freedesktop.DBus', '/org/freedesktop/DBus',
-            'org.freedesktop.DBus', 'GetConnectionUnixUser', new GLib.Variant('(s)', [sender]),
-            new GLib.VariantType('(u)'), Gio.DBusCallFlags.NONE, -1, null);
-        return reply.deepUnpack()[0];
+            'org.freedesktop.DBus', 'GetConnectionCredentials', new GLib.Variant('(s)', [sender]),
+            new GLib.VariantType('(a{sv})'), Gio.DBusCallFlags.NONE, -1, null);
+        const creds = reply.deepUnpack()[0];
+        return {uid: creds.UnixUserID?.deepUnpack(), pid: creds.ProcessID?.deepUnpack()};
+    }
+
+    // 'main' | 'helper' | 'test' (debug only) | null
+    _callerRole(pid) {
+        if (!isInt(pid) || pid <= 1)
+            return null;
+        // @debug-begin
+        if (this._debugTrust?.has(procExe(pid)))
+            return 'test';
+        // @debug-end
+        if (isDrakterMain(pid))
+            return 'main';
+        if (isHandsHelper(pid))
+            return 'helper';
+        return null;
     }
 
     // Returns the client record if the caller may use the API, otherwise
@@ -309,10 +421,12 @@ export default class DrakterCompanion extends Extension {
 
     async HelloAsync([token], invocation) {
         const sender = invocation.get_sender();
+        let pid;
         try {
-            const uid = await this._senderUid(sender);
-            if (uid !== this._uid)
+            const creds = await this._senderCreds(sender);
+            if (creds.uid !== this._uid)
                 throw new Error('different user');
+            pid = creds.pid;
         } catch (e) {
             returnError(invocation, new ApiError('AccessDenied', `Access denied (${e.message})`));
             return;
@@ -322,9 +436,20 @@ export default class DrakterCompanion extends Extension {
             return;
         }
         if (!this._clients.has(sender)) {
+            const role = this._callerRole(pid);
+            if (!role) {
+                log(`Drakter Companion: turned away a client that is not Drakter (pid ${pid}, ${procExe(pid) ?? '?'})`);
+                returnError(invocation, new ApiError('AccessDenied', 'The caller is not Drakter'));
+                return;
+            }
+            // One Drakter main and one hands helper at a time: a second one is not Drakter.
+            if (role !== 'test' && [...this._clients.values()].some(c => c.authed && c.role === role)) {
+                returnError(invocation, new ApiError('AccessDenied', `Another Drakter ${role} is already connected`));
+                return;
+            }
             const watchId = Gio.bus_watch_name_on_connection(Gio.DBus.session, sender,
                 Gio.BusNameWatcherFlags.NONE, null, () => this._forgetClient(sender));
-            this._clients.set(sender, {authed: true, opts: {}, watchId, lastPointer: 0, pending: 0,
+            this._clients.set(sender, {authed: true, role, pid, opts: {}, watchId, lastPointer: 0, pending: 0,
                 escape: false, passthrough: false, shots: []});
         }
         this._syncIndicator();
@@ -448,7 +573,7 @@ export default class DrakterCompanion extends Extension {
             const shooter = new Shell.Screenshot();
             const [content, scale, cursorContent, cursorPoint, cursorScale] =
                 await shooter.screenshot_stage_to_content();
-            actors.forEach((a, i) => (a.opacity = saved[i]));
+            this._restoreOpacity(actors, saved);
             actors = [];
             this._blinkIndicator();
 
@@ -463,7 +588,7 @@ export default class DrakterCompanion extends Extension {
             stream.close(null);
             invocation.return_value(new GLib.Variant('(s(iiii)d)', [file.get_path(), [x, y, w, h], scale]));
         } catch (e) {
-            actors.forEach((a, i) => (a.opacity = saved[i]));
+            this._restoreOpacity(actors, saved);
             try {
                 file?.delete(null);
             } catch {}
@@ -582,6 +707,20 @@ export default class DrakterCompanion extends Extension {
         if (ok)
             Main.activateWindow(w, global.display.get_current_time_roundtrip());
         invocation.return_value(new GLib.Variant('(b)', [ok]));
+    }
+
+    SetFloatingHiddenAsync([hidden], invocation) {
+        if (!this._authed(invocation))
+            return;
+        try {
+            this._checkOwner(invocation.get_sender());
+            const ok = this._floatRule !== null;
+            if (ok)
+                this._setFloatHidden(!!hidden);
+            invocation.return_value(new GLib.Variant('(b)', [ok]));
+        } catch (e) {
+            returnError(invocation, e);
+        }
     }
 
     ForcePassthroughAsync([on], invocation) {
@@ -801,6 +940,8 @@ export default class DrakterCompanion extends Extension {
             return false;
         this._patchWindowChain(w);
         this._floating.add(w);
+        if (this._floatHidden)
+            w.get_compositor_private().opacity = 0;
         w.make_above();
         w.stick();
         // NEVER w.notify('skip-taskbar') here: ShellApp (C) counts its
@@ -849,7 +990,27 @@ export default class DrakterCompanion extends Extension {
         }
     }
 
+    // While hidden (a native approval dialog is open) the floating window is not
+    // painted and takes no click, whatever the page draws.
+    _setFloatHidden(hidden) {
+        this._floatHidden = hidden;
+        for (const w of this._floating) {
+            const actor = w.get_compositor_private();
+            if (actor)
+                actor.opacity = hidden ? 0 : 255;
+        }
+        this._updateInputRegion(true);
+    }
+
+    // After a screenshot hid the floating window: back to its opacity, unless
+    // SetFloatingHidden(true) arrived in the meantime.
+    _restoreOpacity(actors, saved) {
+        actors.forEach((a, i) => (a.opacity = this._floatHidden ? 0 : saved[i]));
+    }
+
     _releaseFloating() {
+        if (this._floatHidden)
+            this._setFloatHidden(false);
         for (const w of this._floating) {
             try {
                 if (w._drakterShownId)
@@ -955,7 +1116,7 @@ export default class DrakterCompanion extends Extension {
         const [px, py, mods] = global.get_pointer();
         if (!force && (mods & ANY_BUTTON))
             return; // never change targets in the middle of a press/drag
-        const passthrough = [...this._clients.values()].some(c => c.passthrough);
+        const passthrough = this._floatHidden || [...this._clients.values()].some(c => c.passthrough);
         for (const w of this._floating) {
             // XWayland: the X server routes pointer events by its own stacking and
             // X11 input shape, so flipping the compositor pick would only desync
@@ -1219,6 +1380,7 @@ export default class DrakterCompanion extends Extension {
     }
 }
 
+// @debug-begin
 // Only exported with DRAKTER_COMPANION_DEBUG=1 in the gnome-shell environment
 // (used by the headless test, never in a normal session). Injects input
 // through a Clutter virtual device and reports internal state.
@@ -1262,6 +1424,9 @@ class DebugApi {
             blinks: v.u(e._blinks),
             float_focus_on: v.b(e._floatFocusOn),
             passthrough: v.b([...e._clients.values()].some(c => c.passthrough)),
+            hidden: v.b(e._floatHidden),
+            opacity: v.u(w?.get_compositor_private()?.opacity ?? 0),
+            roles: v.s([...e._clients.values()].filter(c => c.authed).map(c => c.role).sort().join(',')),
         };
         const [px, py] = global.get_pointer();
         const picked = global.stage.get_actor_at_pos(Clutter.PickMode.REACTIVE, px, py);
@@ -1285,3 +1450,4 @@ class DebugApi {
 function dump(actor) {
     return actor ? {t: actor.constructor.$gtype.name, r: actor.reactive, c: actor.get_children().map(dump)} : null;
 }
+// @debug-end

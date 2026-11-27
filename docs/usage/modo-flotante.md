@@ -34,7 +34,7 @@ Si pulsas el botón del modo flotante sin la extensión, Drakter abre esta misma
 |---|---|
 | Falta la extensión | Instálala (pasos de arriba) |
 | La extensión es antigua | Vuelve a ejecutar el script y cierra la sesión |
-| La extensión ha rechazado la conexión | Sal de Drakter desde la bandeja y vuelve a abrirlo; si sigue, reinstala la extensión |
+| La extensión ha rechazado la conexión | Sal de Drakter desde la bandeja y vuelve a abrirlo (solo se admite un Drakter a la vez); si sigue, reinstala la extensión |
 | Esta sesión no es GNOME con Wayland | En la pantalla de acceso elige «GNOME», no «GNOME sobre Xorg» |
 
 ## Activar y quitar
@@ -61,7 +61,7 @@ Al activarlo, la ventana principal se esconde en la bandeja: el avatar ya hace s
 - **Mira la pantalla** cuando se lo pides («¿cómo exporto esto a PDF?»), señala dónde pulsar y espera a que lo hagas antes de pasar al siguiente paso.
 - **Dibuja tarjetas y esquemas** en una zona libre («hazme un esquema de la fotosíntesis»). `Esc` los borra.
 - **Barra de pregunta:** `Super+Alt+A` la abre para escribirle sin cambiar de app.
-- Cuando necesita permiso para algo, aparece el **cuadro de confirmación de siempre**. Desde el avatar no se aprueba nada.
+- Cuando necesita permiso para algo, aparece el **cuadro de confirmación de siempre**. Desde el avatar no se aprueba nada. Mientras el cuadro está abierto, JARVIS y todo lo que haya dibujado desaparecen de la pantalla y dejan pasar los clics: nada puede tapar el texto del cuadro. Al cerrarlo vuelven.
 
 ## Ajustes
 
@@ -71,7 +71,12 @@ En Configuración → **Modo flotante**:
 |---|---|---|
 | Tamaño del avatar | Normal, pequeño o junto al cursor. Se aplica la próxima vez que actives el modo | Normal |
 | Sonidos del avatar | Pequeños sonidos al aparecer, señalar y terminar. No afecta a la voz | Activado |
+| Dejar que Drakter vea mi pantalla | Permite capturas de pantalla y leer el texto de tus ventanas, solo con el modo flotante activo y cuando la conversación lo pide | **Desactivado** |
 | Dejar que Drakter use mis apps | Permite que Drakter pulse y escriba en otras ventanas cuando se lo pidas | **Desactivado** |
+
+### Dejar que Drakter vea mi pantalla
+
+Está apagado de entrada y solo se enciende desde este ajuste. Con él encendido, y **solo mientras el modo flotante está activo**, Drakter puede hacer una captura de tu pantalla o de una ventana, y leer el texto de tus ventanas, cuando la conversación lo pide («¿dónde pulso para exportar?», «mira esto»). Las capturas **se envían al modelo de IA** para que te responda; en tu equipo se borran nada más usarlas. Mientras Drakter tiene acceso, el icono de Drakter del panel superior se ve, y parpadea en cada captura.
 
 ### Dejar que Drakter use mis apps
 
@@ -87,6 +92,25 @@ Está apagado de entrada y solo se enciende desde este ajuste: Drakter no puede 
 - Las capturas de pantalla solo se hacen cuando Drakter las necesita para responderte, se procesan en tu equipo y se borran nada más leerlas.
 - Lo que aparece en pantalla (textos de otras apps, títulos de ventana) se trata como dato no confiable: no puede darle órdenes a Drakter.
 - La auditoría guarda qué se hizo, pero nunca lo que se tecleó ni el contenido de la pantalla.
+
+## Seguridad de la extensión
+
+La extensión «Drakter Companion» da acceso al puntero, a la lista de ventanas y a capturas sin diálogo. Para que no lo use cualquiera:
+
+- Solo atiende a procesos de tu usuario que presentan el token secreto de `$XDG_RUNTIME_DIR/drakter-companion/token`.
+- Además comprueba **qué proceso llama** (con el bus de sesión y `/proc`). Solo acepta:
+  - el proceso principal de Drakter: el ejecutable `drakter` de la app instalada, con su `resources/app.asar` al lado, o el Electron de desarrollo de una copia de Drakter (`desktop/node_modules/electron/dist/electron`, con `desktop/package.json` llamado `drakter-desktop`);
+  - el ayudante de las manos (`/usr/bin/python3 -I …/hands/helper/main.py`), y solo si desciende de ese proceso principal de Drakter.
+  - Rechaza cualquier proceso con `LD_PRELOAD`, `LD_AUDIT` o `ELECTRON_RUN_AS_NODE` en su entorno.
+- Solo admite **un** Drakter principal y **un** ayudante a la vez.
+- La copia que instala `scripts/install-gnome-extension.sh` no lleva la interfaz de depuración (la que inyecta teclado y ratón en las pruebas). `--dev` la incluye, solo para el gnome-shell de pruebas.
+
+**Riesgo que queda.** En el escritorio Linux tu propio usuario no es una frontera de seguridad completa. Un programa malicioso que ya se ejecute como tú podría, con esfuerzo deliberado, hacerse pasar por Drakter:
+
+- en desarrollo, lanzando el Electron de tu copia de Drakter con su propio código (en la app instalada los fusibles de Electron lo impiden);
+- modificando los archivos de la extensión en `~/.local/share/gnome-shell/extensions` (surte efecto al volver a iniciar sesión) o los de Drakter.
+
+Lo que ya no basta es leer el token: un proceso cualquiera que lo lea recibe «acceso denegado». Si sospechas de software malicioso, desactiva la extensión (`gnome-extensions disable drakter-companion@drakter`): sin ella no hay capturas ni puntero global.
 
 ## Problemas
 
