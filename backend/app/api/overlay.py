@@ -24,10 +24,23 @@ from app.permissions.models import ActorContext, Principal
 logger = logging.getLogger("drakter.api.overlay")
 
 
+def _is_desktop(principal: object) -> bool:
+    return principal == "desktop" or (
+        getattr(principal, "kind", None) == "user" and getattr(principal, "id", None) == "desktop"
+    )
+
+
 async def require_desktop(request: Request) -> None:
-    """Igual que la voz: cualquier otro principal (el agente) queda fuera."""
+    """Solo el escritorio. Sin principal no hay valor por defecto: se rechaza (revisión PR #76, M5).
+
+    Vale el que fije el guardia para la petición; si no lo fija, el que el cableado declara para el
+    token `ui` (`app.state.gui_principal`, `permissions/wiring.py`). Sin ninguno de los dos, 403.
+    """
     state = request.scope.get("state") or {}
-    if state.get("principal", "desktop") != "desktop":
+    principal = state.get("principal")
+    if principal is None:
+        principal = getattr(request.app.state, "gui_principal", None)
+    if principal is None or not _is_desktop(principal):
         raise AppError("forbidden", "Desktop session required", 403)
 
 

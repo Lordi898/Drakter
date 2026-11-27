@@ -62,7 +62,46 @@ class Bulk(ContractModel):
     count: int
 
 
-calls = {"demo_delete": 0, "demo_external": 0, "demo_write": 0}
+class TypedStep(ContractModel):
+    do: str
+    text: str
+
+
+class ActArgs(ContractModel):
+    window_id: str
+    steps: list[TypedStep]
+
+
+class ActResult(ContractModel):
+    status: str
+    steps: list[dict[str, object]]
+    read_id: str | None = None
+    envelope: dict[str, object] | None = None
+
+
+TYPED = "TEXTO-TECLEADO-PRIVADO"
+THIRD_PARTY = "CORREO-DE-TERCEROS"
+
+
+def fake_act(ctx, params: ActArgs) -> ActResult:
+    calls["demo_act"] += 1
+    return ActResult(status="done", steps=[{"index": 0, "do": "type", "status": "ok"}],
+                     read_id=str(uuid4()), envelope={"kind": "window_read", "content": THIRD_PARTY})
+
+
+def act_spec():
+    """`act_in_app` simulada, adaptada como en producción por `tool_action_spec`."""
+    from app.permissions.tool_gate import tool_action_spec
+    from app.tools.spec import ToolContext, ToolSpec
+
+    tool = ToolSpec(name="demo_act", description="manos simuladas", domain="hands", args_model=ActArgs,
+                    result_model=ActResult, permission="demo.write", risk=RiskClass.WRITE,
+                    handler=fake_act, returns_untrusted=True, summarize=lambda p: "teclear",
+                    audit={"window_id": "log", "steps": "hash"})
+    return tool_action_spec(tool, lambda: ToolContext(uuid4(), uuid4(), "c", "agent", None))
+
+
+calls = {"demo_delete": 0, "demo_external": 0, "demo_write": 0, "demo_act": 0}
 revision = {"value": 1}
 lock = threading.Lock()
 
@@ -170,6 +209,8 @@ async def main(root: Path) -> None:
     actions = install_security(app, settings, agent_grants_path=grants)
     for spec in SPECS:
         actions.registry.register(spec)
+    act = act_spec()
+    actions.registry.register(act)
     await start_security(app)
 
     agent_token = secrets.token_urlsafe(32)
@@ -302,6 +343,45 @@ async def main(root: Path) -> None:
     except AppError as exc:
         check("caducada: 410", exc.status_code == 410, exc.status_code)
     check("caducar no ejecuta", calls["demo_delete"] == before and status_of(conn, gone) == "expired")
+
+    print("-- retención: texto tecleado y de terceros fuera de SQLite (I5)")
+    act_args = ActArgs(window_id="0x1", steps=[TypedStep(do="type", text=TYPED)])
+
+    def row_dump(action_id: str) -> str:
+        return json.dumps(conn.execute("SELECT * FROM pending_confirmations WHERE id=?", (action_id,)).fetchone())
+
+    typed = actions.execute_or_request(agent(tainted=True), act, act_args)
+    typed_id = str(typed.action_id)
+    hash_typed = actions.detail(conn, UUID(typed_id))["params_hash"]
+    check("pendiente guarda el texto para poder ejecutarlo", TYPED in row_dump(typed_id))
+    result = actions.approve(conn, UUID(typed_id), hash_typed, Principal.APPROVER, correlation_id="c")
+    check("aprobada ejecuta con el texto completo", calls["demo_act"] == 1 and result.status == "executed", result)
+    dump = row_dump(typed_id)
+    check("ejecutada: sin texto tecleado ni de terceros", TYPED not in dump and THIRD_PARTY not in dump, dump)
+    stored = conn.execute("SELECT args_hash, redacted_at, result_json FROM pending_confirmations WHERE id=?", (typed_id,)).fetchone()
+    check("args_hash intacto y fila marcada", stored[0] == hash_typed and stored[1] is not None, stored)
+    check("resultado compacto: estado, pasos e ids", json.loads(stored[2]).keys() == {"status", "steps", "read_id"}, stored[2])
+    check("la vista de la GUI sigue funcionando", actions.detail(conn, UUID(typed_id))["status"] == "executed")
+    must_abort(conn, "redactada no se reescribe", "UPDATE pending_confirmations SET args_json='{}', redacted_at='x' WHERE id=?", (typed_id,))
+    audit_dump = json.dumps(conn.execute("SELECT * FROM audit_events WHERE confirmation_id=?", (typed_id,)).fetchall())
+    check("auditoría sin el texto", TYPED not in audit_dump and THIRD_PARTY not in audit_dump)
+
+    short = ActionService(db_path=settings.db_path, registry=actions.registry,
+                          engine=PermissionEngine(("demo.*",)), ttl_seconds=-1)
+    lapsed = str(short.execute_or_request(agent(tainted=True), act, act_args).action_id)
+    short.expire_due(conn)
+    check("caducada: sin texto tecleado", status_of(conn, lapsed) == "expired" and TYPED not in row_dump(lapsed), row_dump(lapsed))
+    refused = str(actions.execute_or_request(agent(tainted=True), act, act_args).action_id)
+    actions.reject(conn, UUID(refused), Principal.APPROVER, correlation_id="c")
+    check("rechazada: sin texto tecleado", TYPED not in row_dump(refused))
+    old = str(actions.execute_or_request(agent(tainted=True), act, act_args).action_id)
+    conn.execute("UPDATE pending_confirmations SET status='expired' WHERE id=?", (old,))  # cerrada a la antigua
+    check("fila antigua cerrada aún con texto", TYPED in row_dump(old))
+    actions.reconcile_on_boot(conn)
+    check("la limpieza al arrancar la vacía", TYPED not in row_dump(old) and calls["demo_act"] == 1, row_dump(old))
+    plain = dispatch("demo_delete", {"key": "keep"}, agent(), actions=actions)["action_id"]
+    actions.reject(conn, UUID(plain), Principal.APPROVER, correlation_id="c")
+    check("las demás herramientas conservan sus argumentos", "s3cret-value" in row_dump(plain))
 
     print("-- reglas del motor")
     check("no registrada: denegada", dispatch("rm_rf", {}, agent(), actions=actions)["status"] == "error")

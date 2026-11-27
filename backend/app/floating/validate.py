@@ -6,7 +6,9 @@
 2. JSON Schema `contracts/floating/draw_args.schema.json` (Draft 2020-12, el estricto) → `validation_error`.
 3. `check_draw` (port literal) → `draw_invalid`, con sus líneas en inglés como Roamies.
 4. Reglas de Drakter → `draw_action_forbidden`: marcas `type`, `copy`, `open`, `handoff`; botones `open` cuya
-   URL no pasa `check_url`, y los que no pasan `checkDrawAction` (safety.mjs:504).
+   URL no pasa `check_url`, y los que no pasan `checkDrawAction` (safety.mjs:504). Además (revisión del
+   PR #76, M4): en una sesión contaminada no hay botones `copy` ni `open`, y un botón `copy` siempre enseña
+   en su texto el valor que copia, para que una inyección no pueda pegar en el portapapeles otra cosa.
 
 Además, `lean_schema()` da lo que ve el modelo: el esquema sin `minLength`/`maxLength` y con los elementos de
 lista de las tarjetas como objetos sueltos (port de `leanSchema` + `drawModelSchema`).
@@ -156,8 +158,34 @@ def _schema_message(error: Any) -> str:
     return f"does not match the schema ({kind})"
 
 
-def validate_draw(raw: dict[str, Any]) -> dict[str, Any]:
-    """Devuelve los args ya ordenados y válidos, o lanza `ToolError` con el código del contrato."""
+def session_tainted(ctx: Any) -> bool:
+    """Falla cerrada: si no se llega al registro de turnos, la sesión cuenta como contaminada."""
+    turns = getattr(getattr(ctx.state, "agent_runtime", None), "turns", None)
+    return True if turns is None else bool(turns.is_tainted(ctx.session_id))
+
+
+def _shown(text: Any) -> str:
+    return " ".join(text.split()) if isinstance(text, str) else ""
+
+
+def _action_rule(m: dict[str, Any], action: dict[str, Any], tainted: bool) -> str | None:
+    """M4: lo que un botón no puede hacer aunque pase `checkDrawAction`."""
+    do = action.get("do")
+    if tainted and do in ("copy", "open"):
+        return ("en esta conversación hay contenido no confiable (pantalla, documentos o memoria): "
+                "no se dibujan botones que copien o abran. Di el valor en el chat.")
+    if do == "copy":
+        value = _shown(action.get("value"))
+        if not value or value not in _shown(m.get("text")):
+            return "un botón copy tiene que enseñar en su text exactamente el valor que copia."
+    return None
+
+
+def validate_draw(raw: dict[str, Any], *, tainted: bool = True) -> dict[str, Any]:
+    """Devuelve los args ya ordenados y válidos, o lanza `ToolError` con el código del contrato.
+
+    `tainted` es el estado de la sesión; por omisión, contaminada (falla cerrada).
+    """
     args = tidy_strict(raw)
     errors = sorted(_validator().iter_errors(args), key=lambda e: list(e.absolute_path))
     if errors:
@@ -191,6 +219,8 @@ def validate_draw(raw: dict[str, Any]) -> dict[str, Any]:
                     verdict = check_draw_action({"kind": "button", "action": action or {}})
                 if verdict.level == BLOCK:
                     forbidden.append(f"{where}: Blocked for safety: {verdict.reason}")
+                elif action and (rule := _action_rule(m, action, tainted)):
+                    forbidden.append(f"{where}: {rule}")
     if forbidden:
         raise ToolError(
             "draw_action_forbidden",

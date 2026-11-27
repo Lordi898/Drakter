@@ -20,7 +20,7 @@ from pydantic import BaseModel
 from app.audit.writer import AuditEvent, filter_params, write
 from app.permissions.canonical import canonical_json
 from app.permissions.models import ActionSpec, ActorContext, Principal, Verdict
-from app.services.actions import ActionService
+from app.services.actions import ActionService, compact_result
 from app.tools.gate import confirm_reason
 
 
@@ -37,7 +37,10 @@ def tool_action_spec(tool: Any, make_context: Callable[[], Any]) -> ActionSpec:
     """Adapt a `ToolSpec`. Its handler opens its own connections, so it is `external`.
 
     The handler runs only on the user's approval, so its context has `confirmed=True`.
+    A transient tool (third-party text in its result, or typed text and URLs in its
+    arguments) stores only a compact result, and its row is redacted once closed (I5).
     """
+    transient = _transient(tool)
 
     def handler(_conn: sqlite3.Connection, params: BaseModel) -> Mapping[str, Any]:
         result = tool.handler(_confirmed(make_context()), params)
@@ -47,7 +50,10 @@ def tool_action_spec(tool: Any, make_context: Callable[[], Any]) -> ActionSpec:
                 return await result
 
             result = asyncio.run(waited())
-        return result.model_dump(mode="json")
+        data = result.model_dump(mode="json")
+        return compact_result(data) if transient else data
+
+    handler.transient = transient  # type: ignore[attr-defined]  # read by ActionService
 
     return ActionSpec(
         name=tool.name,
@@ -63,6 +69,11 @@ def tool_action_spec(tool: Any, make_context: Callable[[], Any]) -> ActionSpec:
         count_affected=getattr(tool, "count_affected", None),
         external=True,
     )
+
+
+def _transient(tool: Any) -> bool:
+    """Screen, hands and untrusted results: nothing of them stays in SQLite past its use."""
+    return bool(getattr(tool, "returns_untrusted", False)) or tool.domain in ("hands", "screen")
 
 
 def _with_reason(tool: Any, summarize: Callable[[BaseModel], str]) -> Callable[[BaseModel], str]:

@@ -14,7 +14,7 @@ from drakter_contracts.floating import DrawToolArgs, DrawToolResult, GuideWaitAr
 from pydantic import model_validator
 
 from app.floating.runner import RUNNER
-from app.floating.validate import lean_schema, tidy_strict, validate_draw
+from app.floating.validate import lean_schema, session_tainted, tidy_strict, validate_draw
 from app.tools.spec import RiskClass, ToolContext, ToolSpec
 
 
@@ -33,7 +33,7 @@ class DrawArgs(DrawToolArgs):
 
 async def _draw(ctx: ToolContext, args: DrawArgs) -> DrawToolResult:
     RUNNER.bind(ctx.state)
-    valid = validate_draw(args.model_dump(exclude_none=True))
+    valid = validate_draw(args.model_dump(exclude_none=True), tainted=session_tainted(ctx))
     return await RUNNER.draw(turn_id=ctx.turn_id, session_id=ctx.session_id, call_id=ctx.call_id, args=valid)
 
 
