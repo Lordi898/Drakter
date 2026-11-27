@@ -16,7 +16,7 @@ from drakter_contracts.floating import LogicalRect, WindowRef
 from drakter_contracts.hands_ipc import HEmpty, HScreenshot, HScreenshotResult, HelperWindow, HWindowsResult
 
 from app.integrations.hands.client import HandsClient, HandsError, drakter_pids
-from app.integrations.hands.lists import hands_off_name, secret_title
+from app.integrations.hands.lists import hands_off_name, secret_app_name, secret_title, terminal_name
 
 MAX_SIDE: Final = 1568
 MAX_PNG_BYTES: Final = 256 * 1024
@@ -29,6 +29,37 @@ def is_drakter(w: HelperWindow) -> bool:
 
 def is_hands_off(w: HelperWindow) -> bool:
     return hands_off_name(w.app_id, w.wm_class) is not None
+
+
+def is_secret_app(w: HelperWindow) -> bool:
+    """Password manager, keyring, polkit or gnome-shell: never captured nor read (review I3)."""
+    return secret_app_name(w.app_id, w.wm_class) is not None
+
+
+def is_terminal(w: HelperWindow) -> bool:
+    return terminal_name(w.app_id, w.wm_class) is not None
+
+
+def _overlaps(a: LogicalRect, b: LogicalRect) -> bool:
+    return a.x < b.x + b.w and b.x < a.x + a.w and a.y < b.y + b.h and b.y < a.y + a.h
+
+
+def secret_app_in(wins: HWindowsResult, area: LogicalRect | None) -> bool:
+    """A secret app among the visible windows inside `area` (None: anywhere on the screen)."""
+    return any(is_secret_app(w) and (area is None or _overlaps(w.frame, area))
+               for w in wins.windows if not w.minimized)
+
+
+def monitor_rect(wins: HWindowsResult, index: int) -> LogicalRect | None:
+    return next((m.geometry for m in wins.monitors if m.index == index), None)
+
+
+# The last window list, so a confirmation summary (sync, no helper call) can name the window.
+_known: dict[str, HelperWindow] = {}
+
+
+def known_window(window_id: str | None) -> HelperWindow | None:
+    return _known.get(str(window_id)) if window_id is not None else None
 
 
 def window_ref(w: HelperWindow) -> WindowRef:
@@ -46,6 +77,8 @@ def app_label(w: HelperWindow) -> str:
 async def list_windows(client: HandsClient) -> HWindowsResult:
     res = await client.call("windows.list", HEmpty())
     assert isinstance(res, HWindowsResult)
+    _known.clear()
+    _known.update({w.window_id: w for w in res.windows})
     return res
 
 

@@ -19,7 +19,7 @@ import unicodedata
 # Apps Drakter may point at but never click or type in: a terminal would run commands past every check,
 # the others hold passwords or can change the whole desktop. Keys are lower case: app id, wm_class or the
 # executable's basename.
-HANDS_OFF: dict[str, str] = {
+TERMINALS: dict[str, str] = {
     # terminals and consoles (Roamies)
     "kitty": "kitty", "alacritty": "Alacritty", "foot": "foot", "wezterm": "WezTerm", "wezterm-gui": "WezTerm",
     "org.wezfurlong.wezterm": "WezTerm", "konsole": "Konsole", "org.kde.konsole": "Konsole",
@@ -32,6 +32,9 @@ HANDS_OFF: dict[str, str] = {
     "com.raggesilver.blackbox": "Black Box",
     # Drakter (CONTRACT §5)
     "com.gexperts.tilix": "Tilix", "org.gnome.ptyxis.devel": "Ptyxis",
+}
+# Password managers, the keyring and polkit: never captured nor read either (security review I3).
+SECRET_APPS: dict[str, str] = {
     # password managers and security prompts (Roamies)
     "1password": "1Password", "onepassword": "1Password", "bitwarden": "Bitwarden",
     "com.bitwarden.desktop": "Bitwarden", "keepass": "KeePass", "keepassxc": "KeePassXC",
@@ -41,6 +44,10 @@ HANDS_OFF: dict[str, str] = {
     "org.kde.kwalletmanager": "KWallet", "enpass": "Enpass", "dashlane": "Dashlane",
     "lastpass": "LastPass", "buttercup": "Buttercup", "polkit": "PolicyKit",
     "polkit-gnome-authentication-agent-1": "PolicyKit",
+}
+HANDS_OFF: dict[str, str] = {
+    **TERMINALS,
+    **SECRET_APPS,
     # system settings, disks and package managers (Roamies)
     "gnome-control-center": "Configuración", "org.gnome.settings": "Configuración", "systemsettings": "System Settings",
     "systemsettings5": "System Settings", "systemsettings6": "System Settings",
@@ -63,21 +70,59 @@ HANDS_OFF: dict[str, str] = {
 HANDS_OFF_SHELL: frozenset[str] = frozenset({"gnome-shell", "org.gnome.shell"})
 
 
-def hands_off_name(*keys: str | None) -> str | None:
-    """Display name of the HANDS_OFF app behind any of these ids (app id, wm_class, exe), or None."""
+def _keys(keys: tuple[str | None, ...]):
     for key in keys:
         if not key:
             continue
         k = str(key).strip().lower()
         if k.endswith(".desktop"):
+            yield k  # org.telegram.desktop is an app id, not a .desktop file name
             k = k[: -len(".desktop")]
-        base = k.rsplit("/", 1)[-1]
-        for cand in (k, base):
-            if cand in HANDS_OFF:
-                return HANDS_OFF[cand]
-            if cand in HANDS_OFF_SHELL:
-                return "GNOME Shell"
+        yield k
+        yield k.rsplit("/", 1)[-1]
+
+
+def _name_in(table: dict[str, str], keys: tuple[str | None, ...], shell: bool) -> str | None:
+    for cand in _keys(keys):
+        if cand in table:
+            return table[cand]
+        if shell and cand in HANDS_OFF_SHELL:
+            return "GNOME Shell"
     return None
+
+
+def hands_off_name(*keys: str | None) -> str | None:
+    """Display name of the HANDS_OFF app behind any of these ids (app id, wm_class, exe), or None."""
+    return _name_in(HANDS_OFF, keys, True)
+
+
+def secret_app_name(*keys: str | None) -> str | None:
+    """A password manager, the keyring, polkit or gnome-shell: never captured nor read (review I3)."""
+    return _name_in(SECRET_APPS, keys, True)
+
+
+def terminal_name(*keys: str | None) -> str | None:
+    """A terminal: `read_window` refuses it (it may show secrets the redaction misses)."""
+    return _name_in(TERMINALS, keys, False)
+
+
+# Browsers and messaging clients, where Return sends (review M7).
+SENDS_ON_ENTER: frozenset[str] = frozenset({
+    "firefox", "org.mozilla.firefox", "firefox-esr", "librewolf", "io.gitlab.librewolf-community", "zen",
+    "app.zen_browser.zen", "chromium", "chromium-browser", "org.chromium.chromium", "google-chrome",
+    "google-chrome-stable", "com.google.chrome", "brave", "brave-browser", "com.brave.browser", "microsoft-edge",
+    "com.microsoft.edge", "vivaldi", "vivaldi-stable", "opera", "epiphany", "org.gnome.epiphany", "falkon",
+    "org.kde.falkon", "thunderbird", "org.mozilla.thunderbird", "evolution", "org.gnome.evolution", "geary",
+    "org.gnome.geary", "telegram-desktop", "org.telegram.desktop", "signal", "signal-desktop",
+    "org.signal.signal", "discord", "com.discordapp.discord", "slack", "com.slack.slack", "element",
+    "element-desktop", "im.riot.riot", "whatsapp", "whatsapp-for-linux", "com.github.eneshecan.whatsappforlinux",
+    "teams", "teams-for-linux", "com.github.izneo.teams-for-linux", "skype", "com.skype.client", "fractal",
+    "org.gnome.fractal", "polari", "org.gnome.polari", "zoom", "us.zoom.zoom", "ferdium", "org.ferdium.ferdium",
+})
+
+
+def sends_on_enter(*keys: str | None) -> bool:
+    return any(cand in SENDS_ON_ENTER for cand in _keys(keys))
 
 
 # ── RISKY ────────────────────────────────────────────────────────────────────
@@ -151,8 +196,37 @@ RISKY_KEYS: frozenset[str] = frozenset(
 )
 
 
+_ENTER_KEYS: frozenset[str] = frozenset({"return", "kp_enter", "enter"})
+_SUPER_KEYS: frozenset[str] = frozenset({"super", "super_l", "super_r", "logo", "meta", "meta_l", "meta_r",
+                                        "win", "hyper_l", "hyper_r"})
+SYSTEM_SHORTCUT = "atajo del sistema"
+
+
+def is_system_combo(combo: str | None) -> bool:
+    """Shortcuts the compositor takes, not the target window (review I6): super/logo, alt+F1..F12,
+    ctrl+alt+*, alt+tab, alt+esc and Print. Typed after them, text could land in a shell dialog."""
+    c = normalize_combo(combo or "")
+    if not c:
+        return False
+    *mods, key = c.split("+")
+    if "super" in mods or key in _SUPER_KEYS:
+        return True
+    if key in ("print", "sys_req", "sysrq"):
+        return True
+    if "ctrl" in mods and "alt" in mods:
+        return True
+    if "alt" in mods and (key in ("tab", "iso_left_tab", "esc", "escape", "grave")
+                          or re.fullmatch(r"f([1-9]|1[0-2])", key)):
+        return True
+    return False
+
+
+def is_enter_combo(combo: str | None) -> bool:
+    return normalize_combo(combo or "").rsplit("+", 1)[-1] in _ENTER_KEYS
+
+
 def is_risky_combo(combo: str | None) -> bool:
-    return normalize_combo(combo or "") in RISKY_KEYS
+    return normalize_combo(combo or "") in RISKY_KEYS or is_system_combo(combo)
 
 
 # ── secret paths in window titles ────────────────────────────────────────────
