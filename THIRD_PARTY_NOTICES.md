@@ -57,15 +57,18 @@ Propio del proyecto (no es de terceros): `.claude/CLAUDE.md`, `.claude/agents/{c
 
 ### Escritorio (`desktop/package-lock.json`)
 
-Paquetes que acaban en la aplicación (dependencias de producción, 87 en total):
+Paquetes que acaban en la aplicación (dependencias de producción, 106 en total):
 
 | Licencia | Paquetes |
 |---|---|
-| MIT | 83 (entre ellos `react`, `react-dom`, `radix-ui`, `sonner`, `clsx`, `tailwind-merge`) |
+| MIT | 98 (entre ellos `react`, `react-dom`, `radix-ui`, `sonner`, `clsx`, `tailwind-merge`) |
 | MIT (añadido 2026-11-20) | `@rive-app/canvas` 2.53.0 (runtime de Rive para el personaje; ya cuenta dentro de los MIT) |
 | MIT (añadido 2026-11-26) | `three` 0.180.0 (avatar 3D del personaje; ya cuenta dentro de los MIT). `@types/three` 0.180.0 solo es de desarrollo. La malla y los shaders del avatar son código propio, sin modelos ni texturas de terceros |
+| MIT (añadido 2026-11-27, modo flotante) | `dbus-next` 0.10.2 (cliente D-Bus de la extensión de GNOME) y `zod` 4.6.7 (segunda validación del dibujo en main), con las transitivas de `dbus-next` que entran en `out/main/index.js`: `xml2js`, `xmlbuilder`, `safe-buffer`, `event-stream`, `hexy`, `@nornagon/put` (MIT/X11), `through`, `duplexer`, `from`, `map-stream`, `split` y `stream-combiner`. Ya cuentan dentro de los MIT. `usocket` (opcional, con `node-gyp`) no se instala ni se empaqueta |
 | ISC | `lucide-react` |
-| Apache-2.0 | `class-variance-authority` |
+| Apache-2.0 | `class-variance-authority`; `long` 4.0.0 y `jsbi` 2.0.5 (transitivas de `dbus-next`, añadidas 2026-11-27) |
+| MIT o Apache-2.0 | `pause-stream` 0.0.11 (transitiva de `dbus-next`) |
+| BlueOak-1.0.0 | `sax` 1.6.1 (transitiva de `dbus-next`, vía `xml2js`) |
 | 0BSD | `tslib` |
 | OFL-1.1 | `@fontsource-variable/recursive` (fuente Recursive) |
 
