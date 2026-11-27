@@ -13,7 +13,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from uuid import uuid4
 
-from drakter_contracts.floating import LookScreenArgs, OpenTargetArgs, ReadWindowArgs
+from drakter_contracts.floating import ListWindowsArgs, LookScreenArgs, OpenTargetArgs, ReadWindowArgs
 
 from app.floating import presence
 from app.integrations.hands.safety import check_url_dns, step_risk
@@ -67,6 +67,9 @@ async def code_of(coro):
     return "ok"
 
 
+_presence, _setting_on = presence.current_presence, screen.setting_on
+
+
 async def main():
     report("I3 look_screen sin ajuste → screen_disabled",
            await code_of(screen.look_screen(ctx(), LookScreenArgs(target="screen"))) == "screen_disabled")
@@ -82,8 +85,17 @@ async def main():
            await code_of(screen.read_window(ctx(uuid4()), ReadWindowArgs())) == "job_lane_forbidden")
     report("C1 open_target en turno de tarea → job_lane_forbidden",
            await code_of(hands.open_target(ctx(uuid4()), OpenTargetArgs(url="https://es.wikipedia.org"))) == "job_lane_forbidden")
+    presence.current_presence = _presence
+    screen.setting_on = _setting_on
+    report("N4 list_windows sin ajuste → screen_disabled",
+           await code_of(screen.list_windows(ctx(), ListWindowsArgs())) == "screen_disabled")
+    screen.setting_on = lambda _c, _k: True
+    presence.current_presence = lambda: None
+    report("N4 list_windows sin modo flotante → floating_inactive",
+           await code_of(screen.list_windows(ctx(), ListWindowsArgs())) == "floating_inactive")
     d = next(t for t in screen.TOOLS if t.name == "look_screen").description
     report("I4 descripción", "Úsala solo cuando el usuario te pida mirar o ayudar con algo en pantalla" in d)
+    report("N5 descripción de look_screen: terminales tapadas", "terminales salen tapadas" in d)
     d = next(t for t in screen.TOOLS if t.name == "read_window").description
     report("I3 descripción de read_window menciona terminales", "terminales" in d)
 
@@ -117,5 +129,34 @@ desktop._known["42"] = HelperWindow(window_id="42", app_id="org.gnome.Calculator
                                     client="wayland", frame=rect, buffer=rect, monitor=0, stack=0, focused=True)
 s = hands._summary(ActInAppArgs(window_id="42", steps=[{"do": "click_text", "text": "7"}]))
 report("I1 el resumen nombra la app y el título", "Calculadora" in s and "ventana «Calculadora»" in s, s)
+
+# N5: terminales tapadas en la captura, respetando lo que tienen encima
+from PIL import Image  # noqa: E402
+from drakter_contracts.hands_ipc import HWindowsResult  # noqa: E402
+
+
+def win(wid, app, frame, stack, minimized=False):
+    return HelperWindow(window_id=wid, app_id=app, title="t", pid=1, client="wayland", frame=frame, buffer=frame,
+                        monitor=0, stack=stack, focused=stack == 0, minimized=minimized)
+
+
+geo = {"x": 100, "y": 0, "w": 400, "h": 200}  # capture area, image at scale 2 → 800x400
+wins = HWindowsResult(windows=[
+    win("1", "org.gnome.TextEditor", {"x": 300, "y": 0, "w": 100, "h": 100}, 0),  # above the terminal
+    win("2", "kitty", {"x": 200, "y": 0, "w": 200, "h": 200}, 1),
+    win("3", "org.gnome.Ptyxis", {"x": 0, "y": 0, "w": 50, "h": 50}, 2),  # outside the area
+    win("4", "Alacritty", {"x": 100, "y": 0, "w": 50, "h": 50}, 3, minimized=True),
+], monitors=[], front_window_id="1")
+img = Image.new("RGB", (800, 400), (255, 255, 255))
+geo_rect = desktop.LogicalRect(**geo)
+n = desktop.cover_terminals(img, geo_rect, desktop.terminal_layers(wins, geo_rect))
+px = img.getpixel
+report("N5 tapa solo la terminal visible", n == 1, str(n))
+report("N5 el interior de la terminal queda opaco", px((300, 300)) == (24, 24, 24) and px((210, 10)) == (24, 24, 24))
+report("N5 la ventana de encima conserva sus píxeles", px((450, 50)) == (255, 255, 255))
+report("N5 fuera de la terminal no se toca", px((100, 100)) == (255, 255, 255) and px((700, 300)) == (255, 255, 255))
+plain = Image.new("RGB", (10, 10), (255, 255, 255))
+report("N5 sin terminales no tapa nada", desktop.cover_terminals(
+    plain, desktop.LogicalRect(x=0, y=0, w=10, h=10), [(desktop.LogicalRect(x=0, y=0, w=5, h=5), False)]) == 0)
 print(f"\n{sum(OK)}/{len(OK)} PASS")
 raise SystemExit(0 if all(OK) else 1)

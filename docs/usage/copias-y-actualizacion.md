@@ -27,6 +27,8 @@ También puedes hacerla desde **Ajustes → Copias de seguridad → Crear copia 
 
 Guarda una copia fuera del ordenador (disco externo o nube): copia el `.db` y su `.sha256` juntos.
 
+Las copias guardan lo que había en la base en ese momento. Desde la migración `0016`, cuando una confirmación del modo flotante (usar tus apps, abrir una URL, mirar la pantalla) se cierra, Drakter borra de la base el texto tecleado, la URL en claro y el texto de otras apps, y deja solo sus huellas (hashes). Las copias hechas **antes** de la migración `0016`, o antes de que se redactara esa fila, **conservan ese texto en claro**. Si restauras una de ellas, Drakter vuelve a redactar esas filas al arrancar, pero el archivo de la copia sigue teniendo el texto. Guárdalas como guardarías la propia base y, si ya no las necesitas, bórralas.
+
 ## Restaurar
 
 Restaurar **sustituye toda la base actual** por la copia.

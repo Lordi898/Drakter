@@ -184,6 +184,7 @@ def run(root: Path) -> None:
         claim = "UPDATE pending_confirmations SET status = 'executing' WHERE id = ? AND status = 'approved'"
         ok("primer reclamo gana", conn.execute(claim, (cid,)).rowcount == 1)
         ok("segundo reclamo no ejecuta", conn.execute(claim, (cid,)).rowcount == 0)
+        rejected(conn, "no redacta al cerrar", "UPDATE pending_confirmations SET status = 'executed', args_json = '{\"x\":1}', redacted_at = ? WHERE id = ?", (NOW, cid))
         conn.execute("UPDATE pending_confirmations SET status = 'executed' WHERE id = ?", (cid,))
         rejected(conn, "resuelta no reabre", "UPDATE pending_confirmations SET status = 'approved' WHERE id = ?", (cid,))
         rejected(conn, "confirmacion no se borra", "DELETE FROM pending_confirmations WHERE id = ?", (cid,))

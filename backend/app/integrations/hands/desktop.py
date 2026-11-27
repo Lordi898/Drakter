@@ -10,13 +10,16 @@ import os
 from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Final
+from typing import TYPE_CHECKING, Final
 
 from drakter_contracts.floating import LogicalRect, WindowRef
 from drakter_contracts.hands_ipc import HEmpty, HScreenshot, HScreenshotResult, HelperWindow, HWindowsResult
 
 from app.integrations.hands.client import HandsClient, HandsError, drakter_pids
 from app.integrations.hands.lists import hands_off_name, secret_app_name, secret_title, terminal_name
+
+if TYPE_CHECKING:
+    from PIL import Image
 
 MAX_SIDE: Final = 1568
 MAX_PNG_BYTES: Final = 256 * 1024
@@ -161,19 +164,56 @@ class Encoded:
     width: int
     height: int
     sha256: str
+    covered: int = 0
 
     @property
     def b64(self) -> str:
         return base64.b64encode(self.data).decode("ascii")
 
 
-def encode(path: Path, crop: tuple[int, int, int, int] | None = None) -> Encoded:
-    """Long side down to 1568 px; PNG, or JPEG q85 when the PNG passes 256 KB (Pillow)."""
+def terminal_layers(wins: HWindowsResult, area: LogicalRect) -> list[tuple[LogicalRect, bool]]:
+    """Visible windows over `area`, bottom to top (`stack` 0 is the top), each with "is a terminal"."""
+    shown = [w for w in wins.windows if not w.minimized and _overlaps(w.frame, area)]
+    return [(w.frame, is_terminal(w)) for w in sorted(shown, key=lambda w: w.stack, reverse=True)]
+
+
+def cover_terminals(img: "Image.Image", geometry: LogicalRect, layers: list[tuple[LogicalRect, bool]]) -> int:
+    """Paints opaque the visible part of every terminal in the capture (review N5). Returns how many.
+
+    The layers are drawn bottom to top on a label mask, so a window above a terminal keeps its pixels.
+    """
+    from PIL import Image, ImageDraw
+
+    if not any(term for _, term in layers):
+        return 0
+    sx, sy = img.width / geometry.w, img.height / geometry.h
+    labels = Image.new("L", img.size, 0)
+    draw = ImageDraw.Draw(labels)
+    for i, (r, _) in enumerate(layers[-255:], start=1):
+        box = (round((r.x - geometry.x) * sx), round((r.y - geometry.y) * sy),
+               round((r.x + r.w - geometry.x) * sx) - 1, round((r.y + r.h - geometry.y) * sy) - 1)
+        draw.rectangle(box, fill=i)
+    terms = {i for i, (_, term) in enumerate(layers[-255:], start=1) if term}
+    hist = labels.histogram()
+    shown = {i for i in terms if hist[i]}
+    if shown:
+        img.paste((24, 24, 24), mask=labels.point([255 if v in shown else 0 for v in range(256)]))
+    return len(shown)
+
+
+def encode(path: Path, crop: tuple[int, int, int, int] | None = None,
+           cover: tuple[LogicalRect, list[tuple[LogicalRect, bool]]] | None = None) -> Encoded:
+    """Long side down to 1568 px; PNG, or JPEG q85 when the PNG passes 256 KB (Pillow).
+
+    `cover` (capture geometry, `terminal_layers`): terminals painted opaque before anything else;
+    how many goes in `Encoded.covered`.
+    """
     from PIL import Image
 
     with Image.open(path) as im:
         im.load()
         img = im.convert("RGB")
+    covered = cover_terminals(img, *cover) if cover is not None else 0
     if crop is not None:
         x, y, w, h = crop
         img = img.crop((max(0, x), max(0, y), min(img.width, x + w), min(img.height, y + h)))
@@ -188,7 +228,7 @@ def encode(path: Path, crop: tuple[int, int, int, int] | None = None) -> Encoded
         img.save(buf, "JPEG", quality=JPEG_QUALITY, optimize=True)
         mime = "image/jpeg"
     data = buf.getvalue()
-    return Encoded(data, mime, img.width, img.height, hashlib.sha256(data).hexdigest())
+    return Encoded(data, mime, img.width, img.height, hashlib.sha256(data).hexdigest(), covered)
 
 
 def iter_lines(values: Iterator[str], limit: int) -> tuple[str, bool]:

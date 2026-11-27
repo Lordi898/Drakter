@@ -93,6 +93,8 @@ export class FloatingController {
   private approvalsOpen = 0
   /** Cómo está oculta la capa mientras hay una aprobación: por la extensión o, si falla, ocultando la ventana. */
   private hiddenVia: 'extension' | 'window' | null = null
+  /** `win.hide()` de último recurso (N2): el ocultado normal no confirmó a tiempo. Se deshace al restaurar. */
+  private forcedHidden = false
   private hideQueue: Promise<unknown> = Promise.resolve()
   private stateListeners = new Set<(state: FloatingState) => void>()
 
@@ -111,7 +113,10 @@ export class FloatingController {
       drawDiscarded: (guideId) => void postOverlayEvent(this.backend, { type: 'draw_done', guide_id: guideId })
     })
     installFakeCompanion(this.companion, { focusFloating: (on) => this.fakeFocus(on) })
-    setApprovalGuard((open) => this.onApprovalDialog(open))
+    setApprovalGuard({
+      onDialog: (open) => this.onApprovalDialog(open),
+      forceHide: () => this.forceHide()
+    })
     this.companion.setBaseSubscription(BASE_SUBSCRIPTION)
     this.companion.on('status', (status) => this.onCompanionStatus(status))
     this.companion.on('shortcut', (name, phase) => this.onShortcut(name, phase))
@@ -318,6 +323,14 @@ export class FloatingController {
     return this.setHidden(this.approvalsOpen > 0)
   }
 
+  /** Síncrono: la ventana flotante deja de pintarse ya, aunque la extensión siga sin responder (N2). */
+  private forceHide(): void {
+    const win = this.win
+    if (!win || win.isDestroyed()) return
+    win.hide()
+    this.forcedHidden = true
+  }
+
   private setHidden(hidden: boolean): Promise<void> {
     const run = this.hideQueue.then(() => this.applyHidden(hidden))
     this.hideQueue = run.catch(() => undefined)
@@ -328,9 +341,10 @@ export class FloatingController {
     const win = this.win
     if (!win || win.isDestroyed()) {
       this.hiddenVia = null
+      this.forcedHidden = false
       return
     }
-    if (hidden === (this.hiddenVia !== null)) return
+    if (hidden === (this.hiddenVia !== null) && (hidden || !this.forcedHidden)) return
     if (hidden) {
       let ok = false
       if (this.companion.status === 'ok') {
@@ -350,10 +364,13 @@ export class FloatingController {
     }
     const via = this.hiddenVia
     this.hiddenVia = null
+    const forced = this.forcedHidden
+    this.forcedHidden = false
     if (via === 'window') {
       win.showInactive()
       return
     }
+    if (forced) win.showInactive()
     await this.companion.setFloatingHidden(false).catch((error: unknown) => {
       logError(SCOPE, 'SetFloatingHidden(false) fallido', describeError(error))
     })
@@ -414,6 +431,7 @@ export class FloatingController {
     this.win = null
     this.frame = null
     this.hiddenVia = null // la extensión lo suelta al liberar la ventana
+    this.forcedHidden = false
     const ignore = (what: string) => (error: unknown) => logError(SCOPE, `${what} al desactivar`, describeError(error))
     const connected = this.companion.status === 'ok'
     if (connected) {

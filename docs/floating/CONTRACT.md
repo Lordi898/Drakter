@@ -326,7 +326,7 @@ Están en `contracts/tools/catalog.json` y sus modelos en `floating.py`. Se regi
 | `guide_wait` | overlay | `overlay.read` | read | no | 115 s | `GuideWaitArgs` → `GuideWaitResult` | guide_not_found, floating_inactive, overlay_unavailable, interrupted |
 | `look_screen` | screen | `screen.read` | read | **sí** | 15 s | `LookScreenArgs` → `LookScreenResult` (+1 imagen) | companion_unavailable, window_not_found, shot_not_found, capture_failed, rate_limited, secret_window, job_lane_forbidden, screen_disabled, floating_inactive |
 | `read_window` | screen | `screen.read` | read | **sí** | 20 s | `ReadWindowArgs` → `ReadWindowResult` | companion_unavailable, window_not_found, accessibility_unavailable, drakter_window, secret_window, job_lane_forbidden, screen_disabled, floating_inactive |
-| `list_windows` | screen | `screen.read` | read | **sí** | 5 s | `ListWindowsArgs` → `ListWindowsResult` | companion_unavailable, job_lane_forbidden |
+| `list_windows` | screen | `screen.read` | read | **sí** | 5 s | `ListWindowsArgs` → `ListWindowsResult` | companion_unavailable, job_lane_forbidden, screen_disabled, floating_inactive |
 | `act_in_app` | hands | `hands.write` | write (+`confirm_if`) | **sí** | 90 s | `ActInAppArgs` → `ActInAppResult` | validation_error, hands_disabled, hands_off_app, drakter_window, risky_step, secret_field, window_not_found, window_changed, stale_read, stale_screenshot, stale_window, step_failed, input_unavailable, companion_unavailable, job_lane_forbidden |
 | `open_target` | hands | `hands.write` | write (+`confirm_if`) | no | 10 s | `OpenTargetArgs` → `OpenTargetResult` | validation_error, hands_disabled, target_not_allowed, app_not_found, path_not_allowed, not_found, companion_unavailable, job_lane_forbidden |
 | `ui_set_floating` | ui | `ui.write` | write | no | 3 s | `SetFloatingArgs` → `SetFloatingResult` | ui_unavailable, floating_unavailable |
@@ -397,7 +397,7 @@ B2 se suscribe a `voice.playback` por el hub (ya existe) para saber cuándo empi
 **`look_screen`.** Pasos:
 
 1. El helper captura con `hide_floating:true`. Si `zoom` está presente, recorta la captura indicada, que debe ser de este turno.
-2. El backend reescala al lado largo de 1568 px (PNG; JPEG con calidad 85 si pasa de 256 KB) con Pillow (dependencia nueva del backend) y borra el PNG.
+2. El backend tapa con un rectángulo opaco la parte visible de cada terminal (lista `TERMINALS` de `hands/helper/lists.py`; respeta las ventanas que tiene encima por su `stack`) y lo dice en el sobre («Se taparon N ventanas de terminal»). Después reescala al lado largo de 1568 px (PNG; JPEG con calidad 85 si pasa de 256 KB) con Pillow (dependencia nueva del backend) y borra el PNG.
 3. Guarda `ShotRecord{shot_id, turn_id, origin, scale_to_logical, window_id, frame, taken_at}`, con 8 como mucho por turno. Se purgan al acabar el turno.
 
 Límites: 4 por segundo y 30 por turno (`rate_limited`). Si alguna ventana visible tiene un título que casa con la lista de rutas secretas de `safety.mjs` `checkRead` (`.env`, `.ssh`, `id_rsa`, …), devuelve `secret_window`. Cualquier imagen usada para un objetivo queda **caducada** si la ventana objetivo se movió o cerró, si el usuario hizo clic en una guía o si cambió el foco (`stale_screenshot`).
@@ -428,7 +428,7 @@ En el sobre, una línea por control: `#12 button «Guardar»`, `#13 entry «Nomb
           "text_truncated":false,"redacted":0,"envelope":{"…":"…","content":"#12 button «Guardar»\n…"}}
 ```
 
-**`list_windows`.** Ventanas de arriba abajo, sin títulos en los campos estructurados. En el sobre van las líneas `[2147483712] org.gnome.TextEditor — Sin título`.
+**`list_windows`.** Las mismas condiciones que `look_screen` y `read_window` (`require_screen`: fuera de tareas, ajuste `floating_screen_enabled` y modo flotante activo), porque los títulos también son datos de terceros. Ventanas de arriba abajo, sin títulos en los campos estructurados. En el sobre van las líneas `[2147483712] org.gnome.TextEditor — Sin título`.
 
 ```json
 {} → data: {"windows":[{…}],"monitors":[{…}],"front_window_id":"2147483712","envelope":{…}}

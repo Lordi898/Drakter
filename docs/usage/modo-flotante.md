@@ -76,7 +76,7 @@ En Configuración → **Modo flotante**:
 
 ### Dejar que Drakter vea mi pantalla
 
-Está apagado de entrada y solo se enciende desde este ajuste. Con él encendido, y **solo mientras el modo flotante está activo**, Drakter puede hacer una captura de tu pantalla o de una ventana, y leer el texto de tus ventanas, cuando la conversación lo pide («¿dónde pulso para exportar?», «mira esto»). Las capturas **se envían al modelo de IA** para que te responda; en tu equipo se borran nada más usarlas. Mientras Drakter tiene acceso, el icono de Drakter del panel superior se ve, y parpadea en cada captura.
+Está apagado de entrada y solo se enciende desde este ajuste. Con él encendido, y **solo mientras el modo flotante está activo**, Drakter puede hacer una captura de tu pantalla o de una ventana, y leer el texto de tus ventanas, cuando la conversación lo pide («¿dónde pulso para exportar?», «mira esto»). Las capturas **se envían al modelo de IA** para que te responda; en tu equipo se borran nada más usarlas. Con el ajuste apagado tampoco ve los títulos de tus ventanas. Las terminales salen tapadas en las capturas, y no las lee nunca: pueden mostrar contraseñas o claves. Mientras Drakter tiene acceso, el icono de Drakter del panel superior se ve, y parpadea en cada captura.
 
 ### Dejar que Drakter use mis apps
 
