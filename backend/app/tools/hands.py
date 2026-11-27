@@ -211,9 +211,10 @@ async def act_in_app(ctx: ToolContext, args: ActInAppArgs) -> ActInAppResult:
         if isinstance(s, (StepFill, StepSet, StepType)) and target is not None and target.secret:
             raise _err("secret_field", details=[{"field": f"steps.{i}", "code": "secret_field", "message": "contraseña"}])
         if not confirmed and (kind := step_risk(s, controls)) is not None:
-            raise _err("risky_step", f"El paso {i + 1} ({step_phrase(s, controls)}) necesita confirmación: "
-                                     ("repite con confirm=true" + (f" y read_id={rec.read_id}, para que la confirmación muestre "
-                                     "el nombre del control." if rec is not None else ".")), retryable=True,
+            again = (f"repite con confirm=true y read_id={rec.read_id}, para que la confirmación muestre "
+                     "el nombre del control." if rec is not None else "repite con confirm=true.")
+            raise _err("risky_step", f"El paso {i + 1} ({step_phrase(s, controls)}) necesita confirmación: " + again,
+                       retryable=True,
                        details=[{"field": f"steps.{i}", "code": "risky_step", "message": kind[:60]}])
 
     act_id = uuid4()
