@@ -1,0 +1,191 @@
+<!DOCTYPE node PUBLIC "-//freedesktop//DTD D-BUS Object Introspection 1.0//EN"
+ "http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd">
+<!--
+  Drakter Companion, GNOME Shell 50. API D-Bus v2 (docs/floating/CONTRACT.md §3).
+  Canonical XML: it copies the tables of CONTRACT.md §3; if they differ, the contract wins.
+
+  Bus name: org.drakter.Companion   Object: /org/drakter/Companion
+  Coordinates: logical stage pixels (the GNOME layout space), origin at the top-left
+  of the monitor layout. Timestamps: CLOCK_MONOTONIC in microseconds
+  (GLib.get_monotonic_time / time.monotonic_ns()//1000), the same clock in every process.
+  Every method except Hello needs a prior Hello on the same connection.
+  Signals are UNICAST to authenticated, subscribed connections only (never broadcast).
+
+  Errors: org.drakter.Companion1.Error.AccessDenied (no Hello, bad token, other uid,
+          or not the owner of the floating window), .InvalidArgs, .NotFound (window or
+          monitor), .RateLimited, .Failed.
+-->
+<node>
+  <interface name="org.drakter.Companion1">
+    <!-- 2. Drakter requires Version >= 2 (lower = "outdated"). -->
+    <property name="Version" type="u" access="read"/>
+
+    <!-- token = contents of $XDG_RUNTIME_DIR/drakter-companion/token (0600 in a 0700
+         directory, regenerated on every enable). The sender's uid must be the shell's.
+         info: version u, shell_version s, session s, poll_ms u,
+               capabilities as ⊇ pointer, buttons, gestures, windows, screenshot,
+               input-region, focus, passthrough, activate -->
+    <method name="Hello">
+      <arg name="token" type="s" direction="in"/>
+      <arg name="info" type="a{sv}" direction="out"/>
+    </method>
+
+    <!-- mods = Clutter.ModifierType: SHIFT 1<<0, CONTROL 1<<2, MOD1(Alt) 1<<3,
+         BUTTON1 1<<8, BUTTON2 1<<9, BUTTON3 1<<10, SUPER 1<<26 -->
+    <method name="GetPointer">
+      <arg name="x" type="i" direction="out"/>
+      <arg name="y" type="i" direction="out"/>
+      <arg name="mods" type="u" direction="out"/>
+      <arg name="t_us" type="x" direction="out"/>
+    </method>
+
+    <!-- options (all optional):
+         pointer b        PointerMoved signals (event-driven, throttled)
+         pointer_min_ms u minimum gap between PointerMoved signals (default 8)
+         buttons b        Button signals (left/middle/right edges, polled)
+         gestures b       Gesture signals (+ Shortcut)
+         windows b        FocusChanged / WindowsChanged / FloatingWindowChanged (+ Shortcut)
+         Shortcut goes to every connection subscribed with gestures or windows.
+         Calling it again replaces the options. -->
+    <method name="Subscribe">
+      <arg name="options" type="a{sv}" direction="in"/>
+    </method>
+    <method name="Unsubscribe"/>
+
+    <!-- window: id t, wm_class s, wm_class_instance s, app_id s, gtk_app_id s,
+         sandboxed_app_id s, title s, pid i, client s (wayland|x11),
+         frame (iiii), buffer (iiii), monitor i, workspace i, stack i,
+         focused b, minimized b, fullscreen b, maximized b, above b, sticky b,
+         type s, floating b.  Empty dict = no focused window. -->
+    <method name="GetActiveWindow">
+      <arg name="window" type="a{sv}" direction="out"/>
+    </method>
+    <!-- Visible windows (on the active workspace or sticky, not minimized),
+         sorted from TOP to BOTTOM of the stack (stack 0 = top). -->
+    <method name="ListWindows">
+      <arg name="windows" type="aa{sv}" direction="out"/>
+    </method>
+    <!-- monitor: index i, geometry (iiii), workarea (iiii), scale d, primary b, current b -->
+    <method name="GetMonitors">
+      <arg name="monitors" type="aa{sv}" direction="out"/>
+    </method>
+
+    <!-- options: dir s (required; absolute; the caller's own directory under
+                 $XDG_RUNTIME_DIR or $HOME, not a symlink, not group/world writable),
+                 one of: area (iiii) | monitor i | window t (that window's frame);
+                 default = whole layout,
+                 cursor b (default false),
+                 hide_floating b (default true: the floating window is not in the image).
+         path = absolute PNG path (0600, O_EXCL); geometry = captured logical rect;
+         scale = image px per logical px. No dialog, no flash, no sound.
+         At most 4 per second and connection (else RateLimited). Every capture
+         blinks the panel indicator. -->
+    <method name="Screenshot">
+      <arg name="options" type="a{sv}" direction="in"/>
+      <arg name="path" type="s" direction="out"/>
+      <arg name="geometry" type="(iiii)" direction="out"/>
+      <arg name="scale" type="d" direction="out"/>
+    </method>
+
+    <!-- match: wm_class s, title s, pid i (all given keys must match exactly).
+         Placement: monitor i (-1 = the pointer's monitor, default), cover b (default
+         true: frame = monitor geometry with 1 px less height).
+         The matching window is kept above, on all workspaces, out of alt-tab and the
+         overview, with input region "none" until the first SetInputRegion. It does not
+         steal focus: if it gets the focus without a prior SetFloatingFocus(true), the
+         focus goes back to the previous window in the same frame. The rule persists for
+         windows created later. Empty dict = release. Only one owner (the connection
+         that set it; another connection gets AccessDenied); if that connection closes,
+         the window is released. found = a matching window exists now. -->
+    <method name="SetFloatingWindow">
+      <arg name="match" type="a{sv}" direction="in"/>
+      <arg name="found" type="b" direction="out"/>
+    </method>
+    <!-- mode: "all"   = the window takes every click,
+               "none"  = every click goes through,
+               "rects" = clicks go through except inside rects (at most 256).
+         rects: (x, y, w, h) relative to the window's frame rect, logical px.
+         applied: "compositor" = done by the extension (Wayland client);
+                  "client"     = XWayland client: the app must set its X11 input shape
+                                 (a configuration error for Drakter, which uses Wayland);
+                  "pending"    = no floating window yet (applied when it appears). -->
+    <method name="SetInputRegion">
+      <arg name="mode" type="s" direction="in"/>
+      <arg name="rects" type="a(iiii)" direction="in"/>
+      <arg name="applied" type="s" direction="out"/>
+    </method>
+
+    <!-- Escape grab: only while the floating window shows something (esc_watch).
+         Emits Shortcut('escape', 'press'). -->
+    <method name="SetEscapeGrab">
+      <arg name="enabled" type="b" direction="in"/>
+    </method>
+
+    <!-- true: activate the floating window so it gets the keyboard (question bar).
+         false: re-activate the window that had the focus before, if it still exists.
+         ok = false if there is no floating window (true) or nothing to give the focus
+         back to while the floating window still has it (false). -->
+    <method name="SetFloatingFocus">
+      <arg name="on" type="b" direction="in"/>
+      <arg name="ok" type="b" direction="out"/>
+    </method>
+
+    <!-- Activate a client window (before typing). ok = false if it does not exist or
+         it is the floating window. -->
+    <method name="ActivateWindow">
+      <arg name="id" type="t" direction="in"/>
+      <arg name="ok" type="b" direction="out"/>
+    </method>
+
+    <!-- While any connection has it on, the floating window lets every click through,
+         whatever the rects say. Released when the connection closes. Used by the hands
+         during every act. -->
+    <method name="ForcePassthrough">
+      <arg name="on" type="b" direction="in"/>
+    </method>
+
+    <signal name="PointerMoved">
+      <arg name="x" type="i"/>
+      <arg name="y" type="i"/>
+      <arg name="mods" type="u"/>
+      <arg name="t_us" type="x"/>
+    </signal>
+    <!-- button: 1 left, 2 middle, 3 right (polled every poll-ms only while asked for) -->
+    <signal name="Button">
+      <arg name="button" type="u"/>
+      <arg name="pressed" type="b"/>
+      <arg name="x" type="i"/>
+      <arg name="y" type="i"/>
+      <arg name="t_us" type="x"/>
+    </signal>
+    <!-- Only with modifier-gestures = true (false by default).
+         name/phase: talk/armed | talk/hold | talk/release | talk/tap | talk/cancel,
+         ask/tap. Drakter only uses talk/hold and talk/release. -->
+    <signal name="Gesture">
+      <arg name="name" type="s"/>
+      <arg name="phase" type="s"/>
+      <arg name="t_us" type="x"/>
+    </signal>
+    <!-- name/phase: toggle-floating/press, push-to-talk/press|release, escape/press,
+         ask/press -->
+    <signal name="Shortcut">
+      <arg name="name" type="s"/>
+      <arg name="phase" type="s"/>
+      <arg name="t_us" type="x"/>
+    </signal>
+    <!-- Same dict as GetActiveWindow. Not emitted for the floating window while it is
+         being given its focus back. -->
+    <signal name="FocusChanged">
+      <arg name="window" type="a{sv}"/>
+    </signal>
+    <!-- reason: created | closed | restacked | geometry (these two coalesced every
+         30 ms) | workspace | monitors -->
+    <signal name="WindowsChanged">
+      <arg name="reason" type="s"/>
+    </signal>
+    <signal name="FloatingWindowChanged">
+      <arg name="present" type="b"/>
+      <arg name="window" type="a{sv}"/>
+    </signal>
+  </interface>
+</node>

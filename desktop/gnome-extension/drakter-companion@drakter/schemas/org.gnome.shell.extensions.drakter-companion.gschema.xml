@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist>
+  <schema id="org.gnome.shell.extensions.drakter-companion" path="/org/gnome/shell/extensions/drakter-companion/">
+    <key name="toggle-floating" type="as">
+      <default><![CDATA[['<Super><Alt>d']]]></default>
+      <summary>Activar o desactivar el modo flotante de Drakter</summary>
+    </key>
+    <key name="ask" type="as">
+      <default><![CDATA[['<Super><Alt>a']]]></default>
+      <summary>Abrir la barra de pregunta de Drakter</summary>
+    </key>
+    <key name="push-to-talk" type="s">
+      <default>'&lt;Super&gt;&lt;Alt&gt;space'</default>
+      <summary>Acelerador de pulsar para hablar (emite press y release)</summary>
+    </key>
+    <key name="modifier-gestures" type="b">
+      <default>false</default>
+      <summary>Detectar Ctrl+Alt mantenido (hablar) y toque de Ctrl+Shift (barra de texto)</summary>
+      <description>Apagado por defecto: el shell no ve las teclas que no son modificadores, así que atajos como Ctrl+Shift+A o Ctrl+Alt+T darían falsos positivos.</description>
+    </key>
+    <key name="hold-ms" type="u">
+      <default>250</default>
+      <summary>Tiempo mínimo de Ctrl+Alt para pasar a pulsar para hablar</summary>
+    </key>
+    <key name="tap-max-ms" type="u">
+      <default>600</default>
+      <summary>Duración máxima del toque de Ctrl+Shift</summary>
+    </key>
+    <key name="poll-ms" type="u">
+      <default>8</default>
+      <summary>Periodo de sondeo de botones (ms)</summary>
+    </key>
+  </schema>
+</schemalist>
