@@ -89,10 +89,14 @@ class EvtPlayback(BaseModel):
 
 class EvtLocalCommand(BaseModel):
     """Orden de la capa 0, ya aplicada por la voz. `ui_jarvis`/`ui_drakter`: cambiar el modo de la interfaz
-    (el backend publica `ui.mode`). `ui_appearance`: cambiar el avatar o la interfaz Jarvis, con
+    (el backend publica `ui.mode`). `ui_floating_on`/`ui_floating_off`: «modo flotante» / «quita el modo
+    flotante» (el backend publica `ui.floating`, docs/floating/CONTRACT.md §10). `ui_appearance`: cambiar el avatar o la interfaz Jarvis, con
     exactamente uno de `avatar` o `layout` (el backend publica `ui.appearance`)."""
 
-    command: Literal["stop_speech", "rest", "close", "ui_jarvis", "ui_drakter", "ui_appearance"]
+    command: Literal[
+        "stop_speech", "rest", "close", "ui_jarvis", "ui_drakter", "ui_appearance",
+        "ui_floating_on", "ui_floating_off",
+    ]
     utt_id: str
     avatar: AvatarChoice | None = None
     layout: JarvisLayoutChoice | None = None
@@ -193,6 +197,23 @@ class CmdSpeakStop(ContractModel):
     reason: Literal["barge_in", "user", "mute", "new_turn", "steered"]
 
 
+class CmdSpeakBeat(ContractModel):
+    """Modo flotante (docs/floating/CONTRACT.md §10): dice `text` como una locución propia con `speech_id`.
+
+    Equivale a `speak.open` + `speak.delta` + `speak.close(completed)` en un solo comando. Se encola detrás de lo
+    que ya suene en ese `turn_id` (FIFO, sin cortar ni ser cortada por otro tramo del mismo turno); la cortan
+    `speak.stop` y el barge-in, como a cualquier tramo. Emite los `voice.playback` habituales con este
+    `speech_id`. `ok{ignored: true}` si la voz está silenciada (`tts_enabled=false`) o sin conexión: el
+    backend usa entonces el reloj local del overlay.
+    """
+
+    turn_id: str
+    speech_id: int
+    guide_id: str
+    beat: Annotated[int, Field(ge=1, le=12)]
+    text: Annotated[str, Field(min_length=1, max_length=240)]
+
+
 class CmdSpeakPhrase(ContractModel):
     key: PhraseKey
     when: Literal["now", "when_silent"] = "now"
@@ -236,6 +257,7 @@ CMDS: Final[dict[str, type[BaseModel]]] = {
     "speak.flush": CmdSpeakFlush,
     "speak.close": CmdSpeakClose,
     "speak.stop": CmdSpeakStop,
+    "speak.beat": CmdSpeakBeat,
     "speak.phrase": CmdSpeakPhrase,
     "turn.phase": CmdTurnPhase,
     "voice.config": CmdVoiceConfig,
@@ -246,6 +268,7 @@ CMDS: Final[dict[str, type[BaseModel]]] = {
 CMD_RESULTS: Final[dict[str, type[BaseModel]]] = {
     "rtc.offer": RtcAnswer,
     "speak.delta": SpeakAck,
+    "speak.beat": SpeakAck,
     "status": StatusResult,
 }
 

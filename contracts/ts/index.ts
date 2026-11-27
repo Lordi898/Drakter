@@ -89,6 +89,23 @@ export type TimeBlockStatus = "planned" | "in_progress" | "done" | "skipped" | "
 
 export type TurnStatus = "queued" | "running" | "completed" | "failed" | "cancelled" | "interrupted";
 
+export interface ActInAppArgs {
+  window_id?: string | null;
+  steps: (StepClickText | StepClick | StepClickAt | StepFill | StepChoose | StepType | StepKey | StepScroll | StepHover | StepFocus | StepSet | StepWait)[];
+  read_id?: string | null;
+  shot_id?: string | null;
+  confirm?: boolean;
+}
+
+export interface ActInAppResult {
+  act_id: string;
+  status: "done" | "stopped" | "failed";
+  steps: StepOutcome[];
+  window: WindowRef | null;
+  read_id: string | null;
+  envelope: UntrustedEnvelope | null;
+}
+
 export interface AgendaItem {
   occurrence_id: string;
   source_type: CalendarSourceType;
@@ -389,6 +406,15 @@ export interface CmdRtcOffer {
   restart_pc?: boolean | null;
 }
 
+/** Modo flotante (docs/floating/CONTRACT.md §10): dice `text` como una locución propia con `speech_id`. Equivale a `speak.open` + `speak.delta` + `speak.close(completed)` en un solo comando. Se encola detrás de lo que ya suene en ese `turn_id` (FIFO, sin cortar ni ser cortada por otro tramo del mismo turno); la cortan `speak.stop` y el barge-in, como a cualquier tramo. Emite los `voice.playback` habituales con este `speech_id`. `ok{ignored: true}` si la voz está silenciada (`tts_enabled=false`) o sin conexión: el backend usa entonces el reloj local del overlay. */
+export interface CmdSpeakBeat {
+  turn_id: string;
+  speech_id: number;
+  guide_id: string;
+  beat: number;
+  text: string;
+}
+
 export interface CmdSpeakClose {
   speech_id: number;
   outcome: "completed" | "cancelled" | "failed";
@@ -521,6 +547,18 @@ export interface ConfirmationTicket {
   params_hash: string;
 }
 
+/** Sin nombre ni valor: esos textos van en el sobre (`#id rol «nombre» = valor`). */
+export interface ControlInfo {
+  id: number;
+  role: string;
+  rect: LogicalRect | null;
+  states: string[];
+  actions: string[];
+  editable: boolean;
+  offscreen: boolean;
+  secret: boolean;
+}
+
 export interface ConversationCreate {
   title?: string | null;
 }
@@ -536,6 +574,51 @@ export interface ConversationOut {
 
 export interface ConversationUpdate {
   title?: string | null;
+}
+
+export interface DrawDoneIn {
+  type: "draw_done";
+  guide_id: string;
+}
+
+export interface DrawStartedIn {
+  type: "draw_started";
+  guide_id: string;
+  seg: number;
+}
+
+/** Envoltura de `draw`. El esquema que ve el modelo es `contracts/floating/draw_args.schema.json` (generado del zod de `draw.mjs`, versión lean); la validación real es: tidyDraw → JSON Schema → checkDraw → reglas Drakter. */
+export interface DrawToolArgs {
+  target?: string | null;
+  beats?: Record<string, unknown>[] | null;
+  edit?: Record<string, unknown>[] | null;
+  deep?: boolean | null;
+  keep?: boolean | null;
+}
+
+export interface DrawToolResult {
+  guide_id: string;
+  status: "done" | "waiting" | "edited";
+  waiting_beat: number | null;
+  wait: "click" | "hover" | null;
+  drawn: DrawnPart[];
+  on_screen: DrawnPart[];
+  missing: MissingTarget[];
+  said: string[];
+  notes: string[];
+}
+
+export interface DrawWaitDoneIn {
+  type: "draw_wait_done";
+  guide_id: string;
+  beat: number;
+  result: "clicked" | "hovered" | "timeout" | "skipped";
+}
+
+export interface DrawnPart {
+  part: string;
+  kind: string;
+  label: string | null;
 }
 
 /** Campos de `entities` que expone toda entidad de dominio (0001). */
@@ -597,9 +680,9 @@ export interface EvtError {
   message: string | null;
 }
 
-/** Orden de la capa 0, ya aplicada por la voz. `ui_jarvis`/`ui_drakter`: cambiar el modo de la interfaz (el backend publica `ui.mode`). `ui_appearance`: cambiar el avatar o la interfaz Jarvis, con exactamente uno de `avatar` o `layout` (el backend publica `ui.appearance`). */
+/** Orden de la capa 0, ya aplicada por la voz. `ui_jarvis`/`ui_drakter`: cambiar el modo de la interfaz (el backend publica `ui.mode`). `ui_floating_on`/`ui_floating_off`: «modo flotante» / «quita el modo flotante» (el backend publica `ui.floating`, docs/floating/CONTRACT.md §10). `ui_appearance`: cambiar el avatar o la interfaz Jarvis, con exactamente uno de `avatar` o `layout` (el backend publica `ui.appearance`). */
 export interface EvtLocalCommand {
-  command: "stop_speech" | "rest" | "close" | "ui_jarvis" | "ui_drakter" | "ui_appearance";
+  command: "stop_speech" | "rest" | "close" | "ui_jarvis" | "ui_drakter" | "ui_appearance" | "ui_floating_on" | "ui_floating_off";
   utt_id: string;
   avatar: "holo-contorno" | "holo-hilo" | "holo-busto" | "holo-orbe" | "holo-filamento" | "ascuario" | "relojero" | "filamento" | "none" | null;
   layout: "nucleo" | "holomesa" | "visor" | null;
@@ -662,6 +745,15 @@ export interface EvtUserTurn {
   eot_ms: number;
 }
 
+/** `POST /api/v1/overlay/presence`. Al arrancar, en cada cambio y cada 30 s; caduca a los 75 s. */
+export interface FloatingPresence {
+  active: boolean;
+  ready: boolean;
+  companion: "ok" | "missing" | "outdated" | "denied" | "unsupported_session";
+  monitor?: MonitorInfo | null;
+  bridge_version?: number;
+}
+
 export interface FolderCreate {
   name: string;
   parent_folder_id?: string | null;
@@ -689,6 +781,21 @@ export interface FreeSlot {
   ends_at_utc: string;
   display_start: string;
   display_end: string;
+}
+
+export interface GuideWaitArgs {
+  guide_id: string;
+}
+
+export interface GuideWaitResult {
+  guide_id: string;
+  beat: number;
+  result: "clicked" | "hovered" | "timeout" | "skipped";
+  status: "waiting" | "done" | "stopped";
+  waiting_beat: number | null;
+  wait: "click" | "hover" | null;
+  said: string[];
+  notes: string[];
 }
 
 export interface HabitCreate {
@@ -798,9 +905,23 @@ export interface HabitUpdate {
   reminder_enabled?: boolean | null;
 }
 
+export interface HandsStepBounds {
+  bounds: number[];
+  hover: boolean;
+}
+
 export interface HealthOut {
   status: "ok" | "degraded" | "down";
   components: ComponentHealth[];
+}
+
+/** Imagen que acompaña a un resultado (modo flotante, docs/floating/CONTRACT.md §8.1). Nunca entra en `data` ni en la auditoría: el puente MCP la añade como `ImageContent` detrás del texto (que lleva el sobre no confiable). Máximo 1 por resultado en v1; lado largo ≤ 1568 px. */
+export interface ImageAttachment {
+  mime_type: "image/png" | "image/jpeg";
+  data_b64: string;
+  width: number;
+  height: number;
+  sha256: string;
 }
 
 export interface ImprovementEvaluationCreate {
@@ -865,6 +986,26 @@ export interface ImprovementProposalUpdate {
   title?: string | null;
   summary?: string | null;
   status?: "approved" | "rejected" | null;
+}
+
+export interface InkActionIn {
+  type: "ink_action";
+  part: string;
+}
+
+export interface InkClearedIn {
+  type: "ink_cleared";
+}
+
+export interface InkClosedIn {
+  type: "ink_closed";
+  part: string;
+}
+
+export interface InkPinnedIn {
+  type: "ink_pinned";
+  part: string;
+  on: boolean;
 }
 
 export interface IpcErr {
@@ -964,6 +1105,40 @@ export interface JobsStatusArgs {
 
 export interface JobsStatusResult {
   jobs: JobStatusItem[];
+}
+
+export type ListWindowsArgs = Record<string, never>;
+
+export interface ListWindowsResult {
+  windows: WindowRef[];
+  monitors: MonitorInfo[];
+  front_window_id: string | null;
+  envelope: UntrustedEnvelope;
+}
+
+export interface LogicalRect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+export interface LookScreenArgs {
+  target?: "front" | "screen" | "window";
+  window_id?: string | null;
+  zoom?: ZoomRegion | null;
+  cursor?: boolean;
+}
+
+/** `logical = origin + px_captura * scale_to_logical`. La imagen viaja aparte (`attachments`, ImageContent MCP). */
+export interface LookScreenResult {
+  shot_id: string;
+  image: ShotImage;
+  origin: number[];
+  scale_to_logical: number;
+  window: WindowRef | null;
+  taken_at: string;
+  envelope: UntrustedEnvelope;
 }
 
 export interface MemoryConflictOut {
@@ -1080,6 +1255,20 @@ export interface MessageUpdate {
   status?: MessageStatus | null;
 }
 
+export interface MissingTarget {
+  beat: number;
+  mark: number;
+  reason: "not_found" | "off_screen" | "stale_shot" | "stale_read" | "no_window" | "hands_off";
+}
+
+export interface MonitorInfo {
+  index: number;
+  geometry: LogicalRect;
+  workarea: LogicalRect;
+  scale: number;
+  primary: boolean;
+}
+
 export interface NotificationCreate {
   kind: string;
   title: string;
@@ -1122,10 +1311,86 @@ export interface OccurrenceOverride {
   room?: string | null;
 }
 
+export interface OpenTargetArgs {
+  url?: string | null;
+  app_id?: string | null;
+  location_id?: string | null;
+  relative_path?: string | null;
+  confirm?: boolean;
+}
+
+export interface OpenTargetResult {
+  opened: boolean;
+  kind: "url" | "app" | "file";
+  display: string;
+}
+
 export interface OverlapGroup {
   items: string[];
   starts_at_utc: string;
   ends_at_utc: string;
+}
+
+/** Un beat ya resuelto, con la forma que espera `ink.js` (Roamies `SC/tools.mjs:739-743`). `marks` son marcas de `draw.mjs` con los objetivos ya resueltos (`at.rect`, `to.rect`, `tie.rect`, `points` en px lógicos globales) y `part` asignada. Electron main las vuelve a validar con `draw.mjs` + zod. */
+export interface OverlayBeat {
+  say: string;
+  marks: Record<string, unknown>[];
+  wait: "click" | "hover" | null;
+  n: number;
+  caption: string;
+  voiced: boolean;
+  read: number | null;
+}
+
+/** `overlay.clipboard`: Electron main copia `text` al portapapeles (botón `copy` de una tarjeta, pulsado por el usuario). */
+export interface OverlayClipboard {
+  part: string;
+  text: string;
+}
+
+/** `overlay.draw`: un segmento (= un beat) de un dibujo. El bridge lo entrega como `{kind:'agent', e:{type:'draw', id: guide_id, seg, last, beats, edits, win, busy, fade?, deep?}}`. */
+export interface OverlayDraw {
+  guide_id: string;
+  turn_id: string;
+  call_id: string;
+  seg: number;
+  last: boolean;
+  beats: OverlayBeat[];
+  edits: Record<string, unknown>[];
+  win: number[] | null;
+  busy: number[][];
+  fade: number | null;
+  deep: boolean | null;
+  speech_id: number | null;
+}
+
+/** `overlay.hands` → `{kind:'hands', on}` | `{kind:'hands', step:{bounds, hover}}`. Exactamente uno. */
+export interface OverlayHands {
+  act_id: string;
+  on: boolean | null;
+  step: HandsStepBounds | null;
+}
+
+/** `overlay.ink_clear` → `{kind:'agent', e:{type:'ink_clear', ...}}` (`ink.js:2380-2384`). */
+export interface OverlayInkClear {
+  screen: boolean | null;
+  stop: boolean | null;
+  parts: string[] | null;
+  all: boolean | null;
+  guide_id: string | null;
+}
+
+/** `overlay.ink_stale` → `{kind:'agent', e:{type:'ink_stale'}}`: lo no fijado se desvanece. */
+export interface OverlayInkStale {
+  reason: "focus_changed" | "window_moved" | "window_closed";
+}
+
+/** `overlay.trail` → `{kind:'agent', e:{type:'trail', steps, head, final}}` (tarjeta de pasos). */
+export interface OverlayTrail {
+  act_id: string;
+  steps: TrailStep[];
+  head: string;
+  final: boolean;
 }
 
 export interface ProjectCreate {
@@ -1181,6 +1446,21 @@ export interface ProjectUpdate {
   manual_progress?: number | null;
   objective?: string | null;
   metadata?: Record<string, unknown> | null;
+}
+
+export interface ReadWindowArgs {
+  window_id?: string | null;
+  max_controls?: number;
+  include_text?: boolean;
+}
+
+export interface ReadWindowResult {
+  read_id: string;
+  window: WindowRef;
+  controls: ControlInfo[];
+  text_truncated: boolean;
+  redacted: number;
+  envelope: UntrustedEnvelope;
 }
 
 export interface RecurrenceExceptionCreate {
@@ -1353,6 +1633,19 @@ export interface SearchHitOut {
   content_trust: "untrusted";
 }
 
+export interface SetFloatingArgs {
+  on?: boolean | null;
+  size?: "default" | "small" | "cursor" | null;
+  pin?: "top-left" | "top-right" | "bottom-left" | "bottom-right" | "center" | "release" | null;
+}
+
+export interface SetFloatingResult {
+  delivered: boolean;
+  available: boolean;
+  active: boolean;
+  note: string;
+}
+
 /** Los secretos no van en ajustes (README §4). Los ajustes sensibles exigen confirmación. */
 export interface SettingCreate {
   key: string;
@@ -1369,6 +1662,13 @@ export interface SettingUpdate {
   value: string;
 }
 
+export interface ShotImage {
+  width: number;
+  height: number;
+  mime_type: "image/png" | "image/jpeg";
+  sha256: string;
+}
+
 export interface SpeakAck {
   ignored: boolean;
 }
@@ -1376,6 +1676,96 @@ export interface SpeakAck {
 export interface StatusResult {
   state: Record<string, unknown>;
   metrics_last: Record<string, unknown> | null;
+}
+
+export interface StepChoose {
+  do: "choose";
+  field?: string | null;
+  id?: number | null;
+  option: string;
+}
+
+export interface StepClick {
+  do: "click";
+  id: number;
+  button?: "left" | "right" | "middle";
+  double?: boolean;
+}
+
+/** Último recurso: px de la captura `shot_id` del acto. */
+export interface StepClickAt {
+  do: "click_at";
+  x: number;
+  y: number;
+  button?: "left" | "right" | "middle";
+  double?: boolean;
+}
+
+export interface StepClickText {
+  do: "click_text";
+  text: string;
+  near?: string | null;
+  button?: "left" | "right" | "middle";
+  double?: boolean;
+}
+
+export interface StepFill {
+  do: "fill";
+  field?: string | null;
+  id?: number | null;
+  text: string;
+}
+
+export interface StepFocus {
+  do: "focus";
+  id: number;
+}
+
+export interface StepHover {
+  do: "hover";
+  text?: string | null;
+  id?: number | null;
+}
+
+export interface StepKey {
+  do: "key";
+  combo: string;
+  repeat?: number;
+}
+
+export interface StepOutcome {
+  index: number;
+  do: string;
+  status: "ok" | "failed" | "refused" | "skipped";
+  code: string | null;
+  message: string | null;
+}
+
+export interface StepScroll {
+  do: "scroll";
+  direction?: "up" | "down" | "left" | "right";
+  amount?: number;
+  to_end?: boolean;
+  id?: number | null;
+}
+
+/** Valor de un control (deslizador, interruptor, casilla) por AT-SPI. */
+export interface StepSet {
+  do: "set";
+  id: number;
+  value: boolean | number | string;
+}
+
+/** Escribe en el campo con el foco; falla si el foco no está en un campo editable. */
+export interface StepType {
+  do: "type";
+  text: string;
+}
+
+export interface StepWait {
+  do: "wait";
+  ms?: number;
+  until_text?: string | null;
 }
 
 export interface StorageIndexProgress {
@@ -1681,6 +2071,12 @@ export interface ToolOk {
   data: Record<string, unknown>;
 }
 
+export interface TrailStep {
+  text: string;
+  state: "" | "now" | "ok" | "bad";
+  why: string | null;
+}
+
 export interface TurnRef {
   session_id: string;
   turn_id: string;
@@ -1690,6 +2086,15 @@ export interface TurnRef {
 export interface UiAppearanceRequested {
   avatar: "holo-contorno" | "holo-hilo" | "holo-busto" | "holo-orbe" | "holo-filamento" | "ascuario" | "relojero" | "filamento" | "none" | null;
   layout: "nucleo" | "holomesa" | "visor" | null;
+  source: "voice" | "agent";
+  utt_id: string | null;
+}
+
+/** Pide activar/desactivar el modo flotante o cambiar el avatar flotante. Solo estética; decide Electron main. `source`: `voice` (capa 0, frase cerrada) o `agent` (`ui_set_floating`). Al menos uno de `action`, `size`, `pin`. */
+export interface UiFloatingRequested {
+  action: "on" | "off" | "toggle" | null;
+  size: "default" | "small" | "cursor" | null;
+  pin: "top-left" | "top-right" | "bottom-left" | "bottom-right" | "center" | "release" | null;
   source: "voice" | "agent";
   utt_id: string | null;
 }
@@ -1779,6 +2184,20 @@ export interface WeekdayStat {
   done: number;
 }
 
+/** Ventana sin texto de terceros: el título va, si acaso, en el sobre no confiable. */
+export interface WindowRef {
+  window_id: string;
+  app_id?: string | null;
+  pid: number;
+  client: "wayland" | "x11";
+  frame: LogicalRect;
+  monitor: number;
+  focused: boolean;
+  fullscreen?: boolean;
+  hands_off?: boolean;
+  drakter?: boolean;
+}
+
 export interface WorkspaceEntityChange {
   entity_type: EntityType;
   entity_id: string;
@@ -1795,6 +2214,15 @@ export interface WorkspaceRelationshipChange {
   target_type: EntityType;
   target_id: string;
   actor_type: ActorType;
+}
+
+/** Recorte de una captura anterior del mismo turno, en px de esa captura. */
+export interface ZoomRegion {
+  shot_id: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
 }
 
 /** Unión discriminada por `status`. */
@@ -1834,6 +2262,13 @@ export interface EventPayloads {
   "voice.profile_changed": VoiceProfileChanged;
   "ui.mode": UiModeRequested;
   "ui.appearance": UiAppearanceRequested;
+  "ui.floating": UiFloatingRequested;
+  "overlay.draw": OverlayDraw;
+  "overlay.ink_clear": OverlayInkClear;
+  "overlay.ink_stale": OverlayInkStale;
+  "overlay.hands": OverlayHands;
+  "overlay.trail": OverlayTrail;
+  "overlay.clipboard": OverlayClipboard;
 }
 
 export type EventType = keyof EventPayloads;

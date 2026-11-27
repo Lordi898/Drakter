@@ -12,6 +12,7 @@ Fuente común de `backend/`, `desktop/`, herramientas y agente. Si un plan contr
 | Modelos de dominio | `.../models/` |
 | Rutas REST | `contracts/api/routes.md` |
 | Tipos TS | `contracts/ts/` |
+| Modo flotante (overlay, pantalla, manos) | `.../floating.py`, `.../hands_ipc.py`, `contracts/floating/draw_args.schema.json`; contrato en `docs/floating/CONTRACT.md` |
 
 Backend: dependencia local `drakter-contracts = {path = "../contracts/python", editable = true}` en `[tool.uv.sources]`.
 
