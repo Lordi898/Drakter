@@ -31,33 +31,72 @@ const inFlight = new Map<string, Promise<ApprovalOutcome>>()
 let queueTail: Promise<unknown> = Promise.resolve()
 
 /**
- * Se avisa antes de abrir cada diálogo (`true`, y se espera como mucho `GUARD_WAIT_MS`) y al cerrarse
- * (`false`). El modo flotante lo usa para ocultar su capa entera: nada pintado puede quedar encima del
- * único control humano (revisión de seguridad del PR #76, I8).
+ * Se avisa antes de abrir cada diálogo (`onDialog(true)`) y al cerrarse (`onDialog(false)`). El modo
+ * flotante lo usa para ocultar su capa entera: nada pintado puede quedar encima del único control humano
+ * (revisión de seguridad del PR #76, I8). El diálogo no se abre hasta que `onDialog(true)` confirma que la
+ * capa está oculta; si no lo confirma en `GUARD_ATTEMPTS` plazos de `GUARD_WAIT_MS`, se llama a
+ * `forceHide` (síncrono: oculta la ventana flotante) antes de abrir (N2).
  */
-export type ApprovalGuard = (open: boolean) => Promise<void>
+export interface ApprovalGuard {
+  onDialog(open: boolean): Promise<void>
+  forceHide(): void
+}
 const GUARD_WAIT_MS = 1500
+const GUARD_ATTEMPTS = 2
 let guard: ApprovalGuard | null = null
 
 export function setApprovalGuard(next: ApprovalGuard | null): void {
   guard = next
 }
 
-async function runGuard(open: boolean): Promise<void> {
-  const current = guard
-  if (!current) return
+/** `true` si `promise` se resolvió dentro del plazo; `false` si venció o falló (y lo registra). */
+async function within(promise: Promise<void>, ms: number, what: string): Promise<boolean> {
   let timer: NodeJS.Timeout | undefined
   try {
-    await Promise.race([
-      current(open),
-      new Promise<void>((resolve) => {
-        timer = setTimeout(resolve, GUARD_WAIT_MS)
+    return await Promise.race([
+      promise.then(() => true),
+      new Promise<boolean>((resolve) => {
+        timer = setTimeout(() => resolve(false), ms)
       })
     ])
   } catch (error) {
-    logError('approvals', 'Fallo al preparar la pantalla para la confirmación', describeError(error))
+    logError('approvals', what, describeError(error))
+    return false
   } finally {
     clearTimeout(timer)
+  }
+}
+
+/** Antes del diálogo: la capa flotante tiene que quedar oculta, confirmada o a la fuerza. */
+async function guardBeforeDialog(): Promise<void> {
+  const current = guard
+  if (!current) return
+  let failed = false
+  const hidden = current.onDialog(true).catch((error: unknown) => {
+    failed = true
+    logError('approvals', 'Fallo al ocultar la capa flotante antes de la confirmación', describeError(error))
+    throw error
+  })
+  // Reintento: el ocultado sigue en marcha (cola del controlador), se le da un segundo plazo.
+  for (let attempt = 1; attempt <= GUARD_ATTEMPTS && !failed; attempt++) {
+    if (await within(hidden, GUARD_WAIT_MS, 'Ocultado de la capa flotante fallido')) return
+    if (!failed) {
+      logError('approvals', `La capa flotante no confirmó que estaba oculta (intento ${attempt} de ${GUARD_ATTEMPTS})`)
+    }
+  }
+  try {
+    current.forceHide()
+    logError('approvals', 'Capa flotante ocultada a la fuerza (win.hide) antes de abrir la confirmación')
+  } catch (error) {
+    logError('approvals', 'No se pudo ocultar la capa flotante a la fuerza', describeError(error))
+  }
+}
+
+async function guardAfterDialog(): Promise<void> {
+  const current = guard
+  if (!current) return
+  if (!(await within(current.onDialog(false), GUARD_WAIT_MS, 'Fallo al restaurar la capa flotante'))) {
+    logError('approvals', 'La capa flotante no confirmó su vuelta tras la confirmación')
   }
 }
 
@@ -133,7 +172,7 @@ async function runApproval(host: BackendHost, id: string): Promise<ApprovalOutco
     const parent = getMainWindow()
     // Siempre como propiedad: el arnés e2e sustituye `dialog.showMessageBox`.
     // Con la principal oculta (modo flotante, CONTRACT §4.2) el diálogo se abre sin padre.
-    await runGuard(true)
+    await guardBeforeDialog()
     let result: Electron.MessageBoxReturnValue
     try {
       result =
@@ -141,7 +180,7 @@ async function runApproval(host: BackendHost, id: string): Promise<ApprovalOutco
           ? await dialog.showMessageBox(parent, options)
           : await dialog.showMessageBox(options)
     } finally {
-      await runGuard(false)
+      await guardAfterDialog()
     }
 
     // El backend pudo reiniciarse mientras el diálogo estaba abierto.
