@@ -56,7 +56,7 @@ Al activarlo, la ventana principal se esconde en la bandeja: el avatar ya hace s
 
 ## Qué hace JARVIS mientras flota
 
-- **Aparece junto al cursor** cuando le hablas o te responde, como en Roamies, y se aparta a un borde cuando no hace nada. Nunca te roba el foco: escribes y pulsas en tus apps como siempre. Solo es clicable donde dibuja algo.
+- **Aparece junto al cursor** cuando le hablas o te responde, como en Roamies. En reposo no te sigue: se queda donde estaba, y después de dibujar se aparca en un borde. Nunca te roba el foco: escribes y pulsas en tus apps como siempre. Solo es clicable donde dibuja algo.
 - **Te escucha y te habla:** la esfera se mueve con su voz y la píldora de escucha con tu micrófono.
 - **Mira la pantalla** cuando se lo pides («¿cómo exporto esto a PDF?»), señala dónde pulsar y espera a que lo hagas antes de pasar al siguiente paso.
 - **Dibuja tarjetas y esquemas** en una zona libre («hazme un esquema de la fotosíntesis»). `Esc` los borra.
