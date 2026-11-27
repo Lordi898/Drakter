@@ -16,11 +16,11 @@ from typing import Any, Final, get_args
 
 import drakter_contracts
 from drakter_contracts.errors import ErrorCode
-from drakter_contracts.tools import ToolManifest, ToolOutcome
+from drakter_contracts.tools import ImageAttachment, ToolManifest, ToolOk, ToolOutcome
 from pydantic import BaseModel, TypeAdapter, ValidationError
 from pydantic_core.core_schema import ErrorType
 
-from app.tools.envelope import outcome_code, tool_confirmation, tool_failure, tool_ok
+from app.tools.envelope import outcome_code, tool_confirmation, tool_failure
 from app.tools.gate import (
     AuditSink,
     DefaultToolGate,
@@ -103,7 +103,35 @@ def _spec_problem(spec: ToolSpec) -> str | None:
             return f"audit policy for {key} must be log, hash or omit"
     if spec.risk is RiskClass.CONFIRM and spec.summarize is None:
         return "a CONFIRM tool needs summarize"
+    if spec.confirm_if is not None:
+        if spec.risk is not RiskClass.WRITE:
+            return "confirm_if only applies to a WRITE tool"
+        if not callable(spec.confirm_if):
+            return "confirm_if must be callable"
+    attachments = spec.result_model.model_fields.get("attachments")
+    if attachments is not None and attachments.exclude is not True:
+        return "result_model.attachments must be excluded from the dump (exclude=True)"
     return None
+
+
+_ATTACHMENTS: Final = TypeAdapter(list[ImageAttachment])
+_MAX_ATTACHMENTS: Final = 1
+
+
+def _attachments(spec: ToolSpec, result: Any) -> list[ImageAttachment]:
+    """Images of the result: only from an excluded ``attachments`` field of ``result_model``."""
+    if "attachments" not in spec.result_model.model_fields:
+        return []
+    raw = getattr(result, "attachments", None)
+    if raw is None and isinstance(result, dict):
+        raw = result.get("attachments")
+    if not raw:
+        return []
+    items = [a.model_dump() if isinstance(a, BaseModel) else a for a in raw]
+    attachments = _ATTACHMENTS.validate_python(items)
+    if len(attachments) > _MAX_ATTACHMENTS:
+        raise ValueError("too many attachments")
+    return attachments
 
 
 def _validation_details(exc: ValidationError) -> list[dict[str, Any]]:
@@ -276,13 +304,14 @@ class ToolRegistry:
         tainted = self.turns.is_tainted(ctx.session_id)
         event_args = audit_args(spec, args)
 
+        risk = effective_risk(spec, tainted=tainted, args=args)
+
         def reject(outcome: ToolOutcome) -> Any:
-            return self._reject(outcome, spec.name, ctx, spec, tainted, event_args)
+            return self._reject(outcome, spec.name, ctx, spec, tainted, event_args, risk)
 
         if not self.permissions.allows(spec.permission):
             return await reject(tool_failure(ErrorCode.PERMISSION_DENIED, "Permission denied."))
 
-        risk = effective_risk(spec, tainted=tainted)
         unauthorized = tool_failure(
             ErrorCode.SERVICE_UNAVAILABLE, "The action could not be authorized."
         )
@@ -306,7 +335,7 @@ class ToolRegistry:
                 return await reject(confirmation)
         # What needs confirmation is executed on the user's approval, never by an agent call.
         elif kind == "allow" and risk is not RiskClass.CONFIRM:
-            return await self._execute(spec, args, ctx, tainted, event_args)
+            return await self._execute(spec, args, ctx, tainted, event_args, risk)
         logger.error("invalid gate decision", extra={"event": "tool_gate_invalid"})
         return await reject(unauthorized)
 
@@ -317,10 +346,13 @@ class ToolRegistry:
         ctx: ToolContext,
         tainted: bool,
         event_args: dict[str, Any],
+        risk: RiskClass,
     ) -> ToolOutcome:
         try:
             await self.audit.record(
-                self._event("attempt", spec.name, ctx, spec, tainted, event_args, "pending")
+                self._event(
+                    "attempt", spec.name, ctx, spec, tainted, event_args, "pending", risk=risk
+                )
             )
         except Exception:
             logger.exception("audit failed", extra={"event": "tool_audit_failed"})
@@ -342,6 +374,11 @@ class ToolRegistry:
             outcome.status,
             outcome_code(outcome),
             duration_ms,
+            risk=risk,
+            attachments=tuple(
+                {"sha256": a.sha256, "width": a.width, "height": a.height}
+                for a in (outcome.attachments if isinstance(outcome, ToolOk) else ())
+            ),
         )
         try:
             await self.audit.record(event)
@@ -372,13 +409,14 @@ class ToolRegistry:
             # Dumping first forces validation of instances built without it.
             dumped = result.model_dump() if isinstance(result, BaseModel) else result
             data = spec.result_model.model_validate(dumped).model_dump(mode="json")
+            attachments = _attachments(spec, result)
         except Exception:  # noqa: BLE001 - includes serializers; the detail stays in the log
             logger.exception(
                 "tool returned an invalid result",
                 extra={"event": "tool_invalid_result", "tool": spec.name},
             )
             return tool_failure(ErrorCode.INTERNAL_ERROR, "The tool returned an invalid result.")
-        return tool_ok(data)
+        return ToolOk(data=data, attachments=attachments)
 
     async def _reject(
         self,
@@ -388,6 +426,7 @@ class ToolRegistry:
         spec: ToolSpec | None = None,
         tainted: bool | None = None,
         event_args: dict[str, Any] | None = None,
+        risk: RiskClass | None = None,
     ) -> ToolOutcome:
         if tainted is None:
             tainted = self.turns.is_tainted(ctx.session_id)
@@ -400,6 +439,7 @@ class ToolRegistry:
             event_args or {},
             outcome.status,
             outcome_code(outcome),
+            risk=risk,
         )
         try:
             await self.audit.record(event)
@@ -418,7 +458,12 @@ class ToolRegistry:
         outcome: Any,
         code: str | None = None,
         duration_ms: float | None = None,
+        *,
+        risk: RiskClass | None = None,
+        attachments: tuple[dict[str, Any], ...] = (),
     ) -> ToolAuditEvent:
+        if spec is not None and risk is None:
+            risk = effective_risk(spec, tainted=tainted)
         return ToolAuditEvent(
             phase=phase,
             tool=tool,
@@ -431,9 +476,10 @@ class ToolRegistry:
             code=code,
             permission=spec.permission if spec else None,
             risk=spec.risk.value if spec else None,
-            effective_risk=effective_risk(spec, tainted=tainted).value if spec else None,
+            effective_risk=risk.value if spec and risk else None,
             args=event_args,
             duration_ms=duration_ms,
+            attachments=attachments,
         )
 
 

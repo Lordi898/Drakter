@@ -13,6 +13,7 @@ import os
 import re
 import secrets
 import stat
+import time
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -33,6 +34,9 @@ HERMES_CONFIG_VERSION: Final = 52  # _config_version of v0.22.7: a lower one tri
 CONTEXT_LENGTH: Final = 1_000_000
 COMPRESSION_THRESHOLD_TOKENS: Final = 80_000  # stays under the 100K price step of Haiku 5.5
 SOUL_MAX_CHARS: Final = 120_000  # Hermes truncates SOUL.md silently beyond context_file_max_chars
+IMAGE_CACHE_MAX_AGE_S: Final = 3600.0
+# get_hermes_dir("cache/images", "image_cache") of gateway/platforms/base.py: new and legacy names.
+_IMAGE_CACHE_DIRS: Final = ("cache/images", "image_cache")
 
 _TOOL_NAME_RE: Final = re.compile(r"^[a-z][a-z0-9_]{2,47}$")
 # "hermes" is the foreground home; job lanes use "hermes-w1", "hermes-w2"... (V-24).
@@ -239,6 +243,9 @@ def render_config(
             "disabled_toolsets": list(_DISABLED_TOOLSETS),
             "max_turns": s.agent_max_turns,
             "reasoning_effort": reasoning_effort,
+            # Without it, the explicit auxiliary.vision wins and the model only sees
+            # `MEDIA:<path>` for a tool image (floating CONTRACT §8.1.2, spike 04 §1).
+            "image_input_mode": "native",
         },
         "approvals": {"mode": "manual"},
         "auth": {"adopt_external_logins": False},
@@ -274,6 +281,33 @@ def render_config(
         "tools": {"tool_search": {"enabled": "off"}},
         "updates": {"check": False},
     }
+
+
+def purge_image_cache(root: Path, max_age_s: float = IMAGE_CACHE_MAX_AGE_S) -> int:
+    """Delete cached tool images older than `max_age_s` under the home `root`.
+
+    Hermes caches every MCP `ImageContent` there (screenshots may hold sensitive data).
+    Only regular files are removed, never followed symlinks. Returns how many went.
+    """
+    cutoff = time.time() - max_age_s
+    removed = 0
+    for relative in _IMAGE_CACHE_DIRS:
+        directory = root / relative
+        try:
+            if not stat.S_ISDIR(os.lstat(directory).st_mode):
+                continue
+            entries = list(os.scandir(directory))
+        except OSError:
+            continue
+        for entry in entries:
+            try:
+                info = entry.stat(follow_symlinks=False)
+                if stat.S_ISREG(info.st_mode) and info.st_mtime < cutoff:
+                    os.unlink(entry.path)
+                    removed += 1
+            except OSError:
+                continue
+    return removed
 
 
 def _read_regular(path: Path) -> bytes:
@@ -463,6 +497,7 @@ def materialize_home(
         raise HomeError(f"cannot prepare the Hermes home: {type(exc).__name__}") from exc
     manifest = _build_manifest(paths, files)
     verify_home(manifest)
+    purge_image_cache(paths.root)
     return manifest
 
 
