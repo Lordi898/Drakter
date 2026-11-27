@@ -6,6 +6,14 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y l
 
 ## [Sin publicar]
 
+### Autoconsciencia y contexto (2026-11-27)
+- **Las 4 herramientas del catálogo que faltaban:** `get_voice_status`, `get_workspace_summary`, `get_activity_log` y `get_pending_confirmations`.
+- **`get_self_profile`:** versión, modelo, herramientas, límites, subsistemas y el equipo en el que corre.
+- **Conocimiento del equipo medido en vivo:** CPU, RAM, GPU, sistema, batería, carga y disco. Detecta un cambio de ordenador, de hardware o de sistema y lo avisa una vez por conversación.
+- **Contexto en cada mensaje:** equipo actual, punto de la conversación y conversación más reciente.
+- **Historial de conversaciones** (permiso `chat.read`): `list_chat_sessions`, `search_chat_history` y `get_chat_session`. Los mensajes llegan como datos no confiables.
+- Guía nueva: `docs/usage/consciencia.md`.
+
 ### Documentación e instalación (2026-11-27)
 - **Guía de instalación completa** (`docs/installation/instalar.md`), paso a paso:
   - uv, Python 3.12 (con o sin sudo) y Node 24;

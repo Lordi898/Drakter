@@ -76,6 +76,11 @@ def _install_services(app: FastAPI, settings: Settings) -> None:
     )
     wire_security(app, settings)
     _install_voice(app, settings, runtime)
+    if runtime:
+        # Read-only views for the agent's system tools (system_views.py): same objects as the GUI.
+        runtime.tool_state.actions = app.state.actions
+        runtime.tool_state.voice = app.state.voice
+        _install_awareness(app, settings, runtime)
 
 
 def runtime_dir() -> Path:
@@ -107,6 +112,20 @@ def _install_voice(app: FastAPI, settings: Settings, runtime: Any) -> None:
     # Hermes retrying an unreachable model on a voice turn: the cached `offline` phrase, once.
     runtime.on_model_unreachable = lambda _source: orchestrator.say_phrase("offline")
     app.state.voice = orchestrator
+
+
+def _install_awareness(app: FastAPI, settings: Settings, runtime: Any) -> None:
+    """Self- and context awareness: the machine it runs on (re-read, never configured) and where
+    the conversation is, as a turn prefix; `get_self_profile` reads the same objects."""
+    from app.services.awareness import AwarenessService
+    from app.services.hardware import HardwareTracker
+
+    tracker = HardwareTracker(settings.data_dir)
+    tracker.refresh_if_stale()  # first probe in a thread: the app does not wait for lspci
+    awareness = AwarenessService(settings.db_path, tracker)
+    runtime.add_turn_prefix(awareness.prefix)
+    runtime.tool_state.awareness = awareness
+    app.state.awareness = awareness
 
 
 async def _start_jobs(app: FastAPI) -> Any:

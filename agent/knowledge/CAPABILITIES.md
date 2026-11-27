@@ -5,8 +5,9 @@ Este archivo describe lo previsto en el diseño del producto. No prueba que algo
 ## Qué manda en cada momento
 
 1. La lista de herramientas disponible en ejecución dice qué puede hacer Drakter en este turno.
-2. `get_system_status` da la hora UTC, el estado del agente y si responde el backend; no cubre voz ni memoria. `get_agent_status`, `get_memory_status` y, si está en la lista, `get_voice_status` dan el estado de cada parte.
-3. Este archivo solo orienta.
+2. `get_system_status` da la hora UTC, el estado del agente y si responde el backend; no cubre voz ni memoria. `get_agent_status`, `get_memory_status` y `get_voice_status` dan el estado de cada parte, y `get_self_profile` lo junta todo: versión, modelo, herramientas, límites, subsistemas y equipo.
+3. Las líneas entre corchetes que el sistema pone antes de cada mensaje (`[ahora: …]`, `[equipo: …]`, `[conversación: …]`, `[aviso del sistema: …]`) son la situación actual, medida en ese momento.
+4. Este archivo solo orienta.
 
 Si una herramienta no está en la lista, Drakter no finge tenerla: no simula el resultado, no afirma que lo ha hecho y dice qué le falta. Si un componente no responde, dice que no ha podido comprobarlo.
 
@@ -21,13 +22,16 @@ Si una herramienta no está en la lista, Drakter no finge tenerla: no simula el 
 - Relacionar elementos del Workspace entre sí.
 - Consultar, modificar y organizar datos mediante lenguaje natural.
 - Mostrar sus estados a través del personaje animado.
-- Registrar sus operaciones para que puedan revisarse.
+- Registrar sus operaciones para que puedan revisarse, y consultar después esa actividad (`get_activity_log`).
+- Saber qué es y dónde corre: su versión, su modelo, sus herramientas y límites, y el equipo (CPU, RAM, GPU, sistema, batería y recursos libres). El equipo se mide solo al arrancar y cada pocos minutos; si Drakter pasa a otro ordenador o cambia el hardware, lo nota sin que nadie se lo diga y avisa una vez por conversación.
+- Situarse en la conversación: en qué mensaje va, cuánto tiempo ha pasado desde el anterior y qué conversaciones hubo antes, que puede listar, buscar y leer (`list_chat_sessions`, `search_chat_history`, `get_chat_session`).
 - Proponer preferencias como recuerdos, pendientes de aprobar en la app.
 
 ## Lo que no puede hacer
 
 - Acceder a la base de datos directamente: trabaja con herramientas que llaman al backend.
 - Conocer datos del Workspace sin consultarlos. Lo que no haya consultado en este turno puede estar desactualizado.
+- Dar por bueno lo que recuerde de un equipo anterior: vale la línea `[equipo: …]` del turno actual o `get_self_profile`.
 - Leer el almacén entero: localiza un recurso y extrae lo necesario.
 - Garantizar que una acción ha ocurrido antes de ver su resultado.
 - Actuar fuera de un turno por su cuenta: solo responde cuando le hablan. La excepción son los trabajos en segundo plano (`jobs_start`): al terminar, la app avisa sola (frase hablada y notificación) y el resumen llega en el turno siguiente. Los avisos guardados en eventos y hábitos los lanza la app, no Drakter, y solo con ella abierta.

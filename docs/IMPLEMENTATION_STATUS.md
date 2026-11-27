@@ -29,6 +29,7 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 | 16. Seguridad y fiabilidad | 15 | 15 | 3 | 0 | 0 |
 | 17. Optimización y lanzamiento | 17 | 16 | 5 | 0 | 1 |
 | Modo Jarvis (ampliación) | 16 | 15 | 3 | 1 | 0 |
+| Autoconsciencia y contexto (ampliación) | 6 | 5 | 1 | 1 | 0 |
 | 18. Ampliaciones futuras | 10 | 0 | 0 | 0 | 10 |
 | **Total 0–17** | **342** | **336** | **53** | **3** | **3** |
 
@@ -570,6 +571,19 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 - [x] CPU del renderer en reposo con holo-contorno en Equilibrado (UHD 620): Núcleo 9,2 %, Holomesa 9,2 %, Visor 6,8 %; proceso GPU 8,0 %, 9,1 % y 7,5 %.
 - [ ] Ventana oculta: `document.hidden` y bucle parado.
   ⚠️ Al minimizar con este gestor de ventanas, Chromium no marca la página como oculta, aunque deja de pintar: renderer 0,5 % y GPU 0,7 %. La parada del Stage con `document.hidden` la midió W3 (0 %).
+
+## Autoconsciencia y contexto (ampliación pedida por el usuario)
+
+> Fuera de las checklists 0-17 del plan, pedida por el usuario el 2026-11-27 (`DECISIONS.md` «Autoconsciencia, equipo y contexto de conversación»). Comprobado por drakter-100 con backend real, Hermes real y el modelo simulado (guion `tests/e2e/stub-scenarios/consciencia.json`) en un entorno aislado: 23 de 23 comprobaciones, más `check_security` 145/145, `check_memory_rules` 40/40, confirmaciones y migraciones.
+
+- [x] Las 4 herramientas del catálogo que faltaban: `get_voice_status`, `get_workspace_summary`, `get_activity_log` y `get_pending_confirmations` (`backend/app/tools/system_views.py`). Las 95 del catálogo quedan registradas, sin deriva.
+- [x] `get_self_profile`: versión, commit, modelo, herramientas que puede usar, límites, voz, memoria, trabajos, confirmaciones pendientes y el equipo, todo leído del backend en marcha.
+- [x] Conocimiento del equipo medido, no escrito: fabricante, modelo y tipo, CPU, RAM, GPU, sistema, batería, carga y disco libre (`backend/app/services/hardware.py`). Se mide al arrancar y cada 10 min; `ENVIRONMENT.md` ya no guarda datos del equipo.
+- [x] Detección de cambio de equipo (`new_machine`, `known_machine`), de hardware y de sistema, con historial de equipos en `<datos>/system/hardware.json` (permisos 600, sin números de serie ni machine-id). El aviso llega una vez por conversación durante 72 h.
+  ⚠️ Comprobado fingiendo en `hardware.json` que el equipo anterior era otro (Dell XPS 13): la detección, el aviso y que la línea de equipo describe el nuevo. No se ha movido a otro ordenador real. En Windows y macOS solo hay lecturas de respaldo (`platform`, RAM por `ctypes` en Windows), sin GPU ni modelo del equipo, y sin probar.
+- [x] Contexto vivo de cada turno, solo en el mensaje del turno y nunca en el prompt de sistema: `[equipo: …]`, `[aviso del sistema: …]` y `[conversación: …]` (en qué mensaje va, cuánto hace del anterior y cuál fue la conversación más reciente) (`backend/app/services/awareness.py`).
+- [ ] Historial de conversaciones con el modelo real: `list_chat_sessions`, `search_chat_history` y `get_chat_session` (permiso nuevo `chat.read`; los mensajes llegan en sobre no confiable y contaminan la sesión, así que después las escrituras piden confirmación).
+  ⚠️ Las tres herramientas funcionan por el camino completo (MCP, permisos, auditoría) y la contaminación sube `create_task` de `write` a `confirm`. Falta una conversación con Claude Haiku 5.5 real para ver que usa bien las líneas de contexto y el historial: con el stub solo se prueba el cableado.
 
 ## Checklist 18. Ampliaciones futuras
 

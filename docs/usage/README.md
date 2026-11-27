@@ -18,6 +18,7 @@ Algunas guías de módulo abren con una cabecera de estado escrita en el cierre 
 - [Búsqueda](busqueda.md)
 - [Chat y personaje](chat-y-personaje.md)
 - [Personaje: avatares 3D, boca sincronizada y archivo Rive](personaje.md)
+- [Autoconsciencia y contexto](consciencia.md): qué sabe Drakter de sí mismo, del ordenador en el que corre (y cómo nota un cambio de equipo) y de vuestras conversaciones
 - [Modo Jarvis](modo-jarvis.md): la interfaz holográfica, sus tres interfaces (Núcleo, Holomesa, Visor) y cómo cambiar de avatar e interfaz, también por voz
 - [Trabajos en segundo plano](trabajos.md)
 - [Voz](voz.md): Super+J, «Hey Jarvis», micrófono y salida, auriculares, Deepgram, Fish y Kokoro, caché de frases

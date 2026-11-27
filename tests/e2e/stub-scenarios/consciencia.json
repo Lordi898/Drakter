@@ -1,0 +1,23 @@
+{
+  "description": "Autoconsciencia y contexto: el agente pide su perfil, la voz, el resumen del Workspace, la actividad, las confirmaciones y sus conversaciones; luego busca en el historial.",
+  "steps": [
+    {
+      "text": "Miro quién soy, dónde corro y qué hay pendiente.",
+      "tool_calls": [
+        {"name": "drakter__get_self_profile", "input": {}},
+        {"name": "drakter__get_voice_status", "input": {}},
+        {"name": "drakter__get_workspace_summary", "input": {}},
+        {"name": "drakter__get_activity_log", "input": {"limit": 5}},
+        {"name": "drakter__get_pending_confirmations", "input": {}},
+        {"name": "drakter__list_chat_sessions", "input": {"limit": 5}}
+      ]
+    },
+    {
+      "text": "Busco en conversaciones anteriores.",
+      "tool_calls": [{"name": "drakter__search_chat_history", "input": {"query": "orbe"}}]
+    },
+    {
+      "text": "Hecho. Último resultado: {{tool_result}}"
+    }
+  ]
+}

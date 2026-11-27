@@ -22,6 +22,8 @@ Voz v2 (Pipecat 1.16.0 + WebRTC por loopback) integrada en la app: activación c
 
 **Avatares 3D y modo Jarvis (2026-11-26).** El personaje es un avatar 3D elegible entre 8 (por defecto Holo-Contorno; el personaje clásico SVG o tu `.riv` siguen disponibles). El **modo Jarvis** es una segunda interfaz holográfica, con tres diseños (Núcleo, Holomesa y Visor), sobre los mismos datos. Se activa con un botón, `Ctrl+Shift+J`, `Ctrl+K`, la bandeja, la voz («modo Jarvis») o el agente. Drakter sigue siendo la interfaz de inicio. En la UHD 620, en reposo, el proceso que dibuja la ventana usa entre el 7 % y el 9 % de un núcleo. Guías: [`docs/usage/modo-jarvis.md`](docs/usage/modo-jarvis.md) y [`docs/usage/personaje.md`](docs/usage/personaje.md).
 
+**Autoconsciencia y contexto (2026-11-27).** Drakter sabe qué es (versión, modelo, herramientas y límites) y en qué ordenador corre: lo mide solo y, si lo pasas a otro equipo o cambias el hardware, lo nota y lo avisa. En cada mensaje sabe en qué punto de la conversación vais y puede buscar y leer conversaciones anteriores, que trata como datos no confiables. Guía: [`docs/usage/consciencia.md`](docs/usage/consciencia.md).
+
 Pendiente sobre todo: OpenViking, pantalla de automejora, `.deb` instalado, probar la voz del modo Jarvis con micrófono real y parte de las mediciones de rendimiento.
 
 <details>
@@ -42,7 +44,7 @@ Pendiente sobre todo: OpenViking, pantalla de automejora, `.deb` instalado, prob
 | Almacén (CL10) | `backend/app/services/storage*.py`, `desktop/src/modules/storage/` | 25/25 | Verificado: catálogo, carpetas, etiquetas, índice FTS5, lectura bajo demanda (texto, PDF, imágenes, enlaces), límites de comprimidos y rutas permitidas. ⚠️ Herramientas sin probar con modelo |
 | Relaciones (CL11) | `backend/app/services/relations.py`, `desktop/src/modules/relationships/` | 13/14 | Verificado el servicio, los tipos, las validaciones, las consultas y la integridad; leer, buscar y crear desde el agente con Haiku real. ⚠️ Borrar desde el agente sin recomprobar con el modelo |
 | Memoria (CL12) | `memory/`, `backend/app/integrations/memory/` | 20/22 | Verificado el adaptador SQLite + FTS5 y su ciclo (extraer, clasificar, deduplicar, contradicciones, caducidad); olvidar o aprobar recuerdos pasa por confirmación. ⚠️ OpenViking desactivado |
-| Skills y herramientas (CL13) | `agent/skills/`, `backend/app/tools/` | 7/15 | 87 herramientas por MCP (91 en el catálogo, 4 sin construir) con parámetros, permisos y errores verificados. ⚠️ Las Skills están inertes en Hermes (`skill_manage` desactivado) |
+| Skills y herramientas (CL13) | `agent/skills/`, `backend/app/tools/` | 7/15 | 95 herramientas por MCP, todas las del catálogo con parámetros, permisos y errores verificados. ⚠️ Las Skills están inertes en Hermes (`skill_manage` desactivado) |
 | Voz (CL14) | `voice/`, `backend/app/integrations/voice/`, `desktop/src/voice/` | ver `IMPLEMENTATION_STATUS.md` | Voz v2: Pipecat 1.16.0, WebRTC por loopback, Moonshine, openWakeWord («Hey Jarvis»), Smart Turn, Fish con Kokoro de respaldo. Detalle en [`voice/README.md`](voice/README.md) |
 | Automejora (CL15) | `improvement/`, `backend/app/services/improvement_*.py` | 11/11 | Verificado el ciclo (feedback, propuestas, evaluación aislada, rama Git, revertir) y que no puede cambiar nada sin aprobación. ⚠️ Sin pantalla de automejora |
 | Seguridad (CL16) | `backend/app/permissions/`, `tests/security/` | 14/15 | Revisión adversarial hecha (banco final 169 BLOCKED / 12 BREACH / 0 ERROR). ⚠️ Brechas de diseño conocidas: ver [SECURITY.md](SECURITY.md) |
@@ -189,7 +191,7 @@ React (renderer) ◀── REST + WebSocket ──▶  servicios ── SQLite +
 ```
 
 - **Una sola fuente de verdad:** el Workspace en SQLite, con migraciones controladas (`backend/migrations/`).
-- **Herramientas, no acceso directo:** las 87 herramientas del agente tienen esquema, permisos, validación, resultado estructurado y errores; las destructivas pasan por confirmación (`ActionService`).
+- **Herramientas, no acceso directo:** las 95 herramientas del agente tienen esquema, permisos, validación, resultado estructurado y errores; las destructivas pasan por confirmación (`ActionService`).
 - **Datos no confiables:** los documentos del almacén y la memoria recuperada se tratan como datos; no pueden cambiar las instrucciones ni las reglas de seguridad.
 - **Personalidad en archivos** (`agent/identity/`), separada del modelo; proveedor del modelo intercambiable; voz separada del razonamiento.
 
@@ -216,7 +218,7 @@ Más en [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
 ## Documentación
 
-- [Primeros pasos](docs/usage/primeros-pasos.md) · [Instalación completa](docs/installation/instalar.md) · [Configuración (`.env`)](docs/installation/configuracion-env.md) · [Uso por módulo](docs/usage/README.md) · [Modo Jarvis](docs/usage/modo-jarvis.md) · [Solución de problemas](docs/usage/problemas.md)
+- [Primeros pasos](docs/usage/primeros-pasos.md) · [Instalación completa](docs/installation/instalar.md) · [Configuración (`.env`)](docs/installation/configuracion-env.md) · [Uso por módulo](docs/usage/README.md) · [Modo Jarvis](docs/usage/modo-jarvis.md) · [Autoconsciencia y contexto](docs/usage/consciencia.md) · [Solución de problemas](docs/usage/problemas.md)
 - [Arquitectura](docs/ARCHITECTURE.md) · [Convenciones](docs/CONVENTIONS.md)
 - [Estado de implementación](docs/IMPLEMENTATION_STATUS.md) · [Decisiones](docs/DECISIONS.md) · [Plan maestro](docs/MASTER_PLAN.md)
 - [Registro de cambios](CHANGELOG.md)

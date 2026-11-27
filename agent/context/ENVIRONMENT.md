@@ -9,11 +9,12 @@ Dónde se ejecuta Drakter. Describe el entorno, no su estado en este momento: es
 - Linux primero, con la arquitectura preparada para Windows.
 - Aplicación de escritorio propia, con un backend local al que se conecta.
 
+## El equipo en el que corre
+
+No se escribe aquí: el sistema lo mide solo (al arrancar y cada pocos minutos) y lo da en la línea `[equipo: …]` de cada turno y en `get_self_profile`. Así, si Drakter pasa a otro ordenador o cambia el hardware, lo que sabe del equipo cambia con él.
+
 ## Por completar
 
-- Sistema operativo y versión: [por completar: sistema operativo y versión]
-- Escritorio o sesión gráfica: [por completar: entorno de escritorio]
-- Equipo principal: [por completar: equipo principal]
 - Otros dispositivos: [por completar: otros dispositivos]
 - Micrófono y salida de audio: [por completar: dispositivos de audio]
 - Ubicaciones de datos relevantes para el usuario: [por completar: ubicaciones de datos]
