@@ -47,7 +47,7 @@ class FakeVoice:
             payload: dict[str, Any] = {}
             if msg["type"] == "rtc.offer":
                 payload = {"sdp": "v=0 answer", "type": "answer", "pc_id": "pc-1"}
-            elif msg["type"] == "speak.delta":
+            elif msg["type"] in ("speak.delta", "speak.beat"):
                 payload = {"ignored": False}
             elif msg["type"] == "status":
                 payload = {"state": {}, "metrics_last": {"tts_ttfa_ms": 700}}
@@ -219,6 +219,49 @@ async def main() -> None:
     await settle()
     voice.take()
     del tid
+
+    # 4b) modo flotante: draw cierra el tramo (sin flush), los beats van por la cola y lo que dice el
+    #     modelo después abre un tramo nuevo detrás de ellos (docs/floating/CONTRACT.md §10)
+    tap, t_draw = runtime.tap, uuid4()
+    tap.on_turn_started(t_draw, runtime.session, "voice")
+    tap.on_raw_delta(t_draw, "Mira. ")
+    tap.on_tool_started(t_draw, "draw")
+    await settle()  # el DrawRunner corre dentro de la herramienta: el turno ya abrió su tramo
+    b1, b2 = orch.reserve_speech_id(), orch.reserve_speech_id()
+    ok1 = await orch.speak_beat(str(t_draw), b1, "g1", 1, "Primero, pulsa aquí en Archivo.")
+    ok2 = await orch.speak_beat(str(t_draw), b2, "g1", 2, "Luego, en Exportar.")
+    tap.on_raw_delta(t_draw, "Listo.")
+    tap.on_terminal(t_draw, "completed")
+    await settle()
+    cmds = [c for c in voice.take() if c[0].startswith("speak.")]
+    kinds = [c[0] for c in cmds]
+    first_sid = cmds[0][1]["speech_id"]
+    check(ok1 and ok2 and b2 > b1 > first_sid, f"speak_beat accepted with reserved ids ({first_sid}, {b1}, {b2})")
+    check("speak.flush" not in kinds and kinds[:4] == ["speak.open", "speak.delta", "speak.close", "speak.beat"],
+          f"tool_started(draw): close instead of flush, then beats {kinds}")
+    check(kinds[4:] == ["speak.beat", "speak.open", "speak.delta", "speak.close"]
+          and cmds[5][1]["speech_id"] > b2 and cmds[6][1]["speech_id"] == cmds[5][1]["speech_id"],
+          "text after the beats goes in a new speech, queued behind them")
+
+    # 4c) capa 0 «modo flotante» → ui.floating{source:voice} + frase; sin extensión → floating_unavailable
+    from app.integrations.voice import service as voice_service
+
+    mark = len(events)
+    await voice.evt("voice.local_command", {"command": "ui_floating_on", "utt_id": "u-float"})
+    await settle()
+    published = [e.payload for e in events[mark:] if e.type == "ui.floating"]
+    check(len(published) == 1 and published[0]["action"] == "on" and published[0]["source"] == "voice"
+          and published[0]["utt_id"] == "u-float", f"ui_floating_on → ui.floating {published}")
+    check(("speak.phrase", {"key": "ui_floating_on", "when": "now"}) in voice.take(), "… and says ui_floating_on")
+    real_presence = voice_service._current_presence
+    voice_service._current_presence = lambda: SimpleNamespace(companion="missing")
+    mark = len(events)
+    await voice.evt("voice.local_command", {"command": "ui_floating_off", "utt_id": "u-float2"})
+    await settle()
+    voice_service._current_presence = real_presence
+    check(not any(e.type == "ui.floating" for e in events[mark:])
+          and ("speak.phrase", {"key": "floating_unavailable", "when": "now"}) in voice.take(),
+          "companion != ok → floating_unavailable, no ui.floating")
 
     # 5) speaker off: voice.config + speak.stop{mute}; then no speak.* at all
     await asyncio.to_thread(settings_service.notify_setting_changed, "voice_tts_enabled", "false")

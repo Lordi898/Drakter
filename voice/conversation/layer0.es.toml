@@ -36,6 +36,19 @@ phrases = ["vuelve a drakter", "volver a drakter", "modo drakter", "modo normal"
            "salir del modo jarvis", "desactiva el modo jarvis", "quita el modo jarvis",
            "cambia a modo drakter", "cambia al modo drakter"]
 
+[ui_floating_on]
+# Activan el modo flotante (V1, evento `ui.floating{action:'on'}`), sin LLM ni turno. Solo la frase entera
+# más muletillas; cualquier otra forma va al agente (herramienta ui_set_floating).
+phrases = ["modo flotante", "activa el modo flotante", "activa modo flotante", "activar el modo flotante",
+           "pon el modo flotante", "pon modo flotante", "entra en modo flotante", "entra en el modo flotante",
+           "cambia a modo flotante", "cambia al modo flotante", "sal de la ventana"]
+
+[ui_floating_off]
+# Lo desactivan y vuelve la ventana principal (`ui.floating{action:'off'}`).
+phrases = ["quita el modo flotante", "quita modo flotante", "desactiva el modo flotante",
+           "desactiva modo flotante", "sal del modo flotante", "salir del modo flotante",
+           "cierra el modo flotante", "vuelve a la ventana", "volver a la ventana"]
+
 [ui]
 # En [ui_jarvis] y [ui_drakter], las variantes de [wake] cuentan como «jarvis» salvo estas, que son
 # variantes de «drakter» (y «despierta», que no cuenta como ninguna).
