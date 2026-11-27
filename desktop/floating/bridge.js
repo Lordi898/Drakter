@@ -32,8 +32,31 @@
   D.on('safe', (s) => window.__roamieSafe?.(s));
   D.on('moved', () => window.__roamieMoved?.());
   D.on('voice', (m) => window.Roamie?.__drakterVoice?.(m));
+  // Drakter: con el diálogo nativo de confirmación abierto, main manda su rect (px de la página) en `drakter_dodge`.
+  // El avatar se aparta a la esquina más lejana con el pin de Roamies (pinAt de host.js) y, al cerrarse
+  // (rect null), vuelve a donde estaba con `place`, o al pin que hubiera pedido el usuario.
+  let userPin = null, dodge = null;
+  const agentOf = () => window.Roamie?.tiles?.find((t) => t.creature?.agent)?.creature.agent ?? null;
+  const onDodge = (rect) => {
+    const a = agentOf();
+    if (Array.isArray(rect) && rect.length === 4 && rect.every(Number.isFinite)) {
+      if (!a) return;
+      if (!dodge) dodge = { back: a.pos ? [a.pos.x, a.pos.y] : null };
+      const cx = rect[0] + rect[2] / 2, cy = rect[1] + rect[3] / 2;
+      window.__roamieHost?.({ kind: 'avatar_pin', corner: `${cy < innerHeight / 2 ? 'bottom' : 'top'}-${cx < innerWidth / 2 ? 'right' : 'left'}` });
+      return;
+    }
+    if (!dodge) return;
+    const { back } = dodge;
+    dodge = null;
+    if (userPin) { window.__roamieHost?.(userPin); return; }
+    window.__roamieHost?.({ kind: 'avatar_pin', release: true });
+    if (a && back) a.place?.(back[0], back[1]);
+  };
   D.on('host', (m) => {
     if (!m || typeof m !== 'object') return;
+    if (m.kind === 'drakter_dodge') { onDodge(m.rect); return; }
+    if (m.kind === 'avatar_pin') { userPin = m.release ? null : m; if (dodge) return; }
     // Un segmento de guía con voz: el shim agrupa sus speech_id como una sola locución (§11.2, §11.5).
     if (m.kind === 'agent' && m.e && m.e.type === 'draw' && 'speech_id' in m.e) {
       const { speech_id: id, ...e } = m.e;

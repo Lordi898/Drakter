@@ -73,7 +73,7 @@
         [0, 1].forEach((k) => { ctx.fillStyle = k ? G.DEEP : G.ACC; ctx.fillRect(x + 12 + k * 12, y + 11, 5, 5); });
         G.typed(ctx, this.head, x + w / 2, y + 14, HEAD, G.DIM, a / 0.4, { anchor: 'middle' });
         const steps = this.steps ?? [], done = steps.filter((s) => s.state === 'ok' || s.state === 'bad').length;
-        G.typed(ctx, `${done} of ${steps.length}`, x + w - 14, y + 14, HEAD, G.DIM, 1, { anchor: 'end' });
+        G.typed(ctx, `${done} de ${steps.length}`, x + w - 14, y + 14, HEAD, G.DIM, 1, { anchor: 'end' }); // Drakter: «N de M»
         ctx.save(); ctx.beginPath(); ctx.rect(x + 2, y + 27, w - 4, L.h - 29); ctx.clip();
         L.rows.forEach((r, n) => {
           const s = steps[r.i], ra = a - 0.12 - n * 0.06;

@@ -30,6 +30,7 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 | 17. Optimización y lanzamiento | 17 | 16 | 5 | 0 | 1 |
 | Modo Jarvis (ampliación) | 16 | 15 | 3 | 1 | 0 |
 | Autoconsciencia y contexto (ampliación) | 6 | 5 | 1 | 1 | 0 |
+| Modo flotante (ampliación) | 10 | 7 | 4 | 3 | 0 |
 | 18. Ampliaciones futuras | 10 | 0 | 0 | 0 | 10 |
 | **Total 0–17** | **342** | **336** | **53** | **3** | **3** |
 
@@ -584,6 +585,28 @@ Las siguientes listas son el control de trabajo del proyecto y la única lista v
 - [x] Contexto vivo de cada turno, solo en el mensaje del turno y nunca en el prompt de sistema: `[equipo: …]`, `[aviso del sistema: …]` y `[conversación: …]` (en qué mensaje va, cuánto hace del anterior y cuál fue la conversación más reciente) (`backend/app/services/awareness.py`).
 - [ ] Historial de conversaciones con el modelo real: `list_chat_sessions`, `search_chat_history` y `get_chat_session` (permiso nuevo `chat.read`; los mensajes llegan en sobre no confiable y contaminan la sesión, así que después las escrituras piden confirmación).
   ⚠️ Las tres herramientas funcionan por el camino completo (MCP, permisos, auditoría) y la contaminación sube `create_task` de `write` a `confirm`. Falta una conversación con Claude Haiku 5.5 real para ver que usa bien las líneas de contexto y el historial: con el stub solo se prueba el cableado.
+
+## Modo flotante (ampliación pedida por el usuario)
+
+> Fuera de las checklists 0-17 del plan, pedido por el usuario el 2026-11-27 (`DECISIONS.md` «Modo flotante: arquitectura y contratos»; contrato en `docs/floating/CONTRACT.md`). Integrado por drakter-100 en `ao/jarvis-architecture/floating-mode` y comprobado con la cadena completa en un gnome-shell 50 headless privado (bus de sesión propio, bus de sistema falso, monitor virtual de 2560×1440, sin GPU): extensión v2 integrada, Electron integrado con la página de D1, backend real, Hermes real y el modelo simulado (guiones `tests/e2e/stub-scenarios/flotante-*.json`). Resultado: 29 de 29 comprobaciones; capturas en `/tmp/drakter-floating/shots/integ/`. También pasan registro (103 herramientas), `check_security` 145/145, `check_memory_rules` 40/40, confirmaciones, migraciones, `check_beats`, `check_sim`, la comprobación de D2 (21/21) y el estrés de E1 (20 ciclos sin caída del shell).
+
+- [x] Extensión `drakter-companion` (API D-Bus v2), ventana flotante y activación: Super+Alt+D muestra la flotante encima de todo, la principal pasa a la bandeja y Super+Alt+D otra vez la devuelve. También se activa con Ctrl+Shift+F, el botón, la bandeja, la voz y `ui_set_floating`.
+  ⚠️ En headless la extensión se carga sin instalar. Su instalación en la sesión real va en la casilla de abajo.
+- [x] Avatar JARVIS copiado de Roamies (`8f0adaa`) byte a byte, con los parches `// Drakter:` (`desktop/floating/README.md`): se ve igual que en Roamies y recibe el puntero.
+  ⚠️ En reposo se queda en su sitio y se aparta si el cursor se le acerca. Sigue al cursor cuando aparece para una petición (comportamiento de Roamies). CPU del renderer flotante a 2560×1440 sin GPU: 6,4 % en reposo, 10,7 % dibujando y 34 % animando una tarjeta.
+- [x] Dibujo y tarjetas: `draw` validado en el backend y otra vez en main. Las marcas se resuelven por AT-SPI (el ring cae exacto sobre el botón) y una tarjeta mindmap se coloca en zona libre. Esc lo borra todo.
+- [x] Guía con espera de clic: `draw` vuelve con `waiting`. Un clic real en el botón llega a la app y a la página, `guide_wait` avanza al beat siguiente y el turno termina con la guía completa.
+  ⚠️ Roamies solo arma la espera cuando acaba de decir el beat: un clic hecho antes se ignora.
+- [x] Visión: `look_screen` devuelve 1568 px y la imagen llega al modelo como bloque `image` (carril `image_input_mode: native`). La sesión queda contaminada.
+- [x] Manos con seguridad: `act_in_app` pulsa «7» en gnome-calculator. Tras `look_screen` pide confirmación en el diálogo nativo, que main trae al frente mientras JARVIS se aparta de su rect. Al aprobar se ejecuta, con `overlay.hands` y la tarjeta de rastro. Las barreras de HANDS_OFF, ventanas de Drakter, pasos RISKY y contraseñas se comprobaron en el headless de B3.
+  ⚠️ En headless se aprueba con el teclado (Tab+Enter). Falta aprobarlo con el ratón en la sesión real.
+- [ ] Voz por beats: `speak.beat` en cola FIFO por turno, cortable con barge-in, con el texto final detrás de los beats y la capa 0 «modo flotante».
+  ⚠️ Solo comprobado con el proceso de voz en modo nulo y TTS de tonos (`voice/tests/check_beats.py`) y con `check_sim`. Falta la voz real con `speak.beat` en la sesión real y generar la caché PCM de las 3 frases nuevas (`python -m voice phrases`).
+- [x] Interfaz y ajustes: botón en los modos Drakter y Jarvis, sección de Ajustes con tamaño, sonido y manos (`floating_*`, validados en el backend), ayuda de instalación y guía de uso (`docs/usage/modo-flotante.md`).
+- [ ] Sesión real: extensión instalada con `scripts/install-gnome-extension.sh` y reentrada en la sesión. Falta comprobar el indicador del panel, Super+Alt+D y Super+Alt+A reales, `cover` con escala 1,25, que la flotante no aparezca en Alt-Tab ni en la vista general, el foco y ubuntu-dock.
+  ⚠️ No se puede hacer en headless. Hace falta cerrar la sesión del usuario una vez.
+- [ ] Visión y manos sobre Firefox (ruta `Collection` de AT-SPI de los navegadores).
+  ⚠️ Probado solo con apps GTK. Falta la sesión real con Firefox.
 
 ## Checklist 18. Ampliaciones futuras
 

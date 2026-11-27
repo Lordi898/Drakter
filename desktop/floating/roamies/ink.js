@@ -2141,7 +2141,7 @@
       while (rows.length > 1 && rows[rows.length - 1].y + rows[rows.length - 1].h + 26 + 10 > max) { const r = rows.pop(); if (r.i) hidden++; }
       while (rows.length > 1 && rows[rows.length - 1].head) rows.pop();
       yy = rows[rows.length - 1].y + rows[rows.length - 1].h;
-      if (hidden) { rows.push({ more: `+${hidden} more`, y: yy, h: 26 }); yy += 26; }
+      if (hidden) { rows.push({ more: `+${hidden} más`, y: yy, h: 26 }); yy += 26; } // Drakter: «+N más»
     }
     // Ink in screen points, made once per item so its outline doesn't change from frame to frame.
     for (const r of rows) {

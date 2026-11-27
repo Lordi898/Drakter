@@ -12,7 +12,7 @@ AGPL-3.0-only por esto. El contrato con Electron main está en `docs/floating/CO
 | `fonts/*.woff2`, `fonts/OFL-*.txt` | `showcase/onboarding/fonts/` | Idénticos (SIL OFL 1.1, cada fuente con su titular) |
 | `index.html` | `showcase/desktop.html` | Adaptado (ver abajo) |
 | `boot.js`, `boot-fonts.js` | Los dos `<script>` en línea de `desktop.html` (líneas 49 y 56) | El mismo código pasado a archivo, porque la CSP no admite scripts en línea |
-| `bridge.js` | Nuevo (Drakter) | `window.drakterFloat` → globales `ROAMIE_*`, `__TAURI__.core.invoke` y `__roamie*` (§11.2) |
+| `bridge.js` | Nuevo (Drakter) | `window.drakterFloat` → globales `ROAMIE_*`, `__TAURI__.core.invoke` y `__roamie*` (§11.2). Atiende además `drakter_dodge{rect}` de main: con el diálogo nativo de confirmación abierto, aparca el avatar en la esquina más lejana con `avatar_pin` de Roamies y al cerrarse lo devuelve a su sitio con `place` (o al pin del usuario) |
 | `drakter-voice-out.js` | Nuevo (Drakter) | Sustituye a `Roamie.voiceOut` con la misma API, alimentado por `float:voice` (§11.5) |
 | `dev/` | Nuevo (Drakter), **solo desarrollo** | `fake-host.html` + `fake-preload.js` + `fake-panel.js`, y `diff-upstream.sh`. No se empaqueta |
 
@@ -35,7 +35,7 @@ Sin cambios: `10-dither.js`, `12-sidekick.js`, `ask-bar.js`, `core.js`, `glass.j
 | `host.js` | 193, 208, 320, 329, 330, 343, 384, 420, 477 | «Leyendo …», «Buscando en la web», «Trabajando», «Redactándolo», «Te lo enseño», «Desde la web» / «Respuesta», «Escuchando… pulsa otra vez para enviar» / «Escuchando…» |
 | `markdown.js` | 78 | Regex de fuentes: `/^\**(?:sources?\|fuentes?)\**\s*:\s*(.*)$/i` |
 | `agent.js` | 1019 | Placeholder «Escuchando…» |
-| `agent-cards.js` | 42 | «tu petición» |
+| `agent-cards.js` | 42, 76 | «tu petición»; contador de pasos de la tarjeta de manos «N de M» |
 | `agent-tools.js` | 12, 22, 43, 74, 99 | Etiquetas por defecto de los chips: «mirando tu pantalla», «captura», «leyendo», «escribiendo», «ejecutando» (`web` queda igual) |
 | `agent-panel.js` | 105, 135, 140, 222, 237, 243 | «Fuentes: », «Respuesta desde la web», «Cerrar», «Buscando en la web», «Desde la web», «No he podido terminar» |
 | `notch.js` | 223, 808 | Nombre por defecto `'Drakter'` |
@@ -48,6 +48,7 @@ Sin cambios: `10-dither.js`, `12-sidekick.js`, `ask-bar.js`, `core.js`, `glass.j
 | `ink.js` | 1291 | `fmtValue`: `toLocaleString('es-ES')` y sufijos `mil M` (≥ 10⁹) y `M` (≥ 10⁶) |
 | `ink.js` | 1794, 1795, 1803, 1804, 1825, 1827, 1852 | Test: «N de M», «correctas», «Inténtalo de nuevo», «Correcto.» / «No exactamente: es la X.», «Siguiente» / «Ver puntuación», «Pruébalo» |
 | `ink.js` | 1921 | «Borrar todo · n» |
+| `ink.js` | 2144 | Recordatorios ocultos: «+N más» |
 | `ink.js` | 2124, 2135, 2136, 2137, 2164 | Recordatorios: «hecho», «con retraso …», «Hoy», «Nada para hoy» / «Tu lista aún está vacía», «Más tarde», «recordatorios» |
 
 `index.html` frente a `desktop.html`: `lang="es"`; título `drakter-floating` (regla de casado de la extensión, §4.1); la

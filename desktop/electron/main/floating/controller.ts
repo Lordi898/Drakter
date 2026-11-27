@@ -291,12 +291,17 @@ export class FloatingController {
    * frente (solo avisa con «"Confirmar acción" está preparado»): la extensión lo activa en cuanto aparece.
    */
   private approve(actionId: string): void {
-    void requestApproval(this.backend, actionId)
-    void this.raiseApproval()
+    let open = true
+    void requestApproval(this.backend, actionId).finally(() => {
+      open = false
+      // El avatar vuelve a donde estaba (bridge.js, `drakter_dodge`).
+      if (this.live) this.toPage({ kind: 'drakter_dodge', rect: null })
+    })
+    void this.raiseApproval(() => open)
   }
 
-  private async raiseApproval(): Promise<void> {
-    for (let i = 0; i < 30; i++) {
+  private async raiseApproval(isOpen: () => boolean): Promise<void> {
+    for (let i = 0; i < 30 && isOpen(); i++) {
       await new Promise((resolve) => setTimeout(resolve, 100))
       try {
         const dialog = (await this.companion.listWindows()).find(
@@ -304,6 +309,12 @@ export class FloatingController {
         )
         if (dialog?.id) {
           await this.companion.activateWindow(dialog.id)
+          // Mientras esté abierto, JARVIS se aparta de su rect (px de la página) para no tapar el texto.
+          const o = this.frame
+          if (isOpen() && this.live && dialog.frame && o) {
+            const f = dialog.frame
+            this.toPage({ kind: 'drakter_dodge', rect: [f.x - o.x, f.y - o.y, f.w, f.h] })
+          }
           return
         }
       } catch (error) {
