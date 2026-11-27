@@ -103,20 +103,55 @@ def _publish(hub: Any, type: str, payload: BaseModel, turn: UUID) -> None:
 
 
 # ── act_in_app ───────────────────────────────────────────────────────────────
+def _named_controls(args: ActInAppArgs) -> dict | None:
+    """Controls of the read the steps point at, to name `id` targets in the confirmation.
+
+    `summarize` and `confirm_if` only get the arguments, so only an explicit `read_id` can be
+    resolved; a stale read (the window changed) does not name anything.
+    """
+    if args.read_id is None:
+        return None
+    rec = records.read_record(args.read_id)
+    if rec is None or rec.stale:
+        return None
+    return rec.by_id()
+
+
+def _uses_ids(args: ActInAppArgs) -> bool:
+    return any(getattr(s, "id", None) is not None for s in args.steps)
+
+
+def _risk_with_names(args: ActInAppArgs, controls: dict | None) -> str | None:
+    """Risk by what the model wrote and, if the read is known, by the names of the `id` targets."""
+    if (reason := args_risk(args)) is not None:
+        return reason
+    for i, step in enumerate(args.steps):
+        if (kind := step_risk(step, controls)) is not None:
+            return f"Paso {i + 1} arriesgado: {kind}."
+    return None
+
+
 def _summary(args: BaseModel) -> str:
     """Built by the backend for the confirmation. Typed text: only its length."""
     assert isinstance(args, ActInAppArgs)
+    controls = _named_controls(args)
     where = "la ventana activa" if args.window_id is None else f"la ventana {args.window_id}"
-    steps = "; ".join(f"{i + 1}. {step_phrase(s)}" for i, s in enumerate(args.steps[:12]))
+    steps = "; ".join(f"{i + 1}. {step_phrase(s, controls)}" for i, s in enumerate(args.steps[:12]))
     more = f"; y {len(args.steps) - 12} pasos más" if len(args.steps) > 12 else ""
-    reason = args_risk(args)
+    reason = _risk_with_names(args, controls)
     tail = f" {reason}" if reason else ""
-    return f"Vas a usar {where}: {steps}{more}.{tail}"
+    unnamed = ""
+    if _uses_ids(args) and (controls is None or any(
+        getattr(s, "id", None) is not None and s.id not in controls for s in args.steps
+    )):
+        unnamed = (" Atención: no se ha podido nombrar algún control señalado por número; "
+                   "comprueba en la pantalla qué se va a pulsar antes de aprobar.")
+    return f"Vas a usar {where}: {steps}{more}.{tail}{unnamed}"
 
 
 def _confirm_if_act(args: BaseModel) -> str | None:
     assert isinstance(args, ActInAppArgs)
-    if (reason := args_risk(args)) is not None:
+    if (reason := _risk_with_names(args, _named_controls(args))) is not None:
         return reason
     return "Has pedido confirmación." if args.confirm else None
 
@@ -147,6 +182,7 @@ async def act_in_app(ctx: ToolContext, args: ActInAppArgs) -> ActInAppResult:
 
     # ids → the turn's read; click_at → the turn's capture (CONTRACT §8.2 step 4)
     controls: dict = {}
+    rec = None
     if any(getattr(s, "id", None) is not None for s in args.steps):
         rec = records.read_record(args.read_id) if args.read_id else records.latest_read(turn)
         # From an approval the context has a turn of its own: the read_id names the read then.
@@ -176,7 +212,8 @@ async def act_in_app(ctx: ToolContext, args: ActInAppArgs) -> ActInAppResult:
             raise _err("secret_field", details=[{"field": f"steps.{i}", "code": "secret_field", "message": "contraseña"}])
         if not confirmed and (kind := step_risk(s, controls)) is not None:
             raise _err("risky_step", f"El paso {i + 1} ({step_phrase(s, controls)}) necesita confirmación: "
-                                     "repite con confirm=true.", retryable=True,
+                                     ("repite con confirm=true" + (f" y read_id={rec.read_id}, para que la confirmación muestre "
+                                     "el nombre del control." if rec is not None else ".")), retryable=True,
                        details=[{"field": f"steps.{i}", "code": "risky_step", "message": kind[:60]}])
 
     act_id = uuid4()
