@@ -44,8 +44,8 @@ Propio del proyecto (no es de terceros): `.claude/CLAUDE.md`, `.claude/agents/{c
 
 | Ruta | Origen | Licencia | Texto |
 |---|---|---|---|
-| `desktop/floating/` (carpeta aún por crear) | [KenKaiii/Roamies](https://github.com/KenKaiii/Roamies) commit `8f0adaa` | AGPL-3.0, © Ken Kai (KenKaiii) | Se incorporan y adaptan partes de su avatar JARVIS, dibujo en pantalla y guía; ver `desktop/floating/`. Es la razón de que Drakter pase a AGPL-3.0-only. |
-| `desktop/floating/` (fuentes, aún por copiar) | Roamies `8f0adaa`: Doto, Martian Mono, Readex Pro | SIL OFL 1.1 (cada fuente con su titular) | Se copiarán con sus textos de licencia OFL; las fuentes conservan la OFL. |
+| `desktop/floating/roamies/*.js`, `desktop/floating/index.html`, `boot.js`, `boot-fonts.js` | [KenKaiii/Roamies](https://github.com/KenKaiii/Roamies) commit `8f0adaa` (`showcase/roamies/` y `showcase/desktop.html`) | AGPL-3.0, © Ken Kai (KenKaiii) | 18 archivos copiados byte a byte con su avatar JARVIS, dibujo en pantalla y guía; los cambios (traducción y dos regex) llevan `// Drakter:` y están listados en [desktop/floating/README.md](desktop/floating/README.md). Es la razón de que Drakter pase a AGPL-3.0-only. |
+| `desktop/floating/fonts/*.woff2` | Roamies `8f0adaa` (`showcase/onboarding/fonts/`): Doto (© 2024 The Doto Project Authors), Martian Mono (© 2021 The Martian Mono Project Authors) y Readex Pro (© 2019 The Readex Pro Project Authors) | SIL OFL 1.1 | Sin cambios; cada una con su texto en `desktop/floating/fonts/OFL-*.txt`. |
 | `desktop/src/components/ui/*.tsx` | Componentes generados con [shadcn/ui](https://github.com/shadcn-ui/ui) y adaptados | MIT, © 2023 shadcn | [docs/third-party-licenses/shadcn-ui.txt](docs/third-party-licenses/shadcn-ui.txt) |
 
 ## 3. Dependencias (se instalan aparte, no se versionan)
