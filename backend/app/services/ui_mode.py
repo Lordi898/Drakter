@@ -14,6 +14,7 @@ import time
 from typing import Any, Final, Literal
 
 from drakter_contracts.events import AvatarChoice, JarvisLayoutChoice, UiAppearanceRequested, UiModeRequested
+from drakter_contracts.floating import AvatarPin, AvatarSize, UiFloatingRequested
 
 logger = logging.getLogger("drakter.ui_mode")
 
@@ -81,3 +82,40 @@ def request_ui_appearance(
         logger.exception("ui.appearance publish failed", extra={"event": "ui_appearance_publish_failed"})
         return "unavailable"
     return "published"
+
+
+# ── modo flotante (docs/floating/CONTRACT.md §6 y §8.1 bis) ─────────────────
+_last_floating_at = float("-inf")
+
+
+def request_ui_floating(
+    hub: Any,
+    *,
+    action: Literal["on", "off", "toggle"] | None,
+    size: AvatarSize | None,
+    pin: AvatarPin | None,
+    source: UiSource,
+    utt_id: str | None = None,
+    correlation_id: str | None = None,
+) -> Literal["ok", "rate_limited", "unavailable"]:
+    """Publica `ui.floating`. Límite de 1/s compartido entre la capa 0 de la voz y `ui_set_floating`.
+
+    Nunca lanza. Quien decide si se activa es Electron main (con la extensión de GNOME).
+    """
+    global _last_floating_at
+    if hub is None or (action is None and size is None and pin is None):
+        return "unavailable"
+    payload = UiFloatingRequested(
+        action=action, size=size, pin=pin, source=source, utt_id=utt_id[:64] if utt_id else None
+    )
+    with _lock:
+        now = time.monotonic()
+        if now - _last_floating_at < MIN_INTERVAL_S:
+            return "rate_limited"
+        _last_floating_at = now
+    try:
+        hub.publish("ui.floating", payload, correlation_id=correlation_id)
+    except Exception:  # noqa: BLE001 - un fallo del hub no tumba ni la voz ni la herramienta
+        logger.exception("ui.floating publish failed", extra={"event": "ui_floating_publish_failed"})
+        return "unavailable"
+    return "ok"
